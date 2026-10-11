@@ -3,13 +3,14 @@ import type { Vec3 } from '../math/vec3';
 export type MoveMode = 'ground' | 'air' | 'slide' | 'wallrun' | 'mantle' | 'zipline' | 'grind';
 
 export interface PlayerState {
-  /** Feet (bottom of the capsule). */
+  /** Feet: the capsule bottom minus controller.offset, i.e. (about) the ground contact point when standing. */
   position: Vec3;
   velocity: Vec3;
   yaw: number;
   pitch: number;
   mode: MoveMode;
   onBoard: boolean;
+  /** Mirrors PlayerBody.crouched: the capsule is at capsule.crouchHeight. */
   crouched: boolean;
   grounded: boolean;
   groundNormal: Vec3;

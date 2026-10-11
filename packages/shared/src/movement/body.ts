@@ -31,8 +31,10 @@ const GROUND_PROBE_REACH = 0.1;
 const FIT_SKIN = 0.01;
 
 /**
- * Kinematic capsule driven by Rapier's character controller. Positions are feet: standing on a surface, the
- * feet are on it (the capsule bottom sits `controller.offset` above them).
+ * Kinematic capsule driven by Rapier's character controller. Positions are feet = capsule bottom −
+ * controller.offset, which is (about) the ground contact point: standing on a surface, the feet are on it and
+ * the capsule bottom floats `controller.offset` above them. Standing and crouched capsules share the same feet,
+ * so a crouched capsule's top is at feet + offset + crouchHeight.
  */
 export class PlayerBody {
   private readonly physics: PhysicsWorld;
@@ -142,7 +144,11 @@ export class PlayerBody {
     this.feetPos = vec3(p.x, p.y, p.z);
   }
 
-  /** Resizes the capsule, keeping the feet planted. Returns false (and stays crouched) if standing is blocked. */
+  /**
+   * Resizes the capsule (setHalfHeight), keeping the feet planted. Crouching always succeeds. Standing first checks
+   * that a standing capsule fits at the current feet (top at feet + offset + height); if not, it returns false
+   * and the body stays crouched, so a low ceiling never ends up inside the capsule.
+   */
   setCrouched(c: boolean): boolean {
     if (c === this.crouchedNow) return true;
     if (!c && !this.fitsAt(this.feetPos, false)) return false;
@@ -152,7 +158,11 @@ export class PlayerBody {
     return true;
   }
 
-  /** True when a capsule (standing or crouched) with its feet at `feet` overlaps nothing but this player. */
+  /**
+   * True when a capsule (standing or crouched) with its feet at `feet` (capsule bottom at feet + controller.offset)
+   * overlaps nothing but this player. The test capsule's radius is shrunk by FIT_SKIN so resting on the ground
+   * or touching a wall is not an overlap.
+   */
   fitsAt(feet: Vec3, crouched: boolean): boolean {
     const { rapier, world } = this.physics;
     const r = this.cfg.capsule.radius - FIT_SKIN;

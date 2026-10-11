@@ -6,6 +6,7 @@ import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
 import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection } from './ground';
 import { ageJumpBuffer, coyoteTicks, tryJump } from './jump';
+import { startSlide, updateSlide } from './slide';
 import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
 
 /** Minimum blocked distance (m) before a wall or ceiling contact removes velocity. */
@@ -67,13 +68,15 @@ export class PlayerSim {
     void time;
     const events: SimEvent[] = [];
 
-    // 1. Look and timers.
+    // 1. Look and timers; crouch (stays crouched while standing is blocked); crouch-slide entry.
     this.updateLookAndTimers(input);
+    this.updateCrouch(input);
+    startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
 
     // 2. Special modes (Tasks 6 mantle, 8 zip line, 10 grind) run here and return early.
 
-    // 3. Locomotion: ground or air acceleration toward the wish direction.
-    this.applyLocomotion(input, mods);
+    // 3. Locomotion: ground or air acceleration toward the wish direction (a slide drives itself in step 9).
+    if (this.state.mode !== 'slide') this.applyLocomotion(input, mods);
 
     // 4. Jump (buffer + coyote).
     if (tryJump(this.state, input, this.cfg, mods, this.dt)) events.push({ kind: 'jumped' });
@@ -84,7 +87,8 @@ export class PlayerSim {
     // 8. Landing, air timers and apex tracking.
     this.resolveContacts(move, events);
 
-    // 9. Post-move checks (Tasks 5 slide, 7 wall-run, 9 triggers) run here.
+    // 9. Post-move checks: slide physics and end (Task 5); Tasks 7 wall-run and 9 triggers run here too.
+    updateSlide(this.state, move, input, this.cfg, this.dt);
 
     return events;
   }
@@ -93,6 +97,16 @@ export class PlayerSim {
     this.state.yaw = input.look.yaw;
     this.state.pitch = input.look.pitch;
     ageJumpBuffer(this.state, input, this.cfg);
+  }
+
+  /**
+   * The capsule is crouched while crouch is held (a chute slide needs no crouch). Releasing crouch stands up only
+   * if a standing capsule fits (Review Focus 4); otherwise the player stays crouched (and a crouch-slide goes on)
+   * and tries again every tick, so they stand automatically once clear.
+   */
+  private updateCrouch(input: InputFrame): void {
+    this.body.setCrouched(input.crouch.held);
+    this.state.crouched = this.body.crouched;
   }
 
   private applyLocomotion(input: InputFrame, mods: StatModifiers): void {
@@ -150,7 +164,7 @@ export class PlayerSim {
       if (!wasGrounded) {
         events.push({ kind: 'landed', fallHeight: Math.max(s.airApexY, s.position.y) - s.position.y });
       }
-      s.mode = 'ground';
+      if (s.mode !== 'slide') s.mode = 'ground';
       s.velocity = vec3(s.velocity.x, 0, s.velocity.z);
       s.groundNormal = move.groundNormal;
       s.lastGrounded = vec3(s.position.x, s.position.y, s.position.z);
