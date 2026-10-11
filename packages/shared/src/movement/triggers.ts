@@ -14,6 +14,23 @@ export function createWorldFeatureState(map: MapData): WorldFeatureState {
   return { orbAvailableAt };
 }
 
+/**
+ * Puts the player into free airborne motion at their current position: clears every special mode (mantle, zip,
+ * wall-run), ends grounding, and closes the coyote window. Shared by teleport, respawn and pad launches.
+ * Velocity and jump buffer are left to the caller.
+ */
+export function enterAir(state: PlayerState, cfg: MovementConfig): void {
+  state.mantle = null;
+  state.zip = null;
+  state.wallRun = { time: 0, normal: null, lastNormal: null };
+  // Task 10: also clear grind state here.
+  state.mode = 'air';
+  state.grounded = false;
+  state.groundNormal = vec3(0, 1, 0);
+  state.airTicks = coyoteTicks(cfg) + 1;
+  state.airApexY = state.position.y;
+}
+
 /** Jump pads, boost orbs, then out-of-bounds respawn. Called after the move each tick. */
 export function applyTriggers(
   state: PlayerState,
@@ -38,11 +55,7 @@ export function applyTriggers(
       feet.y <= pad.position.y + PAD_HEIGHT;
     if (!inside || (state.padCooldown[pad.id] ?? 0) > 0) continue;
     state.velocity = vec3(pad.launch.x, pad.launch.y, pad.launch.z);
-    state.mode = 'air';
-    state.grounded = false;
-    state.groundNormal = vec3(0, 1, 0);
-    state.airApexY = feet.y;
-    state.airTicks = coyoteTicks(cfg) + 1; // a pad launch is not followed by a free coyote jump
+    enterAir(state, cfg); // also closes the coyote window: no free jump after a pad launch
     state.padCooldown[pad.id] = cfg.jumpPad.retriggerCooldown;
     events.push({ kind: 'jumpPad', padId: pad.id });
   }
@@ -79,15 +92,7 @@ function respawn(state: PlayerState, body: PlayerBody, map: MapData, cfg: Moveme
   body.setFeet(target);
   state.position = body.feet;
   state.velocity = vec3(0, 0, 0);
-  state.mode = 'air';
-  state.grounded = false;
-  state.groundNormal = vec3(0, 1, 0);
-  state.airTicks = coyoteTicks(cfg) + 1;
-  state.airApexY = target.y;
+  enterAir(state, cfg);
   state.jumpPressAge = null;
-  state.mantle = null;
-  state.zip = null;
-  state.wallRun = { time: 0, normal: null, lastNormal: null };
-  // Task 10: also clear grind state here.
   return { kind: 'respawned', checkpointId: id };
 }

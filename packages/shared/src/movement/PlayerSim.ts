@@ -8,7 +8,7 @@ import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection
 import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
-import { applyTriggers } from './triggers';
+import { applyTriggers, enterAir } from './triggers';
 import { tryAttachZip, updateZip } from './zipLine';
 import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
 import { canStartWallRun, findWall, startWallRun, updateWallRun, wallJump, wallRunGravityScale } from './wallRun';
@@ -64,15 +64,8 @@ export class PlayerSim {
     const s = this.state;
     s.position = this.body.feet;
     s.velocity = vec3(velocity.x, velocity.y, velocity.z);
-    s.mode = 'air';
-    s.grounded = false;
-    s.groundNormal = vec3(0, 1, 0);
-    s.airTicks = coyoteTicks(this.cfg) + 1;
     s.jumpPressAge = null;
-    s.airApexY = position.y;
-    s.mantle = null;
-    s.wallRun = { time: 0, normal: null, lastNormal: null };
-    s.zip = null;
+    enterAir(s, this.cfg);
   }
 
   /** One tick: movement (all modes), then pads, orbs and out-of-bounds respawn. */

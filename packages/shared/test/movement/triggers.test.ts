@@ -29,11 +29,11 @@ describe('jump pads', () => {
   });
 
   it('a pad does not retrigger within retriggerCooldown', async () => {
+    // Spawning on the pad triggers it during the harness's settling ticks; the cooldown then holds it off.
     const h = await makeSim({ jumpPads: [{ ...pad, launch: vec3(0, 0.5, 0) }], spawn: vec3(0, 0, -2) });
-    const ev = h.run(Math.round(cfg.jumpPad.retriggerCooldown * cfg.tickRate) - 2);
-    expect(ev.filter((e) => e.kind === 'jumpPad').length).toBeLessThanOrEqual(1);
-    const later = h.run(Math.round(cfg.tickRate));
-    expect([...ev, ...later].filter((e) => e.kind === 'jumpPad').length).toBeGreaterThanOrEqual(2);
+    const pads = (ev: { kind: string }[]) => ev.filter((e) => e.kind === 'jumpPad').length;
+    expect(pads(h.run(8))).toBe(0);
+    expect(pads(h.run(12))).toBe(1);
   });
 
   it('closes the coyote window so a pad launch gives no free jump', async () => {
@@ -42,6 +42,30 @@ describe('jump pads', () => {
     expect(ev.some((e) => e.kind === 'jumped')).toBe(false);
     expect(h.sim.state.velocity.y).toBeLessThan(launch.y);
     expect(h.sim.state.velocity.y).toBeGreaterThan(launch.y / 2);
+  });
+});
+
+describe('pad launch over special modes', () => {
+  it('a pad overlapping a zip line ride clears the ride and launches', async () => {
+    const p = { id: 'zp', position: vec3(0, 7, 0), radius: 3, launch: vec3(0, 12, 0) };
+    const h = await makeSim({
+      solids: [box('platform', vec3(0, 4, 0), vec3(4, 8, 4))],
+      zipLines: [{ id: 'z', a: vec3(0, 10, 0), b: vec3(0, 4, -30) }],
+      jumpPads: [p],
+      spawn: vec3(0, 8, 0),
+    });
+    // Settling ticks already hit the pad at the platform top? Its y range is 7..7.5, above the platform top at 8? No: feet at 8 are above it.
+    h.tick({}, ['interact']);
+    expect(h.sim.state.mode).toBe('zipline');
+    let ev = h.tick();
+    for (let i = 0; i < 200 && !ev.some((e) => e.kind === 'jumpPad'); i++) ev = h.tick();
+    expect(ev).toContainEqual({ kind: 'jumpPad', padId: 'zp' });
+    expect(h.sim.state.zip).toBeNull();
+    expect(h.sim.state.mantle).toBeNull();
+    expect(h.sim.state.mode).toBe('air');
+    h.tick();
+    expect(h.sim.state.velocity.y).toBeGreaterThan(p.launch.y - 2);
+    expect(h.sim.state.mode).toBe('air');
   });
 });
 
@@ -56,7 +80,7 @@ describe('boost orbs', () => {
     expect(h.sim.state.boostLeft).toBeGreaterThan(0);
     expect(horizontalLength(h.sim.state.velocity)).toBeCloseTo(cfg.run.sprintSpeed * cfg.boostOrb.speedMultiplier, 1);
     expect(horizontalLength(h.sim.state.velocity)).toBeCloseTo(11.2, 1);
-    h.run(Math.round(cfg.boostOrb.duration * cfg.tickRate) + 30, { ...sprint, yaw: 0 });
+    h.run(Math.round(cfg.boostOrb.duration * cfg.tickRate) + 30, sprint);
     expect(h.sim.state.boostLeft).toBe(0);
     expect(horizontalLength(h.sim.state.velocity)).toBeCloseTo(cfg.run.sprintSpeed, 1);
   });
@@ -100,10 +124,19 @@ describe('out-of-bounds respawn', () => {
     h.sim.teleport(vec3(20, 0, 0)); // off the platform, over the void
     const ev = h.run(120);
     expect(ev).toContainEqual({ kind: 'respawned', checkpointId: 'near' });
-    const idx = ev.findIndex((e) => e.kind === 'respawned');
-    expect(idx).toBeGreaterThan(-1);
-    const s = h.sim.state;
-    expect(s.mode).toBe('air');
+    // The respawn tick itself leaves the player at the checkpoint with zero velocity.
+    const again = await makeSim({
+      floor: false,
+      solids: [box('plat', vec3(0, -0.5, 0), vec3(8, 1, 8))],
+      checkpoints,
+      spawn: vec3(0, 0, 0),
+    });
+    again.sim.teleport(vec3(20, -2.9, 0));
+    let e2 = again.tick();
+    for (let i = 0; i < 30 && !e2.some((e) => e.kind === 'respawned'); i++) e2 = again.tick();
+    expect(e2).toContainEqual({ kind: 'respawned', checkpointId: 'near' });
+    expect(again.sim.state.velocity).toEqual(vec3(0, 0, 0));
+    expect(again.sim.state.mode).toBe('air');
   });
 
   it('respawn position and velocity at the moment of respawn', async () => {
