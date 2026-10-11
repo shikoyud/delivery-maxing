@@ -6,6 +6,7 @@ import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
 import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection } from './ground';
 import { ageJumpBuffer, coyoteTicks, tryJump } from './jump';
+import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
 import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
 
@@ -46,6 +47,7 @@ export class PlayerSim {
       airTicks: coyoteTicks(cfg) + 1,
       jumpPressAge: null,
       airApexY: spawn.y,
+      mantle: null,
     };
   }
 
@@ -61,6 +63,7 @@ export class PlayerSim {
     s.airTicks = coyoteTicks(this.cfg) + 1;
     s.jumpPressAge = null;
     s.airApexY = position.y;
+    s.mantle = null;
   }
 
   step(input: InputFrame, mods: StatModifiers, world: WorldFeatureState, time: number): SimEvent[] {
@@ -73,7 +76,10 @@ export class PlayerSim {
     this.updateCrouch(input);
     startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
 
-    // 2. Special modes (Tasks 6 mantle, 8 zip line, 10 grind) run here and return early.
+    // 2. Special modes run here and return early: mantle (Task 6); Tasks 8 zip line and 10 grind go here too.
+    //    Ledge detection runs before the move, so the stored horizontal velocity is the approach velocity
+    //    (a blocking move would already have removed the part into the ledge face).
+    if (this.tryMantle(input)) return events;
 
     // 3. Locomotion: ground or air acceleration toward the wish direction (a slide drives itself in step 9).
     if (this.state.mode !== 'slide') this.applyLocomotion(input, mods);
@@ -91,6 +97,25 @@ export class PlayerSim {
     updateSlide(this.state, move, input, this.cfg, this.dt);
 
     return events;
+  }
+
+  /**
+   * Advances a mantle in progress, or starts one when a ledge is found. While mantling the body is placed on the
+   * mantle path directly (no collisions); the mantle finishes in ground mode. Returns true when this step was a
+   * mantle step (the rest of the step is skipped).
+   */
+  private tryMantle(input: InputFrame): boolean {
+    const s = this.state;
+    if (s.mode !== 'mantle') {
+      const canStart = !s.onBoard && input.move.y > 0 && (s.mode === 'ground' || s.mode === 'air');
+      const top = canStart ? findLedge(this.body, s, this.cfg) : null;
+      if (!top) return false;
+      startMantle(s, top);
+    }
+    updateMantle(s, this.cfg, this.dt);
+    this.body.setFeet(s.position);
+    s.position = this.body.feet;
+    return true;
   }
 
   private updateLookAndTimers(input: InputFrame): void {
@@ -164,7 +189,8 @@ export class PlayerSim {
       if (!wasGrounded) {
         events.push({ kind: 'landed', fallHeight: Math.max(s.airApexY, s.position.y) - s.position.y });
       }
-      if (s.mode !== 'slide') s.mode = 'ground';
+      // Only an air landing changes the mode: a slide stays a slide (mantle steps never reach here).
+      if (s.mode === 'air') s.mode = 'ground';
       s.velocity = vec3(s.velocity.x, 0, s.velocity.z);
       s.groundNormal = move.groundNormal;
       s.lastGrounded = vec3(s.position.x, s.position.y, s.position.z);

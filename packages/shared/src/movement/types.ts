@@ -2,6 +2,17 @@ import type { Vec3 } from '../math/vec3';
 
 export type MoveMode = 'ground' | 'air' | 'slide' | 'wallrun' | 'mantle' | 'zipline' | 'grind';
 
+export interface MantleState {
+  /** Feet when the mantle started. */
+  from: Vec3;
+  /** Feet on top of the ledge. */
+  to: Vec3;
+  /** Seconds since the mantle started. */
+  t: number;
+  /** Horizontal velocity (y = 0) at the start, restored when the mantle finishes. */
+  horizontalVelocity: Vec3;
+}
+
 export interface PlayerState {
   /** Feet: the capsule bottom minus controller.offset, i.e. (about) the ground contact point when standing. */
   position: Vec3;
@@ -22,6 +33,8 @@ export interface PlayerState {
   jumpPressAge: number | null;
   /** Highest feet y since the player was last grounded (used for fall height). */
   airApexY: number;
+  /** The mantle in progress (mode 'mantle'), else null. */
+  mantle: MantleState | null;
 }
 
 export interface StatModifiers {
