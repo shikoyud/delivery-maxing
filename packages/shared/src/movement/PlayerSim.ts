@@ -5,10 +5,11 @@ import type { MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
 import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection } from './ground';
-import { ageJumpBuffer, coyoteTicks, tryJump } from './jump';
+import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
 import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
+import { canStartWallRun, findWall, startWallRun, updateWallRun, wallJump, wallRunGravityScale } from './wallRun';
 
 /** Minimum blocked distance (m) before a wall or ceiling contact removes velocity. */
 const BLOCK_EPS = 1e-4;
@@ -48,6 +49,7 @@ export class PlayerSim {
       jumpPressAge: null,
       airApexY: spawn.y,
       mantle: null,
+      wallRun: { time: 0, normal: null, lastNormal: null },
     };
   }
 
@@ -64,6 +66,7 @@ export class PlayerSim {
     s.jumpPressAge = null;
     s.airApexY = position.y;
     s.mantle = null;
+    s.wallRun = { time: 0, normal: null, lastNormal: null };
   }
 
   step(input: InputFrame, mods: StatModifiers, world: WorldFeatureState, time: number): SimEvent[] {
@@ -81,11 +84,19 @@ export class PlayerSim {
     //    (a blocking move would already have removed the part into the ledge face).
     if (this.tryMantle(input)) return events;
 
-    // 3. Locomotion: ground or air acceleration toward the wish direction (a slide drives itself in step 9).
-    if (this.state.mode !== 'slide') this.applyLocomotion(input, mods);
+    // 3. Wall-run: a buffered jump wall-jumps off the wall; otherwise the run holds to the wall (or ends).
+    //    Locomotion: ground or air acceleration toward the wish direction. A slide drives itself in step 9 and a
+    //    wall-run drives itself here; a wall-jump tick keeps its launch velocity.
+    if (this.state.mode === 'wallrun' && jumpBuffered(this.state, this.cfg)) {
+      wallJump(this.state, this.cfg, mods);
+      events.push({ kind: 'jumped' });
+    } else {
+      if (this.state.mode === 'wallrun') updateWallRun(this.state, this.body, input, this.cfg, this.dt);
+      if (this.state.mode !== 'slide' && this.state.mode !== 'wallrun') this.applyLocomotion(input, mods);
 
-    // 4. Jump (buffer + coyote).
-    if (tryJump(this.state, input, this.cfg, mods, this.dt)) events.push({ kind: 'jumped' });
+      // 4. Jump (buffer + coyote).
+      if (tryJump(this.state, input, this.cfg, mods, this.dt)) events.push({ kind: 'jumped' });
+    }
 
     // 5–7. Gravity, speed cap, collide-and-slide move.
     const move = this.integrateAndMove();
@@ -93,8 +104,9 @@ export class PlayerSim {
     // 8. Landing, air timers and apex tracking.
     this.resolveContacts(move, events);
 
-    // 9. Post-move checks: slide physics and end (Task 5); Tasks 7 wall-run and 9 triggers run here too.
+    // 9. Post-move checks: slide physics and end (Task 5), wall-run start (Task 7); Task 9 triggers run here too.
     updateSlide(this.state, move, input, this.cfg, this.dt);
+    this.tryStartWallRun(input);
 
     return events;
   }
@@ -116,6 +128,14 @@ export class PlayerSim {
     this.body.setFeet(s.position);
     s.position = this.body.feet;
     return true;
+  }
+
+  /** Starts a wall-run when airborne beside a wall that passes canStartWallRun. */
+  private tryStartWallRun(input: InputFrame): void {
+    const s = this.state;
+    if (s.mode !== 'air' || s.grounded || s.onBoard) return;
+    const normal = findWall(this.body, s, this.cfg);
+    if (normal && canStartWallRun(s, normal, input, this.cfg)) startWallRun(s, normal, this.cfg);
   }
 
   private updateLookAndTimers(input: InputFrame): void {
@@ -144,14 +164,15 @@ export class PlayerSim {
 
   /**
    * Gravity is integrated exactly for a constant acceleration (dy = vy·dt − ½·g·dt²), so the jump apex
-   * is exact at any tick rate. Snap-to-ground is only enabled while not moving up.
+   * is exact at any tick rate. Snap-to-ground is only enabled while not moving up. A wall-run scales gravity.
    */
   private integrateAndMove(): MoveResult {
     const s = this.state;
     const { dt, cfg } = this;
+    const g = cfg.gravity * wallRunGravityScale(s, cfg);
     const vy0 = s.velocity.y;
-    const dy = vy0 * dt - 0.5 * cfg.gravity * dt * dt;
-    s.velocity = clampHorizontal(vec3(s.velocity.x, vy0 - cfg.gravity * dt, s.velocity.z), cfg.speedCap);
+    const dy = vy0 * dt - 0.5 * g * dt * dt;
+    s.velocity = clampHorizontal(vec3(s.velocity.x, vy0 - g * dt, s.velocity.z), cfg.speedCap);
     const desired = vec3(s.velocity.x * dt, dy, s.velocity.z * dt);
     const move = this.body.move(desired, s.velocity.y <= 0);
     s.position = this.body.feet;
@@ -189,8 +210,10 @@ export class PlayerSim {
       if (!wasGrounded) {
         events.push({ kind: 'landed', fallHeight: Math.max(s.airApexY, s.position.y) - s.position.y });
       }
-      // Only an air landing changes the mode: a slide stays a slide (mantle steps never reach here).
-      if (s.mode === 'air') s.mode = 'ground';
+      // An air or wall-run landing changes the mode: a slide stays a slide (mantle steps never reach here).
+      if (s.mode === 'air' || s.mode === 'wallrun') s.mode = 'ground';
+      // Landing unlocks every wall for wall-running again.
+      s.wallRun = { time: 0, normal: null, lastNormal: null };
       s.velocity = vec3(s.velocity.x, 0, s.velocity.z);
       s.groundNormal = move.groundNormal;
       s.lastGrounded = vec3(s.position.x, s.position.y, s.position.z);
@@ -198,7 +221,8 @@ export class PlayerSim {
       s.airApexY = s.position.y;
     } else {
       s.airTicks = wasGrounded ? 0 : s.airTicks + 1;
-      s.mode = 'air';
+      // Leaving the ground on foot (or mid-slide) goes airborne; a wall-run keeps its own mode until it ends.
+      if (s.mode === 'ground' || s.mode === 'slide') s.mode = 'air';
       s.groundNormal = vec3(0, 1, 0);
       s.airApexY = Math.max(s.airApexY, s.position.y);
     }

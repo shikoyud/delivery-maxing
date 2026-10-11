@@ -33,6 +33,8 @@ export interface MovementConfig {
     maxApproachAngleDeg: number;
     wallJumpPush: number;
     sameWallDot: number;
+    /** Speed (m/s) at which a wall-runner is pulled toward the wall so contact holds. */
+    stickSpeed: number;
   };
   zipLine: { attachDistance: number; hangDrop: number; baseSpeed: number; maxSpeed: number; levelThreshold: number };
   jumpPad: { retriggerCooldown: number };

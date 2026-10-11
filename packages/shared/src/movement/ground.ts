@@ -3,16 +3,23 @@ import type { InputFrame } from '../input/inputFrame';
 import { horizontalLength, vec3, type Vec3 } from '../math/vec3';
 import type { PlayerState, StatModifiers } from './types';
 
-/**
- * World-space horizontal unit vector (or zero) for the move input, rotated by look yaw.
- * Yaw 0 faces -Z and positive yaw turns left, so forward = (-sin, 0, -cos) and right = (cos, 0, -sin).
- */
+/** Horizontal forward unit vector for look yaw. Yaw 0 faces -Z and positive yaw turns left. */
+export function facing(yaw: number): Vec3 {
+  return vec3(-Math.sin(yaw), 0, -Math.cos(yaw));
+}
+
+/** Horizontal right unit vector for look yaw (see facing). */
+export function rightOf(yaw: number): Vec3 {
+  return vec3(Math.cos(yaw), 0, -Math.sin(yaw));
+}
+
+/** World-space horizontal unit vector (or zero) for the move input, rotated by look yaw. */
 export function wishDirection(input: InputFrame): Vec3 {
   const { x: strafe, y: fwd } = input.move;
-  const s = Math.sin(input.look.yaw);
-  const c = Math.cos(input.look.yaw);
-  const x = -s * fwd + c * strafe;
-  const z = -c * fwd - s * strafe;
+  const f = facing(input.look.yaw);
+  const r = rightOf(input.look.yaw);
+  const x = f.x * fwd + r.x * strafe;
+  const z = f.z * fwd + r.z * strafe;
   const l = Math.hypot(x, z);
   return l > 1e-9 ? vec3(x / l, 0, z / l) : vec3(0, 0, 0);
 }

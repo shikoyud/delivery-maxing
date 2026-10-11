@@ -19,6 +19,11 @@ export function ageJumpBuffer(state: PlayerState, input: InputFrame, cfg: Moveme
   if (state.jumpPressAge !== null && state.jumpPressAge > bufferTicks(cfg)) state.jumpPressAge = null;
 }
 
+/** True when a jump press is buffered (age ≤ bufferTicks). */
+export function jumpBuffered(state: PlayerState, cfg: MovementConfig): boolean {
+  return state.jumpPressAge !== null && state.jumpPressAge <= bufferTicks(cfg);
+}
+
 /**
  * Jumps when a press is buffered (age ≤ bufferTicks) and the player is grounded or within coyote time
  * (airTicks ≤ coyoteTicks). Consumes the press and pushes airTicks past the coyote window.
@@ -26,8 +31,7 @@ export function ageJumpBuffer(state: PlayerState, input: InputFrame, cfg: Moveme
  */
 export function tryJump(state: PlayerState, input: InputFrame, cfg: MovementConfig, mods: StatModifiers, dt: number): boolean {
   void dt; // part of the shared movement-function signature; windows are counted in ticks
-  const age = state.jumpPressAge;
-  if (age === null || age > bufferTicks(cfg)) return false;
+  if (!jumpBuffered(state, cfg)) return false;
   if (!state.grounded && state.airTicks > coyoteTicks(cfg)) return false;
   state.velocity = { ...state.velocity, y: jumpVelocity(cfg, mods) };
   state.jumpPressAge = null;

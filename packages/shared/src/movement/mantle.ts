@@ -1,6 +1,7 @@
 import type { MovementConfig } from '../config/types';
 import { lerpVec3, vec3, type Vec3 } from '../math/vec3';
-import type { PlayerBody } from './body';
+import { WALL_MAX_NY, type PlayerBody } from './body';
+import { facing } from './ground';
 import type { MantleState, PlayerState } from './types';
 
 export type { MantleState };
@@ -19,15 +20,8 @@ const TOP_PROBE_EXTRA = 0.2;
 const HEIGHT_EPS = 1e-3;
 /** Ground probe for the height base: starts this far above the feet and reaches the same distance below them. */
 const BASE_PROBE = 0.1;
-/** Faces with |n.y| below this count as walls. */
-const WALL_MAX_NY = 0.3;
 /** The rise takes this fraction of the mantle; the rest moves forward onto the top. */
 const RISE_FRACTION = 0.6;
-
-/** Horizontal facing for look yaw (yaw 0 faces -Z, positive yaw turns left). */
-export function facing(yaw: number): Vec3 {
-  return vec3(-Math.sin(yaw), 0, -Math.cos(yaw));
-}
 
 /**
  * Looks for a mantle-able ledge straight ahead. Returns the feet position on top of the ledge, or null.

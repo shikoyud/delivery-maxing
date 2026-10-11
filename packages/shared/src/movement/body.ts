@@ -8,9 +8,9 @@ export interface MoveResult {
   grounded: boolean;
   groundNormal: Vec3;
   groundSurface: Surface;
-  /** Collision normals (pointing out of the obstacle) with |n.y| < 0.3. */
+  /** Collision normals (pointing out of the obstacle) with |n.y| < WALL_MAX_NY. */
   wallNormals: Vec3[];
-  /** Collision normals with n.y < -0.3 (ceilings). */
+  /** Collision normals with n.y < -WALL_MAX_NY (ceilings). */
   ceilingNormals: Vec3[];
   /** The translation the controller actually applied. */
   movement: Vec3;
@@ -21,6 +21,9 @@ export interface RayHit {
   normal: Vec3;
   distance: number;
 }
+
+/** Faces with |n.y| below this count as walls (wall contacts, mantle and wall-run probes). */
+export const WALL_MAX_NY = 0.3;
 
 const DEG = Math.PI / 180;
 const UP = { x: 0, y: 1, z: 0 };
@@ -105,8 +108,8 @@ export class PlayerBody {
       const hit = this.controller.computedCollision(i);
       if (!hit) continue;
       const nn = vec3(hit.normal1.x, hit.normal1.y, hit.normal1.z);
-      if (Math.abs(nn.y) < 0.3) wallNormals.push(nn);
-      else if (nn.y < -0.3) ceilingNormals.push(nn);
+      if (Math.abs(nn.y) < WALL_MAX_NY) wallNormals.push(nn);
+      else if (nn.y < -WALL_MAX_NY) ceilingNormals.push(nn);
     }
     const t = this.body.translation();
     this.body.setNextKinematicTranslation({ x: t.x + m.x, y: t.y + m.y, z: t.z + m.z });
