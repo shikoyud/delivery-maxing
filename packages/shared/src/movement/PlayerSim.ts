@@ -8,6 +8,7 @@ import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection
 import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
+import { tryAttachZip, updateZip } from './zipLine';
 import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
 import { canStartWallRun, findWall, startWallRun, updateWallRun, wallJump, wallRunGravityScale } from './wallRun';
 
@@ -50,6 +51,7 @@ export class PlayerSim {
       airApexY: spawn.y,
       mantle: null,
       wallRun: { time: 0, normal: null, lastNormal: null },
+      zip: null,
     };
   }
 
@@ -67,6 +69,7 @@ export class PlayerSim {
     s.airApexY = position.y;
     s.mantle = null;
     s.wallRun = { time: 0, normal: null, lastNormal: null };
+    s.zip = null;
   }
 
   step(input: InputFrame, mods: StatModifiers, world: WorldFeatureState, time: number): SimEvent[] {
@@ -79,9 +82,10 @@ export class PlayerSim {
     this.updateCrouch(input);
     startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
 
-    // 2. Special modes run here and return early: mantle (Task 6); Tasks 8 zip line and 10 grind go here too.
+    // 2. Special modes run here and return early: mantle (Task 6); zip line (Task 8); Task 10 grind goes here too.
     //    Ledge detection runs before the move, so the stored horizontal velocity is the approach velocity
     //    (a blocking move would already have removed the part into the ledge face).
+    if (this.tryZip(input, mods)) return events;
     if (this.tryMantle(input)) return events;
 
     // 3. Wall-run: a buffered jump wall-jumps off the wall; otherwise the run holds to the wall (or ends).
@@ -125,6 +129,28 @@ export class PlayerSim {
       startMantle(s, top);
     }
     updateMantle(s, this.cfg, this.dt);
+    this.body.setFeet(s.position);
+    s.position = this.body.feet;
+    return true;
+  }
+
+  /**
+   * Advances a zip line ride, or attaches when interact is pressed near a line. While riding the body is placed on
+   * the line directly (no collisions). Returns true when this step was a ride step (the rest of the step is
+   * skipped); the tick that detaches is a ride step too.
+   */
+  private tryZip(input: InputFrame, mods: StatModifiers): boolean {
+    const s = this.state;
+    if (s.mode !== 'zipline') {
+      const canAttach = s.mode === 'ground' || s.mode === 'air' || s.mode === 'slide' || s.mode === 'wallrun';
+      if (!canAttach || !tryAttachZip(s, input, this.map.zipLines, this.cfg)) return false;
+    }
+    const line = this.map.zipLines.find((l) => l.id === s.zip?.id);
+    if (line) updateZip(s, line, input, this.cfg, mods, this.dt);
+    else {
+      s.zip = null;
+      s.mode = 'air';
+    }
     this.body.setFeet(s.position);
     s.position = this.body.feet;
     return true;

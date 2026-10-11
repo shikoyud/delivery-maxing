@@ -45,6 +45,8 @@ export interface PlayerState {
   /** The mantle in progress (mode 'mantle'), else null. */
   mantle: MantleState | null;
   wallRun: WallRunState;
+  /** The zip line ride in progress (mode 'zipline'): line id, metres from its `a` end, direction (+1 toward b), speed. */
+  zip: { id: string; s: number; dir: 1 | -1; speed: number } | null;
 }
 
 export interface StatModifiers {
