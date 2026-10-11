@@ -1,7 +1,7 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Draft for review
+- **Status:** Approved
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
