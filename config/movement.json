@@ -1,0 +1,17 @@
+{
+  "tickRate": 30, "maxStepsPerFrame": 5, "gravity": 20, "speedCap": 18,
+  "capsule": { "radius": 0.35, "height": 1.8, "crouchHeight": 1.1 },
+  "controller": { "offset": 0.02, "maxStepHeight": 0.4, "minStepWidth": 0.2, "snapToGround": 0.3, "maxSlopeClimbDeg": 50, "minSlopeSlideDeg": 55 },
+  "run": { "runSpeed": 5.5, "sprintSpeed": 8, "crouchSpeed": 3, "groundAccel": 60, "groundDecel": 40, "airAccel": 14, "overspeedDecay": 4 },
+  "jump": { "height": 1.2, "coyoteTime": 0.1, "bufferTime": 0.1 },
+  "mantle": { "minHeight": 0.4, "maxHeight": 1.5, "reach": 0.8, "duration": 0.3 },
+  "slide": { "minEntrySpeed": 6, "friction": 2, "endSpeed": 3.5, "slopeGravityScale": 1 },
+  "chute": { "friction": 0.4, "steerAccel": 4 },
+  "wallRun": { "maxTime": 1.5, "minSpeed": 5, "checkDistance": 0.6, "gravityScale": 0.15, "maxApproachAngleDeg": 60, "wallJumpPush": 6, "sameWallDot": 0.7 },
+  "zipLine": { "attachDistance": 2, "hangDrop": 2.0, "baseSpeed": 10, "maxSpeed": 16, "levelThreshold": 0.5 },
+  "jumpPad": { "retriggerCooldown": 0.5 },
+  "boostOrb": { "radius": 1.0, "speedMultiplier": 1.4, "duration": 3, "respawnTime": 30 },
+  "rail": { "snapDistance": 0.6, "friction": 0.5, "minSpeedFoot": 6 },
+  "board": { "topSpeed": 12, "accel": 6, "brakeDecel": 12, "friction": 1, "turnRate": 2.5, "railMinSpeed": 10 },
+  "fall": { "outOfBoundsY": -3, "boundsMargin": 20 }
+}

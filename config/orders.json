@@ -1,0 +1,12 @@
+{
+  "board": { "size": 6, "refreshSeconds": 60, "cancelCooldownSeconds": 30 },
+  "backpack": { "baseSlots": 1, "maxSlots": 5 },
+  "bands": { "shortMax": 150, "mediumMax": 350 },
+  "points": { "short": 1, "medium": 2, "long": 3, "chain": 4, "expressOnTime": 1, "fragileIntact": 1, "heavy": 1 },
+  "coins": { "short": 10, "medium": 20, "long": 30, "chain": 40, "expressOnTime": 10, "fragileIntact": 10, "heavy": 10 },
+  "express": { "distanceFactor": 1.5, "extraSeconds": 10 },
+  "fragile": { "maxFallMeters": 7 },
+  "heavy": { "slots": 2, "jumpHeightMultiplier": 0.9 },
+  "mix": { "typeWeights": { "dropoff": 5, "pickup": 4, "chain": 2 }, "modifierWeights": { "none": 5, "express": 2, "fragile": 2, "heavy": 2 } },
+  "zones": { "poiRadius": 3, "poiHeight": 4 }
+}
