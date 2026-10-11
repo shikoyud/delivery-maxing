@@ -2,6 +2,7 @@ import { movementConfig } from '../../src/config';
 import { emptyInput, type InputFrame } from '../../src/input/inputFrame';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import { PlayerSim } from '../../src/movement/PlayerSim';
+import { createWorldFeatureState } from '../../src/movement/triggers';
 import { NO_MODS, type PlayerState, type SimEvent, type StatModifiers, type WorldFeatureState } from '../../src/movement/types';
 import type { BoostOrb, Checkpoint, JumpPad, MapData, Rail, Solid, ZipLine } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier } from '../../src/world/physicsWorld';
@@ -92,7 +93,7 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   };
   const physics = createPhysicsWorld(rapier, map);
   const sim = new PlayerSim(physics, map, movementConfig, spawn, yaw);
-  const world: WorldFeatureState = { orbAvailableAt: new Map() };
+  const world = createWorldFeatureState(map);
 
   const h: Harness = {
     sim,

@@ -47,6 +47,10 @@ export interface PlayerState {
   wallRun: WallRunState;
   /** The zip line ride in progress (mode 'zipline'): line id, metres from its `a` end, direction (+1 toward b), speed. */
   zip: { id: string; s: number; dir: 1 | -1; speed: number } | null;
+  /** Seconds of boost-orb speed boost left (0 when none). */
+  boostLeft: number;
+  /** Seconds until each jump pad (by id) can trigger again; absent or 0 when ready. */
+  padCooldown: Record<string, number>;
 }
 
 export interface StatModifiers {
@@ -56,9 +60,14 @@ export interface StatModifiers {
 
 export const NO_MODS: StatModifiers = Object.freeze({ speedMul: 1, jumpHeightMul: 1 });
 
-export type SimEvent = { kind: 'jumped' } | { kind: 'landed'; fallHeight: number };
+export type SimEvent =
+  | { kind: 'jumped' }
+  | { kind: 'landed'; fallHeight: number }
+  | { kind: 'jumpPad'; padId: string }
+  | { kind: 'orbCollected'; orbId: string }
+  | { kind: 'respawned'; checkpointId: string };
 
-/** Shared, room-wide feature state (filled by Task 9). */
+/** Shared, room-wide feature state (see triggers.ts). */
 export interface WorldFeatureState {
   orbAvailableAt: Map<string, number>;
 }

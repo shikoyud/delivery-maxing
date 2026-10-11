@@ -8,6 +8,7 @@ import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection
 import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
+import { applyTriggers } from './triggers';
 import { tryAttachZip, updateZip } from './zipLine';
 import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
 import { canStartWallRun, findWall, startWallRun, updateWallRun, wallJump, wallRunGravityScale } from './wallRun';
@@ -52,6 +53,8 @@ export class PlayerSim {
       mantle: null,
       wallRun: { time: 0, normal: null, lastNormal: null },
       zip: null,
+      boostLeft: 0,
+      padCooldown: {},
     };
   }
 
@@ -72,9 +75,15 @@ export class PlayerSim {
     s.zip = null;
   }
 
+  /** One tick: movement (all modes), then pads, orbs and out-of-bounds respawn. */
   step(input: InputFrame, mods: StatModifiers, world: WorldFeatureState, time: number): SimEvent[] {
-    void world; // used by triggers (Task 9)
-    void time;
+    this.state.boostLeft = Math.max(0, this.state.boostLeft - this.dt);
+    const events = this.stepMovement(input, mods);
+    events.push(...applyTriggers(this.state, this.body, this.map, world, this.cfg, time));
+    return events;
+  }
+
+  private stepMovement(input: InputFrame, mods: StatModifiers): SimEvent[] {
     const events: SimEvent[] = [];
 
     // 1. Look and timers; crouch (stays crouched while standing is blocked); crouch-slide entry.
@@ -108,7 +117,7 @@ export class PlayerSim {
     // 8. Landing, air timers and apex tracking.
     this.resolveContacts(move, events);
 
-    // 9. Post-move checks: slide physics and end (Task 5), wall-run start (Task 7); Task 9 triggers run here too.
+    // 9. Post-move checks: slide physics and end (Task 5), wall-run start (Task 7); triggers run after this method (step).
     updateSlide(this.state, move, input, this.cfg, this.dt);
     this.tryStartWallRun(input);
 

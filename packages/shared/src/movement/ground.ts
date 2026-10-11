@@ -24,6 +24,11 @@ export function wishDirection(input: InputFrame): Vec3 {
   return l > 1e-9 ? vec3(x / l, 0, z / l) : vec3(0, 0, 0);
 }
 
+/** Speed multiplier from a boost orb: boostOrb.speedMultiplier while boostLeft > 0, else 1. Boards use it too. */
+export function boostMultiplier(state: PlayerState, cfg: MovementConfig): number {
+  return state.boostLeft > 0 ? cfg.boostOrb.speedMultiplier : 1;
+}
+
 /**
  * Speed the player is trying to reach on the ground: run or sprint, scaled by stick magnitude and speedMul.
  * Crouched (crouch-walk), the target is capped at run.crouchSpeed.
@@ -32,7 +37,7 @@ export function targetGroundSpeed(input: InputFrame, state: PlayerState, cfg: Mo
   const magnitude = Math.min(1, Math.hypot(input.move.x, input.move.y));
   if (magnitude === 0) return 0;
   const base = input.sprint.held ? cfg.run.sprintSpeed : cfg.run.runSpeed;
-  const target = base * magnitude * mods.speedMul;
+  const target = base * magnitude * mods.speedMul * boostMultiplier(state, cfg);
   return state.crouched ? Math.min(target, cfg.run.crouchSpeed) : target;
 }
 

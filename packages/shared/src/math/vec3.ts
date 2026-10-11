@@ -10,6 +10,7 @@ export const sub = (a: Vec3, b: Vec3): Vec3 => vec3(a.x - b.x, a.y - b.y, a.z - 
 export const scale = (v: Vec3, k: number): Vec3 => vec3(v.x * k, v.y * k, v.z * k);
 export const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
 export const length = (v: Vec3): number => Math.sqrt(dot(v, v));
+export const distance = (a: Vec3, b: Vec3): number => length(sub(a, b));
 export const horizontalLength = (v: Vec3): number => Math.hypot(v.x, v.z);
 
 export function normalize(v: Vec3): Vec3 {
