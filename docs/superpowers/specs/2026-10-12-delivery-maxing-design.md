@@ -10,14 +10,14 @@ Delivery Maxing is a first-person, low-poly, multiplayer parkour courier game th
 
 Every 10 minutes (one **epoch**), a share of an on-chain reward pool is paid out in **AMZNx** (tokenized Amazon stock on Solana, mint `Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg`). Each player gets an amount proportional to the Delivery Points they earned in that epoch. Players who **lock GAME** in the reward program get a points multiplier of up to +30%. The pool is funded by Pump.fun creator fees from the game's own token, **GAME**, which is launched on Pump.fun paired with AMZNx.
 
-GAME is spent (burned, at fixed USD prices) on high-impact upgrades, the seasonal Courier Pass, the rotating premium shop, crews and gifts. Cosmetics and low-impact upgrades are also available for **Coins**, an off-chain currency earned by playing.
+GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium board skins. Cosmetics and low-impact upgrades are bought with **Coins**, an off-chain currency earned by playing.
 
 ### Design goals
 
 1. **Movement is the fun.** If running around the city is not enjoyable on its own, nothing else matters.
 2. **Skill decides most of the outcome.** Upgrades reach their ceiling quickly. Lockers get a capped edge (at most +30%). Beyond that, route knowledge and movement skill decide earnings.
 3. **Rewards are honest and verifiable.** The pool, epoch results, locks and claims live on-chain. Delivery validation is server-authoritative.
-4. **Token demand comes from use.** GAME is burned on upgrades, passes, cosmetics and crews, and locked for the points bonus.
+4. **Token demand comes from use.** GAME is burned on upgrades and premium skins, and locked for the points bonus.
 
 ## 2. Decisions log
 
@@ -34,7 +34,7 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades, the seasona
 | Fee collection | The Pump.fun creator-fee split sends a share to the reward program's vault. Harvesting into the vault is permissionless. |
 | Reward pool | Fully on-chain program. Each epoch pays a fraction of the unreserved vault. Players claim their rewards. |
 | GAME pricing | Everything bought with GAME has a fixed USD price. A price keeper posts a 30-minute average GAME→USD rate, bounded by on-chain safety limits. |
-| GAME uses | Burned on token upgrades, the Courier Pass, the rotating premium shop and limited drops, crews and gifts. Locked for a points multiplier. |
+| GAME uses | Burned on token upgrades and premium board skins. Locked for a points multiplier. |
 | Spender advantage | Lock-to-boost only: up to +30% Delivery Points, with diminishing returns. No VIP levels. |
 | Ranks | Kept. They unlock Express and Chain orders and cosmetics. No shortcut doors. |
 | Catch-up | Upgrades hit their ceiling fast. No rookie boost. |
@@ -167,6 +167,7 @@ These are paid by burning GAME at a fixed USD price. Ownership is recorded on-ch
 | Backpack | 2 → 3 → 4 → 5 slots (4 purchases) | More concurrent orders. The base is 1 slot. |
 | Shoes | 5 tiers | +3.5% sprint speed per tier, plus small jump and slide gains. Fully maxed is about +17.5%. |
 | Skateboard | Buy the board, then 3 tiers | Base board top speed 12 m/s. Each tier adds top speed and turning, up to 15 m/s. |
+| Premium board skins | Individual items (up to 64) | Cosmetic only |
 
 USD prices are set in the program's settings by the admin multisig.
 
@@ -182,7 +183,7 @@ Coins are off-chain, stored in the database, and cannot be traded or withdrawn.
 
 ### 6.4 USD pricing mechanism
 
-This applies to everything bought with GAME (§6.2, §6.6–6.9) and to valuing locked GAME (§6.5).
+This applies to everything bought with GAME (§6.2) and to valuing locked GAME (§6.5).
 
 - Each GAME-priced item has `usd_price` (6 decimals) stored on-chain.
 - The **price keeper** computes a **30-minute average** GAME→USD rate (the GAME/AMZNx pool average × the AMZNx/USD average) and posts it every few minutes.
@@ -210,41 +211,9 @@ Players can lock GAME in the reward program to multiply the Delivery Points that
 
 - **Warm-up:** newly locked GAME starts counting **24 hours** after deposit. Each new deposit restarts the warm-up timer for the not-yet-active amount only.
 - **Unlocking:** the player requests an unlock. That amount stops counting **immediately** and can be withdrawn after a **7-day cooldown**. Unlock requests take from the warming amount first, then from the active amount.
-- **Scope:** the multiplier applies only to the reward share. Ranks, Courier Pass XP and crew leaderboards use base points.
+- **Scope:** the multiplier applies only to the reward share. Ranks use base points.
 - **Custody:** locked GAME sits in a program-owned vault, separate from the AMZNx reward vault. No admin instruction can move it. The emergency pause can temporarily stop withdrawals, but can never redirect funds.
 - All values (30% cap, $1,500 cap, 24 h, 7 days) are program config, changeable by the admin multisig.
-
-### 6.6 Courier Pass (seasonal)
-
-- Seasons last **30 days**.
-- **Free track:** available to everyone. Rewards are Coins and basic cosmetics.
-- **Premium track:** bought with GAME, default **$10**. Rewards are exclusive cosmetics and Coins. Buying mid-season unlocks all levels already reached.
-- **Pass XP** comes from base Delivery Points. There are **50 levels** per season.
-- Rewards are **cosmetic and Coins only**. The pass never affects earnings.
-
-### 6.7 Premium shop and limited drops
-
-- **Token-only items:** outfits, trails, emotes, nameplates and premium board skins.
-- **Weekly rotation:** 6 featured items change every week.
-- **Limited drops:** available for a **48-hour** window, optionally with a capped supply and numbered copies (for example "#37 of 200"). Supply caps are enforced on-chain.
-
-### 6.8 Crews
-
-- **Creating a crew:** costs **$5** in GAME. The default crew size is 10 members.
-- **Crew upgrades** (GAME, any member can pay):
-  - Member cap 20: **$10**
-  - Member cap 30: **$20**
-  - Custom emblem: **$5**
-  - Crew colors: **$3**
-- **Crew tag** shown above members' nameplates.
-- **Weekly crew leaderboard** ranked by members' total base points. It is for bragging rights only; crews get no pool payout.
-- Membership, roles (leader, member) and invites are stored off-chain in Postgres. Crew purchases are recorded on-chain against the crew's id.
-
-### 6.9 Gifting
-
-Any premium shop item or the Courier Pass premium track can be bought for another wallet. Token upgrades (§6.2) cannot be gifted.
-
-All USD prices in §6.6–6.8 are starting values, set on-chain by the admin multisig.
 
 ## 7. Multiplayer and combat
 
@@ -275,8 +244,8 @@ All USD prices in §6.6–6.8 are starting values, set on-chain by the admin mul
 
 - **Sign-in:** the player connects a wallet through the Solana Wallet Adapter / Wallet Standard. Phantom, Solflare and OKX Wallet are listed explicitly. The player signs a Sign-In With Solana message containing a server nonce. The server verifies it and issues a session token bound to the wallet.
 - **The wallet is the account.** Coins, ranks, cosmetics and Delivery Points are keyed by wallet address.
-- **On-chain actions from the client:** buying upgrades and items (including gifts and crew purchases), locking, unlocking, withdrawing and claiming rewards. All are signed by the player's wallet.
-- **Server sync:** the server reads each player's on-chain upgrade, receipt and lock accounts when they join and subscribes to changes. Purchases take effect only after they are confirmed on-chain.
+- **On-chain actions from the client:** buying upgrades and skins, locking, unlocking, withdrawing and claiming rewards. All are signed by the player's wallet.
+- **Server sync:** the server reads each player's on-chain upgrade and lock accounts when they join and subscribes to changes. Purchases take effect only after they are confirmed on-chain.
 
 ## 9. Reward program (Solana, Anchor)
 
@@ -290,16 +259,14 @@ All USD prices in §6.6–6.8 are starting values, set on-chain by the admin mul
 
 | Account | Contents |
 |---|---|
-| `Config` | Admin (multisig), server key, keeper key, GAME mint, AMZNx mint, payout fraction (default 10%), price limits, lock settings (§6.5), pause flags, upgrade USD prices |
+| `Config` | Admin (multisig), server key, keeper key, GAME mint, AMZNx mint, payout fraction (default 10%), price limits, lock settings (§6.5), pause flags, USD prices of upgrades and premium skins |
 | `Vault` | PDA-owned AMZNx token account; tracks `reserved` (allocated but not yet claimed) |
 | `LockVault` | PDA-owned GAME token account holding all locked GAME |
 | `Rate` | GAME→USD rate and last-updated timestamp |
 | `Epoch` (latest) | Epoch number, Merkle root of cumulative totals, allocation |
 | `Claimed` (per wallet) | Total AMZNx already claimed |
-| `Upgrades` (per wallet) | Backpack tier, shoes tier, board tier (0 = not owned) |
+| `Upgrades` (per wallet) | Backpack tier, shoes tier, board tier (0 = not owned), premium skin bitset |
 | `Lock` (per wallet) | `active`, `warming`, `warming_since`, `unlocking`, `unlock_at` |
-| `Item` (per catalog item) | Item id, kind (cosmetic, pass, crew), USD price, sale window, optional max supply, number sold |
-| `Receipt` (per owner + item) | Proof of ownership. The owner is a wallet, or a crew id for crew items. Holds a serial number for limited items. |
 
 ### 9.3 Instructions
 
@@ -308,13 +275,11 @@ All USD prices in §6.6–6.8 are starting values, set on-chain by the admin mul
 | `harvest` | Anyone | Claims accrued Pump.fun creator fees into the vault through a CPI, with the vault PDA as signer. The only destination is the vault. |
 | `settle_epoch` | Server key | Takes `(epoch_number, merkle_root, allocation)`. Requires `epoch_number = last + 1` and `allocation ≤ payout_fraction × (vault balance − reserved)`. Stores the root and increases `reserved`. |
 | `claim` | Player | Takes `(cumulative_amount, proof)`. Verifies the leaf `(wallet, cumulative_amount)` against the latest root, pays `cumulative_amount − claimed`, and updates `Claimed` and `reserved`. |
-| `buy_upgrade` | Player | Takes `(upgrade, tier, max_game)`. Checks pause, rate freshness and tier order, computes `game_to_burn`, burns the player's GAME and records the tier, all in one instruction. |
-| `buy_item` | Payer | Takes `(item_id, recipient, max_game)`. The recipient is the payer, another wallet (a gift) or a crew id. Checks the sale window, supply cap and that the recipient doesn't already own the item, then burns the payer's GAME and creates the `Receipt`. |
+| `buy_upgrade` | Player | Takes `(upgrade, tier_or_skin, max_game)`. Checks pause, rate freshness, tier order (or that the skin isn't already owned), computes `game_to_burn`, burns the player's GAME and records the purchase, all in one instruction. |
 | `lock` | Player | Moves GAME into `LockVault` and adds it to `warming` (restarting `warming_since`). |
 | `request_unlock` | Player | Moves an amount from `warming`, then `active`, to `unlocking`, and sets `unlock_at = now + 7 days`. |
 | `withdraw` | Player | After `unlock_at`, returns the `unlocking` GAME to the player's own wallet. |
 | `update_rate` | Keeper key | Updates the rate within the change-cap limit. |
-| `create_item` / `update_item` | Admin multisig | Adds catalog items and changes price or sale window. Cannot raise the supply cap of a limited item after sales start. |
 | `update_config` / `set_pause` | Admin multisig | Changes settings and keys, and pauses or unpauses actions. |
 
 ### 9.4 Epoch settlement (off-chain part)
@@ -335,9 +300,7 @@ Players fetch their proof from the game server's API, then call `claim`.
 - Epochs cannot be skipped or settled twice.
 - Reserved AMZNx is never re-allocated.
 - Claims are idempotent. Cumulative totals make double payment impossible.
-- A purchase burns GAME and records the upgrade or receipt in one instruction, so the buyer always gets both or neither.
-- A gift burns only the payer's GAME; the recipient never signs and never pays.
-- Limited items can never sell past their supply cap.
+- A purchase burns GAME and records the upgrade or skin in one instruction, so the buyer always gets both or neither.
 - Locked GAME can only ever return to the wallet that locked it. No admin instruction can move it.
 - **Admin key:** a Squads 2-of-3 multisig.
 
@@ -358,10 +321,8 @@ No system fully stops a well-built bot that genuinely plays the game. These laye
 - **HUD:** active orders with waypoints and distances, Express timers, Coins, epoch countdown, current-epoch points and share %, lock bonus %, claimable AMZNx with a Claim button.
 - **HUB screens:**
   - Order Board
-  - Shop: Coins tab; Token tab (upgrades, weekly rotation, limited drops) with USD and GAME prices; a "Gift to…" option
-  - Courier Pass track
+  - Shop: Coins tab; Token tab (upgrades and premium skins) with USD and GAME prices
   - Lock panel: locked value, current bonus, warm-up and unlock timers, a preview of the bonus for a given amount
-  - Crew screen: members, upgrades, weekly leaderboard
   - Wardrobe
   - Epoch leaderboard
 - **Feedback:** hit impact effects and sound; a stun tumble with stars over the head; delivery-complete popups showing points and Coins.
@@ -383,21 +344,20 @@ delivery-maxing/
 ```
 
 - **Package manager:** pnpm workspaces.
-- **Database tables:** `players`, `deliveries`, `epochs`, `epoch_points`, `cumulative_rewards`, `merkle_trees`, `flags`, `crews`, `crew_members`, `seasons`, `pass_progress`.
+- **Database tables:** `players`, `deliveries`, `epochs`, `epoch_points`, `cumulative_rewards`, `merkle_trees`, `flags`.
 - **Data flow:**
   - Inputs go from client to server.
   - The server sends state snapshots back to clients.
   - Each completed delivery is written to Postgres immediately.
   - The settler reads Postgres and writes epoch results on-chain.
-  - Clients read on-chain state for claims, upgrades, receipts and locks, and the server subscribes to those accounts.
+  - Clients read on-chain state for claims, upgrades and locks, and the server subscribes to those accounts.
 
 ## 13. Error handling
 
 | Failure | Behavior |
 |---|---|
 | Wallet rejects or fails a transaction | A clear message is shown. Nothing is charged and nothing is granted. |
-| Purchase or lock transaction pending | The upgrade, item or lock appears in-game only after on-chain confirmation. |
-| Limited drop sells out mid-purchase | The transaction fails on-chain, nothing is burned, and the shop shows "Sold out." |
+| Purchase or lock transaction pending | The upgrade, skin or lock appears in-game only after on-chain confirmation. |
 | Withdraw attempted before the cooldown ends | Rejected on-chain. The Lock panel shows the time remaining. |
 | Claim fails | Safe to retry. |
 | Settlement fails | Points stay in Postgres. The settler retries and settles missed epochs in order. |
@@ -408,7 +368,7 @@ delivery-maxing/
 ## 14. Testing
 
 - **Shared logic:** Vitest unit tests for movement, orders, POI selection, points, upgrade stats and combat timings.
-- **Reward program:** Anchor tests on a local validator covering every guarantee in §9.5, plus a stale-rate pause, the change cap, the emergency pause, wrong-signer rejection, supply caps, gifting, and the lock warm-up, unlock and withdraw timings.
+- **Reward program:** Anchor tests on a local validator covering every guarantee in §9.5, plus a stale-rate pause, the change cap, the emergency pause, wrong-signer rejection, and the lock warm-up, unlock and withdraw timings.
 - **Settler math:** unit tests for the lock bonus curve and weighted shares, including rounding and the zero-points case. Then a full devnet rehearsal with mock GAME and AMZNx mints.
 - **Pump.fun harvest:** a standalone devnet/mainnet-fork spike, done before the rest of the program is built on it.
 - **Server:** simulated rooms filled with bot clients; anti-cheat tests that feed impossible inputs and expect rejection.
@@ -423,9 +383,9 @@ Each sub-project gets its own implementation plan.
 |---|---|---|
 | 1 | **Movement + delivery loop** | Single-player greybox city. Full movement kit on the shared fixed-step sim. HUB, Order Board, all order types and modifiers with about 20 POIs. Points and Coins tracked locally. Playtest confirms movement is fun. |
 | 2 | **City map + POI system** | Five districts built from CC0 packs, about 150 POIs, navmesh build step, POI selection rules, debug view, 60 fps target met. |
-| 3 | **Upgrades, shop, ranks** | Ranks, Coin shop, Gloves, GPS Watch, cosmetics, token upgrades, premium shop, Courier Pass, gifting and Lock panel, all wired to a mock on-chain source. |
-| 4 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation, shared boost orbs, wallet sign-in, Postgres persistence, combat, crews, anti-cheat layer, reconnects. |
-| 5 | **Reward program + launch** | Harvest spike, Anchor program (pool, upgrades, items, locks), price keeper, epoch settler with lock bonus, claim UI, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
+| 3 | **Upgrades, shop, ranks** | Ranks, Coin shop, Gloves, GPS Watch, cosmetics, token upgrades, premium skins and Lock panel, all wired to a mock on-chain source. |
+| 4 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation, shared boost orbs, wallet sign-in, Postgres persistence, combat, anti-cheat layer, reconnects. |
+| 5 | **Reward program + launch** | Harvest spike, Anchor program (pool, upgrades, locks), price keeper, epoch settler with lock bonus, claim UI, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 
 ## 16. Risks, legal and open items
 
@@ -440,8 +400,8 @@ Each sub-project gets its own implementation plan.
 - Confirm AMZNx is offered in Pump.fun's Custom Pair selector.
 - Confirm that a program PDA can be a creator-fee recipient and can claim through a CPI, for both bonding-curve and PumpSwap fees. This is the first task of sub-project 5.
 - Choose the creator fee percentage at launch (Pump.fun allows 0.05%–1%).
-- Set the USD price of each token upgrade and the launch shop catalog before launch.
+- Set the USD price of each token upgrade and premium skin before launch.
 
 **Not in v1 (later ideas):** mobile touch controls, per-route daily speed boards, Rush Hour events, billboard rentals, private rooms.
 
-**Considered and rejected:** VIP levels based on spending or holdings (too pay-to-win), holder badges (replaced by locking), race wagers (gambling risk).
+**Considered and rejected:** VIP levels based on spending or holdings (too pay-to-win), holder badges (replaced by locking), race wagers (gambling risk), Courier Pass, rotating premium shop and limited drops, crews, gifting (too much for v1).
