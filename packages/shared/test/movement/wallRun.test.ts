@@ -126,17 +126,15 @@ describe('wall-run', () => {
     h.run(5, SPRINT);
     expect(h.sim.state.mode).toBe('wallrun');
     expect(h.sim.state.wallRun.time).toBeGreaterThan(0.1);
-    // Chaining input: forward plus strafe toward the far wall (forward alone lets air control steer the push away).
-    const CHAIN: Hold = { forward: 1, strafe: 1, sprint: true };
-    h.tick(CHAIN, ['jump']);
+    // Chaining needs only W: air control (R13) keeps the wall-jump push.
+    h.tick(SPRINT, ['jump']);
     expect(h.sim.state.mode).toBe('air');
-    h.runUntil(wallRunning, 25, CHAIN);
+    h.runUntil(wallRunning, 25, SPRINT);
     const s = h.sim.state;
     expect(s.wallRun.normal!.x).toBeCloseTo(-1, 3);
     expect(s.wallRun.time).toBeLessThan(0.2);
     expect(s.position.y).toBeGreaterThan(0.5);
-    // Along-wall speed carries over (air steering toward the far wall turns some of it into the push direction).
-    expect(alongWall(s.velocity, s.wallRun.normal!)).toBeGreaterThanOrEqual(7);
+    expect(alongWall(s.velocity, s.wallRun.normal!)).toBeGreaterThanOrEqual(7.5);
   });
 
   it('cannot wall-run the same wall again before landing', async () => {

@@ -74,12 +74,20 @@ export function applyGroundVelocity(state: PlayerState, wish: Vec3, target: numb
   state.velocity = vec3(x, v.y, z);
 }
 
-/** Air control: airAccel steers toward the wish direction but can only raise speed up to max(current, target). */
+/**
+ * Quake-style air control (ruling R13): accelerate only along the wish direction, and only while v·wish < target
+ * (addspeed = target − v·wish, at most airAccel·dt). Velocity is never steered toward wish·target, so perpendicular
+ * momentum (e.g. a wall-jump push) survives. The horizontal speed is then clamped to max(speed before, target).
+ */
 export function applyAirVelocity(state: PlayerState, wish: Vec3, target: number, cfg: MovementConfig, dt: number): void {
   if (isZero(wish)) return;
   const v = state.velocity;
-  const limit = Math.max(horizontalLength(v), target);
-  let [x, z] = moveToward(v.x, v.z, wish.x * limit, wish.z * limit, cfg.run.airAccel * dt);
+  const before = horizontalLength(v);
+  const addSpeed = Math.min(target - (v.x * wish.x + v.z * wish.z), cfg.run.airAccel * dt);
+  if (addSpeed <= 0) return;
+  let x = v.x + wish.x * addSpeed;
+  let z = v.z + wish.z * addSpeed;
+  const limit = Math.max(before, target);
   const l = Math.hypot(x, z);
   if (l > limit) {
     x = (x / l) * limit;

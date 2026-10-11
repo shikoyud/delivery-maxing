@@ -95,4 +95,16 @@ describe('ground movement', () => {
     expect(blk.sim.state.position.z).toBeGreaterThanOrEqual(face + cfg.capsule.radius - 0.05);
     expect(blk.sim.state.position.y - by0).toBeLessThan(0.1);
   });
+
+  it('air control keeps perpendicular momentum (R13): lateral 6 stays ≥ 4 after 10 ticks of W only', async () => {
+    const h = await makeSim();
+    h.sim.teleport(vec3(0, 10, 0), vec3(6, 0, -7));
+    const start = Math.hypot(6, 7);
+    for (let i = 0; i < 10; i++) {
+      h.tick({ forward: 1 });
+      expect(h.sim.state.grounded).toBe(false);
+      expect(speed(h.sim.state)).toBeLessThanOrEqual(start + 1e-9);
+    }
+    expect(h.sim.state.velocity.x).toBeGreaterThanOrEqual(4);
+  });
 });
