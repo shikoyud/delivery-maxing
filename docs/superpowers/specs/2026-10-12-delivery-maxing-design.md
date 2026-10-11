@@ -1,12 +1,12 @@
-# Rooftop Rush — Game Design Spec
+# Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
 - **Status:** Draft for review
-- **Working title:** Rooftop Rush (placeholder)
+- **Game name:** Delivery Maxing
 
 ## 1. Summary
 
-Rooftop Rush is a first-person, low-poly, multiplayer parkour courier game that runs in the browser. Players take orders at a central HUB and deliver packages on foot across a compact city built for movement: wall-runs, slides, zip lines, jump pads and speed boost orbs. Players can buy a skateboard. They can also shove each other for a short knockback and stun. There are no health points.
+Delivery Maxing is a first-person, low-poly, multiplayer parkour courier game that runs in the browser. Players take orders at a central HUB and deliver packages on foot across a compact city built for movement: wall-runs, slides, zip lines, jump pads and speed boost orbs. Players can buy a skateboard. They can also shove each other for a short knockback and stun. There are no health points.
 
 Every 10 minutes (one **epoch**), a share of an on-chain reward pool is paid out in **AMZNx** (tokenized Amazon stock on Solana, mint `Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg`). Each player gets an amount proportional to the Delivery Points they earned in that epoch. The pool is funded by Pump.fun creator fees from the game's own token, **GAME**, which is launched on Pump.fun paired with AMZNx. High-impact upgrades are priced in USD and paid for by **burning GAME**. Cosmetics and low-impact upgrades are bought with **Coins**, an off-chain currency earned by playing.
 
@@ -97,7 +97,7 @@ All movement code lives in the shared package. It runs on a fixed **30 Hz** simu
 | Wall-run | Up to 1.5 s on a wall. A wall-jump chains to the next wall. |
 | Zip line | Press E to attach. Momentum carries over when you jump off. |
 | Jump pad | Launches the player along an authored vector. |
-| Boost orb | +40% speed for 3 s. Orbs respawn per player after 30 s, so players don't contend for them. |
+| Boost orb | +40% speed for 3 s. Orbs are **shared**: the first player to touch one takes it (the server decides ties), and it disappears for everyone in the room until it respawns 30 s later. |
 | Slides (map) | Long low-friction chutes. |
 | Grind rails | Usable on foot and on the skateboard. |
 | Skateboard | Q to pull out or put away. Faster on flat ground and rails. Cannot wall-run or mantle. Getting hit knocks the player off the board. |
@@ -291,7 +291,7 @@ No system fully stops a well-built bot that genuinely plays the game. These laye
 ## 12. System architecture
 
 ```
-rooftop-rush/
+delivery-maxing/
   packages/
     shared/    movement sim, order rules, POI selection, combat rules, config types
     client/    Three.js + Vite: rendering, input layer, HUD/UI, wallet
