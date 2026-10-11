@@ -9,6 +9,7 @@ import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
 import { applyTriggers, enterAir } from './triggers';
+import { tryStartGrind, updateGrind } from './rail';
 import { tryAttachZip, updateZip } from './zipLine';
 import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
 import { canStartWallRun, findWall, startWallRun, updateWallRun, wallJump, wallRunGravityScale } from './wallRun';
@@ -53,6 +54,7 @@ export class PlayerSim {
       mantle: null,
       wallRun: { time: 0, normal: null, lastNormal: null },
       zip: null,
+      grind: null,
       boostLeft: 0,
       padCooldown: {},
     };
@@ -84,10 +86,11 @@ export class PlayerSim {
     this.updateCrouch(input);
     startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
 
-    // 2. Special modes run here and return early: mantle (Task 6); zip line (Task 8); Task 10 grind goes here too.
+    // 2. Special modes run here and return early: mantle (Task 6); zip line (Task 8); grind rail (Task 10).
     //    Ledge detection runs before the move, so the stored horizontal velocity is the approach velocity
     //    (a blocking move would already have removed the part into the ledge face).
     if (this.tryZip(input, mods)) return events;
+    if (this.tryGrind(input, mods)) return events;
     if (this.tryMantle(input)) return events;
 
     // 3. Wall-run: a buffered jump wall-jumps off the wall; otherwise the run holds to the wall (or ends).
@@ -153,6 +156,22 @@ export class PlayerSim {
       s.zip = null;
       s.mode = 'air';
     }
+    this.body.setFeet(s.position);
+    s.position = this.body.feet;
+    return true;
+  }
+
+  /**
+   * Advances a grind in progress, or starts one when airborne and falling onto a rail. While grinding the body is
+   * placed on the rail directly (no collisions). Returns true when this step was a grind step (the rest of the step
+   * is skipped); the tick that detaches is a grind step too.
+   */
+  private tryGrind(input: InputFrame, mods: StatModifiers): boolean {
+    const s = this.state;
+    if (s.mode !== 'grind' && !tryStartGrind(s, this.map.rails, this.cfg)) return false;
+    const rail = this.map.rails.find((r) => r.id === s.grind?.id);
+    if (rail) updateGrind(s, rail, input, this.cfg, mods, this.dt);
+    else enterAir(s, this.cfg);
     this.body.setFeet(s.position);
     s.position = this.body.feet;
     return true;

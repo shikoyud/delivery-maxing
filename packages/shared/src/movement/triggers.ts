@@ -16,14 +16,14 @@ export function createWorldFeatureState(map: MapData): WorldFeatureState {
 
 /**
  * Puts the player into free airborne motion at their current position: clears every special mode (mantle, zip,
- * wall-run), ends grounding, and closes the coyote window. Shared by teleport, respawn and pad launches.
+ * grind, wall-run), ends grounding, and closes the coyote window. Shared by teleport, respawn and pad launches.
  * Velocity and jump buffer are left to the caller.
  */
 export function enterAir(state: PlayerState, cfg: MovementConfig): void {
   state.mantle = null;
   state.zip = null;
   state.wallRun = { time: 0, normal: null, lastNormal: null };
-  // Task 10: also clear grind state here.
+  state.grind = null;
   state.mode = 'air';
   state.grounded = false;
   state.groundNormal = vec3(0, 1, 0);

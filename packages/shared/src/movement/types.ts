@@ -47,6 +47,8 @@ export interface PlayerState {
   wallRun: WallRunState;
   /** The zip line ride in progress (mode 'zipline'): line id, metres from its `a` end, direction (+1 toward b), speed. */
   zip: { id: string; s: number; dir: 1 | -1; speed: number } | null;
+  /** The grind in progress (mode 'grind'): rail id, segment index, metres from that segment's start, direction (+1 toward the last point), speed. */
+  grind: { id: string; segment: number; s: number; dir: 1 | -1; speed: number } | null;
   /** Seconds of boost-orb speed boost left (0 when none). */
   boostLeft: number;
   /** Seconds until each jump pad (by id) can trigger again; absent or 0 when ready. */
