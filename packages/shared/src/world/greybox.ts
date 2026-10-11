@@ -1,0 +1,52 @@
+import { mulberry32 } from '../util/rng';
+import { vec3 } from '../math/vec3';
+import type { GreyboxSource, MapData, Rect, Solid } from './mapTypes';
+
+const intersects = (a: Rect, b: Rect): boolean =>
+  a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
+
+const inRect = (x: number, z: number, r: Rect): boolean =>
+  x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ;
+
+/** Expands a greybox source (hand-placed solids + grid parameters) into the final MapData. */
+export function expandGreybox(src: GreyboxSource): MapData {
+  const { seed, grid, districts, reserved, ...map } = src;
+  const rng = mulberry32(seed);
+  const { pitch, roadWidth, alleyWidth } = grid;
+  const half = src.size / 2;
+  const lot = (pitch - roadWidth - alleyWidth) / 2;
+  const lotOffset = (lot + alleyWidth) / 2;
+  const kMin = Math.ceil(-half / pitch);
+  const kMax = Math.floor(half / pitch) - 1;
+
+  const solids: Solid[] = [
+    { id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(src.size, 1, src.size) },
+  ];
+
+  for (let bx = kMin; bx <= kMax; bx++) {
+    for (let bz = kMin; bz <= kMax; bz++) {
+      const cx = pitch / 2 + bx * pitch;
+      const cz = pitch / 2 + bz * pitch;
+      for (let lotIdx = 0; lotIdx < 4; lotIdx++) {
+        const x = cx + (lotIdx % 2 === 0 ? -lotOffset : lotOffset);
+        const z = cz + (lotIdx < 2 ? -lotOffset : lotOffset);
+        const footprint: Rect = { minX: x - lot / 2, minZ: z - lot / 2, maxX: x + lot / 2, maxZ: z + lot / 2 };
+        const d = districts.find((dd) => inRect(x, z, dd.rect));
+        if (!d) continue;
+        if (reserved.some((r) => intersects(footprint, r))) continue;
+        if (!(rng() < d.fillChance)) continue;
+        const raw = d.heightMin + rng() * (d.heightMax - d.heightMin);
+        const height = Math.round(raw * 2) / 2;
+        solids.push({
+          id: `b-${bx}-${bz}-${lotIdx}`,
+          kind: 'building',
+          center: vec3(x, height / 2, z),
+          size: vec3(lot, height, lot),
+        });
+      }
+    }
+  }
+
+  solids.push(...src.solids);
+  return { ...map, solids };
+}

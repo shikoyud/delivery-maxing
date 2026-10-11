@@ -1,0 +1,30 @@
+{
+  "seed": 1,
+  "size": 600,
+  "grid": { "pitch": 50, "roadWidth": 12, "alleyWidth": 4 },
+  "districts": [
+    { "district": "downtown", "rect": { "minX": -240, "minZ": -240, "maxX": 240, "maxZ": 240 }, "heightMin": 12, "heightMax": 45, "fillChance": 0.85 }
+  ],
+  "reserved": [{ "minX": -40, "minZ": -40, "maxX": 40, "maxZ": 40 }],
+  "solids": [],
+  "zipLines": [],
+  "jumpPads": [],
+  "boostOrbs": [],
+  "rails": [],
+  "checkpoints": [{ "id": "cp-1", "position": { "x": 50, "y": 0, "z": 50 } }],
+  "pois": [
+    { "id": "poi-1", "position": { "x": 100, "y": 0, "z": 0 }, "district": "downtown", "kind": "door" },
+    { "id": "poi-2", "position": { "x": 0, "y": 0, "z": 100 }, "district": "downtown", "kind": "mailbox" },
+    { "id": "poi-3", "position": { "x": -150, "y": 0, "z": -100 }, "district": "downtown", "kind": "counter" }
+  ],
+  "hub": {
+    "center": { "x": 0, "y": 0, "z": 0 },
+    "plazaRadius": 30,
+    "dropZoneRadius": 6,
+    "zoneHeight": 6,
+    "kiosk": { "x": 0, "y": 0, "z": -8 },
+    "kioskRange": 3,
+    "spawn": { "x": 0, "y": 0, "z": 5 },
+    "spawnYaw": 0
+  }
+}

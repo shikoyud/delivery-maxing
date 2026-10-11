@@ -3,3 +3,8 @@ export * from './config';
 export * from './sim/fixedStep';
 export * from './input/inputFrame';
 export * from './math/vec3';
+export * from './world/mapTypes';
+export * from './world/greybox';
+export * from './world/physicsWorld';
+export * from './world/distance';
+export * from './world/zones';
