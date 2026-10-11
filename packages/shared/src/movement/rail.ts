@@ -28,13 +28,9 @@ const feetOn = (rail: Rail, i: number, s: number): Vec3 => {
   return vec3(p.x, p.y + FEET_LIFT, p.z);
 };
 
-/**
- * Minimum grind speed (m/s). On foot this is rail.minSpeedFoot.
- * Task 11: return cfg.board.railMinSpeed here when the player is on the board.
- */
+/** Minimum grind speed (m/s): board.railMinSpeed on the board, rail.minSpeedFoot on foot. */
 export function railMinSpeed(state: PlayerState, cfg: MovementConfig): number {
-  void state;
-  return cfg.rail.minSpeedFoot;
+  return state.onBoard ? cfg.board.railMinSpeed : cfg.rail.minSpeedFoot;
 }
 
 /**

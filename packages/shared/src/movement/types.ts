@@ -30,6 +30,8 @@ export interface PlayerState {
   pitch: number;
   mode: MoveMode;
   onBoard: boolean;
+  /** Board heading as a yaw (see ground.ts facing). Set when the board comes out and on each board landing. */
+  boardHeading: number;
   /** Mirrors PlayerBody.crouched: the capsule is at capsule.crouchHeight. */
   crouched: boolean;
   grounded: boolean;
@@ -67,7 +69,8 @@ export type SimEvent =
   | { kind: 'landed'; fallHeight: number }
   | { kind: 'jumpPad'; padId: string }
   | { kind: 'orbCollected'; orbId: string }
-  | { kind: 'respawned'; checkpointId: string };
+  | { kind: 'respawned'; checkpointId: string }
+  | { kind: 'boardToggled'; onBoard: boolean };
 
 /** Shared, room-wide feature state (see triggers.ts). */
 export interface WorldFeatureState {

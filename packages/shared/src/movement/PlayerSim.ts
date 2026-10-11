@@ -4,6 +4,7 @@ import { clampHorizontal, vec3, type Vec3 } from '../math/vec3';
 import type { MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
+import { alignBoardHeading, applyBoardVelocity, toggleBoard } from './board';
 import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection } from './ground';
 import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
@@ -44,6 +45,7 @@ export class PlayerSim {
       pitch: 0,
       mode: 'air',
       onBoard: false,
+      boardHeading: yaw,
       crouched: false,
       grounded: false,
       groundNormal: vec3(0, 1, 0),
@@ -81,15 +83,17 @@ export class PlayerSim {
   private stepMovement(input: InputFrame, mods: StatModifiers): SimEvent[] {
     const events: SimEvent[] = [];
 
-    // 1. Look and timers; crouch (stays crouched while standing is blocked); crouch-slide entry.
+    // 1. Look and timers; crouch (stays crouched while standing is blocked; ignored on the board); board toggle (Q);
+    //    crouch-slide entry (never on the board).
     this.updateLookAndTimers(input);
     this.updateCrouch(input);
+    if (input.board.pressed && toggleBoard(this.state)) events.push({ kind: 'boardToggled', onBoard: this.state.onBoard });
     startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
 
     // 2. Special modes run here and return early: mantle (Task 6); zip line (Task 8); grind rail (Task 10).
     //    Ledge detection runs before the move, so the stored horizontal velocity is the approach velocity
     //    (a blocking move would already have removed the part into the ledge face).
-    if (this.tryZip(input, mods)) return events;
+    if (this.tryZip(input, mods, events)) return events;
     if (this.tryGrind(input, mods)) return events;
     if (this.tryMantle(input)) return events;
 
@@ -114,7 +118,7 @@ export class PlayerSim {
     this.resolveContacts(move, events);
 
     // 9. Post-move checks: slide physics and end (Task 5), wall-run start (Task 7); triggers run after this method (step).
-    updateSlide(this.state, move, input, this.cfg, this.dt);
+    if (!this.state.onBoard) updateSlide(this.state, move, input, this.cfg, this.dt); // a board rolls itself (chutes too)
     this.tryStartWallRun(input);
 
     return events;
@@ -140,15 +144,17 @@ export class PlayerSim {
   }
 
   /**
-   * Advances a zip line ride, or attaches when interact is pressed near a line. While riding the body is placed on
-   * the line directly (no collisions). Returns true when this step was a ride step (the rest of the step is
+   * Advances a zip line ride, or attaches when interact is pressed near a line (on the board too: attaching puts the
+   * board away and emits boardToggled). While riding the body is placed on the line directly (no collisions). Returns true when this step was a ride step (the rest of the step is
    * skipped); the tick that detaches is a ride step too.
    */
-  private tryZip(input: InputFrame, mods: StatModifiers): boolean {
+  private tryZip(input: InputFrame, mods: StatModifiers, events: SimEvent[]): boolean {
     const s = this.state;
     if (s.mode !== 'zipline') {
       const canAttach = s.mode === 'ground' || s.mode === 'air' || s.mode === 'slide' || s.mode === 'wallrun';
+      const wasOnBoard = s.onBoard;
       if (!canAttach || !tryAttachZip(s, input, this.map.zipLines, this.cfg)) return false;
+      if (wasOnBoard) events.push({ kind: 'boardToggled', onBoard: false }); // attaching put the board away
     }
     const line = this.map.zipLines.find((l) => l.id === s.zip?.id);
     if (line) updateZip(s, line, input, this.cfg, mods, this.dt);
@@ -194,15 +200,19 @@ export class PlayerSim {
   /**
    * The capsule is crouched while crouch is held (a chute slide needs no crouch). Releasing crouch stands up only
    * if a standing capsule fits (Review Focus 4); otherwise the player stays crouched (and a crouch-slide goes on)
-   * and tries again every tick, so they stand automatically once clear.
+   * and tries again every tick, so they stand automatically once clear. On the board crouch is ignored.
    */
   private updateCrouch(input: InputFrame): void {
-    this.body.setCrouched(input.crouch.held);
+    this.body.setCrouched(input.crouch.held && !this.state.onBoard);
     this.state.crouched = this.body.crouched;
   }
 
   private applyLocomotion(input: InputFrame, mods: StatModifiers): void {
     const s = this.state;
+    if (s.onBoard && s.grounded) {
+      applyBoardVelocity(s, input, this.cfg, mods, this.dt);
+      return;
+    }
     const wish = wishDirection(input);
     const target = targetGroundSpeed(input, s, this.cfg, mods);
     if (s.grounded) applyGroundVelocity(s, wish, target, this.cfg, this.dt);
@@ -259,6 +269,8 @@ export class PlayerSim {
       }
       // An air or wall-run landing changes the mode: a slide stays a slide (mantle steps never reach here).
       if (s.mode === 'air' || s.mode === 'wallrun') s.mode = 'ground';
+      // A board landing points the board along the landing travel (air control may have turned it).
+      if (!wasGrounded && s.onBoard) alignBoardHeading(s);
       // Landing unlocks every wall for wall-running again.
       s.wallRun = { time: 0, normal: null, lastNormal: null };
       s.velocity = vec3(s.velocity.x, 0, s.velocity.z);

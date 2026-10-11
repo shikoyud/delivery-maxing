@@ -24,7 +24,8 @@ function feetAt(line: ZipLine, s: number, cfg: MovementConfig): Vec3 {
  * Attaches to the nearest line when interact was pressed and the hand point (feet + capsule height) is within
  * zipLine.attachDistance of it. The ride runs toward the lower end; on a level line (|dy| < levelThreshold) it runs
  * toward the end the player faces. The starting speed is max(baseSpeed, velocity · direction).
- * The caller checks the mode (it does not check the board: attaching will put the board away, Task 11). Returns whether the player attached.
+ * The caller checks the mode. Attaching works on the board too and puts the board away (onBoard false; the caller
+ * emits boardToggled). Returns whether the player attached.
  */
 export function tryAttachZip(state: PlayerState, input: InputFrame, lines: ZipLine[], cfg: MovementConfig): boolean {
   if (!input.interact.pressed) return false;
@@ -53,6 +54,7 @@ export function tryAttachZip(state: PlayerState, input: InputFrame, lines: ZipLi
   const speed = Math.max(cfg.zipLine.baseSpeed, dot(state.velocity, rideDirection(line, dir)));
   state.zip = { id: line.id, s: best.s, dir, speed };
   state.mode = 'zipline';
+  state.onBoard = false;
   state.grounded = false;
   state.groundNormal = vec3(0, 1, 0);
   state.mantle = null;
