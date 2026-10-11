@@ -63,9 +63,11 @@ A modifier can be added to a Drop-off or Pick-up order.
 
 | Modifier | Rule | Unlocked at |
 |---|---|---|
-| **Express** | Has a timer: `1.5 × (path distance ÷ base sprint speed) + 10 s`. Delivering in time earns a bonus. Delivering late still completes the order, without the bonus. | Courier |
+| **Express** | Has a timer: `1.5 × (route distance ÷ base sprint speed) + 10 s`. Delivering in time earns a bonus. Delivering late still completes the order, without the bonus. | Courier |
 | **Fragile** | Earns a bonus if delivered intact. A fall of more than 7 m, being hit by another player, or an out-of-bounds respawn cancels the bonus. The order itself is never lost. | Rookie |
-| **Heavy** | Takes 2 backpack slots and reduces jump height by 10% while carried. Earns a bonus. | Rookie |
+| **Heavy** | Takes 2 backpack slots and reduces jump height by 10% while carried. Earns a bonus. Offered only to players whose backpack has 2 or more slots. | Rookie |
+
+**Order distances.** An order's distance band (§3.4, §5.3) uses the one-way path distance from the HUB to its POI. The **route distance** is the full trip the order needs: HUB → POI for a Drop-off, HUB → POI → HUB for a Pick-up. The Express timer and the minimum plausible time (§10) use the route distance.
 
 ### 3.3 Order Board
 
@@ -139,7 +141,7 @@ Falling into water or out of bounds respawns the player at the nearest checkpoin
 
 | Rule | Value |
 |---|---|
-| Distance bands (path distance) | Short < 150 m, Medium 150–350 m, Long > 350 m |
+| Distance bands (one-way path distance from the HUB) | Short < 150 m, Medium 150–350 m, Long > 350 m |
 | Reachability | Only candidates that pass the build-time check are used |
 | Spread | No two of a player's active orders within 40 m of each other |
 | Reuse | The same POI is not reused within 3 minutes for the same player |
@@ -309,7 +311,7 @@ Players fetch their proof from the game server's API, then call `claim`.
 | Layer | Mechanism |
 |---|---|
 | Server authority | The client sends only inputs; the server simulates all movement. |
-| Delivery validation | The player must be inside the POI or HUB zone on the server. Each order has a minimum plausible time: `path distance ÷ max legal speed × 0.8`. Faster deliveries are rejected and flagged. |
+| Delivery validation | The player must be inside the POI or HUB zone on the server. Each order has a minimum plausible time: `route distance (§3.2) ÷ max legal speed × 0.8`. Faster deliveries are rejected and flagged. |
 | Behavior flags | Repeated identical routes, overly regular input timing, many wallets per IP. Flagged players' points are held. |
 | Review | An admin page lists held points. Approved points are added to the current open epoch; rejected points are discarded. |
 | Per-wallet epoch cap | Available in config, **off by default** |
@@ -386,6 +388,8 @@ Each sub-project gets its own implementation plan.
 | 3 | **Upgrades, shop, ranks** | Ranks, Coin shop, Gloves, GPS Watch, cosmetics, token upgrades, premium skins and Lock panel, all wired to a mock on-chain source. |
 | 4 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation, shared boost orbs, wallet sign-in, Postgres persistence, combat, anti-cheat layer, reconnects. |
 | 5 | **Reward program + launch** | Harvest spike, Anchor program (pool, upgrades, locks), price keeper, epoch settler with lock bonus, claim UI, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
+
+**Sub-project 1 note:** the navmesh arrives in sub-project 2. Until then, path distance is the street-grid distance `|dx| + |dz|` measured on the greybox city's street grid.
 
 ## 16. Risks, legal and open items
 
