@@ -3,7 +3,7 @@ import type { InputFrame } from '../input/inputFrame';
 import { add, closestOnSegment, dot, length, normalize, scale, sub, vec3, type Vec3 } from '../math/vec3';
 import type { ZipLine } from '../world/mapTypes';
 import { facing } from './ground';
-import { jumpVelocity } from './jump';
+import { coyoteTicks, jumpVelocity } from './jump';
 import type { PlayerState, StatModifiers } from './types';
 
 /** Unit vector along the line from a to b. */
@@ -24,7 +24,7 @@ function feetAt(line: ZipLine, s: number, cfg: MovementConfig): Vec3 {
  * Attaches to the nearest line when interact was pressed and the hand point (feet + capsule height) is within
  * zipLine.attachDistance of it. The ride runs toward the lower end; on a level line (|dy| < levelThreshold) it runs
  * toward the end the player faces. The starting speed is max(baseSpeed, velocity · direction).
- * The caller checks the mode and the board. Returns whether the player attached.
+ * The caller checks the mode (it does not check the board: attaching will put the board away, Task 11). Returns whether the player attached.
  */
 export function tryAttachZip(state: PlayerState, input: InputFrame, lines: ZipLine[], cfg: MovementConfig): boolean {
   if (!input.interact.pressed) return false;
@@ -64,7 +64,7 @@ export function tryAttachZip(state: PlayerState, input: InputFrame, lines: ZipLi
 /**
  * Advances a ride by dt and sets state.position and state.velocity (the caller moves the body there, ignoring
  * collisions). Speed changes by g·sinθ·dt (sinθ is the downhill share of the ride direction) and stays within
- * [baseSpeed, maxSpeed × speedMul]. The ride ends at the end of the line, or when jump is pressed (which also adds
+ * [baseSpeed, min(maxSpeed × speedMul, speedCap)]. The ride ends at the end of the line, or when jump is pressed (which also adds
  * jumpVelocity); the player is then airborne with the ride velocity and a fresh fall-height apex.
  */
 export function updateZip(
@@ -81,7 +81,7 @@ export function updateZip(
 
   const downhill = -ride.y;
   z.speed += cfg.gravity * downhill * dt;
-  z.speed = Math.min(Math.max(z.speed, cfg.zipLine.baseSpeed), cfg.zipLine.maxSpeed * mods.speedMul);
+  z.speed = Math.min(Math.max(z.speed, cfg.zipLine.baseSpeed), Math.min(cfg.zipLine.maxSpeed * mods.speedMul, cfg.speedCap));
   z.s += z.dir * z.speed * dt;
 
   const len = lineLength(line);
@@ -98,5 +98,6 @@ export function updateZip(
   state.groundNormal = vec3(0, 1, 0);
   state.airApexY = state.position.y;
   state.jumpPressAge = null;
+  state.airTicks = coyoteTicks(cfg) + 1; // no free coyote jump after a ride
   return 'detached';
 }

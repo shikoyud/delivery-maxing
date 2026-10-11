@@ -122,4 +122,51 @@ describe('zip line', () => {
     expect(g.sim.state.zip).toMatchObject({ dir: 1 });
     expect(g.sim.state.velocity.z).toBeLessThan(0);
   });
+
+  it('detaching (jump-off or end of line) leaves no coyote jump', async () => {
+    const jumped = (ev: { kind: string }[]) => ev.some((e) => e.kind === 'jumped');
+    const a = await rideSim(line('z', [0, 10, 0], [0, 7, -20]));
+    a.tick({}, ['interact']);
+    a.tick({}, ['jump']);
+    expect(a.sim.state.mode).toBe('air');
+    expect(jumped(a.tick({}, ['jump']))).toBe(false);
+
+    const b = await rideSim(line('z', [0, 10, 0], [0, 7, -12]));
+    b.tick({}, ['interact']);
+    let guard = 0;
+    while (b.sim.state.mode === 'zipline' && guard++ < 200) b.tick();
+    expect(b.sim.state.mode).toBe('air');
+    expect(jumped(b.tick({}, ['jump']))).toBe(false);
+  });
+
+  it('speedMul 1.4 lifts the ride cap above 16 m/s but never past the 18 m/s global cap', async () => {
+    const mods = { speedMul: 1.4, jumpHeightMul: 1 };
+    const h = await rideSim(line('z', [0, 10, 0], [0, 2, -30]));
+    h.tick({}, ['interact'], mods);
+    let top = 0;
+    let guard = 0;
+    while (h.sim.state.mode === 'zipline' && guard++ < 300) {
+      h.tick({}, [], mods);
+      if (h.sim.state.zip) top = Math.max(top, h.sim.state.zip.speed);
+    }
+    expect(top).toBeGreaterThan(cfg.zipLine.maxSpeed);
+    expect(top).toBeLessThanOrEqual(cfg.speedCap + 1e-9);
+    expect(top).toBeCloseTo(cfg.speedCap, 5);
+  });
+
+  it('jump-off adds jumpVelocity for the jumpHeightMul in force', async () => {
+    const mods = { speedMul: 1, jumpHeightMul: 0.9 };
+    const zip = line('z', [0, 10, 0], [0, 7, -20]);
+    const jumper = await rideSim(zip);
+    const rider = await rideSim(zip);
+    for (const h of [jumper, rider]) {
+      h.tick({}, ['interact'], mods);
+      h.run(4, {}, mods);
+    }
+    jumper.tick({}, ['jump'], mods);
+    rider.tick({}, [], mods);
+    expect(jumper.sim.state.mode).toBe('air');
+    expect(jumper.sim.state.velocity.y - rider.sim.state.velocity.y).toBeCloseTo(jumpVelocity(cfg, mods), 9);
+    expect(jumpVelocity(cfg, mods)).toBeLessThan(jumpVelocity(cfg, NO_MODS));
+  });
 });
