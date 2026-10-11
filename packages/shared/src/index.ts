@@ -8,3 +8,8 @@ export * from './world/greybox';
 export * from './world/physicsWorld';
 export * from './world/distance';
 export * from './world/zones';
+export * from './movement/types';
+export * from './movement/body';
+export * from './movement/ground';
+export * from './movement/jump';
+export * from './movement/PlayerSim';
