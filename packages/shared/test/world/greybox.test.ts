@@ -69,17 +69,19 @@ describe('expandGreybox', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('expands map/greybox.json without error and keeps POIs off buildings', () => {
+  it('expands map/greybox.json without error into buildings in every district', () => {
+    // The city's content (POIs, features, layout) is covered by greyboxContent.test.ts.
     const src = greyboxJson as unknown as GreyboxSource;
     const out = expandGreybox(src);
-    expect(out.pois.length).toBe(3);
-    expect(out.checkpoints.length).toBe(1);
-    expect(buildings(src).length).toBeGreaterThan(0);
-    const spots = [...out.pois.map((p) => p.position), ...out.checkpoints.map((c) => c.position)];
-    for (const p of spots) {
-      for (const s of buildings(src)) {
-        const inside = Math.abs(p.x - s.center.x) <= s.size.x / 2 && Math.abs(p.z - s.center.z) <= s.size.z / 2;
-        expect(inside).toBe(false);
+    expect(out.solids.filter((s) => s.id === 'ground')).toHaveLength(1);
+    for (const d of src.districts) {
+      const inD = buildings(src).filter(
+        (s) => /^b-/.test(s.id) && s.center.x >= d.rect.minX && s.center.x <= d.rect.maxX && s.center.z >= d.rect.minZ && s.center.z <= d.rect.maxZ,
+      );
+      expect(inD.length, d.district).toBeGreaterThan(0);
+      for (const s of inD) {
+        expect(s.size.y).toBeGreaterThanOrEqual(d.heightMin);
+        expect(s.size.y).toBeLessThanOrEqual(d.heightMax);
       }
     }
   });
