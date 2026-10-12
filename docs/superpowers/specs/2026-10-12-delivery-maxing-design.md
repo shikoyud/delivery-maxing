@@ -1,7 +1,7 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved (revised 2026-10-12 after the SP1 playtest: third-person camera, two-way zip lines, par times, 2 × 2 km city, thieves)
+- **Status:** Approved (revised 2026-10-12 after the SP1 playtest: third-person camera, two-way zip lines, par times, 2 × 2 km city, thieves; revised 2026-10-13 after SP1 playtest 2: sprint toggle, slide boost, crouch key)
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
@@ -45,6 +45,7 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium 
 | Thieves | Street-only NPCs chase couriers carrying packages; a catch steals the packages and costs 1 Delivery Point from the current epoch. |
 | Par times | Every order has a par time; beating it pays a bonus. |
 | Express timer | Tightened from 1.5× to 1.1× (route distance ÷ base sprint speed) + 10 s after the SP1 playtest, so it stays tighter than par (1.3×). |
+| Sprint and slide | Changed after SP1 playtest 2: Shift toggles sprint (Apex-style) instead of being held; starting a slide gives a speed burst that then needs a cooldown; crouch stays on C only (Ctrl+W would close the browser tab). |
 
 ## 3. Core loop
 
@@ -108,10 +109,10 @@ All movement code lives in the shared package. It runs on a fixed **30 Hz** simu
 
 | Move | Behavior |
 |---|---|
-| Run / sprint | Base sprint speed 8 m/s, sprint held with Shift. No stamina. |
+| Run / sprint | Base sprint speed 8 m/s. Shift toggles sprint on and off. Sprint also switches off whenever no move key is held, so it can only be on while moving. No stamina. The sprint on/off state is part of the shared sim state, not the client's. |
 | Jump | About 1.2 m high. Coyote time 100 ms, jump buffer 100 ms. |
 | Mantle | Automatically climbs ledges up to 1.5 m high. |
-| Crouch-slide | Triggered while sprinting. Keeps speed and gains speed downhill. |
+| Crouch-slide | Pressing crouch (C) while sprinting on the ground starts a slide. Starting a slide adds a speed burst of +4 m/s, so a slide from a sprint reaches about 12 m/s (never above the speed cap). Slides use low friction, keep their speed and gain speed downhill. After a boosted slide the burst needs a 2 s cooldown, counted from the start of that slide (Apex-style). A slide started during the cooldown keeps its current speed but gets no burst. |
 | Wall-run | Up to 1.5 s on a wall. A wall-jump chains to the next wall. |
 | Zip line | Press E to attach. You ride in the direction you are facing when you attach, uphill or downhill. Speed is at least 10 m/s both ways; downhill gravity accelerates you up to 16 m/s. Momentum carries over when you jump off. |
 | Jump pad | Launches the player along an authored vector. |
@@ -123,7 +124,7 @@ All movement code lives in the shared package. It runs on a fixed **30 Hz** simu
 
 **Momentum rule:** chaining moves preserves horizontal speed, up to the speed cap.
 
-**Input layer:** raw input (keys and mouse, later touch) is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `board`. Gameplay code only reads actions.
+**Input layer:** raw input (keys and mouse, later touch) is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `board`. Gameplay code only reads actions. Default keys: WASD move, mouse look, Space jump, C crouch, Shift sprint (toggle), E interact, Q board, left click hit. Crouch is C only, never Ctrl: Ctrl+W closes the browser tab on Windows and Linux, and a page cannot block it outside fullscreen.
 
 ## 5. City and POIs
 

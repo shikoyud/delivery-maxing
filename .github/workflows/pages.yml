@@ -1,7 +1,7 @@
 name: Deploy client to GitHub Pages
 on:
   push:
-    branches: [main, sp1/movement-delivery-loop]
+    branches: [main, sp1/movement-delivery-loop, sp2/city-map-poi]
   workflow_dispatch:
 permissions:
   contents: read
