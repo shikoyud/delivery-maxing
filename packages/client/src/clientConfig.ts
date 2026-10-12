@@ -38,6 +38,14 @@ export interface ClientConfig {
     invertY: boolean;
     bindings: Record<BindingName, string[]>;
   };
+  ui: {
+    /** How long a delivery popup stays on screen (s). */
+    popupSeconds: number;
+    /** HUD text refresh rate (Hz); the 3D waypoints still update every frame. */
+    hudUpdateHz: number;
+    /** Waypoint beam pulse rate (Hz). */
+    waypointPulseHz: number;
+  };
 }
 
 export type BindingName =

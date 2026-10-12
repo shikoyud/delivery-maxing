@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import {
   FixedStepper,
-  NO_MODS,
   PlayerSim,
   createPhysicsWorld,
   createWorldFeatureState,
@@ -26,10 +25,14 @@ import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes'
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer } from '../render/Renderer';
 import { installDebugHooks } from './debugHooks';
+import { DeliveryLoop } from './delivery';
+import { browserStorage, createProgressStore } from './progress';
 import { interpolationStart } from './interpolation';
 
 export interface GameOptions {
   debug: boolean;
+  /** Order Board RNG seed (?seed=N); defaults to Date.now(). */
+  seed?: number;
 }
 
 /**
@@ -47,6 +50,7 @@ export class Game {
   /** Frames drawn so far. */
   frames = 0;
   readonly features: FeatureMeshes;
+  readonly delivery: DeliveryLoop;
   private prevPosition: Vec3;
   private camRoll = 0;
   private lastFrameMs: number | null = null;
@@ -69,6 +73,17 @@ export class Game {
     this.renderer.scene.add(this.features.group);
     this.input = new InputManager(this.renderer.renderer.domElement, this.actions, {
       requirePointerLock: !opts.debug,
+    });
+    this.delivery = new DeliveryLoop({
+      host,
+      scene: this.renderer.scene,
+      map,
+      cfg: this.cfg,
+      actions: this.actions,
+      progress: createProgressStore(browserStorage()),
+      seed: opts.seed ?? Date.now(),
+      now: () => this.time,
+      player: () => this.sim.state,
     });
   }
 
@@ -128,8 +143,11 @@ export class Game {
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
-    const frame = this.actions.sampleTick();
-    const events = this.sim.step(frame, NO_MODS, this.world, this.time);
+    const now = this.time;
+    const mods = this.delivery.statModifiers();
+    const frame = this.delivery.beforeStep(this.actions.sampleTick());
+    const events = this.sim.step(frame, mods, this.world, now);
+    this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
     this.tick++;
     return events;
@@ -154,6 +172,7 @@ export class Game {
       this.features.setOrbVisible(orb.id, this.time >= (this.world.orbAvailableAt.get(orb.id) ?? 0));
     }
     this.features.update(clockSeconds);
+    this.delivery.draw(clockSeconds);
     this.renderer.followShadow(feet);
     this.renderer.render();
     this.frames++;

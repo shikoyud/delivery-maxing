@@ -4,18 +4,22 @@ import { Game } from './game/Game';
 const host = document.getElementById('app');
 const hint = document.getElementById('play-hint');
 const bootError = document.getElementById('boot-error');
-const debug = new URLSearchParams(window.location.search).has('debug');
+const params = new URLSearchParams(window.location.search);
+const debug = params.has('debug');
+const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
+const seed = Number.isFinite(seedParam) ? seedParam : undefined;
 
 if (!host) throw new Error('#app is missing');
 
-Game.create(host, { debug })
+Game.create(host, { debug, seed })
   .then((game) => {
     game.start();
     if (hint && !debug) {
       const update = (): void => {
-        hint.hidden = game.input.locked;
+        hint.hidden = game.input.locked || game.delivery.modalOpen;
       };
       document.addEventListener('pointerlockchange', update);
+      game.delivery.onModalChange(update);
       update();
     }
   })

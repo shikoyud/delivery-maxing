@@ -1,4 +1,4 @@
-import type { MoveMode, Vec3 } from '@dm/shared';
+import type { AcceptResult, ActiveOrder, MoveMode, Order, Totals, Vec3 } from '@dm/shared';
 import type { Game } from './Game';
 
 /** Test and debugging API on window.__dm, installed only with ?debug. */
@@ -15,6 +15,19 @@ export interface DebugApi {
   /** Places the player on the ground at `feet` and looks at `target`. */
   viewpoint(feet: Vec3, target: Vec3): void;
   renderInfo(): { calls: number; triangles: number };
+  /** The delivery loop: copies of the board, active orders and totals; accept uses the player's position now. */
+  orders: {
+    board(): (Order | null)[];
+    active(): ActiveOrder[];
+    totals(): Totals;
+    accept(id: string): AcceptResult;
+  };
+  /** Whether the Order Board is open. */
+  boardOpen(): boolean;
+  /** Ground point of a POI zone, by id. */
+  poiPosition(id: string): Vec3;
+  /** Position of the HUB Order Board kiosk. */
+  kiosk(): Vec3;
 }
 
 declare global {
@@ -57,6 +70,19 @@ export function installDebugHooks(game: Game): void {
     renderInfo() {
       return game.renderer.info();
     },
+    orders: {
+      board: () => structuredClone([...game.delivery.orders.board]),
+      active: () => structuredClone([...game.delivery.orders.active]),
+      totals: () => ({ ...game.delivery.orders.totals }),
+      accept: (id) => game.delivery.accept(id),
+    },
+    boardOpen: () => game.delivery.modalOpen,
+    poiPosition(id) {
+      const p = game.map.pois.find((x) => x.id === id);
+      if (!p) throw new Error(`unknown POI ${id}`);
+      return { ...p.position };
+    },
+    kiosk: () => ({ ...game.map.hub.kiosk }),
   };
   window.__dm = api;
 }

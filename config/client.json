@@ -5,5 +5,6 @@
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
     "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "board": ["KeyQ"], "hit": ["Mouse0"],
-    "devPanel": ["Backquote"], "debugOverlay": ["F3"] } }
+    "devPanel": ["Backquote"], "debugOverlay": ["F3"] } },
+  "ui": { "popupSeconds": 3.5, "hudUpdateHz": 12, "waypointPulseHz": 0.8 }
 }

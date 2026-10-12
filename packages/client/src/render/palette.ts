@@ -21,7 +21,24 @@ export const palette = {
   padArrow: 0xfff1a8,
   orb: 0xffd94a,
   chuteStripe: 0xfff6ea,
+  plazaRing: 0x1f9e93,
+  dropZone: 0x9fdcd4,
+  dropZoneRing: 0xfff6ea,
+  kioskBody: 0x1f9e93,
+  kioskCounter: 0xf7f3ea,
+  kioskCanopy: 0xf27166,
+  kioskScreen: 0x16323a,
+  poiIdle: 0x7d929c,
+  poiTarget: 0xf27166,
 } as const;
+
+/**
+ * One colour per active-order slot (backpack holds up to 5): waypoint beams and the HUD swatches share them.
+ * Ordered so the first slots read best against the sky and the sand.
+ */
+export const slotColors = [0xf27166, 0x8a6cf0, 0x16b3a4, 0xe25c9e, 0x3d7fe0] as const;
+
+export const cssHex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
 /** Base colour per solid kind; each solid is tinted around it by a hash of its id. */
 export const kindColor: Record<SolidKind, number> = {

@@ -8,13 +8,13 @@ const artifacts = fileURLToPath(new URL('../e2e-artifacts/', import.meta.url));
 mkdirSync(artifacts, { recursive: true });
 
 /** Opens the game in debug mode and waits for the first frame; returns the console errors seen. */
-async function boot(page: Page): Promise<string[]> {
+async function boot(page: Page, query = ''): Promise<string[]> {
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('?debug=1');
+  await page.goto(`?debug=1${query}`);
   await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
   return errors;
 }
@@ -97,5 +97,107 @@ test('feature screenshot', async ({ page }) => {
   await page.evaluate(() => window.__dm!.viewpoint({ x: 6, y: 0, z: 8 }, { x: 28, y: 2, z: 0 }));
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${artifacts}sp1-features.png` });
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Board seed for the delivery tests. With the starter greybox (3 POIs) its first board is
+ * [Pick-up, Drop-off Express, Drop-off]. Tests assert a Drop-off is present, so a map or generator change
+ * fails here deterministically instead of flaking.
+ */
+const SEED = '&seed=3';
+
+/** Waits for the player to settle, then returns the first Drop-off on the board. */
+async function firstDropoff(page: Page): Promise<{ id: string; poiId: string }> {
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const board = await page.evaluate(() => window.__dm!.orders.board());
+  const drop = board.find((o) => o?.type === 'dropoff');
+  expect(drop, `seed board has no drop-off: ${JSON.stringify(board.map((o) => o?.type))}`).toBeTruthy();
+  const step = drop!.steps[0]!;
+  if (step.kind !== 'poi') throw new Error('drop-off without a POI step');
+  return { id: drop!.id, poiId: step.poiId };
+}
+
+/** Teleports onto a POI's zone (feet at its ground point). */
+async function goToPoi(page: Page, poiId: string): Promise<void> {
+  await page.evaluate((id) => {
+    const p = window.__dm!.poiPosition(id);
+    window.__dm!.teleport({ x: p.x, y: p.y + 0.2, z: p.z });
+  }, poiId);
+}
+
+test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  const drop = await firstDropoff(page);
+  // Stand at the kiosk and press E.
+  const kiosk = await page.evaluate(() => window.__dm!.kiosk());
+  await page.evaluate((k) => window.__dm!.viewpoint({ x: k.x, y: k.y, z: k.z + 2 }, { x: k.x, y: 1.5, z: k.z }), kiosk);
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.keyboard.press('KeyE');
+  await expect(page.locator('.board-overlay')).toBeVisible();
+  await expect(page.locator(`[data-order-id="${drop.id}"] .accept`)).toBeEnabled();
+  await page.screenshot({ path: `${artifacts}sp1-order-board.png` });
+
+  await page.locator(`[data-order-id="${drop.id}"] .accept`).click();
+  await expect(page.locator('.board-active-row')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.board-overlay')).toBeHidden();
+  expect(await page.evaluate(() => window.__dm!.boardOpen())).toBe(false);
+  expect((await page.evaluate(() => window.__dm!.orders.active())).map((a) => a.order.id)).toEqual([drop.id]);
+
+  // Walk-in stand-in: land just inside the POI zone (radius 3 m), facing its post.
+  await page.evaluate((id) => {
+    const p = window.__dm!.poiPosition(id);
+    const d = Math.hypot(p.x, p.z);
+    window.__dm!.viewpoint({ x: p.x - (p.x / d) * 2.5, y: p.y, z: p.z - (p.z / d) * 2.5 }, { x: p.x, y: p.y + 1.6, z: p.z });
+  }, drop.poiId);
+  await expect(page.locator('.popup').filter({ hasText: 'pts' })).toBeVisible({ timeout: 10_000 });
+  const totals = await page.evaluate(() => window.__dm!.orders.totals());
+  expect(totals.points).toBeGreaterThanOrEqual(1);
+  expect(totals.deliveries).toBe(1);
+  expect(await page.evaluate(() => window.__dm!.orders.active())).toEqual([]);
+  await page.screenshot({ path: `${artifacts}sp1-delivered.png` });
+  expect(errors).toEqual([]);
+});
+
+test('progress survives a reload', async ({ page }) => {
+  await boot(page, SEED);
+  const drop = await firstDropoff(page);
+  expect(await page.evaluate((id) => window.__dm!.orders.accept(id), drop.id)).toBe('ok');
+  await goToPoi(page, drop.poiId);
+  await page.waitForFunction(() => window.__dm!.orders.totals().deliveries === 1, undefined, { timeout: 10_000 });
+  const before = await page.evaluate(() => window.__dm!.orders.totals());
+  expect(before.points).toBeGreaterThanOrEqual(1);
+  await page.reload();
+  await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.__dm!.orders.totals())).toEqual(before);
+  await expect(page.locator('.hud-coins .hud-stat-value')).toHaveText(String(before.coins));
+});
+
+test('HUD shows the active order with distance', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  const drop = await firstDropoff(page);
+  expect(await page.evaluate((id) => window.__dm!.orders.accept(id), drop.id)).toBe('ok');
+  const order = page.locator(`.hud-order[data-order-id="${drop.id}"]`);
+  await expect(order).toBeVisible();
+  await expect(order.locator('.hud-stage')).toContainText('Deliver to');
+  await expect(order.locator('.hud-distance')).toHaveText(/^\d+ m$/);
+  const shown = Number((await order.locator('.hud-distance').textContent())!.replace(' m', ''));
+  const { p, target } = await page.evaluate(
+    (id) => ({ p: window.__dm!.player().position, target: window.__dm!.poiPosition(id) }),
+    drop.poiId,
+  );
+  expect(Math.abs(shown - Math.hypot(p.x - target.x, p.y - target.y, p.z - target.z))).toBeLessThanOrEqual(2);
+  // Face the waypoint beam from the far side of the plaza for the screenshot.
+  await page.evaluate((id) => {
+    const t = window.__dm!.poiPosition(id);
+    const d = Math.hypot(t.x, t.z);
+    window.__dm!.viewpoint({ x: (-t.x / d) * 18, y: 0, z: (-t.z / d) * 18 + 4 }, { x: t.x, y: 10, z: t.z });
+  }, drop.poiId);
+  await page.waitForTimeout(500);
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`render with HUB, POIs and a waypoint: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
+  await page.screenshot({ path: `${artifacts}sp1-hud.png` });
   expect(errors).toEqual([]);
 });
