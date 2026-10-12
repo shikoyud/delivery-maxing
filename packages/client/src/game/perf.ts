@@ -85,7 +85,7 @@ export interface PerfResult {
   gpu: string;
   seconds: number;
   warmupSeconds: number;
-  /** Route metres actually glided (the run ends at `seconds`, wherever on the route that is). */
+  /** Route metres actually glided (the run ends after `seconds`, wherever on the route that is). */
   metresGlided: number;
   /** Frames in the statistics (after the warm-up). */
   frames: number;
@@ -143,7 +143,8 @@ export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
       prevMs = nowMs;
       const elapsed = (nowMs - startMs) / 1000;
       overlay.progress(elapsed, cfg.seconds);
-      if (elapsed >= cfg.seconds) {
+      // A run that was all warm-up (very slow frames) goes on until it has something to report.
+      if (elapsed >= cfg.seconds && frameMs.length > 0) {
         game.frameDriver = null;
         const frames = summarize(frameMs);
         const dpr = window.devicePixelRatio;
@@ -154,7 +155,7 @@ export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
           gpu: gpuRenderer(game.renderer.renderer.getContext()),
           seconds: cfg.seconds,
           warmupSeconds: WARMUP_SECONDS,
-          metresGlided: Math.round(Math.min(cfg.seconds * cfg.speed, routeLength(cfg.route))),
+          metresGlided: Math.round(Math.min(elapsed * cfg.speed, routeLength(cfg.route))),
           frames: frames.frames,
           p50Ms: frames.p50,
           p95Ms: frames.p95,
