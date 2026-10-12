@@ -4,6 +4,7 @@ import { movementConfig as cfg, ordersConfig } from '../../src/config';
 import { emptyInput } from '../../src/input/inputFrame';
 import { closestOnSegment, distance, vec3, type Vec3 } from '../../src/math/vec3';
 import { PlayerSim } from '../../src/movement/PlayerSim';
+import { tryAttachZip } from '../../src/movement/zipLine';
 import { createWorldFeatureState } from '../../src/movement/triggers';
 import { NO_MODS } from '../../src/movement/types';
 import { buildPoiTable, streetDistance } from '../../src/world/distance';
@@ -220,6 +221,49 @@ describe('greybox city: zip lines', () => {
         reachable = closestOnSegment(vec3(feet.x, feet.y + hand, feet.z), z.a, z.b).dist <= cfg.zipLine.attachDistance;
       }
       expect(reachable, `${z.id} start is grabbable from a surface`).toBe(true);
+    }
+  });
+
+  it('pressing interact anywhere on a zip start platform within reach grabs that line (tryAttachZip)', () => {
+    const simWorld = createPhysicsWorld(rapier, map); // the players' capsules stay out of the shared query world
+    for (const z of map.zipLines) {
+      const { start } = highEnd(z);
+      let spots = 0;
+      for (let dx = -3; dx <= 3; dx += 0.5) {
+        for (let dz = -3; dz <= 3; dz += 0.5) {
+          const drop = dropTo(vec3(start.x + dx, start.y, start.z + dz), 10);
+          if (drop === null || drop <= 0) continue;
+          const feet = vec3(start.x + dx, start.y - drop, start.z + dz);
+          if (solidAt(vec3(feet.x, feet.y + 1, feet.z))) continue;
+          const hand = vec3(feet.x, feet.y + cfg.capsule.height, feet.z);
+          if (closestOnSegment(hand, z.a, z.b).dist > cfg.zipLine.attachDistance) continue;
+          spots++;
+          const sim = new PlayerSim(simWorld, map, cfg, feet);
+          const input = emptyInput();
+          input.interact = { held: true, pressed: true };
+          expect(tryAttachZip(sim.state, input, map.zipLines, cfg), `${z.id} grab at ${dx}, ${dz}`).toBe(true);
+          expect(sim.state.zip?.id, `${z.id} grab at ${dx}, ${dz}`).toBe(z.id);
+        }
+      }
+      expect(spots, `${z.id} has standing spots in reach`).toBeGreaterThan(0);
+    }
+  });
+
+  it('no two zip cables come within 2 × attachDistance + 1 m of each other', () => {
+    const minGap = 2 * cfg.zipLine.attachDistance + 1;
+    const lines = map.zipLines;
+    for (let i = 0; i < lines.length; i++) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const [p, q] = [lines[i]!, lines[j]!];
+        const len = distance(p.a, p.b);
+        let closest = Infinity;
+        for (let s = 0; s <= len; s += 0.25) {
+          const k = s / len;
+          const c = vec3(p.a.x + (p.b.x - p.a.x) * k, p.a.y + (p.b.y - p.a.y) * k, p.a.z + (p.b.z - p.a.z) * k);
+          closest = Math.min(closest, closestOnSegment(c, q.a, q.b).dist);
+        }
+        expect(closest, `${p.id} vs ${q.id}`).toBeGreaterThanOrEqual(minGap);
+      }
     }
   });
 
