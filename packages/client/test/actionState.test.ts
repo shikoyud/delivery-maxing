@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { clientConfig } from '../src/clientConfig';
 import { ActionState } from '../src/input/actionState';
 
-const PITCH_LIMIT = (clientConfig.camera.pitchLimitDeg * Math.PI) / 180;
-const make = (): ActionState => new ActionState(clientConfig.input, PITCH_LIMIT);
+const DEG = Math.PI / 180;
+const PITCH_MIN = clientConfig.camera.chase.pitchMinDeg * DEG;
+const PITCH_MAX = clientConfig.camera.chase.pitchMaxDeg * DEG;
+const make = (): ActionState => new ActionState(clientConfig.input, PITCH_MIN, PITCH_MAX);
 
 describe('ActionState', () => {
   it('W gives move.y = 1; W + D is normalised to length 1', () => {
@@ -68,13 +70,13 @@ describe('ActionState', () => {
     expect(a.sampleTick().move).toEqual({ x: 0, y: 1 });
   });
 
-  it('pitch is clamped to ±89°', () => {
+  it('pitch clamps to [−55°, 35°] (chase camera: down to −55°, up to 35°)', () => {
     const a = make();
     a.mouseMove(0, -1e6); // mouse up looks up
-    expect(a.look().pitch).toBeCloseTo(PITCH_LIMIT, 9);
+    expect(a.look().pitch).toBeCloseTo(35 * DEG, 9);
     a.mouseMove(0, 2e6);
-    expect(a.look().pitch).toBeCloseTo(-PITCH_LIMIT, 9);
-    expect(a.sampleTick().look.pitch).toBeCloseTo(-PITCH_LIMIT, 9);
+    expect(a.look().pitch).toBeCloseTo(-55 * DEG, 9);
+    expect(a.sampleTick().look.pitch).toBeCloseTo(-55 * DEG, 9);
   });
 
   it('mouse right turns right (negative yaw), scaled by sensitivity', () => {
@@ -107,6 +109,8 @@ describe('ActionState.setLook', () => {
   it('sets yaw and clamps pitch', () => {
     const a = make();
     a.setLook(1.25, 10);
-    expect(a.look()).toEqual({ yaw: 1.25, pitch: PITCH_LIMIT });
+    expect(a.look()).toEqual({ yaw: 1.25, pitch: PITCH_MAX });
+    a.setLook(1.25, -10);
+    expect(a.look()).toEqual({ yaw: 1.25, pitch: PITCH_MIN });
   });
 });

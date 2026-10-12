@@ -8,3 +8,9 @@ export function interpolationStart(before: Vec3, after: Vec3, events: readonly S
   const p = events.some((e) => e.kind === 'respawned') ? after : before;
   return { x: p.x, y: p.y, z: p.z };
 }
+
+/** Interpolates between two angles (radians) along the shorter arc. */
+export function lerpAngle(a: number, b: number, t: number): number {
+  const d = Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  return a + d * t;
+}

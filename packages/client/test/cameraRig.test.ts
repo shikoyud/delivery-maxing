@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerState } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
-import { easeEyeHeight, eyeHeight, easeToward, fovForSpeed, rollForWallRun } from '../src/render/cameraRig';
+import { easeToward, fovForSpeed, rollForWallRun } from '../src/render/cameraRig';
 
 const cam = clientConfig.camera;
 
@@ -14,13 +14,6 @@ describe('cameraRig', () => {
     expect(fovForSpeed(40, cam)).toBe(96);
   });
 
-  it('eyeHeight is 1.0 when crouched or sliding and 1.6 otherwise', () => {
-    const s = (p: Partial<PlayerState>): PlayerState => ({ mode: 'ground', crouched: false, ...p }) as PlayerState;
-    expect(eyeHeight(s({}), cam)).toBe(1.6);
-    expect(eyeHeight(s({ mode: 'air' }), cam)).toBe(1.6);
-    expect(eyeHeight(s({ crouched: true }), cam)).toBe(1.0);
-    expect(eyeHeight(s({ mode: 'slide' }), cam)).toBe(1.0);
-  });
 
   it('rollForWallRun: wall on the right → −8°; wall on the left → +8°; not wall-running → 0', () => {
     // Yaw 0 faces −Z, so the right vector is +X; a wall's normal points from the wall toward the player.
@@ -39,20 +32,5 @@ describe('cameraRig', () => {
     expect(a).toBeGreaterThan(0);
     expect(a).toBeLessThan(10);
     expect(easeToward(0, 10, 100, 8)).toBeCloseTo(10, 6);
-  });
-
-  it('R29a: easeEyeHeight eases toward the crouch eye height at camera.crouchEaseRate (no snap)', () => {
-    const crouched = { mode: 'ground', crouched: true } as PlayerState;
-    const standing = { mode: 'ground', crouched: false } as PlayerState;
-    expect(cam.crouchEaseRate).toBeGreaterThan(0);
-    const one = easeEyeHeight(cam.eyeHeight, crouched, cam, 1 / 60);
-    expect(one).toBeLessThan(cam.eyeHeight);
-    expect(one).toBeGreaterThan(cam.crouchEyeHeight);
-    expect(one).toBeCloseTo(easeToward(cam.eyeHeight, cam.crouchEyeHeight, 1 / 60, cam.crouchEaseRate), 12);
-    let h = cam.eyeHeight;
-    for (let i = 0; i < 60; i++) h = easeEyeHeight(h, crouched, cam, 1 / 60);
-    expect(h).toBeCloseTo(cam.crouchEyeHeight, 2);
-    for (let i = 0; i < 60; i++) h = easeEyeHeight(h, standing, cam, 1 / 60);
-    expect(h).toBeCloseTo(cam.eyeHeight, 2);
   });
 });

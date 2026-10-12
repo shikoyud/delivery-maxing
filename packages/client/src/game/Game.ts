@@ -20,7 +20,9 @@ import greyboxJson from '../../../../map/greybox.json';
 import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
-import { easeEyeHeight, easeToward, fovForSpeed, rollForWallRun } from '../render/cameraRig';
+import { easeToward } from '../render/cameraRig';
+import { ChaseCamera, pivotHeightFor } from '../render/chaseCamera';
+import { createCourierPlaceholder, type CourierView } from '../render/courierPlaceholder';
 import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer } from '../render/Renderer';
@@ -37,7 +39,8 @@ import {
   type DevSettingsStore,
 } from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
-import { interpolationStart } from './interpolation';
+import { physicsRayCast, pointInSolid } from './cameraQueries';
+import { interpolationStart, lerpAngle } from './interpolation';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
@@ -69,9 +72,12 @@ export class Game {
   readonly overlay: DebugOverlay;
   readonly devPanel: DevPanel;
   private readonly progress = createProgressStore(browserStorage());
+  readonly chase: ChaseCamera;
+  readonly courier: CourierView;
   private prevPosition: Vec3;
-  private camRoll = 0;
-  private eye: number = clientConfig.camera.eyeHeight;
+  private prevHeading: number;
+  /** Eased chase pivot height above the feet (drops while crouched or sliding). */
+  private pivot: number = clientConfig.camera.chase.pivotHeight;
   private lastFrameMs: number | null = null;
   private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
@@ -86,10 +92,18 @@ export class Game {
     private readonly devStore: DevSettingsStore,
   ) {
     this.prevPosition = { ...sim.state.position };
-    const pitchLimit = THREE.MathUtils.degToRad(this.cfg.camera.pitchLimitDeg);
-    this.actions = new ActionState(this.cfg.input, pitchLimit);
+    this.prevHeading = sim.state.heading;
+    const chase = this.cfg.camera.chase;
+    this.actions = new ActionState(
+      this.cfg.input,
+      THREE.MathUtils.degToRad(chase.pitchMinDeg),
+      THREE.MathUtils.degToRad(chase.pitchMaxDeg),
+    );
     this.actions.setLook(map.hub.spawnYaw, 0);
     this.renderer = new Renderer(host, this.cfg.graphics, this.cfg.camera, map.size);
+    this.chase = new ChaseCamera(this.renderer.camera, this.cfg.camera, physicsRayCast(sim.physics));
+    this.courier = createCourierPlaceholder(settings.movement.capsule);
+    this.renderer.scene.add(this.courier.object);
     this.renderer.scene.add(buildGreyboxMeshes(map));
     this.features = buildFeatureMeshes(map);
     this.renderer.scene.add(this.features.group);
@@ -181,6 +195,14 @@ export class Game {
   teleport(p: Vec3): void {
     this.sim.teleport(vec3(p.x, p.y, p.z));
     this.prevPosition = { ...this.sim.state.position };
+    this.prevHeading = this.sim.state.heading;
+    this.chase.snap();
+  }
+
+  /** Whether the camera is inside a map solid (tests: the chase camera must never be). */
+  cameraInsideSolid(): boolean {
+    const p = this.renderer.camera.position;
+    return pointInSolid(this.sim.physics, { x: p.x, y: p.y, z: p.z });
   }
 
   private frame(nowMs: number): void {
@@ -192,24 +214,33 @@ export class Game {
     this.renderFrame(this.stepper.alpha, dt, nowMs / 1000);
   }
 
-  /** Moves the player to `feet` on the ground and points the camera at `target` (screenshots and tests). */
+  /**
+   * Moves the player to `feet`, turns the courier toward `target` and orbits the chase camera behind it, looking at
+   * `target` (screenshots and tests).
+   */
   viewpoint(feet: Vec3, target: Vec3): void {
-    this.teleport(feet);
     const dx = target.x - feet.x;
     const dz = target.z - feet.z;
-    const dy = target.y - (feet.y + this.cfg.camera.eyeHeight);
-    this.actions.setLook(Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)));
+    const dy = target.y - (feet.y + this.cfg.camera.chase.height);
+    const yaw = Math.atan2(-dx, -dz);
+    this.sim.state.heading = yaw;
+    this.teleport(feet);
+    this.actions.setLook(yaw, Math.atan2(dy, Math.hypot(dx, dz)));
   }
 
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
+    const headingBefore = this.sim.state.heading;
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
     const events = this.sim.step(frame, mods, this.world, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
+    const respawned = events.some((e) => e.kind === 'respawned');
+    this.prevHeading = respawned ? this.sim.state.heading : headingBefore;
+    if (respawned) this.chase.snap();
     this.tick++;
     return events;
   }
@@ -218,18 +249,13 @@ export class Game {
     const s = this.sim.state;
     const cc = this.cfg.camera;
     const feet = lerpVec3(this.prevPosition, s.position, alpha);
-    const cam = this.renderer.camera;
     const look = this.actions.look();
-    // Roll is clockwise-positive (see rollForWallRun); three's rotation.z is counter-clockwise-positive.
-    this.camRoll = easeToward(this.camRoll, rollForWallRun(s, cc), dt, cc.rollEaseRate);
-    this.eye = easeEyeHeight(this.eye, s, cc, dt);
-    cam.position.set(feet.x, feet.y + this.eye, feet.z);
-    cam.rotation.set(look.pitch, look.yaw, -this.camRoll);
-    const fov = easeToward(cam.fov, fovForSpeed(horizontalLength(s.velocity), cc), dt, cc.fovEaseRate);
-    if (Math.abs(cam.fov - fov) > 1e-4) {
-      cam.fov = fov;
-      cam.updateProjectionMatrix();
-    }
+    const low = s.crouched || s.mode === 'slide';
+    this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
+    const pivot = { x: feet.x, y: feet.y + this.pivot, z: feet.z };
+    this.chase.update(dt, pivot, look.yaw, look.pitch, horizontalLength(s.velocity), s);
+    this.courier.update(feet, lerpAngle(this.prevHeading, s.heading, alpha), low);
+    this.courier.object.visible = !this.chase.courierHidden;
     for (const orb of this.map.boostOrbs) {
       this.features.setOrbVisible(orb.id, this.time >= (this.world.orbAvailableAt.get(orb.id) ?? 0));
     }

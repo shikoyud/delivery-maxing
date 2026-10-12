@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, MoveMode, Order, Totals, Vec3 } from '@dm/shared';
 import type { Game } from './Game';
 
@@ -28,6 +29,15 @@ export interface DebugApi {
   poiPosition(id: string): Vec3;
   /** Position of the HUB Order Board kiosk. */
   kiosk(): Vec3;
+  /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
+  setLook(yaw: number, pitch: number): void;
+  /** Point-in-collider test of the camera position against the map solids. */
+  cameraInsideSolid(): boolean;
+  /**
+   * The chase camera: its position, boom length, whether the courier is hidden (camera forced inside minDistance),
+   * and where the courier's mid-body lands on screen in normalised device coordinates (−1..1, +y up).
+   */
+  camera(): { position: Vec3; distance: number; courierHidden: boolean; courierNdc: { x: number; y: number } };
 }
 
 declare global {
@@ -83,6 +93,19 @@ export function installDebugHooks(game: Game): void {
       return { ...p.position };
     },
     kiosk: () => ({ ...game.map.hub.kiosk }),
+    setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
+    cameraInsideSolid: () => game.cameraInsideSolid(),
+    camera() {
+      const cam = game.renderer.camera;
+      const c = game.courier.object.position;
+      const mid = new THREE.Vector3(c.x, c.y + game.sim.cfg.capsule.height / 2, c.z).project(cam);
+      return {
+        position: { x: cam.position.x, y: cam.position.y, z: cam.position.z },
+        distance: game.chase.distance,
+        courierHidden: game.chase.courierHidden,
+        courierNdc: { x: mid.x, y: mid.y },
+      };
+    },
   };
   window.__dm = api;
 }

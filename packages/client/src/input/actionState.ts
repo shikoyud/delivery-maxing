@@ -28,7 +28,9 @@ export class ActionState {
 
   constructor(
     private readonly input: ClientConfig['input'],
-    private readonly pitchLimitRad: number,
+    /** Look pitch limits (radians): the chase camera's [pitchMinDeg, pitchMaxDeg]. */
+    private readonly pitchMinRad: number,
+    private readonly pitchMaxRad: number,
   ) {
     for (const [name, codes] of Object.entries(input.bindings) as [BindingName, string[]][]) {
       for (const code of codes) this.codeTo.set(code, name);
@@ -68,7 +70,7 @@ export class ActionState {
     const k = this.input.mouseSensitivity;
     this.yaw -= dx * k;
     this.pitch -= (this.input.invertY ? -dy : dy) * k;
-    this.pitch = Math.min(this.pitchLimitRad, Math.max(-this.pitchLimitRad, this.pitch));
+    this.pitch = this.clampPitch(this.pitch);
   }
 
   /** Releases everything (focus or pointer lock lost); held keys need a fresh press to count again. */
@@ -80,7 +82,11 @@ export class ActionState {
   /** Sets the look direction (e.g. the spawn yaw); pitch is clamped. */
   setLook(yaw: number, pitch: number): void {
     this.yaw = yaw;
-    this.pitch = Math.min(this.pitchLimitRad, Math.max(-this.pitchLimitRad, pitch));
+    this.pitch = this.clampPitch(pitch);
+  }
+
+  private clampPitch(p: number): number {
+    return Math.min(this.pitchMaxRad, Math.max(this.pitchMinRad, p));
   }
 
   look(): { yaw: number; pitch: number } {

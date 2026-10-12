@@ -100,6 +100,86 @@ test('feature screenshot', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+/** Waits until `n` more simulation ticks have run (frames are drawn alongside them). */
+async function waitTicks(page: Page, n: number): Promise<void> {
+  const tick0 = await page.evaluate(() => window.__dm!.tick);
+  await page.waitForFunction(([t0, k]) => window.__dm!.tick - t0 >= k, [tick0, n] as const);
+}
+
+test('third-person view shows the courier', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // East edge of the plaza facing down the playground line, then a short sprint so the shot has motion.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('ShiftLeft');
+  await waitTicks(page, 12);
+  await page.keyboard.up('ShiftLeft');
+  await page.keyboard.up('KeyW');
+  await waitTicks(page, 2);
+  const cam = await page.evaluate(() => window.__dm!.camera());
+  console.log(`chase camera: distance ${cam.distance.toFixed(2)} m, courier at NDC (${cam.courierNdc.x.toFixed(2)}, ${cam.courierNdc.y.toFixed(2)})`);
+  expect(cam.courierHidden).toBe(false);
+  expect(cam.distance).toBeGreaterThan(clientJson.camera.chase.distance - 0.5);
+  // Centre-bottom of the frame: horizontally central, below the middle.
+  expect(Math.abs(cam.courierNdc.x)).toBeLessThan(0.2);
+  expect(cam.courierNdc.y).toBeLessThan(0);
+  expect(cam.courierNdc.y).toBeGreaterThan(-0.8);
+  expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
+  await page.screenshot({ path: `${artifacts}sp1-third-person.png` });
+  expect(errors).toEqual([]);
+});
+
+test('camera stays outside geometry in the crouch tunnel and against a wall', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const deg = Math.PI / 180;
+  const { pitchMinDeg, pitchMaxDeg } = clientJson.camera.chase;
+  /** Every yaw step at level, lowest and highest pitch: the camera must never end up inside a solid. */
+  const sweep = async (label: string): Promise<void> => {
+    for (const pitch of [0, pitchMinDeg * deg, pitchMaxDeg * deg]) {
+      for (let k = 0; k < 8; k++) {
+        await page.evaluate(([y, p]) => window.__dm!.setLook(y, p), [(k * Math.PI) / 4, pitch] as const);
+        await waitTicks(page, 2);
+        const inside = await page.evaluate(() => window.__dm!.cameraInsideSolid());
+        expect(inside, `${label}: yaw ${k * 45}°, pitch ${(pitch / deg).toFixed(0)}°`).toBe(false);
+      }
+    }
+  };
+
+  // Crouch tunnel (hub-tunnel-*: roof underside 1.4 m, x 92..104). Crouch first, then go in.
+  await page.keyboard.down('KeyC');
+  await waitTicks(page, 4);
+  await page.evaluate(() => window.__dm!.teleport({ x: 98, y: 0.05, z: 0 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await sweep('tunnel');
+  await page.evaluate(() => window.__dm!.setLook(Math.PI / 2, -20 * (Math.PI / 180)));
+  await waitTicks(page, 3);
+  await page.screenshot({ path: `${artifacts}sp1-camera-tunnel.png` });
+  await page.keyboard.up('KeyC');
+
+  // Back pressed against the south face (z = −56) of building b-0--2-2, facing away from it.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 14.5, y: 0.3, z: -55 }, { x: 14.5, y: 1.6, z: -30 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.keyboard.down('KeyS');
+  await waitTicks(page, 15);
+  await page.keyboard.up('KeyS');
+  const z = await page.evaluate(() => window.__dm!.player().position.z);
+  expect(z).toBeLessThan(-55.5); // flush with the wall
+  await sweep('wall');
+  // Looking almost along the wall: the boom is pulled in short of it and the courier stays in view.
+  await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.3, -15 * (Math.PI / 180)));
+  await waitTicks(page, 3);
+  const cam = await page.evaluate(() => window.__dm!.camera());
+  console.log(`against the wall: boom ${cam.distance.toFixed(2)} m, courier hidden ${cam.courierHidden}`);
+  expect(cam.distance).toBeLessThan(clientJson.camera.chase.distance);
+  expect(cam.courierHidden).toBe(false);
+  expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
+  await page.screenshot({ path: `${artifacts}sp1-camera-wall.png` });
+  expect(errors).toEqual([]);
+});
+
 /**
  * Viewpoints in the air: the player starts falling at once, so the screenshot is taken after a few frames
  * (a fall of well under a metre) rather than after a fixed settle time.

@@ -10,14 +10,12 @@ export interface ClientConfig {
     /** Exponential ease rates (1/s) for the wall-run roll and the speed FOV kick. */
     rollEaseRate: number;
     fovEaseRate: number;
-    eyeHeight: number;
-    crouchEyeHeight: number;
-    /** Exponential ease rate (1/s) of the eye height between standing and crouched (no camera snap). */
+    /** Exponential ease rate (1/s) of the chase pivot height between standing and crouched (no camera snap). */
     crouchEaseRate: number;
-    pitchLimitDeg: number;
     /** Near and far clip planes (m). */
     near: number;
     far: number;
+    chase: ChaseConfig;
   };
   graphics: {
     maxPixelRatio: number;
@@ -54,6 +52,29 @@ export interface ClientConfig {
     /** After a board refresh, Accept clicks are ignored this long (s) and the board flashes (Review Focus 3). */
     boardRefreshGuardSeconds: number;
   };
+}
+
+/** Third-person chase camera (spec §4 "Camera"). Lengths in metres, rates in 1/s. */
+export interface ChaseConfig {
+  /** Boom length behind the pivot on open ground. */
+  distance: number;
+  /** Camera height above the feet on open ground at level pitch. */
+  height: number;
+  /** The camera orbits a pivot this far above the feet (crouchPivotHeight while crouched or sliding). */
+  pivotHeight: number;
+  crouchPivotHeight: number;
+  /** Look pitch limits (degrees): negative looks down (camera above the courier). */
+  pitchMinDeg: number;
+  pitchMaxDeg: number;
+  /** Ease rate of the followed pivot toward the courier (the slight lag; hides small sim snaps). */
+  followEaseRate: number;
+  /** A blocked boom stops this far short of the hit. */
+  collisionRadius: number;
+  /** The boom is never shortened below this (unless that would put the camera inside geometry). */
+  minDistance: number;
+  /** Boom length ease rates when geometry pulls it in and when it lets it back out. */
+  pullInEaseRate: number;
+  pushOutEaseRate: number;
 }
 
 export type BindingName =

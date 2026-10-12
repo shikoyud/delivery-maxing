@@ -11,16 +11,6 @@ export function fovForSpeed(speed: number, cam: CameraConfig): number {
   return cam.fovBase + (cam.fovMax - cam.fovBase) * t;
 }
 
-/** Eye height above the feet: low while crouched or sliding. */
-export function eyeHeight(state: PlayerState, cam: CameraConfig): number {
-  return state.crouched || state.mode === 'slide' ? cam.crouchEyeHeight : cam.eyeHeight;
-}
-
-/** One frame of eye-height easing toward eyeHeight(state) at camera.crouchEaseRate (crouch and stand smoothly). */
-export function easeEyeHeight(current: number, state: PlayerState, cam: CameraConfig, dt: number): number {
-  return easeToward(current, eyeHeight(state, cam), dt, cam.crouchEaseRate);
-}
-
 /**
  * Camera roll (radians) while wall-running: a magnitude of wallRunRollDeg, signed by which side the wall is on
  * (wall on the right gives a negative roll, on the left a positive one); 0 otherwise. The wall normal points
