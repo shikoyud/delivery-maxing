@@ -320,7 +320,7 @@ function rideZip(z: (typeof map.zipLines)[number], to: 'a' | 'b', sprintTicks: n
     if (interact) input.interact = { held: true, pressed: true };
     if (sprint) {
       input.move = { x: 0, y: 1 };
-      input.sprint.held = true;
+      input.sprint = { held: true, pressed: !sim.state.sprinting };
     }
     const events = sim.step(input, NO_MODS, world, tick++ * sim.dt);
     expect(events.filter((e) => e.kind === 'respawned'), `${label}: respawned at tick ${tick}`).toEqual([]);
@@ -403,7 +403,7 @@ function flyFromPad(padId: string, hold: PadHold = 'none'): Flight {
     const input = emptyInput();
     input.look = { yaw, pitch: 0 };
     if (hold !== 'none') input.move = { x: 0, y: 1 };
-    input.sprint.held = hold === 'sprint';
+    if (hold === 'sprint') input.sprint = { held: true, pressed: !sim.state.sprinting };
     const events = sim.step(input, NO_MODS, world, i * sim.dt);
     if (events.some((e) => e.kind === 'respawned')) throw new Error(`${padId} (${hold}): respawned at tick ${i}`);
     if (events.some((e) => e.kind === 'jumpPad')) {

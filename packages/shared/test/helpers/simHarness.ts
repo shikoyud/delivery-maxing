@@ -10,6 +10,7 @@ import { createPhysicsWorld, initRapier } from '../../src/world/physicsWorld';
 export interface Hold {
   forward?: number;
   strafe?: number;
+  /** Sprint should be on: the harness taps Shift on the tick where the sprint state differs (and a move key is held). */
   sprint?: boolean;
   crouch?: boolean;
   jump?: boolean;
@@ -51,11 +52,15 @@ export const box = (id: string, center: Vec3, size: Vec3, extra?: Partial<Solid>
   ...extra,
 });
 
-function makeInput(hold: Hold, press: Press[], defaultYaw: number): InputFrame {
+function makeInput(hold: Hold, press: Press[], defaultYaw: number, state: PlayerState): InputFrame {
   const input = emptyInput();
   input.move = { x: hold.strafe ?? 0, y: hold.forward ?? 0 };
   input.look = { yaw: hold.yaw ?? defaultYaw, pitch: 0 };
-  input.sprint.held = hold.sprint ?? false;
+  const wantSprint = hold.sprint ?? false;
+  const moving = input.move.x !== 0 || input.move.y !== 0;
+  // Sprint is a toggle: tap Shift when the wanted state differs. With no move key it is off anyway, so no tap.
+  if (moving && wantSprint !== state.sprinting) input.sprint.pressed = true;
+  input.sprint.held = input.sprint.pressed;
   input.crouch.held = hold.crouch ?? false;
   input.jump.held = hold.jump ?? false;
   for (const p of press) {
@@ -101,7 +106,7 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
     map,
     time: 0,
     tick(hold = {}, press = [], mods = NO_MODS) {
-      const events = sim.step(makeInput(hold, press, yaw), mods, world, h.time);
+      const events = sim.step(makeInput(hold, press, yaw, sim.state), mods, world, h.time);
       h.time += sim.dt;
       return events;
     },

@@ -290,6 +290,7 @@ export class Game {
       speed: horizontalLength(s.velocity),
       mode: s.mode,
       onBoard: s.onBoard,
+      sprinting: s.sprinting,
       tick: this.tick,
       position: s.position,
     }));

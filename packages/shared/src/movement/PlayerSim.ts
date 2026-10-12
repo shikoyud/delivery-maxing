@@ -9,6 +9,7 @@ import { applyAirVelocity, applyGroundVelocity, hasMoveInput, targetGroundSpeed,
 import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
+import { updateSprint } from './sprint';
 import { applyTriggers, enterAir } from './triggers';
 import { tryStartGrind, updateGrind } from './rail';
 import { tryAttachZip, updateZip } from './zipLine';
@@ -48,6 +49,7 @@ export class PlayerSim {
       onBoard: false,
       boardHeading: yaw,
       crouched: false,
+      sprinting: false,
       grounded: false,
       groundNormal: vec3(0, 1, 0),
       lastGrounded: vec3(spawn.x, spawn.y, spawn.z),
@@ -202,7 +204,8 @@ export class PlayerSim {
   }
 
   /**
-   * The camera yaw and pitch come from the input. Off the board, any movement input turns the courier to face its
+   * The camera yaw and pitch come from the input. The sprint toggle updates first (updateSprint), so every later
+   * step sees this tick's sprint state. Off the board, any movement input turns the courier to face its
    * (camera-relative) wish direction; with no input the heading holds. On the board the heading mirrors boardHeading
    * (set by the board code and at the end of the step).
    */
@@ -210,6 +213,7 @@ export class PlayerSim {
     const s = this.state;
     s.yaw = input.look.yaw;
     s.pitch = input.look.pitch;
+    updateSprint(s, input);
     if (!s.onBoard && hasMoveInput(input)) s.heading = yawOf(wish);
     ageJumpBuffer(s, input, this.cfg);
   }
