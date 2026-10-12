@@ -232,6 +232,7 @@ test('wall-run: the courier stays in view at every look offset from the wall (R1
     expect(inside, `offset ${offset}°`).toBe(false);
     // Positive offsets look away from the wall, so the boom swings toward it.
     if (offset === 30) await page.screenshot({ path: `${artifacts}sp1-camera-wallrun.png` });
+    if (offset === 60) await page.screenshot({ path: `${artifacts}sp1-camera-wallrun-60.png` });
   }
   await page.keyboard.up('KeyW');
   expect(errors).toEqual([]);
