@@ -1,12 +1,12 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved
+- **Status:** Approved (revised 2026-10-12 after the SP1 playtest: third-person camera, two-way zip lines, par times, 2 × 2 km city, thieves)
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
 
-Delivery Maxing is a first-person, low-poly, multiplayer parkour courier game that runs in the browser. Players take orders at a central HUB and deliver packages on foot across a compact city built for movement: wall-runs, slides, zip lines, jump pads and speed boost orbs. Players can buy a skateboard. They can also shove each other for a short knockback and stun. There are no health points.
+Delivery Maxing is a third-person, low-poly, multiplayer parkour courier game that runs in the browser. Players take orders at a central HUB and deliver packages on foot across a large city built for movement: wall-runs, slides, zip lines, jump pads and speed boost orbs. Players can buy a skateboard. They can also shove each other for a short knockback and stun. Street thieves chase couriers who carry packages. There are no health points.
 
 Every 10 minutes (one **epoch**), a share of an on-chain reward pool is paid out in **AMZNx** (tokenized Amazon stock on Solana, mint `Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg`). Each player gets an amount proportional to the Delivery Points they earned in that epoch. Players who **lock GAME** in the reward program get a points multiplier of up to +30%. The pool is funded by Pump.fun creator fees from the game's own token, **GAME**, which is launched on Pump.fun paired with AMZNx.
 
@@ -40,6 +40,10 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium 
 | Catch-up | Upgrades hit their ceiling fast. No rookie boost. |
 | Boost orbs | Shared within a room: first to touch takes it. |
 | Art | Free CC0 low-poly packs (Kenney, Quaternius). Gameplay objects are built in code. |
+| Camera | Third-person chase camera behind a visible courier (changed from first-person after the SP1 playtest). |
+| City size | 2 × 2 km, crossed in about 4 minutes (changed from 600 m after the SP1 playtest). Needs streaming and LOD to hold 60 fps. |
+| Thieves | Street-only NPCs chase couriers carrying packages; a catch steals the packages and costs 1 Delivery Point from the current epoch. |
+| Par times | Every order has a par time; beating it pays a bonus. |
 
 ## 3. Core loop
 
@@ -58,6 +62,9 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium 
 | **Chain** (Pro rank) | Collect at POI A → deliver to POI B → return to the HUB | The player enters the HUB drop zone |
 
 ### 3.2 Order modifiers
+
+**Par time (every order).** Each Drop-off, Pick-up and Chain order has a par time: `route distance ÷ base sprint speed × 1.3 + 10 s` (factor and extra seconds in config). It starts when the order is accepted. Delivering within par earns the par bonus (§3.4). Late delivery still completes the order, without that bonus. Express keeps its own tighter timer; beating both earns both bonuses.
+
 
 A modifier can be added to a Drop-off or Pick-up order.
 
@@ -81,17 +88,20 @@ A modifier can be added to a Drop-off or Pick-up order.
 
 | Component | Delivery Points | Coins |
 |---|---|---|
-| Short (path < 150 m) | 1 | 10 |
-| Medium (150–350 m) | 2 | 20 |
-| Long (> 350 m) | 3 | 30 |
+| Short (path < 500 m) | 1 | 10 |
+| Medium (500–1,200 m) | 2 | 20 |
+| Long (> 1,200 m) | 3 | 30 |
 | Chain (flat) | 4 | 40 |
+| Within par time | +1 | +10 |
 | Express, on time | +1 | +10 |
-| Fragile, intact | +1 | +10 |
+| Fragile, intact | +2 | +20 |
 | Heavy | +1 | +10 |
 
-Every value in this table is a tuning value stored in config.
+Every value in this table is a tuning value stored in config. The band limits apply to the 2 × 2 km city (SP2); the SP1 greybox keeps its smaller limits (150 m / 350 m) in config. A thief catch (§7.3) subtracts Delivery Points.
 
 ## 4. Movement
+
+**Camera:** a third-person chase camera sits about 4.5 m behind and 1.6 m above the courier and is orbited with the mouse. It lags slightly, widens its field of view with speed, tilts during wall-runs, and pulls in when geometry would block the view. Movement is relative to the camera; the courier turns to face its direction of travel. All values are in config.
 
 All movement code lives in the shared package. It runs on a fixed **30 Hz** simulation step on both client and server, and rendering interpolates between steps. The values below are starting points, stored in config.
 
@@ -102,7 +112,7 @@ All movement code lives in the shared package. It runs on a fixed **30 Hz** simu
 | Mantle | Automatically climbs ledges up to 1.5 m high. |
 | Crouch-slide | Triggered while sprinting. Keeps speed and gains speed downhill. |
 | Wall-run | Up to 1.5 s on a wall. A wall-jump chains to the next wall. |
-| Zip line | Press E to attach. Momentum carries over when you jump off. |
+| Zip line | Press E to attach. You ride in the direction you are facing when you attach, uphill or downhill. Speed is at least 10 m/s both ways; downhill gravity accelerates you up to 16 m/s. Momentum carries over when you jump off. |
 | Jump pad | Launches the player along an authored vector. |
 | Boost orb | +40% speed for 3 s. Orbs are **shared**: the first player to touch one takes it (the server decides ties), and it disappears for everyone in the room until it respawns 30 s later. |
 | Slides (map) | Long low-friction chutes. |
@@ -118,7 +128,7 @@ All movement code lives in the shared package. It runs on a fixed **30 Hz** simu
 
 ### 5.1 Layout
 
-The city is about 600 × 600 m. A skilled runner crosses it in roughly 75 s. Water and cliffs form the outer boundary.
+The city is about 2 × 2 km. A skilled runner crosses it in roughly 4 minutes. Water and cliffs form the outer boundary. The client streams the city in chunks with level-of-detail meshes so the 60 fps target holds; physics colliders are loaded for the chunks around the player.
 
 | District | Main features |
 |---|---|
@@ -141,7 +151,9 @@ Falling into water or out of bounds respawns the player at the nearest checkpoin
 
 | Rule | Value |
 |---|---|
-| Distance bands (one-way path distance from the HUB) | Short < 150 m, Medium 150–350 m, Long > 350 m |
+| Distance bands (one-way path distance from the HUB) | Short < 500 m, Medium 500–1,200 m, Long > 1,200 m |
+| Elevated targets | At least 40% of POIs are on rooftops, balconies or upper floors that need a parkour route (mantle, wall-run, pad or zip line). Every elevated POI has a way down with no fall over the Fragile limit. |
+| Order mix | Chain orders are weighted higher than in SP1 (tuned in config). |
 | Reachability | Only candidates that pass the build-time check are used |
 | Spread | No two of a player's active orders within 40 m of each other |
 | Reuse | The same POI is not reused within 3 minutes for the same player |
@@ -242,6 +254,22 @@ Players can lock GAME in the reward program to multiply the Delivery Points that
 
 **Visible to other players:** outfit, nameplate, rank badge and the packages on the backpack.
 
+### 7.3 Thieves
+
+Thieves are street NPCs that make carrying packages risky.
+
+| Rule | Value (starting values, in config) |
+|---|---|
+| Where | Patrol streets and plazas only. They cannot wall-run, mantle, use zip lines, pads or rails. They never enter the HUB plaza. |
+| Trigger | A courier who carries at least one package comes within 15 m (and in line of sight). |
+| Chase | Faster than the courier's run speed (5.5 m/s) but slower than sprint (8 m/s), e.g. 7 m/s, for at most 10 s, then they give up and return to patrol. |
+| Escape | Out-run them by sprinting, get above street level (rooftops, zip lines, pads), or reach the HUB safe zone. |
+| Catch | One touch robs the courier: every carried package is stolen and those orders fail (no points or Coins). Accepted but not yet collected Pick-up and Chain orders are kept. |
+| Penalty | 1 Delivery Point is subtracted from the courier's points in the current epoch. Epoch points never go below 0. Points from settled epochs are never touched. |
+| Cooldown | A robbed courier is ignored by thieves for 20 s. |
+| Density | A few thieves per district, more on long-distance streets. |
+| Authority | In multiplayer (SP4) thieves are simulated by the server and shared by everyone in the room. |
+
 ## 8. Wallet and accounts
 
 - **Sign-in:** the player connects a wallet through the Solana Wallet Adapter / Wallet Standard. Phantom, Solflare and OKX Wallet are listed explicitly. The player signs a Sign-In With Solana message containing a server nonce. The server verifies it and issues a session token bound to the wallet.
@@ -289,7 +317,7 @@ Players can lock GAME in the reward program to multiply the Delivery Points that
 1. Epochs are aligned to wall-clock 10-minute boundaries (UTC). A delivery belongs to the epoch in which the server recorded it.
 2. At the boundary, the settler triggers `harvest`, reads the vault, and computes `allocation = payout_fraction × unreserved`.
 3. The settler reads every `Lock` account and the current `Rate`. Each player's effective locked GAME is `active`, plus `warming` if `warming_since + 24 h` is at or before the epoch end. That amount is converted to USD and gives the bonus from §6.5.
-4. **Weighted points** = base points × (1 + bonus). Each player's share is `allocation × weighted_points ÷ total_weighted_points`, rounded down. Points held for review (see §10) are excluded.
+4. **Weighted points** = base points × (1 + bonus), where base points are the epoch's earned points minus thief penalties (§7.3), floored at 0. Each player's share is `allocation × weighted_points ÷ total_weighted_points`, rounded down. Points held for review (see §10) are excluded.
 5. Each share is added to the player's **cumulative total**. The settler builds a Merkle tree of `(wallet, cumulative_total)` over all players ever paid, stores the tree in Postgres, and calls `settle_epoch`.
 6. If no points were earned, the epoch settles with allocation 0.
 7. If submission fails, the settler retries. Missed epochs are settled in order, each using the lock state and rate recorded at its own boundary.
@@ -320,7 +348,7 @@ No system fully stops a well-built bot that genuinely plays the game. These laye
 
 ## 11. HUD and UI
 
-- **HUD:** active orders with waypoints and distances, Express timers, Coins, epoch countdown, current-epoch points and share %, lock bonus %, claimable AMZNx with a Claim button.
+- **HUD:** active orders with waypoints and distances, par and Express timers, a warning when a thief is chasing, Coins, epoch countdown, current-epoch points and share %, lock bonus %, claimable AMZNx with a Claim button.
 - **HUB screens:**
   - Order Board
   - Shop: Coins tab; Token tab (upgrades and premium skins) with USD and GAME prices
@@ -369,7 +397,7 @@ delivery-maxing/
 
 ## 14. Testing
 
-- **Shared logic:** Vitest unit tests for movement, orders, POI selection, points, upgrade stats and combat timings.
+- **Shared logic:** Vitest unit tests for movement, orders, POI selection, points, par times, thief chase and robbery rules, upgrade stats and combat timings.
 - **Reward program:** Anchor tests on a local validator covering every guarantee in §9.5, plus a stale-rate pause, the change cap, the emergency pause, wrong-signer rejection, and the lock warm-up, unlock and withdraw timings.
 - **Settler math:** unit tests for the lock bonus curve and weighted shares, including rounding and the zero-points case. Then a full devnet rehearsal with mock GAME and AMZNx mints.
 - **Pump.fun harvest:** a standalone devnet/mainnet-fork spike, done before the rest of the program is built on it.
@@ -383,10 +411,10 @@ Each sub-project gets its own implementation plan.
 
 | # | Sub-project | Done when |
 |---|---|---|
-| 1 | **Movement + delivery loop** | Single-player greybox city. Full movement kit on the shared fixed-step sim. HUB, Order Board, all order types and modifiers with about 20 POIs. Points and Coins tracked locally. Playtest confirms movement is fun. |
-| 2 | **City map + POI system** | Five districts built from CC0 packs, about 150 POIs, navmesh build step, POI selection rules, debug view, 60 fps target met. |
+| 1 | **Movement + delivery loop** | Single-player greybox city. Full movement kit on the shared fixed-step sim, seen through the third-person chase camera with an animated courier. Two-way zip lines. HUB, Order Board, all order types and modifiers, and par times, with about 20 POIs. Points and Coins tracked locally. Playtest confirms movement is fun. |
+| 2 | **City map + POI system** | 2 × 2 km city with five districts built from CC0 packs, chunk streaming and LOD, about 150 POIs (at least 40% elevated), new distance bands, navmesh build step, POI selection rules, single-player thieves (§7.3), debug view, 60 fps target met. |
 | 3 | **Upgrades, shop, ranks** | Ranks, Coin shop, Gloves, GPS Watch, cosmetics, token upgrades, premium skins and Lock panel, all wired to a mock on-chain source. |
-| 4 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation, shared boost orbs, wallet sign-in, Postgres persistence, combat, anti-cheat layer, reconnects. |
+| 4 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation, shared boost orbs, server-authoritative thieves, wallet sign-in, Postgres persistence, combat, anti-cheat layer, reconnects. |
 | 5 | **Reward program + launch** | Harvest spike, Anchor program (pool, upgrades, locks), price keeper, epoch settler with lock bonus, claim UI, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 
 **Sub-project 1 note:** the navmesh arrives in sub-project 2. Until then, path distance is the street-grid distance `|dx| + |dz|` measured on the greybox city's street grid.
@@ -399,6 +427,8 @@ Each sub-project gets its own implementation plan.
 - **Lock-to-boost:** locking a token to increase a real-money payout can be treated like staking for yield in some jurisdictions. Include it in the legal review.
 - **Custody:** the program holds both the AMZNx pool and players' locked GAME, which makes it a high-value target. The audit must cover the lock vault.
 - **Branding:** no Amazon name, logo or trade dress in the game. Courier branding is fictional.
+
+**Performance risk:** a 2 × 2 km city in the browser depends on chunk streaming, LOD and collider paging. SP2 must prove the 60 fps target on a mid-range laptop before the full city is authored.
 
 **Open items to verify:**
 - Confirm AMZNx is offered in Pump.fun's Custom Pair selector.
