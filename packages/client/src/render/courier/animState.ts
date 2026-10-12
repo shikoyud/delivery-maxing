@@ -21,11 +21,11 @@ export function wallSide(heading: number, normal: Vec3): 'L' | 'R' {
   return normal.x * rightX + normal.z * rightZ >= 0 ? 'L' : 'R';
 }
 
-/** Ground locomotion by speed: Idle, Walking, or Running with a playback rate that follows the speed. */
+/** Ground locomotion by speed: Idle, Walking, or Running with a playback rate that follows the speed (floored at runMinTimeScale). */
 function locomotion(speed: number, cfg: CourierConfig): Pick<CourierAnim, 'clip' | 'timeScale'> {
   if (speed < cfg.idleSpeed) return { clip: 'Idle', timeScale: 1 };
   if (speed < cfg.walkMaxSpeed) return { clip: 'Walking', timeScale: 1 };
-  return { clip: 'Running', timeScale: speed / cfg.runSpeedForFullRun };
+  return { clip: 'Running', timeScale: Math.max(cfg.runMinTimeScale, speed / cfg.runSpeedForFullRun) };
 }
 
 const still = (pose: CourierAnim['pose']): CourierAnim => ({ clip: 'Idle', timeScale: 1, pose });

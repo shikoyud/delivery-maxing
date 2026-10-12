@@ -10,11 +10,21 @@ import type { CourierDebug, CourierView } from './CourierView';
 const CLIPS: readonly CourierClip[] = ['Idle', 'Walking', 'Running', 'Jump'];
 const DEG = Math.PI / 180;
 
-/** A bone's local position and rotation, saved before a pose is layered over the clip and restored before the next mixer update. */
-interface Saved {
-  bone: THREE.Object3D;
-  position: THREE.Vector3;
-  quaternion: THREE.Quaternion;
+/** A clip with its own copies of every track's arrays (settleOnFeet and trimming edit them in place). */
+function ownClip(source: THREE.AnimationClip): THREE.AnimationClip {
+  const clip = source.clone();
+  clip.tracks = clip.tracks.map((t) => {
+    const c = t.clone(); // KeyframeTrack.clone shares the source's typed arrays
+    c.times = c.times.slice();
+    c.values = c.values.slice();
+    return c;
+  });
+  return clip;
+}
+
+/** One pose's bone rotations, resolved to indices into the pose-bone list. */
+interface PoseBones {
+  bones: { index: number; r: number[] }[];
 }
 
 /** Finds a bone by its glTF name (GLTFLoader drops the dots and may add a _n suffix: "Foot.L" → "FootL"). */
@@ -32,18 +42,18 @@ function findBone(scene: THREE.Object3D, name: string): THREE.Bone {
   return bone;
 }
 
-/** Linear interpolation of a keyframed scalar at `t` (clamped to the first and last key). */
-function sample(times: ArrayLike<number>, values: readonly number[], t: number): number {
-  const n = times.length;
-  if (t <= times[0]!) return values[0]!;
-  for (let i = 1; i < n; i++) {
-    if (t <= times[i]!) {
-      const a = times[i - 1]!;
-      const u = (t - a) / (times[i]! - a || 1);
-      return values[i - 1]! + (values[i]! - values[i - 1]!) * u;
-    }
-  }
-  return values[n - 1]!;
+/** Hip and foot tracks are resampled this often (Hz) before their lowest point is settled onto the feet. */
+const SETTLE_HZ = 60;
+
+/** Replaces a track's keys with its own interpolated values at `times`. */
+function resample(track: THREE.KeyframeTrack, times: readonly number[]): void {
+  // createInterpolant is set per track at runtime (missing from the typings); it honours glTF cubic-spline tracks.
+  const interp = (track as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant();
+  const n = track.getValueSize();
+  const values = new Float32Array(times.length * n);
+  times.forEach((t, i) => values.set(interp.evaluate(t), i * n));
+  track.times = new Float32Array(times);
+  track.values = values;
 }
 
 function depth(o: THREE.Object3D): number {
@@ -56,7 +66,8 @@ function depth(o: THREE.Object3D): number {
  * The animated courier: Quaternius "Robot Expressive" (CC0), scaled to courier.height and turned to the shared facing
  * convention. animFor picks a clip (cross-faded) and a procedural pose, which is layered over the clip as extra bone
  * rotations, a hip drop and a whole-body lean (blended over crossFade). The feet are separate IK bones in this rig, so
- * while a pose is on they are carried rigidly with the shins. Packages ride on the back; a deck shows on the board.
+ * while a pose is on they are carried rigidly with the shins, and lifted back onto the floor if a pose swings one below
+ * it. Packages ride on the back; a deck shows on the board.
  *
  * Hierarchy: root (feet, eased yaw) → body (pose lean and drop; the frame pose angles are given in) → figure (glTF
  * scene, scaled, turned 180° because the file faces +Z), plus the packages (in body) and the deck (in root).
@@ -76,16 +87,35 @@ export class CourierModel implements CourierView {
   private pose: CourierAnim['pose'] = 'none';
   private readonly weights = new Map<CourierPoseName, number>();
   private readonly poseNames: CourierPoseName[];
-  /** Bones the poses rotate, parents first, with the bone object for each config name. */
-  private readonly poseBones: { name: string; bone: THREE.Bone }[];
+  /** Bones the poses rotate, parents first, with each one's blended rotation this frame (degrees). */
+  private readonly poseBones: { name: string; bone: THREE.Bone; sum: number[] }[];
+  private readonly poseSpecs = new Map<CourierPoseName, PoseBones>();
+  /** Bones a pose may move (hips, feet, pose bones) and their pre-pose local transforms, restored before the mixer runs. */
+  private readonly posed: THREE.Object3D[];
+  private readonly savedPos: THREE.Vector3[];
+  private readonly savedQuat: THREE.Quaternion[];
+  private posedSaved = false;
+  // Scratch objects: applyPose runs every frame and allocates nothing.
+  private readonly footInShin = [new THREE.Matrix4(), new THREE.Matrix4()];
+  private readonly m4 = new THREE.Matrix4();
+  private readonly inv = new THREE.Matrix4();
+  private readonly frameQ = new THREE.Quaternion();
+  private readonly frameInv = new THREE.Quaternion();
+  private readonly parentQ = new THREE.Quaternion();
+  private readonly parentInv = new THREE.Quaternion();
+  private readonly delta = new THREE.Quaternion();
+  private readonly euler = new THREE.Euler();
+  private readonly v = new THREE.Vector3();
+  private readonly v2 = new THREE.Vector3();
   private readonly hips: THREE.Bone;
-  private readonly legs: { shin: THREE.Bone; foot: THREE.Bone }[];
+  /** Per leg: shin and foot bones, the foot's mesh and that mesh's local bounding-box corners (for the floor clamp). */
+  private readonly legs: { shin: THREE.Bone; foot: THREE.Bone; mesh: THREE.Object3D; corners: THREE.Vector3[] }[];
   private readonly torso: THREE.Bone;
   /** Torso bone → body frame at rest, inverted: carries the packages with the torso. */
   private readonly packagesRest = new THREE.Matrix4();
   private readonly materials = new Set<THREE.Material>();
-  private saved: Saved[] = [];
-  private readonly deckTop: number;
+  /** Height of the deck top above the feet; the figure stands on it while on the board. */
+  readonly deckTop: number;
   private snapNext = true;
   private packageCount = 0;
 
@@ -125,43 +155,50 @@ export class CourierModel implements CourierView {
     });
 
     this.mixer = new THREE.AnimationMixer(this.figure);
-    const actions = {} as Record<CourierClip, THREE.AnimationAction>;
+    const clips = {} as Record<CourierClip, THREE.AnimationClip>;
     for (const name of CLIPS) {
       const source = gltf.animations.find((a) => a.name === name);
       if (!source) throw new Error(`courier model has no "${name}" clip`);
-      if (name !== 'Jump') {
-        actions[name] = this.mixer.clipAction(source);
-        continue;
+      const clip = ownClip(source);
+      if (name === 'Jump') {
+        // The airborne part only (its hop is taken out below), played once from take-off and then held.
+        const [from, to] = cfg.airClip as [number, number];
+        for (const t of clip.tracks) t.trim(from, to).shift(-from);
+        clip.resetDuration();
       }
-      // Jump: the airborne part only (its hop is taken out below), played once from take-off and then held.
-      const [from, to] = cfg.airClip as [number, number];
-      const air = source.clone();
-      air.tracks = air.tracks.map((t) => {
-        const c = t.clone(); // shares the source's arrays: copy them, since shift and settleOnFeet edit in place
-        c.times = c.times.slice();
-        c.values = c.values.slice();
-        return c.trim(from, to).shift(-from);
-      });
-      air.resetDuration();
-      const action = this.mixer.clipAction(air);
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
-      actions[name] = action;
+      clips[name] = clip;
     }
-    this.actions = actions;
 
     this.hips = findBone(this.figure, 'Body');
     this.torso = findBone(this.figure, 'Torso');
-    this.legs = (['L', 'R'] as const).map((s) => ({ shin: findBone(this.figure, `LowerLeg${s}`), foot: findBone(this.figure, `Foot${s}`) }));
+    this.legs = (['L', 'R'] as const).map((side) => {
+      const foot = findBone(this.figure, `Foot${side}`);
+      const mesh = foot.children.find((c) => (c as THREE.Mesh).isMesh) as THREE.Mesh | undefined;
+      if (!mesh) throw new Error(`courier model has no mesh on Foot${side}`);
+      mesh.geometry.computeBoundingBox();
+      const { min, max } = mesh.geometry.boundingBox!;
+      const corners = [0, 1, 2, 3, 4, 5, 6, 7].map(
+        (k) => new THREE.Vector3(k & 1 ? max.x : min.x, k & 2 ? max.y : min.y, k & 4 ? max.z : min.z),
+      );
+      return { shin: findBone(this.figure, `LowerLeg${side}`), foot, mesh, corners };
+    });
     this.poseNames = Object.keys(cfg.poses) as CourierPoseName[];
     for (const p of this.poseNames) this.weights.set(p, 0);
     const boneNames = new Set(this.poseNames.flatMap((p) => Object.keys(cfg.poses[p].bones)));
     this.poseBones = [...boneNames]
-      .map((name) => ({ name, bone: findBone(this.figure, name) }))
+      .map((name) => ({ name, bone: findBone(this.figure, name), sum: [0, 0, 0] }))
       .sort((a, b) => depth(a.bone) - depth(b.bone));
+    for (const p of this.poseNames) {
+      const bones = Object.entries(cfg.poses[p].bones).map(([name, r]) => ({ index: this.poseBones.findIndex((b) => b.name === name), r }));
+      this.poseSpecs.set(p, { bones });
+    }
+    this.posed = [this.hips, ...this.legs.map((l) => l.foot), ...this.poseBones.map((b) => b.bone)];
+    this.savedPos = this.posed.map(() => new THREE.Vector3());
+    this.savedQuat = this.posed.map(() => new THREE.Quaternion());
 
     // Scale to courier.height from the idle pose, feet on the root.
-    this.actions.Idle.play();
+    const idle = this.mixer.clipAction(clips.Idle);
+    idle.play();
     this.mixer.update(0);
     this.root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.figure, true);
@@ -169,9 +206,18 @@ export class CourierModel implements CourierView {
     this.figure.scale.setScalar(s);
     this.figure.position.y = -box.min.y * s;
     this.root.updateMatrixWorld(true);
-    this.settleOnFeet(this.actions.Jump);
-    this.actions.Jump.stop();
-    this.actions.Idle.reset().play();
+    // The sim's collider does the moving: these clips keep their lowest point on the feet (no baked hop, no toes or
+    // hands through the floor).
+    this.actions = {
+      Idle: idle,
+      Walking: this.settleOnFeet(clips.Walking),
+      Running: this.settleOnFeet(clips.Running),
+      Jump: this.settleOnFeet(clips.Jump),
+    };
+    this.actions.Jump.setLoop(THREE.LoopOnce, 1);
+    this.actions.Jump.clampWhenFinished = true;
+    this.mixer.stopAllAction();
+    idle.reset().play();
     this.mixer.update(0);
     this.root.updateMatrixWorld(true);
 
@@ -182,28 +228,34 @@ export class CourierModel implements CourierView {
   }
 
   /**
-   * Takes a clip's baked hop out: at each key, lowers the hips and the feet (separate IK bones here) together so the
-   * figure's lowest point sits on the feet. The sim's collider does the real jumping, and the figure stays on it.
+   * Takes a clip's baked hop out and keeps it out of the floor: the hip and foot position tracks (the feet are separate
+   * IK bones here) are resampled at SETTLE_HZ, then at each sample the hips and feet are moved up or down together so
+   * the figure's lowest point sits on the feet. Returns the clip's action.
    */
-  private settleOnFeet(action: THREE.AnimationAction): void {
-    const clip = action.getClip();
+  private settleOnFeet(clip: THREE.AnimationClip): THREE.AnimationAction {
     const track = (name: string): THREE.KeyframeTrack | undefined => clip.tracks.find((t) => t.name === `${name}.position`);
     const hips = track('Body');
-    if (!hips) return;
+    if (!hips) return this.mixer.clipAction(clip);
     const moved = [hips, track('FootL'), track('FootR')].filter((t): t is THREE.KeyframeTrack => t !== undefined);
+    const grid: number[] = [];
+    for (let t = 0; t < clip.duration; t += 1 / SETTLE_HZ) grid.push(t);
+    grid.push(clip.duration);
+    // Before the action exists: its interpolants bind to the track arrays when it is created.
+    for (const t of moved) resample(t, grid);
+    const action = this.mixer.clipAction(clip);
     this.mixer.stopAllAction();
     action.reset().play();
     const scale = this.hips.parent!.getWorldScale(new THREE.Vector3()).y;
-    const lows = Array.from(hips.times, (t) => {
+    const lows = grid.map((t) => {
       action.time = t;
       this.mixer.update(0);
       this.root.updateMatrixWorld(true);
       return new THREE.Box3().setFromObject(this.figure, true).min.y;
     });
-    // In place: the action's interpolants already hold these arrays (the Jump copies made in the constructor).
-    for (const t of moved) {
-      for (let i = 0; i < t.times.length; i++) t.values[i * 3 + 1]! -= sample(hips.times, lows, t.times[i]!) / scale;
-    }
+    // In place: the action's interpolants hold these arrays.
+    for (const t of moved) lows.forEach((low, i) => (t.values[i * 3 + 1]! -= low / scale));
+    action.stop();
+    return action;
   }
 
   /** A bone by glTF name (tests and tuning). */
@@ -274,24 +326,23 @@ export class CourierModel implements CourierView {
 
   /** Puts back the bones the last pose moved, so the mixer (which only writes animated tracks) starts clean. */
   private restore(): void {
-    for (const s of this.saved) {
-      s.bone.position.copy(s.position);
-      s.bone.quaternion.copy(s.quaternion);
-    }
-    this.saved = [];
-  }
-
-  private save(bone: THREE.Object3D): void {
-    this.saved.push({ bone, position: bone.position.clone(), quaternion: bone.quaternion.clone() });
+    if (!this.posedSaved) return;
+    this.posed.forEach((b, i) => {
+      b.position.copy(this.savedPos[i]!);
+      b.quaternion.copy(this.savedQuat[i]!);
+    });
+    this.posedSaved = false;
   }
 
   /** Layers the blended poses over the clip; `raise` lifts the whole body (onto the deck). */
   private applyPose(raise: number): void {
     let drop = 0;
     let hipDrop = 0;
-    const lean = [0, 0, 0];
-    const rot = new Map<string, number[]>();
+    let lx = 0;
+    let ly = 0;
+    let lz = 0;
     let any = false;
+    for (const b of this.poseBones) b.sum.fill(0);
     for (const p of this.poseNames) {
       const w = this.weights.get(p) ?? 0;
       if (w <= 0) continue;
@@ -299,61 +350,70 @@ export class CourierModel implements CourierView {
       const spec = this.cfg.poses[p];
       drop += w * spec.drop;
       hipDrop += w * spec.hipDrop;
-      for (let i = 0; i < 3; i++) lean[i]! += w * (spec.body[i] ?? 0);
-      for (const [name, r] of Object.entries(spec.bones)) {
-        const acc = rot.get(name) ?? [0, 0, 0];
-        for (let i = 0; i < 3; i++) acc[i]! += w * (r[i] ?? 0);
-        rot.set(name, acc);
+      lx += w * (spec.body[0] ?? 0);
+      ly += w * (spec.body[1] ?? 0);
+      lz += w * (spec.body[2] ?? 0);
+      for (const { index, r } of this.poseSpecs.get(p)!.bones) {
+        const sum = this.poseBones[index]!.sum;
+        for (let i = 0; i < 3; i++) sum[i]! += w * (r[i] ?? 0);
       }
     }
     this.body.position.set(0, raise - drop, 0);
-    this.body.rotation.set(lean[0]! * DEG, lean[1]! * DEG, lean[2]! * DEG);
-    this.root.updateMatrixWorld(true);
+    this.body.rotation.set(lx * DEG, ly * DEG, lz * DEG);
     if (!any) return;
 
-    // The feet are IK targets parented beside the legs: carry them with the shins through the pose.
-    const footInShin = this.legs.map(({ shin, foot }) => shin.matrixWorld.clone().invert().multiply(foot.matrixWorld));
-    for (const { foot } of this.legs) this.save(foot);
-    this.save(this.hips);
+    this.posed.forEach((b, i) => {
+      this.savedPos[i]!.copy(b.position);
+      this.savedQuat[i]!.copy(b.quaternion);
+    });
+    this.posedSaved = true;
 
-    const frame = this.body.getWorldQuaternion(new THREE.Quaternion());
+    // The feet are IK targets parented beside the legs: carry them with the shins through the pose.
+    this.legs.forEach(({ shin, foot }, i) => {
+      shin.updateWorldMatrix(true, false);
+      foot.updateWorldMatrix(true, false);
+      this.footInShin[i]!.copy(shin.matrixWorld).invert().multiply(foot.matrixWorld);
+    });
+
+    this.body.getWorldQuaternion(this.frameQ);
+    this.frameInv.copy(this.frameQ).invert();
     if (hipDrop !== 0) {
-      const p = this.hips.getWorldPosition(new THREE.Vector3());
-      p.add(new THREE.Vector3(0, -hipDrop, 0).applyQuaternion(frame));
-      this.hips.position.copy(this.hips.parent!.worldToLocal(p));
+      this.hips.getWorldPosition(this.v).add(this.v2.set(0, -hipDrop, 0).applyQuaternion(this.frameQ));
+      this.hips.position.copy(this.hips.parent!.worldToLocal(this.v));
     }
-    const frameInv = frame.clone().invert();
-    const parentQ = new THREE.Quaternion();
-    const delta = new THREE.Quaternion();
-    const euler = new THREE.Euler();
-    for (const { name, bone } of this.poseBones) {
-      const r = rot.get(name);
-      if (!r || (r[0] === 0 && r[1] === 0 && r[2] === 0)) continue;
-      this.save(bone);
+    for (const { bone, sum } of this.poseBones) {
+      if (sum[0] === 0 && sum[1] === 0 && sum[2] === 0) continue;
       // Parent orientation in the body frame (Qp); the delta is about body axes: q' = Qp⁻¹ · Δ · Qp · q.
-      bone.parent!.getWorldQuaternion(parentQ).premultiply(frameInv);
-      delta.setFromEuler(euler.set(r[0]! * DEG, r[1]! * DEG, r[2]! * DEG));
-      const m = parentQ.clone().invert().multiply(delta).multiply(parentQ);
-      bone.quaternion.premultiply(m);
+      bone.parent!.getWorldQuaternion(this.parentQ).premultiply(this.frameInv);
+      this.delta.setFromEuler(this.euler.set(sum[0]! * DEG, sum[1]! * DEG, sum[2]! * DEG));
+      this.parentInv.copy(this.parentQ).invert();
+      bone.quaternion.premultiply(this.parentInv.multiply(this.delta).multiply(this.parentQ));
     }
-    const world = new THREE.Matrix4();
-    const scale = new THREE.Vector3();
     this.legs.forEach(({ shin, foot }, i) => {
       shin.updateWorldMatrix(true, false);
       foot.parent!.updateWorldMatrix(true, false);
-      world.multiplyMatrices(shin.matrixWorld, footInShin[i]!);
-      world.premultiply(foot.parent!.matrixWorld.clone().invert());
-      world.decompose(foot.position, foot.quaternion, scale);
+      this.m4.multiplyMatrices(shin.matrixWorld, this.footInShin[i]!);
+      this.m4.premultiply(this.inv.copy(foot.parent!.matrixWorld).invert());
+      this.m4.decompose(foot.position, foot.quaternion, this.v);
     });
-    this.root.updateMatrixWorld(true);
+    // A pose may swing a foot below the floor (a bent knee over a walking stride): lift that foot back onto it.
+    const floor = this.root.position.y + raise;
+    for (const { foot, mesh, corners } of this.legs) {
+      mesh.updateWorldMatrix(true, false);
+      let lowest = Infinity;
+      for (const c of corners) lowest = Math.min(lowest, this.v.copy(c).applyMatrix4(mesh.matrixWorld).y);
+      if (lowest >= floor) continue;
+      foot.getWorldPosition(this.v).y += floor - lowest;
+      foot.position.copy(foot.parent!.worldToLocal(this.v));
+    }
   }
 
   /** Keeps the packages on the torso as it bends and bobs. */
   private followTorso(): void {
+    this.torso.updateWorldMatrix(true, false); // brings the body's world matrix up to date too
     const m = this.packages.matrix;
     m.copy(this.body.matrixWorld).invert().multiply(this.torso.matrixWorld).multiply(this.packagesRest);
     this.packages.matrixWorldNeedsUpdate = true;
-    this.packages.updateMatrixWorld(true);
   }
 
   /** Boxes in `columns` up the back, placed in the body frame at rest and then carried by the torso bone. */

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { ordersConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
+import { movementConfig, ordersConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 import { CourierModel } from '../src/render/courier/CourierModel';
 
@@ -41,7 +41,10 @@ const meshesOf = (o: THREE.Object3D): THREE.Mesh[] => {
   return out;
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('CourierModel', () => {
   it('is courier.height tall, standing on the feet', async () => {
@@ -140,6 +143,71 @@ describe('CourierModel', () => {
     expect(hand()).toBeGreaterThan(idleHand + 0.2);
   });
 
+  /** Every pose (and plain locomotion) after it has fully blended in. */
+  const POSED: [string, Parameters<typeof st>[0], number][] = [
+    ['idle', {}, 0],
+    ['run', {}, 8],
+    ['slide', { mode: 'slide', crouched: true }, 9],
+    ['wallrunL', { mode: 'wallrun', normal: { x: 1, y: 0, z: 0 } }, 8],
+    ['wallrunR', { mode: 'wallrun', normal: { x: -1, y: 0, z: 0 } }, 8],
+    ['zip', { mode: 'zipline' }, 12],
+    ['grind', { mode: 'grind' }, 9],
+    ['mantle', { mode: 'mantle' }, 2],
+    ['board', { onBoard: true }, 10],
+    ['fall', { mode: 'air', vy: -6 }, 6],
+    ['crouch', { crouched: true }, 0],
+    ['crouch-walk', { crouched: true }, 2.5],
+  ];
+
+  /** Settles `m` into a state, sampling the figure over `frames` frames of the clip. */
+  const boxesOver = (m: CourierModel, s: PlayerState, speed: number, frames = 24): THREE.Box3[] => {
+    m.snap();
+    m.update(0, s, origin, speed);
+    const out: THREE.Box3[] = [];
+    for (let i = 0; i < frames; i++) {
+      m.update(0.05, s, origin, speed);
+      out.push(bodyBox(m));
+    }
+    return out;
+  };
+
+  it.each(POSED)('%s: no part of the figure goes below the surface it stands on', async (_label, over, speed) => {
+    const m = await model();
+    const raise = over?.onBoard ? m.deckTop : 0;
+    const low = Math.min(...boxesOver(m, st(over), speed).map((b) => b.min.y));
+    expect(low).toBeGreaterThanOrEqual(raise - 0.03);
+  });
+
+  it('board: both feet stand on the deck, inside its footprint', async () => {
+    const m = await model();
+    boxesOver(m, st({ onBoard: true }), 10);
+    const { length, width } = cfg.deck;
+    for (const side of ['L', 'R']) {
+      const foot = m.figure.getObjectByName(`Foot${side}_1`)!;
+      const b = new THREE.Box3().setFromObject(foot, true);
+      expect(b.min.y, side).toBeGreaterThanOrEqual(m.deckTop - 0.02);
+      expect(b.min.y, side).toBeLessThan(m.deckTop + 0.05); // standing on it, not floating
+      expect(Math.max(-b.min.x, b.max.x), side).toBeLessThanOrEqual(width / 2 + 0.03);
+      expect(Math.max(-b.min.z, b.max.z), side).toBeLessThanOrEqual(length / 2);
+    }
+  });
+
+  it('grind: the feet stay on the rail (the sim feet)', async () => {
+    const m = await model();
+    const lows = boxesOver(m, st({ mode: 'grind' }), 9).map((b) => b.min.y);
+    expect(Math.min(...lows)).toBeGreaterThanOrEqual(-0.03);
+    expect(Math.max(...lows)).toBeLessThan(0.05);
+  });
+
+  it('zip: the hands reach the cable, hangDrop above the feet', async () => {
+    const m = await model();
+    boxesOver(m, st({ mode: 'zipline' }), 12);
+    const top = (name: string): number => new THREE.Box3().setFromObject(m.figure.getObjectByName(name)!, true).max.y;
+    for (const hand of ['HandL', 'HandR']) {
+      expect(Math.abs(top(hand) - movementConfig.zipLine.hangDrop), hand).toBeLessThan(0.08);
+    }
+  });
+
   it('poses do not accumulate frame over frame', async () => {
     const m = await model();
     const s = st({ mode: 'zipline' });
@@ -197,10 +265,16 @@ describe('CourierModel', () => {
     for (const mesh of all) expect((mesh.material as THREE.Material).colorWrite).toBe(true);
   });
 
-  it('a failed load resolves to null with one warning', async () => {
+  it.each([
+    ['a 404', () => new Response('not found', { status: 404 })],
+    ['a corrupt file', () => new Response('this is not a glb', { status: 200 })],
+  ])('a failed load (%s) resolves to null with one warning', async (_label, respond) => {
+    vi.stubGlobal('fetch', vi.fn(async () => respond()));
+    // Node has no ProgressEvent; FileLoader reports download progress with one.
+    vi.stubGlobal('ProgressEvent', class extends Event {});
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    expect(await CourierModel.load('http://127.0.0.1:9/missing.glb', cfg)).toBeNull();
+    expect(await CourierModel.load('https://example.test/RobotExpressive.glb', cfg)).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(error).not.toHaveBeenCalled();
   });

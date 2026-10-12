@@ -115,6 +115,8 @@ export interface CourierConfig {
   crossFade: number;
   /** The Running clip plays at normal speed at this ground speed (faster above, slower below). */
   runSpeedForFullRun: number;
+  /** Floor on the Running playback rate, so a slow run never plays in slow motion. */
+  runMinTimeScale: number;
   /** Below this the courier idles; up to walkMaxSpeed it walks; above it runs. */
   idleSpeed: number;
   walkMaxSpeed: number;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { MovementConfig } from '@dm/shared';
 import type { CourierConfig } from '../clientConfig';
+import { isLow } from './chaseCamera';
 import { easeYaw } from './courier/animState';
 import type { CourierView } from './courier/CourierView';
 import { palette } from './palette';
@@ -59,8 +60,7 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
       root.position.set(feet.x, feet.y, feet.z);
       root.rotation.y = snapNext ? state.heading : easeYaw(root.rotation.y, state.heading, dt, courier.turnEaseRate);
       snapNext = false;
-      const low = state.crouched || state.mode === 'slide';
-      const h = low ? capsule.crouchHeight : capsule.height;
+      const h = isLow(state) ? capsule.crouchHeight : capsule.height;
       const s = capsule.radius / r0;
       body.scale.set(s, h / h0, s);
     },

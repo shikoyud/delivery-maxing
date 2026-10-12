@@ -35,6 +35,13 @@ describe('animFor: locomotion clips', () => {
     expect(run.pose).toBe('none');
   });
 
+  it('a slow run never plays in slow motion: the Running rate is floored at runMinTimeScale', () => {
+    const slow = animFor(state(), cfg.walkMaxSpeed, cfg);
+    expect(slow.clip).toBe('Running');
+    expect(slow.timeScale).toBe(cfg.runMinTimeScale);
+    expect(cfg.runMinTimeScale).toBeGreaterThan(cfg.walkMaxSpeed / cfg.runSpeedForFullRun);
+  });
+
   it('in the air: the Jump clip; falling (vy below −fallSpeed) adds the fall pose', () => {
     expect(animFor(state({ mode: 'air', vy: 4 }), 6, cfg)).toEqual({ clip: 'Jump', timeScale: 1, pose: 'none' });
     expect(animFor(state({ mode: 'air', vy: -1 }), 6, cfg).pose).toBe('none');
