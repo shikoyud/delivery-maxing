@@ -54,10 +54,13 @@ describe('camera physics queries (greybox crouch tunnel: roof underside y 1.4, x
   it('wall probe: the horizontal normal of a wall face within reach; ceilings, floors and the courier never count', () => {
     const probe = physicsWallProbe(physics, sim.body.collider);
     // 0.4 m from the inner face z = 2 of hub-tunnel-wall-02.
-    const n = probe({ x: 98, y: 0.8, z: 1.6 }, 0.6)!;
-    expect(n.x).toBeCloseTo(0, 6);
-    expect(n.y).toBe(0);
-    expect(n.z).toBeCloseTo(-1, 6);
+    const hit = probe({ x: 98, y: 0.8, z: 1.6 }, 0.6)!;
+    expect(hit.normal.x).toBeCloseTo(0, 6);
+    expect(hit.normal.y).toBe(0);
+    expect(hit.normal.z).toBeCloseTo(-1, 6);
+    expect(hit.distance).toBeCloseTo(0.4, 6);
+    // The same probe answers other reaches too (its query ball follows the reach).
+    expect(probe({ x: 98, y: 0.8, z: 1.6 }, 0.95)!.distance).toBeCloseTo(0.4, 6);
     expect(probe({ x: 98, y: 0.8, z: 1.6 }, 0.3)).toBeNull();
     // Roof underside 0.2 m above, floor 1.2 m below, walls 2 m away, the courier's capsule right here: nothing.
     expect(probe({ x: 98, y: 1.2, z: 0 }, 0.6)).toBeNull();

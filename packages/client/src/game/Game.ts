@@ -108,7 +108,7 @@ export class Game {
       this.renderer.camera,
       this.cfg.camera,
       this.cameraCast,
-      physicsWallProbe(sim.physics, sim.body.collider),
+      { probe: physicsWallProbe(sim.physics, sim.body.collider), courierRadius: () => settings.movement.capsule.radius },
     );
     this.courier = createCourierPlaceholder(settings.movement.capsule);
     this.renderer.scene.add(this.courier.object);

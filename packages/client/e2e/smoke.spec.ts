@@ -181,8 +181,10 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.3, -15 * (Math.PI / 180)));
   await waitTicks(page, 3);
   const flush = await page.evaluate(() => window.__dm!.camera());
-  console.log(`flush with the wall at π+1.3: boom ${flush.distance.toFixed(2)} m, courier hidden ${flush.courierHidden}`);
-  expect(flush.distance).toBeGreaterThanOrEqual(clientJson.camera.chase.minDistance);
+  console.log(
+    `flush with the wall at π+1.3: boom ${flush.distance.toFixed(2)} m, camera ${flush.courierDistance.toFixed(2)} m from the courier, hidden ${flush.courierHidden}`,
+  );
+  expect(flush.courierDistance).toBeGreaterThanOrEqual(clientJson.camera.chase.minDistance);
   expect(flush.courierHidden).toBe(false);
   expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
   await page.screenshot({ path: `${artifacts}sp1-camera-wall.png` });
@@ -194,16 +196,18 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.3, -15 * (Math.PI / 180)));
   await waitTicks(page, 3);
   const graze = await page.evaluate(() => window.__dm!.camera());
-  console.log(`1 m off the wall at π+1.3: boom ${graze.distance.toFixed(2)} m, courier hidden ${graze.courierHidden}`);
+  console.log(
+    `1 m off the wall at π+1.3: boom ${graze.distance.toFixed(2)} m, camera ${graze.courierDistance.toFixed(2)} m from the courier, hidden ${graze.courierHidden}`,
+  );
   expect(graze.distance).toBeLessThan(clientJson.camera.chase.distance);
-  expect(graze.distance).toBeGreaterThan(clientJson.camera.chase.minDistance);
+  expect(graze.courierDistance).toBeGreaterThan(clientJson.camera.chase.minDistance);
   expect(graze.courierHidden).toBe(false);
   expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
   await page.screenshot({ path: `${artifacts}sp1-camera-wall-graze.png` });
   expect(errors).toEqual([]);
 });
 
-test('wall-run: the courier stays in view at every look offset from the wall (R12)', async ({ page }) => {
+test('wall-run: the courier stays in view at look offsets from the wall, hidden only when the camera is that close (R12, R10)', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const deg = Math.PI / 180;
@@ -225,14 +229,20 @@ test('wall-run: the courier stays in view at every look offset from the wall (R1
       cam: window.__dm!.camera(),
       inside: window.__dm!.cameraInsideSolid(),
     }));
-    console.log(`wall-run, look ${offset}° off the wall: boom ${cam.distance.toFixed(2)} m, courier hidden ${cam.courierHidden}`);
+    console.log(
+      `wall-run, look ${offset}° off the wall: boom ${cam.distance.toFixed(2)} m, camera ${cam.courierDistance.toFixed(2)} m from the courier, hidden ${cam.courierHidden}`,
+    );
     expect(mode, `offset ${offset}°`).toBe('wallrun');
-    expect(cam.distance, `offset ${offset}°`).toBeGreaterThanOrEqual(minDistance);
-    expect(cam.courierHidden, `offset ${offset}°`).toBe(false);
     expect(inside, `offset ${offset}°`).toBe(false);
-    // Positive offsets look away from the wall, so the boom swings toward it.
-    if (offset === 30) await page.screenshot({ path: `${artifacts}sp1-camera-wallrun.png` });
-    if (offset === 60) await page.screenshot({ path: `${artifacts}sp1-camera-wallrun-60.png` });
+    // Hiding follows the camera's real distance to the courier, not the boom from the shifted pivot.
+    expect(cam.courierHidden, `offset ${offset}°`).toBe(cam.courierDistance < minDistance);
+    // Positive offsets look away from the wall, so the boom swings back toward it. At +60° the boom from the shifted
+    // pivot meets the wall beside the courier (about 0.5 m from it), so R10 hides the courier there; everywhere else
+    // it is in view.
+    if (offset === 60) expect(cam.courierHidden, 'offset 60°').toBe(true);
+    else expect(cam.courierDistance, `offset ${offset}°`).toBeGreaterThanOrEqual(minDistance);
+    const shot = { 30: 'sp1-camera-wallrun.png', [-30]: 'sp1-camera-wallrun-m30.png', 60: 'sp1-camera-wallrun-60.png', [-60]: 'sp1-camera-wallrun-m60.png' }[offset];
+    if (shot) await page.screenshot({ path: `${artifacts}${shot}` });
   }
   await page.keyboard.up('KeyW');
   expect(errors).toEqual([]);

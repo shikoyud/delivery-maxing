@@ -1,4 +1,4 @@
-import type { PhysicsWorld, PlayerSim, Vec3 } from '@dm/shared';
+import { WALL_MAX_NY, type PhysicsWorld, type PlayerSim, type Vec3 } from '@dm/shared';
 import type { RayCast, WallProbe } from '../render/chaseCamera';
 
 /** A Rapier collider (the client has no direct Rapier dependency). */
@@ -41,23 +41,27 @@ export function ballInSolid(physics: PhysicsWorld, center: Vec3, radius: number,
   return inside;
 }
 
-/** A face counts as a wall when the horizontal share of its normal is at least this (about 45° from vertical). */
-const WALL_MIN_HORIZONTAL = 0.7;
-
 /**
- * R12 wall probe: projects `p` onto every solid within `reach` (a ball overlap query) and returns the horizontal unit
- * normal of the nearest near-vertical face, pointing from the face toward `p`. Floors, ceilings, sensors and the
- * courier's own collider (`exclude`) never count.
+ * R12 wall probe: projects `p` onto every solid within `reach` (a ball overlap query) and returns the nearest face that
+ * counts as a wall — its horizontal unit normal, pointing from the face toward `p`, and its distance. Walls are
+ * classified exactly as the movement sim classifies them (|n.y| < WALL_MAX_NY, a geometry rule, not a camera tuning
+ * value). Floors, ceilings, sensors and the courier's own collider (`exclude`) never count. The query ball is built
+ * once and rebuilt only when the reach changes (a dev-panel edit).
  */
 export function physicsWallProbe(physics: PhysicsWorld, exclude?: Collider): WallProbe {
   const { rapier, world } = physics;
+  let ball = new rapier.Ball(1);
+  let ballRadius = 1;
   return (p, reach) => {
-    let best: Vec3 | null = null;
-    let bestDist = reach;
+    if (reach !== ballRadius) {
+      ball = new rapier.Ball(reach);
+      ballRadius = reach;
+    }
+    let best: { normal: Vec3; distance: number } | null = null;
     world.intersectionsWithShape(
       p,
       IDENTITY,
-      new rapier.Ball(reach),
+      ball,
       (collider) => {
         const proj = collider.projectPoint(p, true);
         if (!proj || proj.isInside) return true;
@@ -65,10 +69,10 @@ export function physicsWallProbe(physics: PhysicsWorld, exclude?: Collider): Wal
         const dy = p.y - proj.point.y;
         const dz = p.z - proj.point.z;
         const dist = Math.hypot(dx, dy, dz);
+        if (dist < 1e-6 || dist > reach || (best && dist >= best.distance)) return true;
+        if (Math.abs(dy / dist) >= WALL_MAX_NY) return true;
         const h = Math.hypot(dx, dz);
-        if (dist < 1e-6 || dist > bestDist || h < WALL_MIN_HORIZONTAL * dist) return true;
-        best = { x: dx / h, y: 0, z: dz / h };
-        bestDist = dist;
+        best = { normal: { x: dx / h, y: 0, z: dz / h }, distance: dist };
         return true;
       },
       rapier.QueryFilterFlags.EXCLUDE_SENSORS,

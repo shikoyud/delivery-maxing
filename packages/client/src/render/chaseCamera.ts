@@ -13,12 +13,18 @@ type CameraConfig = ClientConfig['camera'];
 export type RayCast = (from: Vec3, dir: Vec3, maxDist: number) => number | null;
 
 /**
- * Wall probe for R12: the horizontal unit normal of the nearest near-vertical solid face within `reach` of `p`
- * (pointing away from the face), or null. In the game this is a Rapier point projection (game/cameraQueries.ts).
+ * Wall probe for R12: the nearest near-vertical solid face within `reach` of `p` — its horizontal unit normal (pointing
+ * away from the face) and its distance from `p` — or null. In the game this is a Rapier point projection
+ * (game/cameraQueries.ts).
  */
-export type WallProbe = (p: Vec3, reach: number) => Vec3 | null;
+export type WallProbe = (p: Vec3, reach: number) => { normal: Vec3; distance: number } | null;
 
-const noWalls: WallProbe = () => null;
+export interface ChaseCameraOptions {
+  /** Finds walls near the pivot (R12). Default: none. */
+  probe?: WallProbe;
+  /** The courier's capsule radius, read every frame (dev-panel edits apply live). Default 0. */
+  courierRadius?: () => number;
+}
 
 export interface ChasePose {
   /** Where the camera goes. */
@@ -133,7 +139,8 @@ export function chaseCameraPose(
  * blocks it and lets it back out slowly (pushOutEaseRate), widens the FOV with speed and rolls during wall-runs.
  * Recovery is eased as a share of the open-ground pose (boom extent, and the rise a ceiling allowed), so mouse look on
  * open ground moves the camera at once. R10: the camera never passes the point where its collision ball touches a
- * surface; when that is closer than minDistance, `courierHidden` turns true.
+ * surface; whenever that leaves the camera closer than minDistance to the courier's own pivot, `courierHidden` turns
+ * true (measured from the courier, not from the R12-shifted pivot the boom starts at).
  */
 export class ChaseCamera {
   private follow: Vec3 | null = null;
@@ -143,15 +150,19 @@ export class ChaseCamera {
   /** Rise above the pivot as a share of the open-ground rise (below 1 under or just after a ceiling). */
   private riseShare = 1;
   private roll = 0;
-  private hidden = false;
+  private toCourier = 0;
+  private readonly probe: WallProbe;
+  private readonly courierRadius: () => number;
 
   constructor(
     readonly camera: THREE.PerspectiveCamera,
     private readonly cfg: CameraConfig,
     private readonly cast: RayCast,
-    private readonly probe: WallProbe = noWalls,
+    options: ChaseCameraOptions = {},
   ) {
     camera.rotation.order = 'YXZ';
+    this.probe = options.probe ?? (() => null);
+    this.courierRadius = options.courierRadius ?? (() => 0);
   }
 
   /** Current boom length (m). */
@@ -159,9 +170,14 @@ export class ChaseCamera {
     return this.dist;
   }
 
-  /** True when the boom is shorter than minDistance (the courier mesh would fill the view). */
+  /** Distance (m) from the camera to the courier's own pivot (the `target` of the last update, before any shift). */
+  get courierDistance(): number {
+    return this.toCourier;
+  }
+
+  /** True when the camera is closer than minDistance to the courier's pivot (the courier mesh would fill the view). */
   get courierHidden(): boolean {
-    return this.hidden;
+    return this.follow !== null && this.toCourier < this.cfg.chase.minDistance;
   }
 
   /** Jump straight to the next pose instead of easing (teleport, respawn). */
@@ -189,7 +205,7 @@ export class ChaseCamera {
 
     const p = add(follow, pose.direction, this.dist);
     this.camera.position.set(p.x, p.y, p.z);
-    this.hidden = this.dist < ch.minDistance;
+    this.toCourier = Math.hypot(p.x - target.x, p.y - target.y, p.z - target.z);
     // Roll is clockwise-positive (see rollForWallRun); three's rotation.z is counter-clockwise-positive.
     this.roll = easeToward(this.roll, rollForWallRun(state, this.cfg), dt, this.cfg.rollEaseRate);
     const v = pose.view;
@@ -202,17 +218,32 @@ export class ChaseCamera {
   }
 
   /**
-   * R12: the pivot moved wallPivotOffset along the normal of the wall being run (state.wallRun.normal) or, otherwise,
-   * of a wall face the probe finds within wallPivotOffset of the pivot, so the boom has room beside the wall. A sphere
-   * cast from the courier's pivot limits the move (a narrow gap never pushes it into the opposite wall). The followed
-   * point eases toward the result (followEaseRate), so the shift eases in and out instead of jumping.
+   * R12/R13: the pivot moved off the courier's axis along a wall normal, so the boom has room beside the wall.
+   * - Wall-running: the normal of the wall being run (state.wallRun.normal), by the full wallPivotOffset (the run holds
+   *   the courier flush against it).
+   * - Otherwise: the nearest wall face the probe finds within capsuleRadius + wallPivotOffset, by
+   *   max(0, capsuleRadius + wallPivotOffset − d) for a face d away. About wallPivotOffset when flush and fading to 0
+   *   at the edge of the reach, so brushing past a corner never jumps the pivot sideways.
+   * A sphere cast from the courier's pivot limits the move (a narrow gap never pushes it into the opposite wall), and
+   * the followed point eases toward the result (followEaseRate), so the shift also eases in and out.
    */
   private wallShifted(target: Vec3, state: PlayerState): Vec3 {
     const k = this.cfg.chase.wallPivotOffset;
     if (k <= 0) return target;
-    const n = state.mode === 'wallrun' && state.wallRun.normal ? state.wallRun.normal : this.probe(target, k);
-    if (!n) return target;
-    return add(target, n, this.cast(target, n, k) ?? k);
+    let n: Vec3;
+    let shift: number;
+    if (state.mode === 'wallrun' && state.wallRun.normal) {
+      n = state.wallRun.normal;
+      shift = k;
+    } else {
+      const reach = this.courierRadius() + k;
+      const wall = this.probe(target, reach);
+      if (!wall) return target;
+      n = wall.normal;
+      shift = Math.max(0, reach - wall.distance);
+    }
+    if (shift <= 0) return target;
+    return add(target, n, this.cast(target, n, shift) ?? shift);
   }
 
   /**

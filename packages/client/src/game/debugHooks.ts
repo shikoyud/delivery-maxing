@@ -35,12 +35,14 @@ export interface DebugApi {
   /** Whether any of the camera's near plane is inside a map solid (a ball reaching the near-plane corners). */
   cameraInsideSolid(): boolean;
   /**
-   * The chase camera: its position, boom length, whether the courier is hidden (boom under minDistance), and where
+   * The chase camera: its position, boom length, distance to the courier's own pivot, whether the courier is hidden
+   * (that distance under minDistance), and where
    * the courier's mid-body and top land on screen in normalised device coordinates (−1..1, +y up).
    */
   camera(): {
     position: Vec3;
     distance: number;
+    courierDistance: number;
     courierHidden: boolean;
     courierNdc: { x: number; y: number };
     courierTopNdc: { x: number; y: number };
@@ -111,6 +113,7 @@ export function installDebugHooks(game: Game): void {
       return {
         position: { x: cam.position.x, y: cam.position.y, z: cam.position.z },
         distance: game.chase.distance,
+        courierDistance: game.chase.courierDistance,
         courierHidden: game.chase.courierHidden,
         courierNdc: { x: mid.x, y: mid.y },
         courierTopNdc: { x: top.x, y: top.y },
