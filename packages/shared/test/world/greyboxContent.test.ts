@@ -223,7 +223,7 @@ describe('greybox city: zip lines', () => {
     }
   });
 
-  it('every zip line clears everything below by the hang drop, ending ≥ 2.2 m above the landing', () => {
+  it('every zip line clears everything below by the hang drop, ending 2.2 m to hangDrop + fragile.maxFallMeters above the landing', () => {
     const r = cfg.capsule.radius;
     for (const z of map.zipLines) {
       const len = distance(z.a, z.b);
@@ -237,6 +237,8 @@ describe('greybox city: zip lines', () => {
       }
       const { end } = highEnd(z);
       expect(dropTo(end)!, `${z.id} low end`).toBeGreaterThanOrEqual(2.2);
+      // The rider lets go at the low end; the fall from there keeps a Fragile package intact.
+      expect(dropTo(end)!, `${z.id} low end`).toBeLessThanOrEqual(cfg.zipLine.hangDrop + ordersConfig.fragile.maxFallMeters);
     }
   });
 });
@@ -249,6 +251,10 @@ const PAD_TARGETS: Record<string, string> = {
   'harbor-pad-01': 'harbor-crane-01',
   'harbor-pad-02': 'harbor-crane-02',
   'suburbs-pad-01': 'suburbs-watertower-01',
+  // Downtown rooftop access lands on generated buildings (ids follow the map seed).
+  'downtown-pad-01': 'b-2--2-3',
+  'downtown-pad-02': 'b-2--2-1',
+  'downtown-pad-03': 'b-0--2-1',
 };
 
 /** Runs the pad launch with no input from standing on the pad; returns where the player first lands. */

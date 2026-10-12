@@ -93,16 +93,45 @@ test('a collected orb disappears', async ({ page }) => {
 test('feature screenshot', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
-  // Stand at the hub looking east at the feature cluster.
-  await page.evaluate(() => window.__dm!.viewpoint({ x: 6, y: 0, z: 8 }, { x: 28, y: 2, z: 0 }));
+  // Stand at the plaza's east edge looking down the playground line: orbs, mantle blocks, wall-run alley.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 22, y: 0, z: 5 }, { x: 70, y: 2, z: -1 }));
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${artifacts}sp1-features.png` });
   expect(errors).toEqual([]);
 });
 
 /**
- * Board seed for the delivery tests. With the starter greybox (3 POIs) its first board is
- * [Pick-up, Drop-off Express, Drop-off]. Tests assert a Drop-off is present, so a map or generator change
+ * Viewpoints in the air: the player starts falling at once, so the screenshot is taken after a few frames
+ * (a fall of well under a metre) rather than after a fixed settle time.
+ */
+async function airShot(page: Page, feet: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }, file: string): Promise<void> {
+  await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, target] as const);
+  const tick0 = await page.evaluate(() => window.__dm!.tick);
+  await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 3, tick0);
+  await page.screenshot({ path: `${artifacts}${file}` });
+}
+
+test('city overview screenshot', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  await airShot(page, { x: 0, y: 120, z: 200 }, { x: 0, y: 0, z: 0 }, 'sp1-city-overview.png');
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`city overview: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
+  expect(errors).toEqual([]);
+});
+
+test('playground screenshot', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // Above the plaza's south-east corner, looking along the playground line toward the tower.
+  await airShot(page, { x: 40, y: 18, z: 42 }, { x: 92, y: 2, z: -2 }, 'sp1-playground.png');
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Board seed for the delivery tests. With the Task 18 city (21 POIs) its first board's first Drop-off is an Express
+ * drop-off to harbor-poi-05, a street door. Tests assert a Drop-off is present, so a map or generator change
  * fails here deterministically instead of flaking.
  */
 const SEED = '&seed=3';
