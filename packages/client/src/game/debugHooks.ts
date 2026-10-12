@@ -31,13 +31,19 @@ export interface DebugApi {
   kiosk(): Vec3;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
-  /** Point-in-collider test of the camera position against the map solids. */
+  /** Whether any of the camera's near plane is inside a map solid (a ball reaching the near-plane corners). */
   cameraInsideSolid(): boolean;
   /**
-   * The chase camera: its position, boom length, whether the courier is hidden (camera forced inside minDistance),
-   * and where the courier's mid-body lands on screen in normalised device coordinates (−1..1, +y up).
+   * The chase camera: its position, boom length, whether the courier is hidden (boom under minDistance), and where
+   * the courier's mid-body and top land on screen in normalised device coordinates (−1..1, +y up).
    */
-  camera(): { position: Vec3; distance: number; courierHidden: boolean; courierNdc: { x: number; y: number } };
+  camera(): {
+    position: Vec3;
+    distance: number;
+    courierHidden: boolean;
+    courierNdc: { x: number; y: number };
+    courierTopNdc: { x: number; y: number };
+  };
 }
 
 declare global {
@@ -98,12 +104,15 @@ export function installDebugHooks(game: Game): void {
     camera() {
       const cam = game.renderer.camera;
       const c = game.courier.object.position;
-      const mid = new THREE.Vector3(c.x, c.y + game.sim.cfg.capsule.height / 2, c.z).project(cam);
+      const h = game.sim.cfg.capsule.height;
+      const mid = new THREE.Vector3(c.x, c.y + h / 2, c.z).project(cam);
+      const top = new THREE.Vector3(c.x, c.y + h, c.z).project(cam);
       return {
         position: { x: cam.position.x, y: cam.position.y, z: cam.position.z },
         distance: game.chase.distance,
         courierHidden: game.chase.courierHidden,
         courierNdc: { x: mid.x, y: mid.y },
+        courierTopNdc: { x: top.x, y: top.y },
       };
     },
   };

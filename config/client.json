@@ -1,8 +1,8 @@
 {
   "camera": { "fovBase": 80, "fovMax": 96, "fovSpeedMin": 8, "fovSpeedMax": 18, "wallRunRollDeg": 8, "rollEaseRate": 10, "fovEaseRate": 6, "crouchEaseRate": 12, "near": 0.1, "far": 1000,
-    "chase": { "distance": 4.5, "height": 1.6, "pivotHeight": 1.3, "crouchPivotHeight": 0.8,
-      "pitchMinDeg": -55, "pitchMaxDeg": 35, "followEaseRate": 14, "collisionRadius": 0.25,
-      "minDistance": 0.8, "pullInEaseRate": 30, "pushOutEaseRate": 6 } },
+    "chase": { "distance": 4.5, "height": 1.6, "pivotHeight": 1.3, "crouchPivotHeight": 0.8, "lookAtHeight": 1.9,
+      "pitchMinDeg": -55, "pitchMaxDeg": 35, "followEaseRate": 14, "collisionRadius": 0.3,
+      "minDistance": 0.8, "pushOutEaseRate": 6 } },
   "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 650, "drawCallBudget": 150,
     "waterLevel": -1.5, "waterMargin": 2000, "lights": { "hemi": 2.1, "sun": 2.4 }, "shadowBias": -0.0005, "shadowNormalBias": 0.05 },
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {

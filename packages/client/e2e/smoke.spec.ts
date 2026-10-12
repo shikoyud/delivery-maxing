@@ -122,10 +122,13 @@ test('third-person view shows the courier', async ({ page }) => {
   console.log(`chase camera: distance ${cam.distance.toFixed(2)} m, courier at NDC (${cam.courierNdc.x.toFixed(2)}, ${cam.courierNdc.y.toFixed(2)})`);
   expect(cam.courierHidden).toBe(false);
   expect(cam.distance).toBeGreaterThan(clientJson.camera.chase.distance - 0.5);
-  // Centre-bottom of the frame: horizontally central, below the middle.
+  // R9: centre-bottom of the frame, horizontally central, the whole courier (head included) below the middle.
   expect(Math.abs(cam.courierNdc.x)).toBeLessThan(0.2);
   expect(cam.courierNdc.y).toBeLessThan(0);
   expect(cam.courierNdc.y).toBeGreaterThan(-0.8);
+  expect(cam.courierTopNdc.y).toBeLessThan(0);
+  // No centre crosshair in third person (R9).
+  await expect(page.locator('.crosshair')).toHaveCount(0);
   expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
   await page.screenshot({ path: `${artifacts}sp1-third-person.png` });
   expect(errors).toEqual([]);
@@ -136,14 +139,18 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const deg = Math.PI / 180;
   const { pitchMinDeg, pitchMaxDeg } = clientJson.camera.chase;
-  /** Every yaw step at level, lowest and highest pitch: the camera must never end up inside a solid. */
-  const sweep = async (label: string): Promise<void> => {
-    for (const pitch of [0, pitchMinDeg * deg, pitchMaxDeg * deg]) {
-      for (let k = 0; k < 8; k++) {
-        await page.evaluate(([y, p]) => window.__dm!.setLook(y, p), [(k * Math.PI) / 4, pitch] as const);
+  /**
+   * Every 45° yaw step plus `extraYaws`, at level, lowest, highest and a mid-low pitch: no part of the camera's near
+   * plane may end up inside a solid.
+   */
+  const sweep = async (label: string, extraYaws: number[] = []): Promise<void> => {
+    const yaws = [...Array.from({ length: 8 }, (_, k) => (k * Math.PI) / 4), ...extraYaws];
+    for (const pitch of [0, pitchMinDeg * deg, pitchMaxDeg * deg, -20 * deg]) {
+      for (const yaw of yaws) {
+        await page.evaluate(([y, p]) => window.__dm!.setLook(y, p), [yaw, pitch] as const);
         await waitTicks(page, 2);
         const inside = await page.evaluate(() => window.__dm!.cameraInsideSolid());
-        expect(inside, `${label}: yaw ${k * 45}°, pitch ${(pitch / deg).toFixed(0)}°`).toBe(false);
+        expect(inside, `${label}: yaw ${(yaw / deg).toFixed(0)}°, pitch ${(pitch / deg).toFixed(0)}°`).toBe(false);
       }
     }
   };
@@ -167,9 +174,11 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   await page.keyboard.up('KeyS');
   const z = await page.evaluate(() => window.__dm!.player().position.z);
   expect(z).toBeLessThan(-55.5); // flush with the wall
-  await sweep('wall');
-  // Looking almost along the wall: the boom is pulled in short of it and the courier stays in view.
-  await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.3, -15 * (Math.PI / 180)));
+  // Grazing yaws: the boom runs almost along the wall (the review's see-through case at π ± 1.3).
+  await sweep('wall', [Math.PI + 1.3, Math.PI - 1.3, Math.PI + 1.45, Math.PI - 1.45]);
+  // Looking almost along the wall (the review's see-through case is π + 1.3, swept above; this one is a little more
+  // grazing so the boom stays over minDistance): the boom is pulled in and the courier stays in view.
+  await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.48, -15 * (Math.PI / 180)));
   await waitTicks(page, 3);
   const cam = await page.evaluate(() => window.__dm!.camera());
   console.log(`against the wall: boom ${cam.distance.toFixed(2)} m, courier hidden ${cam.courierHidden}`);
@@ -177,6 +186,50 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   expect(cam.courierHidden).toBe(false);
   expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
   await page.screenshot({ path: `${artifacts}sp1-camera-wall.png` });
+  expect(errors).toEqual([]);
+});
+
+test('camera stays outside geometry on a zip line beside a building', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // downtown-zip-03 runs from (43.8, 23, −92) down to (50, 2.8, −160) and passes about 1.1 m from the east face
+  // (x = 44) of building b-0--3-3 a fifth of the way along. Hang under the top end facing down the line and press E.
+  await page.evaluate(() => {
+    const a = { x: 43.8, y: 23, z: -92 };
+    const b = { x: 50, y: 2.8, z: -160 };
+    const t = 0.02;
+    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+    window.__dm!.viewpoint({ x: p.x, y: p.y - 2, z: p.z }, { x: b.x, y: b.y, z: b.z });
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
+  });
+  await page.waitForFunction(() => window.__dm!.player().mode === 'zipline', undefined, { timeout: 10_000 });
+  const deg = Math.PI / 180;
+  const rideYaw = Math.atan2(-(50 - 43.8), -(-160 - -92));
+  // Orbit while riding, with extra weight on yaws that swing the boom west toward the building.
+  const yaws = [rideYaw - 1.3, rideYaw - 1.6, rideYaw - 1.0, rideYaw, rideYaw - 2.2, rideYaw + 1.3];
+  let checks = 0;
+  let shot = false;
+  for (let i = 0; i < 80; i++) {
+    const p = await page.evaluate(() => window.__dm!.player());
+    if (p.mode !== 'zipline') break;
+    await page.evaluate(([y, pitch]) => window.__dm!.setLook(y, pitch), [yaws[i % yaws.length]!, (i % 3 === 0 ? -25 : 0) * deg] as const);
+    await waitTicks(page, 1);
+    const inside = await page.evaluate(() => window.__dm!.cameraInsideSolid());
+    const at = await page.evaluate(() => window.__dm!.player().position);
+    expect(inside, `zip ride at (${at.x.toFixed(1)}, ${at.y.toFixed(1)}, ${at.z.toFixed(1)}), check ${i}`).toBe(false);
+    checks++;
+    // Screenshot beside the building (its east face spans z −123..−106), boom swung toward it.
+    if (!shot && at.z < -104 && at.z > -118) {
+      await page.evaluate(([y, pitch]) => window.__dm!.setLook(y, pitch), [rideYaw - 1.3, -10 * deg] as const);
+      await waitTicks(page, 1);
+      expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
+      await page.screenshot({ path: `${artifacts}sp1-camera-zip.png` });
+      shot = true;
+    }
+  }
+  console.log(`zip ride: ${checks} camera checks, screenshot beside the building: ${shot}`);
+  expect(shot).toBe(true);
   expect(errors).toEqual([]);
 });
 

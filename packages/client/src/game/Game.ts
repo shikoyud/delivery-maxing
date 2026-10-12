@@ -21,7 +21,7 @@ import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
 import { easeToward } from '../render/cameraRig';
-import { ChaseCamera, pivotHeightFor } from '../render/chaseCamera';
+import { ChaseCamera, clampPivotHeight, isLow, pivotHeightFor, type RayCast } from '../render/chaseCamera';
 import { createCourierPlaceholder, type CourierView } from '../render/courierPlaceholder';
 import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
@@ -39,7 +39,7 @@ import {
   type DevSettingsStore,
 } from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
-import { physicsRayCast, pointInSolid } from './cameraQueries';
+import { ballInSolid, physicsSphereCast } from './cameraQueries';
 import { interpolationStart, lerpAngle } from './interpolation';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
@@ -73,6 +73,8 @@ export class Game {
   readonly devPanel: DevPanel;
   private readonly progress = createProgressStore(browserStorage());
   readonly chase: ChaseCamera;
+  /** Sphere cast of the camera's collision ball against the map (the courier's own collider excluded). */
+  private readonly cameraCast: RayCast;
   readonly courier: CourierView;
   private prevPosition: Vec3;
   private prevHeading: number;
@@ -101,7 +103,8 @@ export class Game {
     );
     this.actions.setLook(map.hub.spawnYaw, 0);
     this.renderer = new Renderer(host, this.cfg.graphics, this.cfg.camera, map.size);
-    this.chase = new ChaseCamera(this.renderer.camera, this.cfg.camera, physicsRayCast(sim.physics));
+    this.cameraCast = physicsSphereCast(sim.physics, chase.collisionRadius, sim.body.collider);
+    this.chase = new ChaseCamera(this.renderer.camera, this.cfg.camera, this.cameraCast);
     this.courier = createCourierPlaceholder(settings.movement.capsule);
     this.renderer.scene.add(this.courier.object);
     this.renderer.scene.add(buildGreyboxMeshes(map));
@@ -199,10 +202,16 @@ export class Game {
     this.chase.snap();
   }
 
-  /** Whether the camera is inside a map solid (tests: the chase camera must never be). */
+  /**
+   * Whether any part of the camera's near plane is inside a map solid (tests: the chase camera must never be): a ball
+   * around the camera reaching the near-plane corners at the current FOV and aspect.
+   */
   cameraInsideSolid(): boolean {
-    const p = this.renderer.camera.position;
-    return pointInSolid(this.sim.physics, { x: p.x, y: p.y, z: p.z });
+    const cam = this.renderer.camera;
+    const halfH = cam.near * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+    const r = Math.hypot(cam.near, halfH, halfH * cam.aspect);
+    const p = cam.position;
+    return ballInSolid(this.sim.physics, { x: p.x, y: p.y, z: p.z }, r, this.sim.body.collider);
   }
 
   private frame(nowMs: number): void {
@@ -221,7 +230,7 @@ export class Game {
   viewpoint(feet: Vec3, target: Vec3): void {
     const dx = target.x - feet.x;
     const dz = target.z - feet.z;
-    const dy = target.y - (feet.y + this.cfg.camera.chase.height);
+    const dy = target.y - (feet.y + this.cfg.camera.chase.pivotHeight + this.cfg.camera.chase.height);
     const yaw = Math.atan2(-dx, -dz);
     this.sim.state.heading = yaw;
     this.teleport(feet);
@@ -250,12 +259,11 @@ export class Game {
     const cc = this.cfg.camera;
     const feet = lerpVec3(this.prevPosition, s.position, alpha);
     const look = this.actions.look();
-    const low = s.crouched || s.mode === 'slide';
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
-    const pivot = { x: feet.x, y: feet.y + this.pivot, z: feet.z };
-    this.chase.update(dt, pivot, look.yaw, look.pitch, horizontalLength(s.velocity), s);
-    this.courier.update(feet, lerpAngle(this.prevHeading, s.heading, alpha), low);
-    this.courier.object.visible = !this.chase.courierHidden;
+    const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
+    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s);
+    this.courier.update(feet, lerpAngle(this.prevHeading, s.heading, alpha), isLow(s));
+    this.courier.setHidden(this.chase.courierHidden);
     for (const orb of this.map.boostOrbs) {
       this.features.setOrbVisible(orb.id, this.time >= (this.world.orbAvailableAt.get(orb.id) ?? 0));
     }

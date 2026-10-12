@@ -32,11 +32,32 @@ describe('courier placeholder', () => {
     const front = (): THREE.Vector3 => c.front.getWorldPosition(new THREE.Vector3());
     c.update({ x: 0, y: 0, z: 0 }, 0, false);
     c.object.updateMatrixWorld(true);
-    expect(front().z).toBeLessThan(-cap.radius * 0.9);
+    expect(front().z).toBeLessThan(-cap.radius * 0.7);
     c.update({ x: 0, y: 0, z: 0 }, Math.PI / 2, false);
     c.object.updateMatrixWorld(true);
-    expect(front().x).toBeLessThan(-cap.radius * 0.9);
+    expect(front().x).toBeLessThan(-cap.radius * 0.7);
     expect(Math.abs(front().z)).toBeLessThan(1e-6);
+  });
+
+  it('the visor stays inside the capsule radius (nothing pokes past the collision capsule)', () => {
+    const c = createCourierPlaceholder(cap);
+    c.update({ x: 0, y: 0, z: 0 }, 0, false);
+    const b = box(c.object);
+    expect(Math.max(-b.min.x, b.max.x, -b.min.z, b.max.z)).toBeLessThanOrEqual(cap.radius + 1e-9);
+  });
+
+  it('hiding the courier keeps its shadow', () => {
+    const c = createCourierPlaceholder(cap);
+    c.setHidden(true);
+    const meshes: THREE.Mesh[] = [];
+    c.object.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
+    });
+    expect(c.object.visible).toBe(true);
+    // Hidden from the camera (colourWrite off) but still drawn into the shadow map.
+    expect(meshes.every((m) => m.castShadow && (m.material as THREE.Material).colorWrite === false)).toBe(true);
+    c.setHidden(false);
+    expect(meshes.every((m) => (m.material as THREE.Material).colorWrite)).toBe(true);
   });
 
   it('casts shadows and costs two meshes', () => {

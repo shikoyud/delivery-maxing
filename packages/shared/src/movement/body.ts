@@ -55,7 +55,8 @@ export class PlayerBody {
   private readonly physics: PhysicsWorld;
   private readonly cfg: MovementConfig;
   private readonly body: RigidBody;
-  private readonly collider: Collider;
+  /** The courier's own collider (camera queries exclude it). */
+  readonly collider: Collider;
   private readonly controller: KinematicCharacterController;
   private crouchedNow = false;
   private feetPos: Vec3;

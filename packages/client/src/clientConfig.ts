@@ -54,26 +54,30 @@ export interface ClientConfig {
   };
 }
 
-/** Third-person chase camera (spec §4 "Camera"). Lengths in metres, rates in 1/s. */
+/** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */
 export interface ChaseConfig {
-  /** Boom length behind the pivot on open ground. */
+  /** Boom length behind the lifted pivot on open ground. */
   distance: number;
-  /** Camera height above the feet on open ground at level pitch. */
+  /** Lift above the pivot before the boom runs back (R9: camera at feet + pivotHeight + height at level pitch). */
   height: number;
   /** The camera orbits a pivot this far above the feet (crouchPivotHeight while crouched or sliding). */
   pivotHeight: number;
   crouchPivotHeight: number;
+  /** The camera looks at the point this far above the feet (less the crouch drop), so the courier sits low in frame. */
+  lookAtHeight: number;
   /** Look pitch limits (degrees): negative looks down (camera above the courier). */
   pitchMinDeg: number;
   pitchMaxDeg: number;
   /** Ease rate of the followed pivot toward the courier (the slight lag; hides small sim snaps). */
   followEaseRate: number;
-  /** A blocked boom stops this far short of the hit. */
+  /**
+   * Radius of the camera's collision ball (sphere cast). Must cover the near plane at fovMax (checked in
+   * clientConfig.test.ts), so the camera never sees through a surface it grazes.
+   */
   collisionRadius: number;
-  /** The boom is never shortened below this (unless that would put the camera inside geometry). */
+  /** Below this boom length the courier is hidden (its shadow stays); the camera itself never passes a hit (R10). */
   minDistance: number;
-  /** Boom length ease rates when geometry pulls it in and when it lets it back out. */
-  pullInEaseRate: number;
+  /** Ease rate of the boom growing back out once geometry stops blocking it. Pulling in is immediate (R10). */
   pushOutEaseRate: number;
 }
 

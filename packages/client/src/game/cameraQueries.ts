@@ -1,35 +1,42 @@
-import type { PhysicsWorld, Vec3 } from '@dm/shared';
+import type { PhysicsWorld, PlayerSim, Vec3 } from '@dm/shared';
 import type { RayCast } from '../render/chaseCamera';
 
-/**
- * Query filter for camera collision: static map solids only. The courier's capsule is the only kinematic body, so
- * excluding kinematic bodies leaves it out; sensors (trigger volumes) never block the camera.
- */
-function cameraFilter(physics: PhysicsWorld): number {
-  const f = physics.rapier.QueryFilterFlags;
-  return f.EXCLUDE_KINEMATIC | f.EXCLUDE_SENSORS;
-}
+/** A Rapier collider (the client has no direct Rapier dependency). */
+type Collider = PlayerSim['body']['collider'];
 
-/** Chase-camera ray cast against the map's solids (distance to the first hit, or null). */
-export function physicsRayCast(physics: PhysicsWorld): RayCast {
+const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
+
+/**
+ * Chase-camera collision as a sphere cast against the map: how far the centre of a ball of `radius` travels along the
+ * unit vector `dir` before the ball touches a solid (null when it travels `maxDist` freely). `exclude` is the
+ * courier's own collider; sensors (trigger volumes) never block the camera. A ball already touching a surface and
+ * moving away from it is not stopped (stopAtPenetration false), so a camera resting against a wall can still move off it.
+ */
+export function physicsSphereCast(physics: PhysicsWorld, radius: number, exclude?: Collider): RayCast {
   const { rapier, world } = physics;
-  const flags = cameraFilter(physics);
+  const ball = new rapier.Ball(radius);
+  const flags = rapier.QueryFilterFlags.EXCLUDE_SENSORS;
   return (from, dir, maxDist) => {
-    const hit = world.castRay(new rapier.Ray(from, dir), maxDist, true, flags);
-    return hit ? hit.timeOfImpact : null;
+    const hit = world.castShape(from, IDENTITY, dir, ball, 0, maxDist, false, flags, undefined, exclude);
+    return hit ? hit.time_of_impact : null;
   };
 }
 
-/** Whether `p` lies inside any map solid (the courier's capsule and sensors excluded). */
-export function pointInSolid(physics: PhysicsWorld, p: Vec3): boolean {
+/** Whether a ball of `radius` at `center` overlaps any map solid (`exclude`: the courier's collider; sensors ignored). */
+export function ballInSolid(physics: PhysicsWorld, center: Vec3, radius: number, exclude?: Collider): boolean {
+  const { rapier, world } = physics;
   let inside = false;
-  physics.world.intersectionsWithPoint(
-    p,
+  world.intersectionsWithShape(
+    center,
+    IDENTITY,
+    new rapier.Ball(radius),
     () => {
       inside = true;
       return false; // stop at the first one
     },
-    cameraFilter(physics),
+    rapier.QueryFilterFlags.EXCLUDE_SENSORS,
+    undefined,
+    exclude,
   );
   return inside;
 }
