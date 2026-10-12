@@ -24,13 +24,21 @@ import { easeToward, eyeHeight, fovForSpeed, rollForWallRun } from '../render/ca
 import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer } from '../render/Renderer';
+import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
+import { mountDevPanel, type DevPanel } from '../ui/devPanel';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
+import { assignNumbers, createDevSettingsStore, type DevSettings, type DevSettingsStore } from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
 import { interpolationStart } from './interpolation';
 
+/** Dev settings are saved this long after the last panel edit (ms). */
+const SAVE_DEBOUNCE_MS = 300;
+
 export interface GameOptions {
   debug: boolean;
+  /** Show the F3 debug overlay from the start (defaults to `debug`). */
+  overlay?: boolean;
   /** Order Board RNG seed (?seed=N); defaults to Date.now(). */
   seed?: number;
 }
@@ -51,6 +59,9 @@ export class Game {
   frames = 0;
   readonly features: FeatureMeshes;
   readonly delivery: DeliveryLoop;
+  readonly overlay: DebugOverlay;
+  readonly devPanel: DevPanel;
+  private readonly progress = createProgressStore(browserStorage());
   private prevPosition: Vec3;
   private camRoll = 0;
   private lastFrameMs: number | null = null;
@@ -62,6 +73,8 @@ export class Game {
     readonly map: MapData,
     readonly sim: PlayerSim,
     readonly world: WorldFeatureState,
+    private readonly settings: DevSettings,
+    private readonly devStore: DevSettingsStore,
   ) {
     this.prevPosition = { ...sim.state.position };
     const pitchLimit = THREE.MathUtils.degToRad(this.cfg.camera.pitchLimitDeg);
@@ -80,19 +93,61 @@ export class Game {
       map,
       cfg: this.cfg,
       actions: this.actions,
-      progress: createProgressStore(browserStorage()),
+      progress: this.progress,
+      backpackCapacity: settings.backpackSlots,
+      baseSprintSpeed: settings.movement.run.sprintSpeed,
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
       player: () => this.sim.state,
     });
+    this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
+    this.devPanel = mountDevPanel(settings, {
+      onBackpack: (n) => this.delivery.orders.setBackpackCapacity(n),
+      onReset: () => {
+        const fresh = this.devStore.reset();
+        assignNumbers(settings.movement as never, fresh.movement as never);
+        settings.backpackSlots = fresh.backpackSlots;
+        this.delivery.orders.setBackpackCapacity(fresh.backpackSlots);
+      },
+      onResetProgress: () => {
+        this.delivery.resetProgress();
+      },
+      onChange: () => this.scheduleSave(),
+    });
+    this.actions.onUiKey = (name) => {
+      if (name === 'debugOverlay') this.overlay.toggle();
+      else this.toggleDevPanel();
+    };
+  }
+
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleSave(): void {
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      this.devStore.save(this.settings);
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
+  private toggleDevPanel(): void {
+    this.devPanel.toggle();
+    if (this.devPanel.isOpen) {
+      this.actions.releaseAll();
+      if (this.input.locked) this.host.ownerDocument.exitPointerLock();
+    }
   }
 
   static async create(host: HTMLElement, opts: GameOptions): Promise<Game> {
     const rapier = await initRapier();
     const map = expandGreybox(greyboxJson as GreyboxSource);
     const physics = createPhysicsWorld(rapier, map);
-    const sim = new PlayerSim(physics, map, movementConfig, map.hub.spawn, map.hub.spawnYaw);
-    const game = new Game(host, opts, map, sim, createWorldFeatureState(map));
+    // One deep-cloned movement object shared by PlayerSim and the dev panel; the shared import is never mutated.
+    const devStore = createDevSettingsStore(browserStorage());
+    const settings = devStore.load();
+    const sim = new PlayerSim(physics, map, settings.movement, map.hub.spawn, map.hub.spawnYaw);
+    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore);
     if (opts.debug) installDebugHooks(game);
     return game;
   }
@@ -176,5 +231,13 @@ export class Game {
     this.renderer.followShadow(feet);
     this.renderer.render();
     this.frames++;
+    this.overlay.frame(clockSeconds * 1000, () => ({
+      drawCalls: this.renderer.info().calls,
+      speed: horizontalLength(s.velocity),
+      mode: s.mode,
+      onBoard: s.onBoard,
+      tick: this.tick,
+      position: s.position,
+    }));
   }
 }

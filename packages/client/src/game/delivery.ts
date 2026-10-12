@@ -38,6 +38,9 @@ export interface DeliveryDeps {
   cfg: ClientConfig;
   actions: ActionState;
   progress: ProgressStore;
+  /** Starting backpack capacity and base sprint speed (dev tuning); default to the config values. */
+  backpackCapacity?: number;
+  baseSprintSpeed?: number;
   /** Board RNG seed (?seed=N, else Date.now()). */
   seed: number;
   /** Sim time (s) and the player's sim state, read when the UI acts between ticks. */
@@ -71,10 +74,10 @@ export class DeliveryLoop {
         distance: streetDistance,
         hub: d.map.hub.center,
         cfg: ordersConfig,
-        baseSprintSpeed: movementConfig.run.sprintSpeed,
+        baseSprintSpeed: d.baseSprintSpeed ?? movementConfig.run.sprintSpeed,
         rng: mulberry32(d.seed),
         unlocks: { express: true, chain: true },
-        backpackCapacity: ordersConfig.backpack.baseSlots,
+        backpackCapacity: d.backpackCapacity ?? ordersConfig.backpack.baseSlots,
         totals: d.progress.load(),
       },
       d.now(),
@@ -141,6 +144,15 @@ export class DeliveryLoop {
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);
     events.push(...this.orders.update(now, this.zones));
     for (const e of events) this.announce(e, before);
+  }
+
+  /** Zeroes Points, Coins and deliveries in storage and in the running totals (dev panel). */
+  resetProgress(): void {
+    this.orders.totals.points = 0;
+    this.orders.totals.coins = 0;
+    this.orders.totals.deliveries = 0;
+    this.d.progress.save(this.orders.totals);
+    this.nextHudAt = 0;
   }
 
   accept(id: string): AcceptResult {

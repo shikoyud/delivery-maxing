@@ -32,6 +32,9 @@ importers:
       '@dm/shared':
         specifier: workspace:*
         version: link:../shared
+      lil-gui:
+        specifier: 0.21.0
+        version: 0.21.0
       three:
         specifier: 0.186.1
         version: 0.186.1
@@ -624,6 +627,9 @@ packages:
   lightningcss@1.33.0:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
+
+  lil-gui@0.21.0:
+    resolution: {integrity: sha512-tpvxN7v1GvE/Tv+GRopfOp0W7fVEjF4PltkuX8vOCIfim22rD1ztvfkoEMcv9lzQeuNUSeIrUmUjBwmlW/oUew==}
 
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
@@ -1387,6 +1393,8 @@ snapshots:
       lightningcss-linux-x64-musl: 1.33.0
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
+
+  lil-gui@0.21.0: {}
 
   locate-path@6.0.0:
     dependencies:

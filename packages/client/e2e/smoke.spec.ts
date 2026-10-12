@@ -236,3 +236,46 @@ test('HUD shows the active order with distance', async ({ page }) => {
   await page.screenshot({ path: `${artifacts}sp1-hud.png` });
   expect(errors).toEqual([]);
 });
+
+test('dev panel: backtick opens it, a sprintSpeed edit applies live, typing does not move the player', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const panel = page.locator('.dm-dev-panel');
+  await expect(panel).toBeHidden();
+  await page.keyboard.press('Backquote');
+  await expect(panel).toBeVisible();
+  await expect(page.locator('.debug-overlay')).toBeVisible(); // ?debug=1 shows the overlay by default
+
+  await panel.locator('.lil-title', { hasText: /^run$/ }).click();
+  const field = panel.locator('.lil-controller', { hasText: 'sprintSpeed' }).locator('input');
+  const before = await page.evaluate(() => window.__dm!.player().position);
+  await field.fill('12');
+  await field.press('KeyW'); // typed into the field: must not move the player
+  await field.press('Enter');
+  const typed = await page.evaluate(() => window.__dm!.player().position);
+  expect(Math.hypot(before.x - typed.x, before.z - typed.z)).toBeLessThan(0.05);
+  await page.keyboard.press('F3');
+  await expect(page.locator('.debug-overlay')).toBeHidden();
+  await page.keyboard.press('F3');
+  await page.keyboard.press('Backquote');
+  await expect(panel).toBeHidden();
+
+  const tick0 = await page.evaluate(() => window.__dm!.tick);
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('ShiftLeft');
+  await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 45, tick0);
+  const p = await page.evaluate(() => window.__dm!.player());
+  await page.keyboard.up('ShiftLeft');
+  await page.keyboard.up('KeyW');
+  expect(Math.hypot(p.velocity.x, p.velocity.z)).toBeGreaterThan(10);
+  expect(errors).toEqual([]);
+});
+
+test('dev panel screenshot', async ({ page }) => {
+  await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 10);
+  await page.keyboard.press('Backquote');
+  await page.locator('.dm-dev-panel .lil-title', { hasText: /^run$/ }).click();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${artifacts}sp1-devpanel.png` });
+});
