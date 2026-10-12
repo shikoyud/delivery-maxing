@@ -10,5 +10,6 @@ describe('play hint', () => {
     expect(hint).toMatch(/WASD move relative to the camera/);
     expect(hint).toMatch(/zip line rides the way you face/i);
     for (const key of ['Shift sprint', 'Space jump', 'C crouch', 'E interact', 'Q board']) expect(hint).toContain(key);
+    expect(hint).toContain('Shift sprint (toggle)');
   });
 });

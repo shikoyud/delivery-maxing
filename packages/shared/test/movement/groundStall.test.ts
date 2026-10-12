@@ -62,6 +62,7 @@ describe('sprinting across the real map ground', () => {
       const input = emptyInput();
       input.move.y = 1;
       input.look.yaw = yaw;
+      input.sprint.pressed = !sim.state.sprinting;
       input.sprint.held = true;
       const before = sim.state.position;
       sim.step(input, NO_MODS, world, t / movementConfig.tickRate);
@@ -92,6 +93,7 @@ describe('sprinting across the real map ground', () => {
       const input = emptyInput();
       input.move.y = 1;
       input.look.yaw = yaw;
+      input.sprint.pressed = !sim.state.sprinting;
       input.sprint.held = true;
       if (t % 25 === 5) { input.jump.pressed = true; input.jump.held = true; }
       const events = sim.step(input, NO_MODS, world, t / movementConfig.tickRate);

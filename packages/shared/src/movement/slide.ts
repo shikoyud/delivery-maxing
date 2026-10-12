@@ -6,11 +6,11 @@ import { wishDirection } from './ground';
 import type { PlayerState } from './types';
 
 /**
- * Starts a crouch-slide. Needs all of: crouch pressed this tick, grounded (on foot, in ground mode), sprint held,
+ * Starts a crouch-slide. Needs all of: crouch pressed this tick, grounded (on foot, in ground mode), sprinting (the sprint toggle is on),
  * not on the board, and horizontal speed ≥ slide.minEntrySpeed. The caller crouches the body.
  */
 export function startSlide(state: PlayerState, input: InputFrame, cfg: MovementConfig): boolean {
-  if (!input.crouch.pressed || !input.sprint.held) return false;
+  if (!input.crouch.pressed || !state.sprinting) return false;
   if (!state.grounded || state.mode !== 'ground' || state.onBoard) return false;
   if (horizontalLength(state.velocity) < cfg.slide.minEntrySpeed) return false;
   state.mode = 'slide';

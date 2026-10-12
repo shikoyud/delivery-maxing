@@ -46,7 +46,7 @@ export function boostMultiplier(state: PlayerState, cfg: MovementConfig): number
 export function targetGroundSpeed(input: InputFrame, state: PlayerState, cfg: MovementConfig, mods: StatModifiers): number {
   const magnitude = Math.min(1, Math.hypot(input.move.x, input.move.y));
   if (magnitude === 0) return 0;
-  const base = input.sprint.held ? cfg.run.sprintSpeed : cfg.run.runSpeed;
+  const base = state.sprinting ? cfg.run.sprintSpeed : cfg.run.runSpeed;
   const target = base * magnitude * mods.speedMul * boostMultiplier(state, cfg);
   return state.crouched ? Math.min(target, cfg.run.crouchSpeed) : target;
 }

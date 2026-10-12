@@ -6,6 +6,7 @@ export interface OverlayStats {
   speed: number;
   mode: MoveMode;
   onBoard: boolean;
+  sprinting: boolean;
   tick: number;
   position: Vec3;
 }
@@ -19,7 +20,7 @@ export interface DebugOverlay {
 
 const REFRESH_MS = 250;
 
-/** F3 overlay: FPS, draw calls, speed, mode, onBoard, tick, position. DOM only (no draw calls). */
+/** F3 overlay: FPS, draw calls, speed, mode, onBoard, sprint, tick, position. DOM only (no draw calls). */
 export function mountDebugOverlay(host: HTMLElement, visible: boolean): DebugOverlay {
   const root = el('pre', 'debug-overlay', host);
   root.hidden = !visible;
@@ -51,6 +52,7 @@ export function mountDebugOverlay(host: HTMLElement, visible: boolean): DebugOve
           `speed  ${s.speed.toFixed(2)} m/s`,
           `mode   ${s.mode}`,
           `board  ${s.onBoard}`,
+          `sprint ${s.sprinting ? ' on' : 'off'}`,
           `tick   ${s.tick}`,
           `pos    ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}`,
         ].join('\n'),

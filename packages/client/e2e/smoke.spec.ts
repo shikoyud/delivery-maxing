@@ -49,17 +49,16 @@ test('loads, renders the greybox and reports ready', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('holding W + Shift for 1 s runs at ~8 m/s', async ({ page }) => {
+test('W then a Shift tap runs at ~8 m/s', async ({ page }) => {
   // Timed in simulation ticks, not wall time: headless Chromium renders on the CPU and can drop below
   // 30 / maxStepsPerFrame fps, where the fixed stepper drops time by design.
   await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const { start, tick0 } = await page.evaluate(() => ({ start: window.__dm!.player().position, tick0: window.__dm!.tick }));
   await page.keyboard.down('KeyW');
-  await page.keyboard.down('ShiftLeft');
+  await page.keyboard.press('ShiftLeft'); // Shift toggles sprint on; it stays on while W is held
   await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 30, tick0); // 1 s of sim time
   const { p, ticks } = await page.evaluate((t0) => ({ p: window.__dm!.player(), ticks: window.__dm!.tick - t0 }), tick0);
-  await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   const speed = Math.hypot(p.velocity.x, p.velocity.z);
   const moved = Math.hypot(p.position.x - start.x, p.position.z - start.z);
@@ -130,9 +129,8 @@ test('third-person view shows the courier', async ({ page }) => {
   await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
   await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
   await page.keyboard.down('KeyW');
-  await page.keyboard.down('ShiftLeft');
+  await page.keyboard.press('ShiftLeft');
   await waitTicks(page, 12);
-  await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   await waitCameraSettled(page);
   const cam = await page.evaluate(() => window.__dm!.camera());
@@ -322,8 +320,9 @@ test('courier model loads and animates (mixer time advances)', async ({ page }) 
   expect(c1.time).toBeGreaterThan(c0.time);
   await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
   await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
-  // W + D + Shift: a diagonal sprint, so the chase camera sees the courier three-quarters from behind.
-  for (const k of ['KeyW', 'KeyD', 'ShiftLeft']) await page.keyboard.down(k);
+  // W + D, then a Shift tap: a diagonal sprint, so the chase camera sees the courier three-quarters from behind.
+  for (const k of ['KeyW', 'KeyD']) await page.keyboard.down(k);
+  await page.keyboard.press('ShiftLeft');
   await page.waitForFunction(() => window.__dm!.courier().clip === 'Running', undefined, { timeout: 10_000 });
   await waitTicks(page, 8);
   await page.screenshot({ path: `${artifacts}sp1-courier-run.png` });
@@ -333,7 +332,7 @@ test('courier model loads and animates (mixer time advances)', async ({ page }) 
   await waitTicks(page, 4);
   expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('slide');
   await page.screenshot({ path: `${artifacts}sp1-courier-slide.png` });
-  for (const k of ['KeyC', 'ShiftLeft', 'KeyD', 'KeyW']) await page.keyboard.up(k);
+  for (const k of ['KeyC', 'KeyD', 'KeyW']) await page.keyboard.up(k);
   const info = await page.evaluate(() => window.__dm!.renderInfo());
   console.log(`courier model: ${info.calls} draw calls, ${info.triangles} triangles`);
   expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
@@ -605,10 +604,9 @@ test('dev panel: backtick opens it, a sprintSpeed edit applies live, typing does
 
   const tick0 = await page.evaluate(() => window.__dm!.tick);
   await page.keyboard.down('KeyW');
-  await page.keyboard.down('ShiftLeft');
+  await page.keyboard.press('ShiftLeft');
   await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 45, tick0);
   const p = await page.evaluate(() => window.__dm!.player());
-  await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   expect(Math.hypot(p.velocity.x, p.velocity.z)).toBeGreaterThan(10);
   expect(errors).toEqual([]);
