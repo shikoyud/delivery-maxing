@@ -702,3 +702,7 @@ kbd {
   font: 700 14px system-ui, sans-serif;
   cursor: pointer;
 }
+
+.perf-title.fail {
+  color: #ff9a8f;
+}

@@ -12,8 +12,8 @@ const PROGRESS_MS = 500;
 
 const ms = (v: number): string => `${v.toFixed(1)} ms`;
 
-/** The ?perf=1 panel: a running message, then the frame-time summary, the JSON to paste and a copy button. */
-export function mountPerfOverlay(host: HTMLElement, opts: { warmupSeconds: number }): PerfOverlay {
+/** The ?perf=1 panel: a running message, then PASS or FAIL with the frame-time summary, the JSON to paste and a copy button. */
+export function mountPerfOverlay(host: HTMLElement): PerfOverlay {
   const root = el('div', 'perf-overlay', host);
   const title = el('h2', 'perf-title', root);
   const lines = el('pre', 'perf-lines', root);
@@ -28,16 +28,21 @@ export function mountPerfOverlay(host: HTMLElement, opts: { warmupSeconds: numbe
     },
     show(r) {
       document.exitPointerLock(); // a locked pointer can't click the button
-      setText(title, `Perf result: ${r.fpsAtP95.toFixed(1)} fps at p95`);
+      setText(title, `${r.pass ? 'PASS' : 'FAIL'}: p95 ${ms(r.p95Ms)} (${r.fpsAtP95.toFixed(1)} fps), target ${r.p95TargetMs} ms or less`);
+      title.classList.toggle('fail', !r.pass);
       setText(
         lines,
         [
           `p50 ${ms(r.p50Ms)}   p95 ${ms(r.p95Ms)}   p99 ${ms(r.p99Ms)}   max ${ms(r.maxMs)}`,
-          `fps at p95  ${r.fpsAtP95.toFixed(1)}   (target: p95 <= 16.7 ms)`,
+          '60 Hz frames read about 16.7 ms and a dropped frame about 33 ms.',
           `max draw calls ${r.maxDrawCalls}   max triangles ${r.maxTriangles}`,
           `city update p95 ${ms(r.cityUpdateP95Ms)}`,
           `GPU ${r.gpu}`,
-          `${r.frames} frames over ${r.seconds} s; the first ${opts.warmupSeconds} s (warm-up) is left out.`,
+          '',
+          'p95 by viewpoint:',
+          ...r.viewpoints.map((v, i) => `  ${i + 1}. (${v.feet.x}, ${v.feet.z})  ${ms(v.p95Ms)}  ${v.frames} frames`),
+          '',
+          `${r.frames} frames over ${r.seconds} s (${r.viewpointSeconds} s per viewpoint). Left out: the first ${r.warmupSeconds} s (warm-up) and the first ${r.teleportSkipFrames} frames after each teleport.`,
         ].join('\n'),
       );
       const json = el('pre', 'perf-json', root);

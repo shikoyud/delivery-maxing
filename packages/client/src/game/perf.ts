@@ -34,45 +34,137 @@ export function summarize(frameMs: readonly number[]): FrameSummary {
 }
 
 export interface RoutePose {
+  /** Index of the route entry being flown. */
+  index: number;
   feet: Vec3;
-  /** What the camera looks at: the target of the leg being travelled. */
+  /** What the camera looks at: the entry's own target. */
   target: Vec3;
-  /** The end of the route has been reached (the pose stays on the last stop). */
+  /** The run's time is up (the pose stays at the end of the last entry). */
   done: boolean;
 }
 
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-/** Total length of the route's straight legs (m). */
-export function routeLength(route: PerfConfig['route']): number {
-  let total = 0;
-  for (let i = 0; i + 1 < route.length; i++) {
-    const a = route[i]!.feet;
-    const b = route[i + 1]!.feet;
-    total += Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
-  }
-  return total;
+/** Seconds each route entry gets: the run split equally. */
+export function legSeconds(seconds: number, entries: number): number {
+  return seconds / entries;
 }
 
 /**
- * Where a glide along the route's `feet` points (straight legs, in order) is after travelling `distance` metres, looking
- * at the target of the leg's first stop. The last stop looks at its own target.
+ * Where the flythrough is `elapsed` seconds into a `seconds`-long run: the run is split equally across the route
+ * entries; each starts at its `feet` and glides horizontally toward its `target` at `speed` m/s (keeping its height, and
+ * stopping at the target), looking at the target.
  */
-export function routeAt(route: PerfConfig['route'], distance: number): RoutePose {
-  let left = Math.max(0, distance);
-  for (let i = 0; i + 1 < route.length; i++) {
-    const a = route[i]!;
-    const b = route[i + 1]!;
-    const length = Math.hypot(b.feet.x - a.feet.x, b.feet.y - a.feet.y, b.feet.z - a.feet.z);
-    if (left < length) {
-      const t = left / length;
-      const feet = { x: lerp(a.feet.x, b.feet.x, t), y: lerp(a.feet.y, b.feet.y, t), z: lerp(a.feet.z, b.feet.z, t) };
-      return { feet, target: { ...a.target }, done: false };
-    }
-    left -= length;
+export function viewpointAt(route: PerfConfig['route'], speed: number, seconds: number, elapsed: number): RoutePose {
+  const share = legSeconds(seconds, route.length);
+  const index = Math.min(route.length - 1, Math.max(0, Math.floor(elapsed / share)));
+  const { feet, target } = route[index]!;
+  const t = Math.min(share, Math.max(0, elapsed - index * share));
+  const dx = target.x - feet.x;
+  const dz = target.z - feet.z;
+  const distance = Math.hypot(dx, dz);
+  const glided = distance > 0 ? Math.min(speed * t, distance) / distance : 0;
+  return {
+    index,
+    feet: { x: feet.x + dx * glided, y: feet.y, z: feet.z + dz * glided },
+    target: { ...target },
+    done: elapsed >= seconds,
+  };
+}
+
+/** What the recorder holds when the run ends. */
+export interface RecordedRun {
+  overall: FrameSummary;
+  /** One summary per route entry (zeros for an entry that got no counted frames). */
+  perViewpoint: FrameSummary[];
+  maxCalls: number;
+  maxTriangles: number;
+  /** p95 of CityView.update's wall-clock cost per frame (ms). */
+  cityUpdateP95: number;
+}
+
+/** What the renderer reports about the frame just drawn. */
+export interface FrameRender {
+  calls: number;
+  triangles: number;
+  cityMs: number;
+}
+
+/**
+ * Collects the frame times of a flythrough. `frame()` is called before each frame is drawn, so what it reads belongs to
+ * the frame before. Frames up to `warmupMs` from the first call, and the first `skipFrames` frames drawn after each
+ * teleport to another viewpoint (the jump itself), are not counted.
+ */
+export class PerfRecorder {
+  private start: number | null = null;
+  private prev = 0;
+  private current = -1;
+  private sinceJump = 0;
+  private readonly all: number[] = [];
+  private readonly byViewpoint: number[][];
+  private readonly city: number[] = [];
+  private maxCalls = 0;
+  private maxTriangles = 0;
+
+  constructor(
+    viewpoints: number,
+    private readonly warmupMs: number,
+    private readonly skipFrames: number,
+  ) {
+    this.byViewpoint = Array.from({ length: viewpoints }, () => []);
   }
-  const last = route[route.length - 1]!;
-  return { feet: { ...last.feet }, target: { ...last.target }, done: true };
+
+  /** Frames counted so far. */
+  get measured(): number {
+    return this.all.length;
+  }
+
+  /** Milliseconds since the first call (0 before it). */
+  elapsedMs(nowMs: number): number {
+    return this.start === null ? 0 : nowMs - this.start;
+  }
+
+  /** `viewpoint` is the route entry about to be drawn (the one this call places the player at). */
+  frame(nowMs: number, viewpoint: number, render: () => FrameRender): void {
+    if (this.start === null) {
+      this.start = nowMs;
+    } else {
+      const drawnAfterJump = this.sinceJump;
+      this.sinceJump++;
+      if (this.prev - this.start >= this.warmupMs && drawnAfterJump >= this.skipFrames) {
+        const ms = nowMs - this.prev;
+        const r = render();
+        this.all.push(ms);
+        this.byViewpoint[this.current]?.push(ms);
+        this.city.push(r.cityMs);
+        this.maxCalls = Math.max(this.maxCalls, r.calls);
+        this.maxTriangles = Math.max(this.maxTriangles, r.triangles);
+      }
+    }
+    if (viewpoint !== this.current) {
+      this.current = viewpoint;
+      this.sinceJump = 0;
+    }
+    this.prev = nowMs;
+  }
+
+  result(): RecordedRun {
+    return {
+      overall: summarize(this.all),
+      perViewpoint: this.byViewpoint.map(summarize),
+      maxCalls: this.maxCalls,
+      maxTriangles: this.maxTriangles,
+      cityUpdateP95: summarize(this.city).p95,
+    };
+  }
+}
+
+/** The first frames after a teleport are left out of the statistics. */
+export const TELEPORT_SKIP_FRAMES = 2;
+
+/** One route entry's own frame times. */
+export interface ViewpointResult {
+  feet: Vec3;
+  frames: number;
+  p95Ms: number;
 }
 
 /** What a flythrough measured, plus where and on what (all of it goes into the pasted JSON). */
@@ -84,10 +176,14 @@ export interface PerfResult {
   /** WEBGL_debug_renderer_info's unmasked renderer, or "unknown". */
   gpu: string;
   seconds: number;
+  /** Seconds each route entry was flown (seconds / entries). */
+  viewpointSeconds: number;
   warmupSeconds: number;
-  /** Route metres actually glided (the run ends after `seconds`, wherever on the route that is). */
-  metresGlided: number;
-  /** Frames in the statistics (after the warm-up). */
+  teleportSkipFrames: number;
+  /** Overall p95 must not exceed this (config perf.p95TargetMs) to pass. */
+  p95TargetMs: number;
+  pass: boolean;
+  /** Frames in the overall statistics (after the warm-up and the post-teleport frames). */
   frames: number;
   p50Ms: number;
   p95Ms: number;
@@ -99,6 +195,8 @@ export interface PerfResult {
   maxTriangles: number;
   /** p95 of the wall-clock cost of CityView.update per frame (0 on the greybox). */
   cityUpdateP95Ms: number;
+  /** p95 per route entry, in route order, so a slow district shows. */
+  viewpoints: ViewpointResult[];
 }
 
 function gpuRenderer(gl: WebGLRenderingContext | WebGL2RenderingContext): string {
@@ -111,42 +209,26 @@ function gpuRenderer(gl: WebGLRenderingContext | WebGL2RenderingContext): string
 }
 
 /**
- * Glides the player along `cfg.route` at `cfg.speed` m/s for `cfg.seconds` (the chase camera follows; input and the
- * simulation are off), timing every frame, then shows the result panel. The first WARMUP_SECONDS are left out.
+ * Flies the route: the run's `cfg.seconds` are split equally across its entries; each teleports the player to its
+ * `feet` and glides toward its `target` at `cfg.speed` m/s with the chase camera following (input and the simulation
+ * are off), timing every frame. Then shows the result panel.
  */
 export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
-  const overlay = mountPerfOverlay(game.host, { warmupSeconds: WARMUP_SECONDS });
-  const frameMs: number[] = [];
-  const cityMs: number[] = [];
-  let maxCalls = 0;
-  let maxTriangles = 0;
-  let startMs: number | null = null;
-  let prevMs = 0;
-
-  const glide = (elapsedSeconds: number): void => {
-    const pose = routeAt(cfg.route, elapsedSeconds * cfg.speed);
-    game.viewpoint(pose.feet, pose.target);
-  };
+  const overlay = mountPerfOverlay(game.host);
+  const rec = new PerfRecorder(cfg.route.length, WARMUP_SECONDS * 1000, TELEPORT_SKIP_FRAMES);
+  const readRender = (): FrameRender => ({ ...game.renderer.info(), cityMs: game.cityUpdateMs });
 
   return new Promise((resolve) => {
-    // Called before each frame is drawn, so what it reads (interval, render info, city cost) belongs to the frame before.
+    // Called before each frame is drawn, so what the recorder reads belongs to the frame before.
     game.frameDriver = (nowMs) => {
-      if (startMs === null) {
-        startMs = nowMs;
-      } else if (prevMs - startMs >= WARMUP_SECONDS * 1000) {
-        frameMs.push(nowMs - prevMs);
-        cityMs.push(game.cityUpdateMs);
-        const info = game.renderer.info();
-        maxCalls = Math.max(maxCalls, info.calls);
-        maxTriangles = Math.max(maxTriangles, info.triangles);
-      }
-      prevMs = nowMs;
-      const elapsed = (nowMs - startMs) / 1000;
+      const elapsed = rec.elapsedMs(nowMs) / 1000;
+      const pose = viewpointAt(cfg.route, cfg.speed, cfg.seconds, elapsed);
+      rec.frame(nowMs, pose.index, readRender);
       overlay.progress(elapsed, cfg.seconds);
       // A run that was all warm-up (very slow frames) goes on until it has something to report.
-      if (elapsed >= cfg.seconds && frameMs.length > 0) {
+      if (pose.done && rec.measured > 0) {
         game.frameDriver = null;
-        const frames = summarize(frameMs);
+        const run = rec.result();
         const dpr = window.devicePixelRatio;
         const result: PerfResult = {
           url: window.location.href,
@@ -154,24 +236,27 @@ export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
           pixelRatio: game.renderer.renderer.getPixelRatio(),
           gpu: gpuRenderer(game.renderer.renderer.getContext()),
           seconds: cfg.seconds,
+          viewpointSeconds: legSeconds(cfg.seconds, cfg.route.length),
           warmupSeconds: WARMUP_SECONDS,
-          metresGlided: Math.round(Math.min(elapsed * cfg.speed, routeLength(cfg.route))),
-          frames: frames.frames,
-          p50Ms: frames.p50,
-          p95Ms: frames.p95,
-          p99Ms: frames.p99,
-          maxMs: frames.max,
-          fpsAtP95: frames.p95 > 0 ? 1000 / frames.p95 : 0,
-          maxDrawCalls: maxCalls,
-          maxTriangles,
-          cityUpdateP95Ms: summarize(cityMs).p95,
+          teleportSkipFrames: TELEPORT_SKIP_FRAMES,
+          p95TargetMs: cfg.p95TargetMs,
+          pass: run.overall.p95 <= cfg.p95TargetMs,
+          frames: run.overall.frames,
+          p50Ms: run.overall.p50,
+          p95Ms: run.overall.p95,
+          p99Ms: run.overall.p99,
+          maxMs: run.overall.max,
+          fpsAtP95: run.overall.p95 > 0 ? 1000 / run.overall.p95 : 0,
+          maxDrawCalls: run.maxCalls,
+          maxTriangles: run.maxTriangles,
+          cityUpdateP95Ms: run.cityUpdateP95,
+          viewpoints: run.perViewpoint.map((v, i) => ({ feet: { ...cfg.route[i]!.feet }, frames: v.frames, p95Ms: v.p95 })),
         };
         overlay.show(result);
         resolve(result);
         return;
       }
-      glide(elapsed);
+      game.viewpoint(pose.feet, pose.target); // a teleport each frame, which also keeps the chase camera snapped behind
     };
-    glide(0);
   });
 }

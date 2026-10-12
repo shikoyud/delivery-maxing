@@ -731,6 +731,12 @@ test('?perf=1 completes a short run (seconds=5) and reports a result', async ({ 
   console.log(`perf result (swiftshader): ${JSON.stringify(r)}`);
   expect(r.seconds).toBe(5);
   expect(r.frames).toBeGreaterThan(0);
+  expect(r.viewpointSeconds).toBeCloseTo(5 / clientJson.perf.route.length, 9);
+  expect(r.p95TargetMs).toBe(clientJson.perf.p95TargetMs);
+  expect(r.pass).toBe(r.p95Ms <= r.p95TargetMs);
+  // One entry per route viewpoint; the counted frames add up (very slow headless frames may leave some entries empty).
+  expect(r.viewpoints.map((v) => v.feet)).toEqual(clientJson.perf.route.map((v) => v.feet));
+  expect(r.viewpoints.reduce((n, v) => n + v.frames, 0)).toBe(r.frames);
   expect(r.p50Ms).toBeGreaterThan(0);
   expect(r.p50Ms).toBeLessThanOrEqual(r.p95Ms);
   expect(r.p95Ms).toBeLessThanOrEqual(r.p99Ms);
@@ -743,13 +749,16 @@ test('?perf=1 completes a short run (seconds=5) and reports a result', async ({ 
   expect(r.gpu.length).toBeGreaterThan(0);
   expect(r.url).toContain('perf=1');
   expect(r.pixelRatio).toBeGreaterThan(0);
-  // The player was glided along the first leg (5 s × 12 m/s ≈ 60 m from the start of the route), not left at the spawn.
-  const start = clientJson.perf.route[0]!.feet;
+  // The run ended at the last viewpoint (not left at the spawn): the courier stands near its feet, glided toward its target.
+  const last = clientJson.perf.route.at(-1)!;
   const at = (await page.evaluate(() => window.__dm!.player())).position;
-  expect(Math.hypot(at.x - start.x, at.z - start.z)).toBeGreaterThan(30);
+  expect(Math.hypot(at.x - last.feet.x, at.z - last.feet.z)).toBeLessThan(0.625 * clientJson.perf.speed + 1);
+  expect(at.x).toBeLessThanOrEqual(last.feet.x + 1e-6); // the last entry's target is toward -x
   const panel = page.locator('.perf-overlay');
-  await expect(panel).toContainText('fps at p95');
+  await expect(panel.locator('.perf-title')).toContainText(r.pass ? 'PASS' : 'FAIL');
+  await expect(panel).toContainText('dropped frame');
   await expect(panel).toContainText('warm-up');
+  await expect(panel).toContainText('p95 by viewpoint');
   await page.screenshot({ path: `${artifacts}sp2-perf-result.png` });
   await page.getByRole('button', { name: 'Copy result' }).click();
   await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();

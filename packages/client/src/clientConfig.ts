@@ -70,12 +70,17 @@ export interface CityRenderConfig {
   renderRegion: number;
 }
 
-/** The ?perf=1 flythrough (Task 8) and the CI budget viewpoints: street and rooftop views over every district. */
+/**
+ * The ?perf=1 flythrough (Task 8) and the CI budget viewpoints: street and rooftop views over every district. The run's
+ * `seconds` are split equally across the route entries.
+ */
 export interface PerfConfig {
   route: { feet: Vec3; target: Vec3 }[];
-  /** Flythrough length (s) and glide speed (m/s). */
+  /** Flythrough length (s, all entries together) and glide speed (m/s) toward each entry's target. */
   seconds: number;
   speed: number;
+  /** The run passes when the overall p95 frame time is at most this (ms): 60 Hz frames read ~16.7 ms, a dropped one ~33 ms. */
+  p95TargetMs: number;
 }
 
 /** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */

@@ -39,6 +39,14 @@ describe('clientConfig', () => {
     expect(r[2]!).toBeLessThanOrEqual(clientConfig.graphics.fogFar);
   });
 
+  it('perf run: positive length, speed and a p95 target above one 60 Hz frame', () => {
+    const { seconds, speed, p95TargetMs, route } = clientConfig.perf;
+    expect(seconds / route.length).toBeGreaterThan(1); // each viewpoint outlasts the 1 s warm-up and the post-teleport frames
+    expect(speed).toBeGreaterThan(0);
+    expect(p95TargetMs).toBeGreaterThanOrEqual(1000 / 60);
+    expect(p95TargetMs).toBeLessThan(1000 / 30);
+  });
+
   it('perf route viewpoints lie on the 2 km map and cover all four quadrants', () => {
     const route = clientConfig.perf.route;
     expect(route.length).toBeGreaterThanOrEqual(8);

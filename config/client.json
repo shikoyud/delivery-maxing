@@ -46,7 +46,8 @@
       { "feet": { "x": -400, "y": 0.02, "z": 400 }, "target": { "x": -700, "y": 3, "z": 400 } }
     ],
     "seconds": 60,
-    "speed": 12
+    "speed": 12,
+    "p95TargetMs": 18
   },
   "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "expressUrgentSeconds": 10, "boardRefreshGuardSeconds": 0.75 }
 }
