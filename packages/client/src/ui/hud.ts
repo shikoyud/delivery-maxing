@@ -34,14 +34,15 @@ export class Hud {
     this.prompt.hidden = true;
   }
 
-  update(m: HudModel, prompt: string | null): void {
+  /** `colorIndex`: the stable colour index of an active order (R29d). */
+  update(m: HudModel, prompt: string | null, colorIndex: (orderId: string) => number): void {
     setText(this.coins, String(m.totals.coins));
     setText(this.points, String(m.totals.points));
     setText(this.deliveries, String(m.totals.deliveries));
     const pips = Array.from({ length: m.slots.capacity }, (_, i) => `<i class="${i < m.slots.used ? 'full' : ''}"></i>`).join('');
     setHtml(this.slots, `<span>Backpack</span>${pips}<b>${m.slots.used}/${m.slots.capacity}</b>`);
 
-    const rows = m.orders.map((o, i) => {
+    const rows = m.orders.map((o) => {
       const chip = o.modifier ? `<span class="chip chip-${o.modifier}">${MODIFIER_LABEL[o.modifier]}</span>` : '';
       const extra: string[] = [];
       if (o.express) {
@@ -55,7 +56,7 @@ export class Hud {
         extra.push(o.fragileIntact ? '<span class="hud-fragile">Intact</span>' : '<span class="hud-fragile broken">Damaged</span>');
       }
       return (
-        `<div class="hud-order" data-order-id="${esc(o.id)}" style="--slot:${cssHex(slotColor(i))}">` +
+        `<div class="hud-order" data-order-id="${esc(o.id)}" style="--slot:${cssHex(slotColor(colorIndex(o.id)))}">` +
         `<div class="hud-order-top"><span class="hud-order-title">${esc(o.title)}</span>${chip}` +
         `<span class="hud-distance">${o.distance} m</span></div>` +
         `<div class="hud-stage">${esc(o.stage)}</div>` +

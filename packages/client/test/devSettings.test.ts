@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { movementConfig, ordersConfig } from '@dm/shared';
-import { DEV_KEY, createDevSettingsStore } from '../src/game/devSettings';
+import { DEV_KEY, countOverrides, createDebouncedSave, createDevSettingsStore, overridesLabel } from '../src/game/devSettings';
 
 function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -87,5 +87,75 @@ describe('createDevSettingsStore', () => {
     s.movement.gravity = 1;
     expect(movementConfig).toEqual(before);
     expect(createDevSettingsStore(memoryStorage()).load().movement.run.sprintSpeed).toBe(before.run.sprintSpeed);
+  });
+
+  it('R27: saving after one edit stores only that key (later config changes still reach playtesters)', () => {
+    const storage = memoryStorage();
+    const store = createDevSettingsStore(storage);
+    const s = store.load();
+    s.movement.run.sprintSpeed = 9.5;
+    store.save(s);
+    expect(JSON.parse(storage.data.get(DEV_KEY)!)).toEqual({ movement: { run: { sprintSpeed: 9.5 } } });
+    s.backpackSlots = ordersConfig.backpack.baseSlots + 1;
+    store.save(s);
+    expect(JSON.parse(storage.data.get(DEV_KEY)!)).toEqual({
+      backpackSlots: ordersConfig.backpack.baseSlots + 1,
+      movement: { run: { sprintSpeed: 9.5 } },
+    });
+    // Load still merges the diff over the current defaults.
+    const back = store.load();
+    expect(back.movement.run.sprintSpeed).toBe(9.5);
+    expect(back.movement.run.runSpeed).toBe(movementConfig.run.runSpeed);
+    expect(back.movement.wallRun).toEqual(movementConfig.wallRun);
+  });
+
+  it('R27: saving settings equal to the defaults leaves no saved key', () => {
+    const storage = memoryStorage();
+    const store = createDevSettingsStore(storage);
+    const s = store.load();
+    s.movement.gravity = 30;
+    store.save(s);
+    expect(storage.data.has(DEV_KEY)).toBe(true);
+    s.movement.gravity = movementConfig.gravity;
+    store.save(s);
+    expect(storage.data.has(DEV_KEY)).toBe(false);
+  });
+
+  it('R27: countOverrides counts the values that differ from the defaults', () => {
+    const s = createDevSettingsStore(null).load();
+    expect(countOverrides(s)).toBe(0);
+    s.movement.jump.height = 2;
+    s.movement.gravity = 25;
+    s.backpackSlots = ordersConfig.backpack.baseSlots + 1;
+    expect(countOverrides(s)).toBe(3);
+  });
+
+  it('R27: Reset tuning cancels a pending debounced save, so no saved key comes back', () => {
+    vi.useFakeTimers();
+    try {
+      const storage = memoryStorage();
+      const store = createDevSettingsStore(storage);
+      const s = store.load();
+      const saver = createDebouncedSave(() => store.save(s), 300);
+      s.movement.run.sprintSpeed = 12;
+      saver.schedule();
+      saver.cancel();
+      store.reset();
+      vi.advanceTimersByTime(1000);
+      expect(storage.data.has(DEV_KEY)).toBe(false);
+      saver.schedule();
+      vi.advanceTimersByTime(299);
+      expect(storage.data.has(DEV_KEY)).toBe(false);
+      vi.advanceTimersByTime(1);
+      expect(storage.data.has(DEV_KEY)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('R27: overridesLabel reads "N overrides active" with a proper singular', () => {
+    expect(overridesLabel(0)).toBe('No overrides active');
+    expect(overridesLabel(1)).toBe('1 override active');
+    expect(overridesLabel(3)).toBe('3 overrides active');
   });
 });

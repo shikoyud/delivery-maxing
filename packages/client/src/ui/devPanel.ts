@@ -1,6 +1,6 @@
 import GUI, { type Controller } from 'lil-gui';
 import { ordersConfig } from '@dm/shared';
-import { FIXED_MOVEMENT_KEYS, type DevSettings } from '../game/devSettings';
+import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import { el } from './dom';
 
 export interface DevPanelHooks {
@@ -16,6 +16,8 @@ export interface DevPanelHooks {
 
 export interface DevPanel {
   toggle(): void;
+  /** Shows how many values differ from the defaults (R27). */
+  setOverrideCount(n: number): void;
   readonly isOpen: boolean;
 }
 
@@ -54,6 +56,8 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
   const gui = new GUI({ title: 'Dev tuning', width: 300 });
   gui.domElement.classList.add('dm-dev-panel');
   gui.hide();
+  const status = { overrides: overridesLabel(0) };
+  const statusCtrl = gui.add(status, 'overrides').name('status').disable();
 
   const walk = (folder: GUI, obj: Record<string, number>): void => {
     for (const [key, def] of Object.entries(obj)) {
@@ -96,6 +100,10 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
   gui.add(actions, 'resetProgress').name('Reset progress');
 
   return {
+    setOverrideCount(n) {
+      status.overrides = overridesLabel(n);
+      statusCtrl.updateDisplay();
+    },
     toggle() {
       if (gui._hidden) gui.show();
       else gui.hide();

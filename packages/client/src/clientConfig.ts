@@ -12,6 +12,8 @@ export interface ClientConfig {
     fovEaseRate: number;
     eyeHeight: number;
     crouchEyeHeight: number;
+    /** Exponential ease rate (1/s) of the eye height between standing and crouched (no camera snap). */
+    crouchEaseRate: number;
     pitchLimitDeg: number;
     /** Near and far clip planes (m). */
     near: number;
@@ -49,6 +51,8 @@ export interface ClientConfig {
     waypointPulseHz: number;
     /** Below this many seconds left, an Express timer turns to its urgent colour. */
     expressUrgentSeconds: number;
+    /** After a board refresh, Accept clicks are ignored this long (s) and the board flashes (Review Focus 3). */
+    boardRefreshGuardSeconds: number;
   };
 }
 

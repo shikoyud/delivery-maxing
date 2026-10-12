@@ -25,8 +25,9 @@ import { buildHubMeshes, type HubMeshes } from '../render/hubMeshes';
 import { buildWaypoints, type Waypoints } from '../render/waypoints';
 import { esc, keyLabel } from '../ui/dom';
 import { Hud } from '../ui/hud';
-import { MODIFIER_LABEL, hudModel, poiIndex, stageText } from '../ui/hudModel';
-import { OrderBoardView } from '../ui/orderBoard';
+import { MODIFIER_LABEL, hudModel, poiIndex, pointsText, stageText } from '../ui/hudModel';
+import { OrderBoardView, refreshGuardLeft } from '../ui/orderBoard';
+import { SlotColorAssigner } from '../ui/slotColors';
 import { Popups } from '../ui/popups';
 import type { ActionState } from '../input/actionState';
 import type { ProgressStore } from './progress';
@@ -66,6 +67,10 @@ export class DeliveryLoop {
   private zones: PlayerZones = { inPlaza: false, inDropZone: false, poiIds: new Set() };
   private nextHudAt = 0;
   private readonly modalListeners: (() => void)[] = [];
+  /** Sim time of the last board refresh (null before the first): Accept clicks wait out the guard after it (R28). */
+  private boardRefreshedAt: number | null = null;
+  private readonly colors = new SlotColorAssigner();
+  private readonly colorIndex = (id: string): number => this.colors.indexOf(id);
 
   constructor(private readonly d: DeliveryDeps) {
     this.orders = new OrderSystem(
@@ -92,7 +97,10 @@ export class DeliveryLoop {
       d.map,
       ordersConfig,
       {
-        accept: (id) => void this.accept(id),
+        // A click right after a refresh may be meant for the old card: ignore it while the board flashes.
+        accept: (id) => {
+          if (this.refreshGuardLeft() === 0) void this.accept(id);
+        },
         cancel: (id) => void this.cancel(id),
         closed: () => {
           // Keys pressed while the board was open must not count as held when play resumes.
@@ -143,7 +151,21 @@ export class DeliveryLoop {
     const before = this.orders.active;
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);
     events.push(...this.orders.update(now, this.zones));
-    for (const e of events) this.announce(e, before);
+    for (const e of events) this.announce(e, before, now);
+  }
+
+  /** Dev panel backpack slots: applies the capacity and regenerates the board now (Heavy can appear at once). */
+  setBackpackCapacity(n: number): void {
+    if (n === this.orders.backpackCapacity) return;
+    this.orders.setBackpackCapacity(n);
+    const now = this.d.now();
+    for (const e of this.orders.refreshBoard(now)) this.announce(e, this.orders.active, now);
+    this.nextHudAt = 0;
+  }
+
+  /** Seconds left of the post-refresh Accept guard. */
+  refreshGuardLeft(): number {
+    return refreshGuardLeft(this.boardRefreshedAt, this.d.now(), this.d.cfg.ui.boardRefreshGuardSeconds);
   }
 
   /** Zeroes Points, Coins and deliveries in storage and in the running totals (dev panel). */
@@ -175,22 +197,25 @@ export class DeliveryLoop {
     const now = this.d.now();
     const targets: Vec3[] = [];
     const targetPois = new Set<string>();
+    const colorIndices: number[] = [];
     const pois = poiIndex(this.d.map);
+    this.colors.sync(this.orders.active.map((a) => a.order.id));
     for (const a of this.orders.active) {
       const step = this.orders.currentStep(a);
       targets.push(pois.target(step));
+      colorIndices.push(this.colors.indexOf(a.order.id));
       if (step.kind === 'poi') targetPois.add(step.poiId);
     }
-    this.waypoints.update(targets, clockSeconds);
+    this.waypoints.update(targets, colorIndices, clockSeconds);
     this.hubMeshes.setTargets(targetPois);
 
     if (clockSeconds >= this.nextHudAt) {
       this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
       const { position } = this.d.player();
       const prompt = !this.modalOpen && this.nearKiosk(position) ? `<kbd>${esc(keyLabel(this.d.cfg.input.bindings.interact[0] ?? ''))}</kbd> Order Board` : null;
-      this.hud.update(hudModel(this.orders, this.d.map, position, now), prompt);
+      this.hud.update(hudModel(this.orders, this.d.map, position, now), prompt, this.colorIndex);
     }
-    if (this.modalOpen) this.board.render(this.orders, now, this.zones.inPlaza);
+    if (this.modalOpen) this.board.render(this.orders, now, this.zones.inPlaza, this.refreshGuardLeft(), this.colorIndex);
   }
 
   private inPlazaNow(): boolean {
@@ -203,17 +228,17 @@ export class DeliveryLoop {
   }
 
   /** `before`: the active orders before this tick's update, so a completed order's details are still known. */
-  private announce(e: OrderEvent, before: readonly ActiveOrder[]): void {
+  private announce(e: OrderEvent, before: readonly ActiveOrder[], now: number): void {
     switch (e.kind) {
       case 'completed': {
         this.d.progress.save(this.orders.totals);
         const lines = e.bonuses.map(
-          (b) => `${BONUS_LINE[b]}  +${ordersConfig.points[BONUS_KEY[b]]} pts · +${ordersConfig.coins[BONUS_KEY[b]]} coins`,
+          (b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[BONUS_KEY[b]])} · +${ordersConfig.coins[BONUS_KEY[b]]} coins`,
         );
         const done = before.find((a) => a.order.id === e.orderId);
         if (e.onTime === false) lines.push('Express late · no bonus');
         if (done?.order.modifier === 'fragile' && !done.fragileIntact) lines.push('Fragile damaged · no bonus');
-        this.popups.show(`Delivered!  +${e.points} pts · +${e.coins} coins`, lines);
+        this.popups.show(`Delivered!  +${pointsText(e.points)} · +${e.coins} coins`, lines);
         break;
       }
       case 'stepReached': {
@@ -225,6 +250,7 @@ export class DeliveryLoop {
         this.popups.show(`${MODIFIER_LABEL.fragile} package damaged`, ['Bonus lost · the order still counts'], 'warn');
         break;
       case 'boardRefreshed':
+        this.boardRefreshedAt = now; // Accept waits out the guard; the board flashes (R28)
         break;
     }
   }

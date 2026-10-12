@@ -414,6 +414,17 @@ kbd {
   font-weight: 700 !important;
 }
 
+/* Board refresh flash (R28): while Accept is guarded after a refresh, the cards and the timer pill glow. */
+.board-refreshed .board-card:not(.empty) {
+  box-shadow: 0 0 0 3px var(--dm-teal);
+  transition: box-shadow 0.2s ease-out;
+}
+
+.board-refreshed .board-refresh {
+  background: var(--dm-teal);
+  color: var(--dm-paper);
+}
+
 .board-notice {
   margin-top: 12px;
   padding: 8px 12px;

@@ -20,7 +20,7 @@ import greyboxJson from '../../../../map/greybox.json';
 import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
-import { easeToward, eyeHeight, fovForSpeed, rollForWallRun } from '../render/cameraRig';
+import { easeEyeHeight, easeToward, fovForSpeed, rollForWallRun } from '../render/cameraRig';
 import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer } from '../render/Renderer';
@@ -28,7 +28,14 @@ import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
-import { assignNumbers, createDevSettingsStore, type DevSettings, type DevSettingsStore } from './devSettings';
+import {
+  assignNumbers,
+  countOverrides,
+  createDebouncedSave,
+  createDevSettingsStore,
+  type DevSettings,
+  type DevSettingsStore,
+} from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
 import { interpolationStart } from './interpolation';
 
@@ -64,7 +71,9 @@ export class Game {
   private readonly progress = createProgressStore(browserStorage());
   private prevPosition: Vec3;
   private camRoll = 0;
+  private eye: number = clientConfig.camera.eyeHeight;
   private lastFrameMs: number | null = null;
+  private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
 
   private constructor(
@@ -102,33 +111,30 @@ export class Game {
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
-      onBackpack: (n) => this.delivery.orders.setBackpackCapacity(n),
+      onBackpack: (n) => this.delivery.setBackpackCapacity(n),
       onReset: () => {
+        this.saver.cancel(); // a pending save would bring the overrides back
         const fresh = this.devStore.reset();
         assignNumbers(settings.movement as never, fresh.movement as never);
         settings.backpackSlots = fresh.backpackSlots;
-        this.delivery.orders.setBackpackCapacity(fresh.backpackSlots);
+        this.delivery.setBackpackCapacity(fresh.backpackSlots);
+        this.devPanel.setOverrideCount(0);
       },
       onResetProgress: () => {
         this.delivery.resetProgress();
       },
-      onChange: () => this.scheduleSave(),
+      onChange: () => {
+        this.saver.schedule();
+        this.devPanel.setOverrideCount(countOverrides(settings));
+      },
     });
+    this.devPanel.setOverrideCount(countOverrides(settings));
     this.actions.onUiKey = (name) => {
       if (name === 'debugOverlay') this.overlay.toggle();
       else this.toggleDevPanel();
     };
   }
 
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
-
-  private scheduleSave(): void {
-    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null;
-      this.devStore.save(this.settings);
-    }, SAVE_DEBOUNCE_MS);
-  }
 
   /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
   private toggleDevPanel(): void {
@@ -216,7 +222,8 @@ export class Game {
     const look = this.actions.look();
     // Roll is clockwise-positive (see rollForWallRun); three's rotation.z is counter-clockwise-positive.
     this.camRoll = easeToward(this.camRoll, rollForWallRun(s, cc), dt, cc.rollEaseRate);
-    cam.position.set(feet.x, feet.y + eyeHeight(s, cc), feet.z);
+    this.eye = easeEyeHeight(this.eye, s, cc, dt);
+    cam.position.set(feet.x, feet.y + this.eye, feet.z);
     cam.rotation.set(look.pitch, look.yaw, -this.camRoll);
     const fov = easeToward(cam.fov, fovForSpeed(horizontalLength(s.velocity), cc), dt, cc.fovEaseRate);
     if (Math.abs(cam.fov - fov) > 1e-4) {

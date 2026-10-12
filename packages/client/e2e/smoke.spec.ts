@@ -183,7 +183,7 @@ test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
     const uz = p.z / d;
     window.__dm!.viewpoint({ x: p.x - ux * 2.5, y: p.y, z: p.z - uz * 2.5 }, { x: p.x + ux * 20 - uz * 10, y: p.y + 1.6, z: p.z + uz * 20 + ux * 10 });
   }, drop.poiId);
-  const popup = page.locator('.popup').filter({ hasText: 'pts' });
+  const popup = page.locator('.popup').filter({ hasText: /Delivered!\s+\+\d+ pts?\b/ });
   await expect(popup).toBeVisible({ timeout: 10_000 });
   // toBeVisible counts opacity 0; wait for the fade-in to finish before the screenshot.
   await expect(popup).toHaveCSS('opacity', '1');

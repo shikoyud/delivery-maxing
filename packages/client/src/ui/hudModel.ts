@@ -31,6 +31,11 @@ const DISTRICT_LABEL: Record<Poi['district'], string> = {
 export const TYPE_LABEL: Record<OrderType, string> = { dropoff: 'Drop-off', pickup: 'Pick-up', chain: 'Chain' };
 export const MODIFIER_LABEL: Record<Modifier, string> = { express: 'Express', fragile: 'Fragile', heavy: 'Heavy' };
 
+/** "1 pt", "N pts". */
+export function pointsText(n: number): string {
+  return `${n} ${n === 1 ? 'pt' : 'pts'}`;
+}
+
 /** "Mailbox · Harbor". */
 export function poiLabel(poi: Poi): string {
   return `${KIND_LABEL[poi.kind]} · ${DISTRICT_LABEL[poi.district]}`;

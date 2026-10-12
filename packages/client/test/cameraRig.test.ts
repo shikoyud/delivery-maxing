@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerState } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
-import { eyeHeight, easeToward, fovForSpeed, rollForWallRun } from '../src/render/cameraRig';
+import { easeEyeHeight, eyeHeight, easeToward, fovForSpeed, rollForWallRun } from '../src/render/cameraRig';
 
 const cam = clientConfig.camera;
 
@@ -39,5 +39,20 @@ describe('cameraRig', () => {
     expect(a).toBeGreaterThan(0);
     expect(a).toBeLessThan(10);
     expect(easeToward(0, 10, 100, 8)).toBeCloseTo(10, 6);
+  });
+
+  it('R29a: easeEyeHeight eases toward the crouch eye height at camera.crouchEaseRate (no snap)', () => {
+    const crouched = { mode: 'ground', crouched: true } as PlayerState;
+    const standing = { mode: 'ground', crouched: false } as PlayerState;
+    expect(cam.crouchEaseRate).toBeGreaterThan(0);
+    const one = easeEyeHeight(cam.eyeHeight, crouched, cam, 1 / 60);
+    expect(one).toBeLessThan(cam.eyeHeight);
+    expect(one).toBeGreaterThan(cam.crouchEyeHeight);
+    expect(one).toBeCloseTo(easeToward(cam.eyeHeight, cam.crouchEyeHeight, 1 / 60, cam.crouchEaseRate), 12);
+    let h = cam.eyeHeight;
+    for (let i = 0; i < 60; i++) h = easeEyeHeight(h, crouched, cam, 1 / 60);
+    expect(h).toBeCloseTo(cam.crouchEyeHeight, 2);
+    for (let i = 0; i < 60; i++) h = easeEyeHeight(h, standing, cam, 1 / 60);
+    expect(h).toBeCloseTo(cam.eyeHeight, 2);
   });
 });

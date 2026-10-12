@@ -2,7 +2,7 @@ import { scoreOrder, type AcceptResult, type MapData, type Order, type OrderSyst
 import { cssHex } from '../render/palette';
 import { slotColor } from '../render/waypoints';
 import { clock, el, esc, setHtml, setText } from './dom';
-import { MODIFIER_LABEL, TYPE_LABEL, poiIndex, stageText, stepTexts } from './hudModel';
+import { MODIFIER_LABEL, TYPE_LABEL, poiIndex, pointsText, stageText, stepTexts } from './hudModel';
 
 export interface OrderBoardCallbacks {
   accept(orderId: string): void;
@@ -13,11 +13,19 @@ export interface OrderBoardCallbacks {
 
 const BAND_LABEL = { short: 'Short', medium: 'Medium', long: 'Long' } as const;
 
-/** Why Accept is disabled, from OrderSystem.canAccept; null when it is enabled. */
-export function acceptBlockedReason(result: AcceptResult, order: Order, cooldownLeft: number): string | null {
+/** Seconds left of the post-refresh Accept guard (R28): 0 with no refresh yet or once the window has passed. */
+export function refreshGuardLeft(refreshedAt: number | null, now: number, guardSeconds: number): number {
+  return refreshedAt === null ? 0 : Math.max(0, refreshedAt + guardSeconds - now);
+}
+
+/**
+ * Why Accept is disabled, from OrderSystem.canAccept and the post-refresh guard (`guardLeft` s, R28); null when
+ * it is enabled. Reasons about the order itself win over the guard.
+ */
+export function acceptBlockedReason(result: AcceptResult, order: Order, cooldownLeft: number, guardLeft = 0): string | null {
   switch (result) {
     case 'ok':
-      return null;
+      return guardLeft > 0 ? 'New orders · wait' : null;
     case 'no_slots':
       return `Needs ${order.slots} free slot${order.slots === 1 ? '' : 's'}`;
     case 'cooldown':
@@ -61,7 +69,7 @@ export class OrderBoardView {
     title.innerHTML = '<span class="board-brand">Delivery <b>Maxing</b> courier</span><h2>Order Board</h2>';
     const meta = el('div', 'board-meta', head);
     this.slots = el('span', 'board-pill', meta);
-    this.refresh = el('span', 'board-pill', meta);
+    this.refresh = el('span', 'board-pill board-refresh', meta);
     const close = el('button', 'board-close', meta);
     close.type = 'button';
     close.textContent = 'Close · Esc';
@@ -98,8 +106,13 @@ export class OrderBoardView {
     this.cb.closed();
   }
 
-  render(orders: OrderSystem, now: number, inPlaza: boolean): void {
+  /**
+   * `guardLeft`: seconds left of the post-refresh Accept guard (the board flashes meanwhile); `colorIndex`: the
+   * stable colour index of an active order (R29d).
+   */
+  render(orders: OrderSystem, now: number, inPlaza: boolean, guardLeft: number, colorIndex: (orderId: string) => number): void {
     if (!this.open_) return;
+    this.root.classList.toggle('board-refreshed', guardLeft > 0);
     const pois = poiIndex(this.map);
     const cooldownLeft = Math.max(0, orders.cancelCooldownUntil - now);
     setText(this.slots, `Backpack ${orders.usedSlots()}/${orders.backpackCapacity}`);
@@ -121,7 +134,7 @@ export class OrderBoardView {
       const best = scoreOrder(o, { onTime: true, intact: true }, this.cfg);
       const bonus =
         o.modifier && o.modifier !== 'heavy' && best.points > base.points
-          ? `<div class="board-bonus">+${best.points - base.points} pts · +${best.coins - base.coins} coins if ${o.modifier === 'express' ? 'on time' : 'intact'}</div>`
+          ? `<div class="board-bonus">+${pointsText(best.points - base.points)} · +${best.coins - base.coins} coins if ${o.modifier === 'express' ? 'on time' : 'intact'}</div>`
           : '';
       const facts = [
         o.band ? BAND_LABEL[o.band] : 'Multi-stop',
@@ -129,7 +142,7 @@ export class OrderBoardView {
         `${o.slots} slot${o.slots === 1 ? '' : 's'}`,
       ];
       if (o.expressLimit !== null) facts.push(`${clock(o.expressLimit)} limit`);
-      const reason = acceptBlockedReason(orders.canAccept(o.id, now, inPlaza), o, cooldownLeft);
+      const reason = acceptBlockedReason(orders.canAccept(o.id, now, inPlaza), o, cooldownLeft, guardLeft);
       const shownPts = o.modifier === 'heavy' ? best : base;
       return (
         `<div class="board-card type-${o.type}" data-order-id="${esc(o.id)}">` +
@@ -138,17 +151,17 @@ export class OrderBoardView {
         `</div>` +
         `<ol class="board-route">${route}</ol>` +
         `<div class="board-facts">${facts.map((f) => `<span>${f}</span>`).join('')}</div>` +
-        `<div class="board-reward"><b>${shownPts.points} pts</b> · ${shownPts.coins} coins</div>${bonus}` +
+        `<div class="board-reward"><b>${pointsText(shownPts.points)}</b> · ${shownPts.coins} coins</div>${bonus}` +
         `<button type="button" class="accept" data-action="accept"${reason ? ' disabled' : ''}>${reason ? esc(reason) : 'Accept'}</button>` +
         `</div>`
       );
     });
     setHtml(this.cards, cards.join('') || '<div class="board-card empty"><span>No orders right now</span></div>');
 
-    const active = orders.active.map((a, i) => {
+    const active = orders.active.map((a) => {
       const disabled = inPlaza ? '' : ' disabled title="Return to the HUB"';
       return (
-        `<div class="board-active-row" data-order-id="${esc(a.order.id)}" style="--slot:${cssHex(slotColor(i))}">` +
+        `<div class="board-active-row" data-order-id="${esc(a.order.id)}" style="--slot:${cssHex(slotColor(colorIndex(a.order.id)))}">` +
         `<span class="type-badge">${TYPE_LABEL[a.order.type]}</span>` +
         (a.order.modifier ? `<span class="chip chip-${a.order.modifier}">${MODIFIER_LABEL[a.order.modifier]}</span>` : '') +
         `<span class="board-active-stage">${esc(stageText(a, pois))}</span>` +

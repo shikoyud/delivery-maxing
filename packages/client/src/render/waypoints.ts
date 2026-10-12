@@ -4,8 +4,8 @@ import { slotColors } from './palette';
 
 export interface Waypoints {
   mesh: THREE.InstancedMesh;
-  /** One beam per target, coloured by its slot index; `timeSeconds` drives the pulse. */
-  update(targets: readonly Vec3[], timeSeconds: number): void;
+  /** One beam per target, coloured by `colorIndices[i]` (the order's stable colour); `timeSeconds` drives the pulse. */
+  update(targets: readonly Vec3[], colorIndices: readonly number[], timeSeconds: number): void;
 }
 
 // Art dimensions (metres).
@@ -58,14 +58,14 @@ export function buildWaypoints(maxSlots: number, pulseHz: number): Waypoints {
   const p = new THREE.Vector3();
   return {
     mesh,
-    update(targets, t) {
+    update(targets, colorIndices, t) {
       const count = Math.min(targets.length, mesh.instanceMatrix.count);
       for (let i = 0; i < count; i++) {
         const tg = targets[i]!;
         const k = 1 + PULSE * Math.sin(t * pulseHz * Math.PI * 2 + i);
         m.compose(p.set(tg.x, tg.y, tg.z), q, s.set(k, 1, k));
         mesh.setMatrixAt(i, m);
-        mesh.setColorAt(i, c.setHex(slotColor(i)));
+        mesh.setColorAt(i, c.setHex(slotColor(colorIndices[i] ?? i)));
       }
       mesh.count = count;
       mesh.instanceMatrix.needsUpdate = true;
