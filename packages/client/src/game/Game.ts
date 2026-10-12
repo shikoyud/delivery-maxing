@@ -249,12 +249,14 @@ export class Game {
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
+    const wasZip = this.sim.state.mode === 'zipline';
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
     const events = this.sim.step(frame, mods, this.world, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
-    this.prevPosition = interpolationStart(before, this.sim.state.position, events);
+    const leftZip = wasZip && this.sim.state.mode !== 'zipline';
+    this.prevPosition = interpolationStart(before, this.sim.state.position, events, leftZip);
     if (events.some((e) => e.kind === 'respawned')) {
       // A teleport: no camera sweep, and no turn or animation blend across it.
       this.chase.snap();

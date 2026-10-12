@@ -10,6 +10,8 @@ export interface CourierDebug {
   pose: string;
   /** Animation mixer time (s); advances while the model animates. */
   time: number;
+  /** The drawn yaw (root rotation; displayYaw eased at turnEaseRate). */
+  yaw: number;
   packages: number;
 }
 
@@ -18,7 +20,7 @@ export interface CourierDebug {
  * Review Focus 4). Game drives either one the same way.
  */
 export interface CourierView {
-  /** Positioned at the feet and turned to the courier's yaw. */
+  /** Positioned at the feet (eased down after a zip dismount, R16) and turned to displayYaw (R14). */
   readonly root: THREE.Object3D;
   /** Per frame: interpolated feet, the sim state and horizontal speed (m/s); `dt` is the frame time (s). */
   update(dt: number, state: PlayerState, feet: Vec3, speed: number): void;

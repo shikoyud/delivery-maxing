@@ -353,9 +353,16 @@ test('courier poses: wall-run, zip line and board', async ({ page }) => {
   await page.waitForFunction(() => window.__dm!.player().mode === 'zipline', undefined, { timeout: 10_000 });
   const rideYaw = Math.atan2(-(50 - 43.8), -(-160 - -92));
   await page.evaluate((y) => window.__dm!.setLook(y, -5 * (Math.PI / 180)), rideYaw + 0.7);
+  // W held with the camera swung out turns the heading off the line; the courier still faces the ride (R14).
+  await page.keyboard.down('KeyW');
   await waitTicks(page, 4);
   expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('zip');
+  const zipYaw = await page.evaluate(() => ({ heading: window.__dm!.player().heading, drawn: window.__dm!.courier().yaw }));
+  expect(Math.abs(Math.sin(zipYaw.heading - rideYaw))).toBeGreaterThan(0.5);
+  expect(Math.abs(Math.sin(zipYaw.drawn - rideYaw))).toBeLessThan(0.05);
+  expect(Math.cos(zipYaw.drawn - rideYaw)).toBeGreaterThan(0.99);
   await page.screenshot({ path: `${artifacts}sp1-courier-zip.png` });
+  await page.keyboard.up('KeyW');
 
   // Board: back on the plaza, Q, then roll forward and a little right.
   await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));

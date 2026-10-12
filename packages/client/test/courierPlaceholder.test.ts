@@ -64,6 +64,32 @@ describe('courier placeholder', () => {
     expect(c.root.rotation.y).toBeCloseTo(1, 5);
   });
 
+  it('on a zip line it faces the ride direction, not the input (R14)', () => {
+    const c = make();
+    const zip = { ...st(Math.PI / 2, false, 'zipline'), velocity: { x: 0, y: -1, z: 12 } } as PlayerState;
+    c.snap();
+    c.update(0, zip, { x: 0, y: 5, z: 0 }, 12);
+    expect(Math.abs(c.root.rotation.y)).toBeCloseTo(Math.PI, 6);
+  });
+
+  it('eases down after a zip dismount instead of dropping in one tick (R16); a snap places it at once', () => {
+    const c = make();
+    c.snap();
+    c.update(0.016, st(0, false, 'zipline'), { x: 0, y: 9, z: 0 }, 12);
+    c.update(0.016, st(0), { x: 0, y: 7.5, z: 0 }, 5);
+    expect(c.root.position.y).toBeGreaterThan(8.5);
+    c.update(0.1, st(0), { x: 0, y: 7.5, z: 0 }, 5);
+    expect(c.root.position.y).toBeGreaterThan(7.5);
+    expect(c.root.position.y).toBeLessThan(8.5);
+    c.update(2, st(0), { x: 0, y: 7.5, z: 0 }, 5);
+    expect(c.root.position.y).toBeCloseTo(7.5, 5);
+    // Teleporting off a zip line snaps.
+    c.update(0.016, st(0, false, 'zipline'), { x: 0, y: 9, z: 0 }, 12);
+    c.snap();
+    c.update(0.016, st(0, false, 'air'), { x: 40, y: 2, z: 0 }, 0);
+    expect(c.root.position.y).toBe(2);
+  });
+
   it('the visor stays inside the capsule radius (nothing pokes past the collision capsule)', () => {
     const c = make();
     place(c, { x: 0, y: 0, z: 0 }, 0);

@@ -14,13 +14,13 @@ async function model(): Promise<CourierModel> {
   return new CourierModel(await new GLTFLoader().parseAsync(ab, ''), cfg);
 }
 
-function st(over: Partial<{ mode: MoveMode; heading: number; onBoard: boolean; crouched: boolean; vy: number; normal: Vec3 | null }> = {}): PlayerState {
+function st(over: Partial<{ mode: MoveMode; heading: number; onBoard: boolean; crouched: boolean; vy: number; normal: Vec3 | null; v: Vec3 }> = {}): PlayerState {
   return {
     mode: over.mode ?? 'ground',
     heading: over.heading ?? 0,
     onBoard: over.onBoard ?? false,
     crouched: over.crouched ?? false,
-    velocity: { x: 0, y: over.vy ?? 0, z: 0 },
+    velocity: over.v ?? { x: 0, y: over.vy ?? 0, z: 0 },
     wallRun: { time: 0.2, normal: over.normal ?? null, lastNormal: null },
   } as unknown as PlayerState;
 }
@@ -82,6 +82,30 @@ describe('CourierModel', () => {
     m.snap();
     m.update(0.016, st({ heading: -2 }), origin, 0);
     expect(m.root.rotation.y).toBeCloseTo(-2, 9);
+  });
+
+  it('faces its travel on a zip line or in a slide, not the input (R14)', async () => {
+    const m = await model();
+    m.snap();
+    m.update(0, st({ mode: 'zipline', heading: Math.PI / 2, v: { x: 0, y: -1, z: 12 } }), { x: 0, y: 5, z: 0 }, 12);
+    expect(Math.abs(m.root.rotation.y)).toBeCloseTo(Math.PI, 6);
+    m.snap();
+    m.update(0, st({ mode: 'slide', crouched: true, heading: Math.PI / 2, v: { x: -8, y: 0, z: 0 } }), origin, 8);
+    expect(m.root.rotation.y).toBeCloseTo(Math.PI / 2, 6); // −X is yaw π/2
+    m.snap();
+    m.update(0, st({ mode: 'slide', crouched: true, heading: 0.3, v: { x: 0, y: 0, z: 8 } }), origin, 8);
+    expect(Math.abs(m.root.rotation.y)).toBeCloseTo(Math.PI, 6);
+  });
+
+  it('eases down after a zip dismount (R16), then stands on the feet', async () => {
+    const m = await model();
+    m.snap();
+    m.update(0.016, st({ mode: 'zipline' }), { x: 0, y: 9, z: 0 }, 12);
+    m.update(0.016, st(), { x: 0, y: 7.5, z: 0 }, 5);
+    expect(m.root.position.y).toBeGreaterThan(8.5);
+    m.update(2, st(), { x: 0, y: 7.5, z: 0 }, 5);
+    expect(m.root.position.y).toBeCloseTo(7.5, 5);
+    expect(bodyBox(m).min.y).toBeCloseTo(7.5, 1);
   });
 
   it('plays the clip animFor picks, and the mixer time advances', async () => {

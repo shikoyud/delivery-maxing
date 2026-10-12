@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { MovementConfig } from '@dm/shared';
 import type { CourierConfig } from '../clientConfig';
 import { isLow } from './chaseCamera';
-import { easeYaw } from './courier/animState';
+import { createDismountEase, displayYaw, easeYaw, stepDismountEase } from './courier/animState';
 import type { CourierView } from './courier/CourierView';
 import { palette } from './palette';
 
@@ -53,12 +53,15 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
 
   let snapNext = true;
   let packages = 0;
+  const dismount = createDismountEase();
   return {
     root,
     front: visor,
     update(dt, state, feet) {
-      root.position.set(feet.x, feet.y, feet.z);
-      root.rotation.y = snapNext ? state.heading : easeYaw(root.rotation.y, state.heading, dt, courier.turnEaseRate);
+      const dy = stepDismountEase(dismount, state.mode, feet.y, dt, courier.dismountEaseRate, snapNext);
+      root.position.set(feet.x, feet.y + dy, feet.z);
+      const yaw = displayYaw(state, courier);
+      root.rotation.y = snapNext ? yaw : easeYaw(root.rotation.y, yaw, dt, courier.turnEaseRate);
       snapNext = false;
       const h = isLow(state) ? capsule.crouchHeight : capsule.height;
       const s = capsule.radius / r0;
@@ -77,6 +80,6 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
     snap() {
       snapNext = true;
     },
-    debug: () => ({ loaded: false, clip: null, pose: 'none', time: 0, packages }),
+    debug: () => ({ loaded: false, clip: null, pose: 'none', time: 0, yaw: root.rotation.y, packages }),
   };
 }

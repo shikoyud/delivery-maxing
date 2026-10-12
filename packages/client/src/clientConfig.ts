@@ -109,8 +109,12 @@ export interface CourierPose {
 export interface CourierConfig {
   /** The model is scaled to this height (feet to the top of the head). */
   height: number;
-  /** Exponential ease rate of the model's yaw toward the sim heading. */
+  /** Exponential ease rate of the model's yaw toward the way it faces (displayYaw). */
   turnEaseRate: number;
+  /** On a zip line, in a slide, grind or wall-run the courier faces its velocity above this horizontal speed (R14). */
+  facingMinSpeed: number;
+  /** After leaving a zip line the courier eases down onto the feet at this exponential rate (1/s, R16). */
+  dismountEaseRate: number;
   /** Clip cross-fade and pose blend time. */
   crossFade: number;
   /** The Running clip plays at normal speed at this ground speed (faster above, slower below). */

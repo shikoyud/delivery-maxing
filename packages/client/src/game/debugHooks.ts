@@ -8,7 +8,7 @@ export interface DebugApi {
   /** True once the first frame has been drawn. */
   readonly ready: boolean;
   readonly tick: number;
-  player(): { position: Vec3; velocity: Vec3; mode: MoveMode; onBoard: boolean };
+  player(): { position: Vec3; velocity: Vec3; mode: MoveMode; onBoard: boolean; heading: number };
   /** Moves the player into the air at `p`, optionally moving at velocity `v` (m/s). */
   teleport(p: Vec3, v?: Vec3): void;
   /** False while a boost orb is collected and waiting to respawn. */
@@ -68,7 +68,7 @@ export function installDebugHooks(game: Game): void {
     },
     player() {
       const s = game.sim.state;
-      return { position: { ...s.position }, velocity: { ...s.velocity }, mode: s.mode, onBoard: s.onBoard };
+      return { position: { ...s.position }, velocity: { ...s.velocity }, mode: s.mode, onBoard: s.onBoard, heading: s.heading };
     },
     teleport(p, v) {
       game.teleport(p, v);
