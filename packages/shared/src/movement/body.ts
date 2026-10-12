@@ -32,6 +32,16 @@ const GROUND_PROBE_LIFT = 0.1;
 const GROUND_PROBE_REACH = 0.1;
 /** Shrink applied to fitsAt's test capsule so resting contact does not count as overlap. */
 const FIT_SKIN = 0.01;
+/** A ground gap this much under controller.offset is left alone (float noise, not a sink). */
+const SKIN_TOLERANCE = 1e-4;
+/**
+ * Rapier's controller is given this fraction of controller.offset as its own gap, while the body rests a full
+ * controller.offset above the ground (skinDeficit restores it after every move). A capsule resting exactly at the
+ * controller's gap makes every horizontal cast graze the ground: Rapier reports a contact at distance 0 whose normal
+ * is noise, and the slide along it hops the capsule up by centimetres and pushes it sideways. Resting half the gap
+ * further out keeps those casts clear of the ground (a slab's cast error is under 5 mm at that distance).
+ */
+const CAST_GAP_FRACTION = 0.5;
 
 /**
  * Kinematic capsule driven by Rapier's character controller. Positions are feet = capsule bottom −
@@ -59,7 +69,7 @@ export class PlayerBody {
       rapier.ColliderDesc.capsule(this.halfHeight(false), cfg.capsule.radius),
       this.body,
     );
-    this.controller = world.createCharacterController(cfg.controller.offset);
+    this.controller = world.createCharacterController(cfg.controller.offset * CAST_GAP_FRACTION);
     this.controller.setUp(UP);
     world.step();
   }
@@ -86,7 +96,7 @@ export class PlayerBody {
   /** Re-reads controller tuning from cfg so dev-panel edits apply on the next move. */
   private configureController(snapToGround: boolean): void {
     const k = this.cfg.controller;
-    this.controller.setOffset(k.offset);
+    this.controller.setOffset(k.offset * CAST_GAP_FRACTION);
     this.controller.enableAutostep(k.maxStepHeight, k.minStepWidth, false);
     this.controller.setMaxSlopeClimbAngle(k.maxSlopeClimbDeg * DEG);
     this.controller.setMinSlopeSlideAngle(k.minSlopeSlideDeg * DEG);
@@ -112,7 +122,8 @@ export class PlayerBody {
       else if (nn.y < -WALL_MAX_NY) ceilingNormals.push(nn);
     }
     const t = this.body.translation();
-    this.body.setNextKinematicTranslation({ x: t.x + m.x, y: t.y + m.y, z: t.z + m.z });
+    const lift = desired.y <= 0 ? this.skinDeficit(vec3(t.x + m.x, t.y + m.y, t.z + m.z)) : 0;
+    this.body.setNextKinematicTranslation({ x: t.x + m.x, y: t.y + m.y + lift, z: t.z + m.z });
     this.physics.world.step();
     this.syncFeet();
 
@@ -130,6 +141,29 @@ export class PlayerBody {
       }
     }
     return { grounded, groundNormal, groundSurface, wallNormals, ceilingNormals, movement: vec3(m.x, m.y, m.z) };
+  }
+
+  /**
+   * How far the capsule centred at `center` must rise to restore the controller.offset gap above walkable ground
+   * below it (0 when the gap is intact or there is no walkable ground under it).
+   *
+   * Rapier's shape casts against a large cuboid are off by centimetres (up to ~5 cm on the 600 m ground slab), so
+   * the controller can leave the capsule inside its own offset gap, or inside the slab; the next moves then start
+   * in contact and stall. A ray cast is exact, so the gap is measured along the vertical through the bottom
+   * sphere's centre: its distance to the ground plane is the ray distance × n.y. The correction is bounded by the
+   * capsule radius, so it only ever settles a shallow sink.
+   */
+  private skinDeficit(center: Vec3): number {
+    const { radius } = this.cfg.capsule;
+    const { offset, maxSlopeClimbDeg } = this.cfg.controller;
+    const sphereY = center.y - this.halfHeight(this.crouchedNow);
+    const probe = this.rayHit(vec3(center.x, sphereY, center.z), vec3(0, -1, 0), radius + offset + GROUND_PROBE_REACH);
+    if (!probe) return 0;
+    const n = probe.hit.normal;
+    if (n.y < Math.cos(maxSlopeClimbDeg * DEG)) return 0;
+    const gap = probe.hit.distance * n.y - radius;
+    if (gap >= offset - SKIN_TOLERANCE) return 0;
+    return Math.min((offset - gap) / n.y, radius);
   }
 
   private syncFeet(): void {
