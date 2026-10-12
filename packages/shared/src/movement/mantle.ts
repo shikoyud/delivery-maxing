@@ -24,18 +24,18 @@ const BASE_PROBE = 0.1;
 const RISE_FRACTION = 0.6;
 
 /**
- * Looks for a mantle-able ledge straight ahead. Returns the feet position on top of the ledge, or null.
+ * Looks for a mantle-able ledge straight ahead along the courier heading. Returns the feet position on top of the ledge, or null.
  * 1. A ray forward from feet + 1.0 m, over radius + mantle.reach, must hit a wall face (|n.y| < 0.3).
  * 2. A ray down from hit + forward·(radius + 0.1), starting at feet.y + maxHeight + 0.1 and reaching maxHeight + 0.2,
  *    finds the top.
  * 3. The top must be in (minHeight, maxHeight] above the feet (the ground under them when grounded) and a standing capsule must fit there.
- * The caller checks the mode, the board and forward input.
+ * The caller checks the mode, the board and that the input points along the heading.
  */
 export function findLedge(body: PlayerBody, state: PlayerState, cfg: MovementConfig): Vec3 | null {
   const { radius } = cfg.capsule;
   const { minHeight, maxHeight, reach } = cfg.mantle;
   const feet = state.position;
-  const fwd = facing(state.yaw);
+  const fwd = facing(state.heading);
 
   const wall = body.castRay(vec3(feet.x, feet.y + WALL_PROBE_HEIGHT, feet.z), fwd, radius + reach);
   if (!wall || Math.abs(wall.normal.y) >= WALL_MAX_NY) return null;

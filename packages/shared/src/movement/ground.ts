@@ -13,6 +13,16 @@ export function rightOf(yaw: number): Vec3 {
   return vec3(Math.cos(yaw), 0, -Math.sin(yaw));
 }
 
+/** Yaw (see facing: 0 faces -Z, positive turns left) of a horizontal direction. */
+export function yawOf(v: Vec3): number {
+  return Math.atan2(-v.x, -v.z);
+}
+
+/** True when the move input is non-zero. */
+export function hasMoveInput(input: InputFrame): boolean {
+  return input.move.x !== 0 || input.move.y !== 0;
+}
+
 /** World-space horizontal unit vector (or zero) for the move input, rotated by look yaw. */
 export function wishDirection(input: InputFrame): Vec3 {
   const { x: strafe, y: fwd } = input.move;

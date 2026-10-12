@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { movementConfig as cfg } from '../../src/config';
 import { horizontalLength, vec3 } from '../../src/math/vec3';
+import { facing } from '../../src/movement/ground';
 import { NO_MODS, type PlayerState } from '../../src/movement/types';
 import type { Rail, Solid, ZipLine } from '../../src/world/mapTypes';
 import { box, makeSim, type Harness, type Hold } from '../helpers/simHarness';
@@ -84,11 +85,14 @@ describe('skateboard', () => {
     expect(v0).toBeGreaterThan(10);
     expect(travelYaw(h.sim.state)).toBeCloseTo(0, 6);
 
-    // Strafing does not move the board sideways.
+    // W+D steers toward the wish direction (45° right) but never slides the board sideways: it rolls along its heading.
     h.run(5, { forward: 1, strafe: 1 });
-    expect(Math.abs(h.sim.state.velocity.x)).toBeLessThan(1e-9);
+    const f = facing(h.sim.state.boardHeading);
+    const v = h.sim.state.velocity;
+    expect(h.sim.state.boardHeading).toBeLessThan(0);
+    expect(Math.abs(v.x * f.z - v.z * f.x)).toBeLessThan(1e-9);
 
-    // Look 90° left (yaw π/2 faces -X): the heading follows at no more than turnRate per second.
+    // W with the camera 90° left (yaw π/2, wish faces -X): the heading follows at no more than turnRate per second.
     const target = Math.PI / 2;
     const maxStep = cfg.board.turnRate / cfg.tickRate;
     let prev = travelYaw(h.sim.state);

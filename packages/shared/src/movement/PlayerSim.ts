@@ -5,7 +5,7 @@ import type { MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
 import { alignBoardHeading, applyBoardVelocity, toggleBoard } from './board';
-import { applyAirVelocity, applyGroundVelocity, targetGroundSpeed, wishDirection } from './ground';
+import { applyAirVelocity, applyGroundVelocity, facing, targetGroundSpeed, wishDirection, yawOf } from './ground';
 import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
@@ -43,6 +43,7 @@ export class PlayerSim {
       velocity: vec3(0, 0, 0),
       yaw,
       pitch: 0,
+      heading: yaw,
       mode: 'air',
       onBoard: false,
       boardHeading: yaw,
@@ -63,7 +64,7 @@ export class PlayerSim {
     };
   }
 
-  /** Places the player at `position` (airborne, no coyote jump, no buffered press). */
+  /** Places the player at `position` (airborne, no coyote jump, no buffered press). The heading is kept. */
   teleport(position: Vec3, velocity: Vec3 = vec3(0, 0, 0)): void {
     this.body.setFeet(position);
     const s = this.state;
@@ -82,13 +83,14 @@ export class PlayerSim {
     const events = this.stepMovement(input, mods);
     events.push(...applyTriggers(this.state, this.body, this.map, world, this.cfg, time));
     this.state.velocity = clampHorizontal(this.state.velocity, this.cfg.speedCap);
+    if (this.state.onBoard) this.state.heading = this.state.boardHeading;
     return events;
   }
 
   private stepMovement(input: InputFrame, mods: StatModifiers): SimEvent[] {
     const events: SimEvent[] = [];
 
-    // 1. Look and timers; crouch (stays crouched while standing is blocked; ignored on the board); board toggle (Q);
+    // 1. Look, courier heading and timers; crouch (stays crouched while standing is blocked; ignored on the board); board toggle (Q);
     //    crouch-slide entry (never on the board).
     this.updateLookAndTimers(input);
     this.updateCrouch(input);
@@ -137,7 +139,7 @@ export class PlayerSim {
   private tryMantle(input: InputFrame): boolean {
     const s = this.state;
     if (s.mode !== 'mantle') {
-      const canStart = !s.onBoard && input.move.y > 0 && (s.mode === 'ground' || s.mode === 'air');
+      const canStart = !s.onBoard && this.inputAlongHeading(input) && (s.mode === 'ground' || s.mode === 'air');
       const top = canStart ? findLedge(this.body, s, this.cfg) : null;
       if (!top) return false;
       startMantle(s, top);
@@ -146,6 +148,13 @@ export class PlayerSim {
     this.body.setFeet(s.position);
     s.position = this.body.feet;
     return true;
+  }
+
+  /** True when the wish direction points along the courier heading (dot > 0.5). */
+  private inputAlongHeading(input: InputFrame): boolean {
+    const wish = wishDirection(input);
+    const f = facing(this.state.heading);
+    return wish.x * f.x + wish.z * f.z > 0.5;
   }
 
   /**
@@ -196,10 +205,18 @@ export class PlayerSim {
     if (normal && canStartWallRun(s, normal, input, this.cfg)) startWallRun(s, normal, this.cfg);
   }
 
+  /**
+   * The camera yaw and pitch come from the input. Off the board, any movement input turns the courier to face its
+   * (camera-relative) wish direction; with no input the heading holds. On the board the heading mirrors boardHeading
+   * (set by the board code and at the end of the step).
+   */
   private updateLookAndTimers(input: InputFrame): void {
-    this.state.yaw = input.look.yaw;
-    this.state.pitch = input.look.pitch;
-    ageJumpBuffer(this.state, input, this.cfg);
+    const s = this.state;
+    s.yaw = input.look.yaw;
+    s.pitch = input.look.pitch;
+    const wish = wishDirection(input);
+    if (!s.onBoard && (wish.x !== 0 || wish.z !== 0)) s.heading = yawOf(wish);
+    ageJumpBuffer(s, input, this.cfg);
   }
 
   /**

@@ -26,8 +26,14 @@ export interface PlayerState {
   /** Feet: the capsule bottom minus controller.offset, i.e. (about) the ground contact point when standing. */
   position: Vec3;
   velocity: Vec3;
+  /** Camera (look) yaw; only wishDirection reads it. */
   yaw: number;
   pitch: number;
+  /**
+   * The way the courier faces, a yaw in the facing() convention: the yaw of the wish direction on every tick with
+   * movement input (unchanged otherwise), and boardHeading while on the board. Mantle and wall-run probe along it.
+   */
+  heading: number;
   mode: MoveMode;
   onBoard: boolean;
   /** Board heading as a yaw (see ground.ts facing). Set when the board comes out and on each board landing. */
