@@ -39,7 +39,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isVec3 = (v: unknown): v is Vec3 => isObj(v) && isNum(v.x) && isNum(v.y) && isNum(v.z);
 
 /** Half-extents of the AABB of a box with half-extents `h` rotated by XYZ Euler degrees `r`. */
-function rotatedHalfExtents(h: Vec3, r: Vec3 | undefined): Vec3 {
+export function rotatedHalfExtents(h: Vec3, r: Vec3 | undefined): Vec3 {
   if (!r) return h;
   const [a, b, c] = [r.x, r.y, r.z].map((d) => (d * Math.PI) / 180) as [number, number, number];
   const [ca, sa, cb, sb, cc, sc] = [Math.cos(a), Math.sin(a), Math.cos(b), Math.sin(b), Math.cos(c), Math.sin(c)];

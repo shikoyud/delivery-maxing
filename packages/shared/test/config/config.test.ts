@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { movementConfig, ordersConfig } from '../../src/config';
+import { movementConfig, ordersConfig, worldConfig } from '../../src/config';
 
 describe('config pins spec values', () => {
   it('movement', () => {
@@ -25,5 +25,8 @@ describe('config pins spec values', () => {
     expect(ordersConfig.fragile.maxFallMeters).toBe(7);
     expect(ordersConfig.heavy).toEqual({ slots: 2, jumpHeightMultiplier: 0.9 });
     expect(ordersConfig.backpack.baseSlots).toBe(1);
+  });
+  it('world', () => {
+    expect(worldConfig).toEqual({ chunkSize: 100, physics: { loadRadius: 150, unloadRadius: 220 } });
   });
 });

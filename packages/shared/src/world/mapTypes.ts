@@ -1,7 +1,9 @@
 import type { Vec3 } from '../math/vec3';
 
 export type Surface = 'default' | 'chute';
-export type SolidKind = 'ground' | 'building' | 'prop' | 'ramp' | 'chute' | 'hub';
+export type SolidKind =
+  | 'ground' | 'building' | 'prop' | 'ramp' | 'chute' | 'hub'
+  | 'road' | 'sidewalk' | 'cliff' | 'container' | 'crane' | 'stairs';
 export interface Solid {
   id: string;
   kind: SolidKind;
@@ -10,6 +12,8 @@ export interface Solid {
   /** XYZ Euler, degrees */
   rotationDeg?: Vec3;
   surface?: Surface;
+  /** A collider whose look comes from a prop (it is not drawn itself) */
+  hidden?: boolean;
 }
 export interface ZipLine { id: string; a: Vec3; b: Vec3 }
 export interface JumpPad { id: string; position: Vec3; radius: number; launch: Vec3 }
@@ -25,6 +29,8 @@ export interface Poi {
   position: Vec3;
   district: District;
   kind: PoiKind;
+  /** Sits above street level (roof, balcony) */
+  elevated?: boolean;
 }
 export interface Hub {
   center: Vec3;

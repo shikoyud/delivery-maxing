@@ -104,3 +104,9 @@ export interface OrdersConfig {
   };
   zones: { poiRadius: number; poiHeight: number };
 }
+
+export interface WorldConfig {
+  /** Side of a streamed chunk, metres */
+  chunkSize: number;
+  physics: { loadRadius: number; unloadRadius: number };
+}
