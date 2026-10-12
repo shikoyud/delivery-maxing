@@ -43,7 +43,7 @@
         "pitch": 100, "streetHalfWidth": 7, "edgeMargin": 2, "apronWidth": 14, "yardChance": 0.15,
         "warehouses": {
           "pieces": ["b-2story-wide", "b-2story-wide-2doors", "b-4story-wide-2doors"],
-          "scaleMin": 1, "scaleMax": 1, "fillChance": 0.6, "setback": 1.5, "gapMin": 3, "gapMax": 8, "doorOffset": 1
+          "scaleMin": 1, "scaleMax": 1, "fillChance": 0.5, "setback": 1.5, "gapMin": 3, "gapMax": 8, "doorOffset": 1
         },
         "container": { "length": 6, "width": 2.4, "height": 2.6 },
         "yard": {

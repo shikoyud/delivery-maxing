@@ -6,8 +6,6 @@ import {
   paramChecks,
   quayCheckpoints,
   quayPoint,
-  type ContainerStack,
-  type CraneReport,
   type DistrictContext,
   type DistrictGrid,
   type DistrictOutput,
@@ -386,20 +384,6 @@ function addStack(b: Build, axis: Axis, side: 1 | -1, u: number, cols: number, v
   report.containerStacks.push({ id, rect, top: topY, tiers, steps: steps.map((s) => s.id), dir });
 }
 
-/** The jib of crane `c` as a footprint, from its seaward end to its inland end. */
-function jibRect(p: HarborParams, c: CranePlan): Rect {
-  const { inward: d, mast: m } = c;
-  const half = p.crane.jibWidth / 2;
-  const a = { x: m.x - d.x * p.crane.counterJibLength, z: m.z - d.z * p.crane.counterJibLength };
-  const e = { x: m.x + d.x * p.crane.jibLength, z: m.z + d.z * p.crane.jibLength };
-  return {
-    minX: r2(Math.min(a.x, e.x) - (d.x === 0 ? half : 0)),
-    maxX: r2(Math.max(a.x, e.x) + (d.x === 0 ? half : 0)),
-    minZ: r2(Math.min(a.z, e.z) - (d.z === 0 ? half : 0)),
-    maxZ: r2(Math.max(a.z, e.z) + (d.z === 0 ? half : 0)),
-  };
-}
-
 /** A footprint `length` along the jib from `from` m inland of the mast (negative: seaward), as wide as the jib. */
 function alongJib(p: HarborParams, c: CranePlan, from: number, length: number, width = p.crane.jibWidth): Rect {
   const { inward: d, mast: m } = c;
@@ -421,7 +405,7 @@ function buildCrane(b: Build, c: CranePlan): void {
   const under = c.height - k.jibThickness;
   const half = k.mastSize / 2;
   const mast = { minX: c.mast.x - half, maxX: c.mast.x + half, minZ: c.mast.z - half, maxZ: c.mast.z + half };
-  const jib = jibRect(p, c);
+  const jib = alongJib(p, c, -k.counterJibLength, k.counterJibLength + k.jibLength);
   addSolids(b, [
     box(`${c.id}-mast`, 'crane', mast, 0, under),
     box(`${c.id}-jib`, 'crane', jib, under, c.height),

@@ -718,6 +718,22 @@ test('sp2 Downtown screenshot (on a wall-run alley roof, looking along the alley
   expect(errors).toEqual([]);
 });
 
+test('sp2 Harbor screenshot (on a crane jib, looking along its zip line over the container yards)', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // On the jib of harbor-crane-2 (top 35.69 m, x 250–253, z 908–960) near its inland end, looking west along its
+  // zip line down to a yard stack at (79.35, 898), with the south quay apron and the water on the left.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 251.5, y: 35.7, z: 912 }, { x: 79.35, y: 0, z: 898 }));
+  await settle(page, 10);
+  const p = await page.evaluate(() => window.__dm!.player());
+  expect(p.mode).toBe('ground');
+  expect(p.position.y).toBeGreaterThan(35); // standing on the jib
+  await page.screenshot({ path: `${artifacts}sp2-harbor.png` });
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`sp2 harbor: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(errors).toEqual([]);
+});
+
 test('the default (no ?map) still loads the SP1 greybox', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
