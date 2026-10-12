@@ -1,0 +1,814 @@
+{
+  "palettes": [
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Light.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Light2.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Grey.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Dark.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Blue.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_DarkBlue.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_DarkPurple.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Green.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Red.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Yellow.png",
+    "source/quaternius/ultimate-textured-building-pack/textures/Texture_Signs.png"
+  ],
+  "defaultPalette": "Texture_Light",
+  "lod1MinDiagonal": 1.4,
+  "pieces": [
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/1Story.fbx",
+      "id": "b-1story",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/1Story_GableRoof.fbx",
+      "id": "b-1story-gableroof",
+      "kind": "building",
+      "scale": 2.8,
+      "roofY": null,
+      "colliders": [
+        {
+          "center": {
+            "x": 0.03,
+            "y": 1.698,
+            "z": 0.091
+          },
+          "size": {
+            "x": 5.794,
+            "y": 3.396,
+            "z": 5.963
+          }
+        },
+        {
+          "center": {
+            "x": 1.332,
+            "y": 4.6,
+            "z": 0
+          },
+          "size": {
+            "x": 3.361,
+            "y": 0.3,
+            "z": 6.664
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": -32.74
+          }
+        },
+        {
+          "center": {
+            "x": -1.332,
+            "y": 4.598,
+            "z": 0
+          },
+          "size": {
+            "x": 3.362,
+            "y": 0.3,
+            "z": 6.664
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": 32.775
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/1Story_RoundRoof.fbx",
+      "id": "b-1story-roundroof",
+      "kind": "building",
+      "scale": 2.8,
+      "roofY": null,
+      "colliders": [
+        {
+          "center": {
+            "x": -0.011,
+            "y": 2.4,
+            "z": 0.023
+          },
+          "size": {
+            "x": 5.82,
+            "y": 4.801,
+            "z": 5.869
+          }
+        },
+        {
+          "center": {
+            "x": 1.393,
+            "y": 5.776,
+            "z": 0
+          },
+          "size": {
+            "x": 3.293,
+            "y": 0.3,
+            "z": 5.952
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": -27.655
+          }
+        },
+        {
+          "center": {
+            "x": -1.385,
+            "y": 5.776,
+            "z": 0
+          },
+          "size": {
+            "x": 3.293,
+            "y": 0.3,
+            "z": 5.952
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": 27.655
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/1Story_Sign.fbx",
+      "id": "b-1story-sign",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story.fbx",
+      "id": "b-2story",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_2.fbx",
+      "id": "b-2story-2",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Balcony.fbx",
+      "id": "b-2story-balcony",
+      "kind": "building",
+      "scale": 2.8,
+      "colliders": [
+        {
+          "center": {
+            "x": 0,
+            "y": 3.909,
+            "z": -0.525
+          },
+          "size": {
+            "x": 6.044,
+            "y": 7.817,
+            "z": 6.05
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 4.1,
+            "z": 2.995
+          },
+          "size": {
+            "x": 2.3,
+            "y": 0.2,
+            "z": 1.01
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Center.fbx",
+      "id": "b-2story-center",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Columns.fbx",
+      "id": "b-2story-columns",
+      "kind": "building",
+      "scale": 2.8,
+      "colliders": [
+        {
+          "center": {
+            "x": 0,
+            "y": 3.645,
+            "z": -0.49
+          },
+          "size": {
+            "x": 6.044,
+            "y": 7.29,
+            "z": 5.98
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 3.85,
+            "z": 2.92
+          },
+          "size": {
+            "x": 6.044,
+            "y": 0.2,
+            "z": 0.84
+          }
+        },
+        {
+          "center": {
+            "x": 1.76,
+            "y": 1.875,
+            "z": 3.0
+          },
+          "size": {
+            "x": 0.46,
+            "y": 3.75,
+            "z": 0.46
+          }
+        },
+        {
+          "center": {
+            "x": -1.76,
+            "y": 1.875,
+            "z": 3.0
+          },
+          "size": {
+            "x": 0.46,
+            "y": 3.75,
+            "z": 0.46
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Double.fbx",
+      "id": "b-2story-double",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_GableRoof.fbx",
+      "id": "b-2story-gableroof",
+      "kind": "building",
+      "scale": 2.8,
+      "roofY": null,
+      "colliders": [
+        {
+          "center": {
+            "x": 0,
+            "y": 3.193,
+            "z": 0.028
+          },
+          "size": {
+            "x": 6.044,
+            "y": 6.386,
+            "z": 6.09
+          }
+        },
+        {
+          "center": {
+            "x": 1.381,
+            "y": 7.577,
+            "z": 0
+          },
+          "size": {
+            "x": 3.359,
+            "y": 0.3,
+            "z": 6.664
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": -31.69
+          }
+        },
+        {
+          "center": {
+            "x": -1.306,
+            "y": 7.621,
+            "z": 0
+          },
+          "size": {
+            "x": 3.326,
+            "y": 0.3,
+            "z": 6.664
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": 31.657
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_RoundRoof.fbx",
+      "id": "b-2story-roundroof",
+      "kind": "building",
+      "scale": 2.8,
+      "roofY": null,
+      "colliders": [
+        {
+          "center": {
+            "x": 0,
+            "y": 3.115,
+            "z": 0
+          },
+          "size": {
+            "x": 5.912,
+            "y": 6.231,
+            "z": 5.901
+          }
+        },
+        {
+          "center": {
+            "x": 1.389,
+            "y": 7.221,
+            "z": 0
+          },
+          "size": {
+            "x": 3.293,
+            "y": 0.3,
+            "z": 5.952
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": -27.655
+          }
+        },
+        {
+          "center": {
+            "x": -1.389,
+            "y": 7.221,
+            "z": 0
+          },
+          "size": {
+            "x": 3.293,
+            "y": 0.3,
+            "z": 5.952
+          },
+          "rotationDeg": {
+            "x": 0,
+            "y": 0,
+            "z": 27.655
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Sidehouse.fbx",
+      "id": "b-2story-sidehouse",
+      "kind": "building",
+      "scale": 2.8,
+      "colliders": [
+        {
+          "center": {
+            "x": 1.955,
+            "y": 3.629,
+            "z": -0.525
+          },
+          "size": {
+            "x": 5.81,
+            "y": 7.257,
+            "z": 6.05
+          }
+        },
+        {
+          "center": {
+            "x": -2.85,
+            "y": 1.675,
+            "z": -0.55
+          },
+          "size": {
+            "x": 3.8,
+            "y": 3.35,
+            "z": 4.5
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Sign.fbx",
+      "id": "b-2story-sign",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Slim.fbx",
+      "id": "b-2story-slim",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Stairs.fbx",
+      "id": "b-2story-stairs",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Wide.fbx",
+      "id": "b-2story-wide",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/2Story_Wide_2Doors.fbx",
+      "id": "b-2story-wide-2doors",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/3Story_Balcony.fbx",
+      "id": "b-3story-balcony",
+      "kind": "building",
+      "scale": 2.8,
+      "colliders": [
+        {
+          "center": {
+            "x": 0,
+            "y": 5.67,
+            "z": -0.505
+          },
+          "size": {
+            "x": 6.044,
+            "y": 11.34,
+            "z": 6.01
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 4.1,
+            "z": 3.005
+          },
+          "size": {
+            "x": 2.3,
+            "y": 0.2,
+            "z": 1.01
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 7.6,
+            "z": 3.005
+          },
+          "size": {
+            "x": 2.3,
+            "y": 0.2,
+            "z": 1.01
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/3Story_Slim.fbx",
+      "id": "b-3story-slim",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/3Story_Small.fbx",
+      "id": "b-3story-small",
+      "kind": "building",
+      "scale": 2.8,
+      "lod1MinDiagonal": 1.6
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/4Story.fbx",
+      "id": "b-4story",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/4Story_Center.fbx",
+      "id": "b-4story-center",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/4Story_Wide_2Doors.fbx",
+      "id": "b-4story-wide-2doors",
+      "kind": "building",
+      "scale": 2.8,
+      "colliders": [
+        {
+          "center": {
+            "x": 0,
+            "y": 6.972,
+            "z": -0.835
+          },
+          "size": {
+            "x": 19.118,
+            "y": 13.944,
+            "z": 5.87
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 3.15,
+            "z": 2.835
+          },
+          "size": {
+            "x": 6.7,
+            "y": 0.2,
+            "z": 1.87
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/4Story_Wide_2Doors_Roof.fbx",
+      "id": "b-4story-wide-2doors-roof",
+      "kind": "building",
+      "scale": 2.8,
+      "roofY": null,
+      "colliders": [
+        {
+          "center": {
+            "x": 0,
+            "y": 7.015,
+            "z": -0.835
+          },
+          "size": {
+            "x": 19.118,
+            "y": 14.03,
+            "z": 5.87
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 3.15,
+            "z": 2.835
+          },
+          "size": {
+            "x": 6.7,
+            "y": 0.2,
+            "z": 1.87
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 14.907,
+            "z": 0.019
+          },
+          "size": {
+            "x": 14.465,
+            "y": 0.3,
+            "z": 3.15
+          },
+          "rotationDeg": {
+            "x": 39.001,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "center": {
+            "x": 0,
+            "y": 14.907,
+            "z": -2.24
+          },
+          "size": {
+            "x": 14.465,
+            "y": 0.3,
+            "z": 3.15
+          },
+          "rotationDeg": {
+            "x": -39.001,
+            "y": 0,
+            "z": 0
+          }
+        }
+      ]
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/buildings/6Story_Stack.fbx",
+      "id": "b-6story-stack",
+      "kind": "building",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/AC_Unit.fbx",
+      "id": "p-ac-unit",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/AC_Unitx4.fbx",
+      "id": "p-ac-unitx4",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Balcony.fbx",
+      "id": "p-balcony",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Bricks_Half.fbx",
+      "id": "p-bricks-half",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Bricks_Large.fbx",
+      "id": "p-bricks-large",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Bricks_LeftStraight.fbx",
+      "id": "p-bricks-leftstraight",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Bricks_RightStraight.fbx",
+      "id": "p-bricks-rightstraight",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Bricks_Single.fbx",
+      "id": "p-bricks-single",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Bricks_Small.fbx",
+      "id": "p-bricks-small",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door1.fbx",
+      "id": "p-door1",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door2.fbx",
+      "id": "p-door2",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door3.fbx",
+      "id": "p-door3",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door4.fbx",
+      "id": "p-door4",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door5.fbx",
+      "id": "p-door5",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door_Double.fbx",
+      "id": "p-door-double",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door_Window.fbx",
+      "id": "p-door-window",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Door_Window2.fbx",
+      "id": "p-door-window2",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Pipe_L.fbx",
+      "id": "p-pipe-l",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Pipe_Straight.fbx",
+      "id": "p-pipe-straight",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Pipe_Straight_Short.fbx",
+      "id": "p-pipe-straight-short",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Sign_Bakery.fbx",
+      "id": "p-sign-bakery",
+      "kind": "part",
+      "scale": 2.8,
+      "palette": "Texture_Signs"
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Sign_Barbershop.fbx",
+      "id": "p-sign-barbershop",
+      "kind": "part",
+      "scale": 2.8,
+      "palette": "Texture_Signs"
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Sign_Bookshop.fbx",
+      "id": "p-sign-bookshop",
+      "kind": "part",
+      "scale": 2.8,
+      "palette": "Texture_Signs"
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Sign_Hardware.fbx",
+      "id": "p-sign-hardware",
+      "kind": "part",
+      "scale": 2.8,
+      "palette": "Texture_Signs"
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Sign_Pharmacy.fbx",
+      "id": "p-sign-pharmacy",
+      "kind": "part",
+      "scale": 2.8,
+      "palette": "Texture_Signs"
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Staircase.fbx",
+      "id": "p-staircase",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Stairs_Roof.fbx",
+      "id": "p-stairs-roof",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Window.fbx",
+      "id": "p-window",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Window_Double.fbx",
+      "id": "p-window-double",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Window_Double_Roof.fbx",
+      "id": "p-window-double-roof",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/ultimate-textured-building-pack/parts/Window_Roof.fbx",
+      "id": "p-window-roof",
+      "kind": "part",
+      "scale": 2.8
+    },
+    {
+      "src": "source/quaternius/animated-men/Male_Casual.fbx",
+      "id": "c-thief-casual",
+      "kind": "character",
+      "height": 1.8,
+      "keepClips": [
+        "Man_Idle",
+        "Man_Walk",
+        "Man_Run",
+        "Man_Punch"
+      ]
+    },
+    {
+      "src": "source/quaternius/animated-men/Male_LongSleeve.fbx",
+      "id": "c-thief-longsleeve",
+      "kind": "character",
+      "height": 1.8,
+      "keepClips": [
+        "Man_Idle",
+        "Man_Walk",
+        "Man_Run",
+        "Man_Punch"
+      ]
+    }
+  ]
+}

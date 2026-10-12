@@ -1,0 +1,2319 @@
+{
+  "b-1story": {
+    "id": "b-1story",
+    "kind": "building",
+    "lod0": "city/buildings/b-1story.glb",
+    "lod1": "city/buildings/b-1story.lod1.glb",
+    "size": {
+      "x": 6.032,
+      "y": 4.682,
+      "z": 6.089
+    },
+    "tris": [
+      2824,
+      704
+    ],
+    "roofY": 4.449,
+    "colliders": [
+      {
+        "center": {
+          "x": -0.001,
+          "y": 2.225,
+          "z": 0.034
+        },
+        "size": {
+          "x": 5.888,
+          "y": 4.449,
+          "z": 6.02
+        }
+      }
+    ],
+    "avgColor": [
+      0.387,
+      0.368,
+      0.356
+    ]
+  },
+  "b-1story-gableroof": {
+    "id": "b-1story-gableroof",
+    "kind": "building",
+    "lod0": "city/buildings/b-1story-gableroof.glb",
+    "lod1": "city/buildings/b-1story-gableroof.lod1.glb",
+    "size": {
+      "x": 5.895,
+      "y": 5.669,
+      "z": 6.664
+    },
+    "tris": [
+      1684,
+      476
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0.03,
+          "y": 1.698,
+          "z": 0.091
+        },
+        "size": {
+          "x": 5.794,
+          "y": 3.396,
+          "z": 5.963
+        }
+      },
+      {
+        "center": {
+          "x": 1.332,
+          "y": 4.6,
+          "z": 0
+        },
+        "size": {
+          "x": 3.361,
+          "y": 0.3,
+          "z": 6.664
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": -32.74
+        }
+      },
+      {
+        "center": {
+          "x": -1.332,
+          "y": 4.598,
+          "z": 0
+        },
+        "size": {
+          "x": 3.362,
+          "y": 0.3,
+          "z": 6.664
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": 32.775
+        }
+      }
+    ],
+    "avgColor": [
+      0.35,
+      0.33,
+      0.318
+    ]
+  },
+  "b-1story-roundroof": {
+    "id": "b-1story-roundroof",
+    "kind": "building",
+    "lod0": "city/buildings/b-1story-roundroof.glb",
+    "lod1": "city/buildings/b-1story-roundroof.lod1.glb",
+    "size": {
+      "x": 5.843,
+      "y": 6.673,
+      "z": 5.952
+    },
+    "tris": [
+      2408,
+      680
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": -0.011,
+          "y": 2.4,
+          "z": 0.023
+        },
+        "size": {
+          "x": 5.82,
+          "y": 4.801,
+          "z": 5.869
+        }
+      },
+      {
+        "center": {
+          "x": 1.393,
+          "y": 5.776,
+          "z": 0
+        },
+        "size": {
+          "x": 3.293,
+          "y": 0.3,
+          "z": 5.952
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": -27.655
+        }
+      },
+      {
+        "center": {
+          "x": -1.385,
+          "y": 5.776,
+          "z": 0
+        },
+        "size": {
+          "x": 3.293,
+          "y": 0.3,
+          "z": 5.952
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": 27.655
+        }
+      }
+    ],
+    "avgColor": [
+      0.361,
+      0.34,
+      0.327
+    ]
+  },
+  "b-1story-sign": {
+    "id": "b-1story-sign",
+    "kind": "building",
+    "lod0": "city/buildings/b-1story-sign.glb",
+    "lod1": "city/buildings/b-1story-sign.lod1.glb",
+    "size": {
+      "x": 6.032,
+      "y": 5.023,
+      "z": 6.032
+    },
+    "tris": [
+      2426,
+      678
+    ],
+    "roofY": 4.588,
+    "colliders": [
+      {
+        "center": {
+          "x": -0.033,
+          "y": 2.294,
+          "z": 0.023
+        },
+        "size": {
+          "x": 5.82,
+          "y": 4.588,
+          "z": 5.869
+        }
+      }
+    ],
+    "avgColor": [
+      0.368,
+      0.345,
+      0.331
+    ]
+  },
+  "b-2story": {
+    "id": "b-2story",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story.glb",
+    "lod1": "city/buildings/b-2story.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 7.687,
+      "z": 7.09
+    },
+    "tris": [
+      3536,
+      1020
+    ],
+    "roofY": 7.223,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.612,
+          "z": -0.45
+        },
+        "size": {
+          "x": 6.044,
+          "y": 7.223,
+          "z": 6.191
+        }
+      }
+    ],
+    "avgColor": [
+      0.405,
+      0.386,
+      0.377
+    ]
+  },
+  "b-2story-2": {
+    "id": "b-2story-2",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-2.glb",
+    "lod1": "city/buildings/b-2story-2.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 7.735,
+      "z": 6.09
+    },
+    "tris": [
+      4106,
+      950
+    ],
+    "roofY": 7.257,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.629,
+          "z": 0
+        },
+        "size": {
+          "x": 6.044,
+          "y": 7.257,
+          "z": 6.09
+        }
+      }
+    ],
+    "avgColor": [
+      0.405,
+      0.386,
+      0.376
+    ]
+  },
+  "b-2story-balcony": {
+    "id": "b-2story-balcony",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-balcony.glb",
+    "lod1": "city/buildings/b-2story-balcony.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 8.243,
+      "z": 7.09
+    },
+    "tris": [
+      4210,
+      1370
+    ],
+    "roofY": 7.817,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.909,
+          "z": -0.525
+        },
+        "size": {
+          "x": 6.044,
+          "y": 7.817,
+          "z": 6.05
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 4.1,
+          "z": 2.995
+        },
+        "size": {
+          "x": 2.3,
+          "y": 0.2,
+          "z": 1.01
+        }
+      }
+    ],
+    "avgColor": [
+      0.395,
+      0.376,
+      0.369
+    ]
+  },
+  "b-2story-center": {
+    "id": "b-2story-center",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-center.glb",
+    "lod1": "city/buildings/b-2story-center.lod1.glb",
+    "size": {
+      "x": 6.779,
+      "y": 7.662,
+      "z": 6.996
+    },
+    "tris": [
+      3282,
+      1282
+    ],
+    "roofY": 7.199,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.6,
+          "z": -0.481
+        },
+        "size": {
+          "x": 6.779,
+          "y": 7.199,
+          "z": 6.033
+        }
+      }
+    ],
+    "avgColor": [
+      0.421,
+      0.412,
+      0.406
+    ]
+  },
+  "b-2story-columns": {
+    "id": "b-2story-columns",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-columns.glb",
+    "lod1": "city/buildings/b-2story-columns.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 7.752,
+      "z": 6.969
+    },
+    "tris": [
+      3620,
+      1402
+    ],
+    "roofY": 7.29,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.645,
+          "z": -0.49
+        },
+        "size": {
+          "x": 6.044,
+          "y": 7.29,
+          "z": 5.98
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 3.85,
+          "z": 2.92
+        },
+        "size": {
+          "x": 6.044,
+          "y": 0.2,
+          "z": 0.84
+        }
+      },
+      {
+        "center": {
+          "x": 1.76,
+          "y": 1.875,
+          "z": 3
+        },
+        "size": {
+          "x": 0.46,
+          "y": 3.75,
+          "z": 0.46
+        }
+      },
+      {
+        "center": {
+          "x": -1.76,
+          "y": 1.875,
+          "z": 3
+        },
+        "size": {
+          "x": 0.46,
+          "y": 3.75,
+          "z": 0.46
+        }
+      }
+    ],
+    "avgColor": [
+      0.406,
+      0.388,
+      0.379
+    ]
+  },
+  "b-2story-double": {
+    "id": "b-2story-double",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-double.glb",
+    "lod1": "city/buildings/b-2story-double.lod1.glb",
+    "size": {
+      "x": 6.779,
+      "y": 7.687,
+      "z": 7.09
+    },
+    "tris": [
+      4062,
+      1530
+    ],
+    "roofY": 7.223,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.612,
+          "z": -0.443
+        },
+        "size": {
+          "x": 6.779,
+          "y": 7.223,
+          "z": 6.205
+        }
+      }
+    ],
+    "avgColor": [
+      0.425,
+      0.414,
+      0.407
+    ]
+  },
+  "b-2story-gableroof": {
+    "id": "b-2story-gableroof",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-gableroof.glb",
+    "lod1": "city/buildings/b-2story-gableroof.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 8.773,
+      "z": 6.664
+    },
+    "tris": [
+      3200,
+      886
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.193,
+          "z": 0.028
+        },
+        "size": {
+          "x": 6.044,
+          "y": 6.386,
+          "z": 6.09
+        }
+      },
+      {
+        "center": {
+          "x": 1.381,
+          "y": 7.577,
+          "z": 0
+        },
+        "size": {
+          "x": 3.359,
+          "y": 0.3,
+          "z": 6.664
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": -31.69
+        }
+      },
+      {
+        "center": {
+          "x": -1.306,
+          "y": 7.621,
+          "z": 0
+        },
+        "size": {
+          "x": 3.326,
+          "y": 0.3,
+          "z": 6.664
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": 31.657
+        }
+      }
+    ],
+    "avgColor": [
+      0.38,
+      0.36,
+      0.349
+    ]
+  },
+  "b-2story-roundroof": {
+    "id": "b-2story-roundroof",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-roundroof.glb",
+    "lod1": "city/buildings/b-2story-roundroof.lod1.glb",
+    "size": {
+      "x": 5.912,
+      "y": 8.118,
+      "z": 5.952
+    },
+    "tris": [
+      2714,
+      520
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.115,
+          "z": 0
+        },
+        "size": {
+          "x": 5.912,
+          "y": 6.231,
+          "z": 5.901
+        }
+      },
+      {
+        "center": {
+          "x": 1.389,
+          "y": 7.221,
+          "z": 0
+        },
+        "size": {
+          "x": 3.293,
+          "y": 0.3,
+          "z": 5.952
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": -27.655
+        }
+      },
+      {
+        "center": {
+          "x": -1.389,
+          "y": 7.221,
+          "z": 0
+        },
+        "size": {
+          "x": 3.293,
+          "y": 0.3,
+          "z": 5.952
+        },
+        "rotationDeg": {
+          "x": 0,
+          "y": 0,
+          "z": 27.655
+        }
+      }
+    ],
+    "avgColor": [
+      0.362,
+      0.341,
+      0.327
+    ]
+  },
+  "b-2story-sidehouse": {
+    "id": "b-2story-sidehouse",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-sidehouse.glb",
+    "lod1": "city/buildings/b-2story-sidehouse.lod1.glb",
+    "size": {
+      "x": 9.711,
+      "y": 7.72,
+      "z": 7.09
+    },
+    "tris": [
+      5646,
+      1242
+    ],
+    "roofY": 7.257,
+    "colliders": [
+      {
+        "center": {
+          "x": 1.955,
+          "y": 3.629,
+          "z": -0.525
+        },
+        "size": {
+          "x": 5.81,
+          "y": 7.257,
+          "z": 6.05
+        }
+      },
+      {
+        "center": {
+          "x": -2.85,
+          "y": 1.675,
+          "z": -0.55
+        },
+        "size": {
+          "x": 3.8,
+          "y": 3.35,
+          "z": 4.5
+        }
+      }
+    ],
+    "avgColor": [
+      0.404,
+      0.385,
+      0.376
+    ]
+  },
+  "b-2story-sign": {
+    "id": "b-2story-sign",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-sign.glb",
+    "lod1": "city/buildings/b-2story-sign.lod1.glb",
+    "size": {
+      "x": 6.032,
+      "y": 7.72,
+      "z": 6.032
+    },
+    "tris": [
+      3260,
+      824
+    ],
+    "roofY": 7.257,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.628,
+          "z": 0
+        },
+        "size": {
+          "x": 5.912,
+          "y": 7.257,
+          "z": 5.901
+        }
+      }
+    ],
+    "avgColor": [
+      0.376,
+      0.354,
+      0.341
+    ]
+  },
+  "b-2story-slim": {
+    "id": "b-2story-slim",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-slim.glb",
+    "lod1": "city/buildings/b-2story-slim.lod1.glb",
+    "size": {
+      "x": 3.124,
+      "y": 7.72,
+      "z": 6.033
+    },
+    "tris": [
+      2884,
+      724
+    ],
+    "roofY": 7.257,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.628,
+          "z": 0
+        },
+        "size": {
+          "x": 3.124,
+          "y": 7.257,
+          "z": 6.033
+        }
+      }
+    ],
+    "avgColor": [
+      0.413,
+      0.396,
+      0.387
+    ]
+  },
+  "b-2story-stairs": {
+    "id": "b-2story-stairs",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-stairs.glb",
+    "lod1": "city/buildings/b-2story-stairs.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 7.687,
+      "z": 7.09
+    },
+    "tris": [
+      4116,
+      1288
+    ],
+    "roofY": 7.223,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.612,
+          "z": -0.495
+        },
+        "size": {
+          "x": 6.044,
+          "y": 7.223,
+          "z": 6.101
+        }
+      }
+    ],
+    "avgColor": [
+      0.404,
+      0.385,
+      0.376
+    ]
+  },
+  "b-2story-wide": {
+    "id": "b-2story-wide",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-wide.glb",
+    "lod1": "city/buildings/b-2story-wide.lod1.glb",
+    "size": {
+      "x": 10.711,
+      "y": 7.694,
+      "z": 6.315
+    },
+    "tris": [
+      5044,
+      2262
+    ],
+    "roofY": 7.154,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.577,
+          "z": -0.141
+        },
+        "size": {
+          "x": 10.711,
+          "y": 7.154,
+          "z": 6.033
+        }
+      }
+    ],
+    "avgColor": [
+      0.414,
+      0.404,
+      0.398
+    ]
+  },
+  "b-2story-wide-2doors": {
+    "id": "b-2story-wide-2doors",
+    "kind": "building",
+    "lod0": "city/buildings/b-2story-wide-2doors.glb",
+    "lod1": "city/buildings/b-2story-wide-2doors.lod1.glb",
+    "size": {
+      "x": 19.118,
+      "y": 7.694,
+      "z": 6.315
+    },
+    "tris": [
+      7838,
+      3414
+    ],
+    "roofY": 7.154,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 3.577,
+          "z": -0.141
+        },
+        "size": {
+          "x": 19.118,
+          "y": 7.154,
+          "z": 6.033
+        }
+      }
+    ],
+    "avgColor": [
+      0.414,
+      0.405,
+      0.4
+    ]
+  },
+  "b-3story-balcony": {
+    "id": "b-3story-balcony",
+    "kind": "building",
+    "lod0": "city/buildings/b-3story-balcony.glb",
+    "lod1": "city/buildings/b-3story-balcony.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 11.795,
+      "z": 7.022
+    },
+    "tris": [
+      5204,
+      2282
+    ],
+    "roofY": 11.34,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 5.67,
+          "z": -0.505
+        },
+        "size": {
+          "x": 6.044,
+          "y": 11.34,
+          "z": 6.01
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 4.1,
+          "z": 3.005
+        },
+        "size": {
+          "x": 2.3,
+          "y": 0.2,
+          "z": 1.01
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 7.6,
+          "z": 3.005
+        },
+        "size": {
+          "x": 2.3,
+          "y": 0.2,
+          "z": 1.01
+        }
+      }
+    ],
+    "avgColor": [
+      0.41,
+      0.392,
+      0.385
+    ]
+  },
+  "b-3story-slim": {
+    "id": "b-3story-slim",
+    "kind": "building",
+    "lod0": "city/buildings/b-3story-slim.glb",
+    "lod1": "city/buildings/b-3story-slim.lod1.glb",
+    "size": {
+      "x": 3.124,
+      "y": 11.177,
+      "z": 6.033
+    },
+    "tris": [
+      3716,
+      882
+    ],
+    "roofY": 10.726,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 5.363,
+          "z": 0
+        },
+        "size": {
+          "x": 3.124,
+          "y": 10.726,
+          "z": 6.033
+        }
+      }
+    ],
+    "avgColor": [
+      0.421,
+      0.405,
+      0.398
+    ]
+  },
+  "b-3story-small": {
+    "id": "b-3story-small",
+    "kind": "building",
+    "lod0": "city/buildings/b-3story-small.glb",
+    "lod1": "city/buildings/b-3story-small.lod1.glb",
+    "size": {
+      "x": 5.345,
+      "y": 10.776,
+      "z": 5.53
+    },
+    "tris": [
+      3352,
+      738
+    ],
+    "roofY": 10.539,
+    "colliders": [
+      {
+        "center": {
+          "x": 0.021,
+          "y": 5.27,
+          "z": 0.044
+        },
+        "size": {
+          "x": 5.138,
+          "y": 10.539,
+          "z": 5.442
+        }
+      }
+    ],
+    "avgColor": [
+      0.414,
+      0.398,
+      0.391
+    ]
+  },
+  "b-4story": {
+    "id": "b-4story",
+    "kind": "building",
+    "lod0": "city/buildings/b-4story.glb",
+    "lod1": "city/buildings/b-4story.lod1.glb",
+    "size": {
+      "x": 6.779,
+      "y": 14.257,
+      "z": 7.09
+    },
+    "tris": [
+      6862,
+      2810
+    ],
+    "roofY": 13.794,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 6.897,
+          "z": -0.443
+        },
+        "size": {
+          "x": 6.779,
+          "y": 13.794,
+          "z": 6.205
+        }
+      }
+    ],
+    "avgColor": [
+      0.445,
+      0.437,
+      0.433
+    ]
+  },
+  "b-4story-center": {
+    "id": "b-4story-center",
+    "kind": "building",
+    "lod0": "city/buildings/b-4story-center.glb",
+    "lod1": "city/buildings/b-4story-center.lod1.glb",
+    "size": {
+      "x": 6.779,
+      "y": 14.257,
+      "z": 7.09
+    },
+    "tris": [
+      6314,
+      2460
+    ],
+    "roofY": 13.794,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 6.897,
+          "z": -0.45
+        },
+        "size": {
+          "x": 6.779,
+          "y": 13.794,
+          "z": 6.191
+        }
+      }
+    ],
+    "avgColor": [
+      0.428,
+      0.42,
+      0.415
+    ]
+  },
+  "b-4story-wide-2doors": {
+    "id": "b-4story-wide-2doors",
+    "kind": "building",
+    "lod0": "city/buildings/b-4story-wide-2doors.glb",
+    "lod1": "city/buildings/b-4story-wide-2doors.lod1.glb",
+    "size": {
+      "x": 19.118,
+      "y": 14.424,
+      "z": 7.55
+    },
+    "tris": [
+      13564,
+      6606
+    ],
+    "roofY": 13.944,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 6.972,
+          "z": -0.835
+        },
+        "size": {
+          "x": 19.118,
+          "y": 13.944,
+          "z": 5.87
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 3.15,
+          "z": 2.835
+        },
+        "size": {
+          "x": 6.7,
+          "y": 0.2,
+          "z": 1.87
+        }
+      }
+    ],
+    "avgColor": [
+      0.43,
+      0.424,
+      0.421
+    ]
+  },
+  "b-4story-wide-2doors-roof": {
+    "id": "b-4story-wide-2doors-roof",
+    "kind": "building",
+    "lod0": "city/buildings/b-4story-wide-2doors-roof.glb",
+    "lod1": "city/buildings/b-4story-wide-2doors-roof.lod1.glb",
+    "size": {
+      "x": 19.118,
+      "y": 15.914,
+      "z": 7.55
+    },
+    "tris": [
+      12638,
+      6304
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 7.015,
+          "z": -0.835
+        },
+        "size": {
+          "x": 19.118,
+          "y": 14.03,
+          "z": 5.87
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 3.15,
+          "z": 2.835
+        },
+        "size": {
+          "x": 6.7,
+          "y": 0.2,
+          "z": 1.87
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 14.907,
+          "z": 0.019
+        },
+        "size": {
+          "x": 14.465,
+          "y": 0.3,
+          "z": 3.15
+        },
+        "rotationDeg": {
+          "x": 39.001,
+          "y": 0,
+          "z": 0
+        }
+      },
+      {
+        "center": {
+          "x": 0,
+          "y": 14.907,
+          "z": -2.24
+        },
+        "size": {
+          "x": 14.465,
+          "y": 0.3,
+          "z": 3.15
+        },
+        "rotationDeg": {
+          "x": -39.001,
+          "y": 0,
+          "z": 0
+        }
+      }
+    ],
+    "avgColor": [
+      0.425,
+      0.418,
+      0.414
+    ]
+  },
+  "b-6story-stack": {
+    "id": "b-6story-stack",
+    "kind": "building",
+    "lod0": "city/buildings/b-6story-stack.glb",
+    "lod1": "city/buildings/b-6story-stack.lod1.glb",
+    "size": {
+      "x": 6.044,
+      "y": 21.849,
+      "z": 6.996
+    },
+    "tris": [
+      6118,
+      2960
+    ],
+    "roofY": 21.388,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 10.694,
+          "z": -0.453
+        },
+        "size": {
+          "x": 6.044,
+          "y": 21.388,
+          "z": 6.09
+        }
+      }
+    ],
+    "avgColor": [
+      0.417,
+      0.403,
+      0.396
+    ]
+  },
+  "c-thief-casual": {
+    "id": "c-thief-casual",
+    "kind": "character",
+    "lod0": "city/characters/thief-casual.glb",
+    "lod1": null,
+    "size": {
+      "x": 0.532,
+      "y": 1.8,
+      "z": 0.307
+    },
+    "tris": [
+      1852,
+      0
+    ],
+    "roofY": null,
+    "colliders": [],
+    "avgColor": [
+      0.22,
+      0.171,
+      0.124
+    ]
+  },
+  "c-thief-longsleeve": {
+    "id": "c-thief-longsleeve",
+    "kind": "character",
+    "lod0": "city/characters/thief-longsleeve.glb",
+    "lod1": null,
+    "size": {
+      "x": 0.53,
+      "y": 1.8,
+      "z": 0.34
+    },
+    "tris": [
+      1970,
+      0
+    ],
+    "roofY": null,
+    "colliders": [],
+    "avgColor": [
+      0.086,
+      0.103,
+      0.091
+    ]
+  },
+  "p-ac-unit": {
+    "id": "p-ac-unit",
+    "kind": "part",
+    "lod0": "city/parts/p-ac-unit.glb",
+    "lod1": null,
+    "size": {
+      "x": 0.799,
+      "y": 0.495,
+      "z": 0.496
+    },
+    "tris": [
+      48,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.247,
+          "z": 0
+        },
+        "size": {
+          "x": 0.799,
+          "y": 0.495,
+          "z": 0.496
+        }
+      }
+    ],
+    "avgColor": [
+      0.496,
+      0.496,
+      0.496
+    ]
+  },
+  "p-ac-unitx4": {
+    "id": "p-ac-unitx4",
+    "kind": "part",
+    "lod0": "city/parts/p-ac-unitx4.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.693,
+      "y": 0.495,
+      "z": 1.163
+    },
+    "tris": [
+      192,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.247,
+          "z": 0
+        },
+        "size": {
+          "x": 1.693,
+          "y": 0.495,
+          "z": 1.163
+        }
+      }
+    ],
+    "avgColor": [
+      0.496,
+      0.496,
+      0.496
+    ]
+  },
+  "p-balcony": {
+    "id": "p-balcony",
+    "kind": "part",
+    "lod0": "city/parts/p-balcony.glb",
+    "lod1": null,
+    "size": {
+      "x": 2.336,
+      "y": 0.757,
+      "z": 1.329
+    },
+    "tris": [
+      176,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.378,
+          "z": 0
+        },
+        "size": {
+          "x": 2.336,
+          "y": 0.757,
+          "z": 1.329
+        }
+      }
+    ],
+    "avgColor": [
+      0.246,
+      0.22,
+      0.181
+    ]
+  },
+  "p-bricks-half": {
+    "id": "p-bricks-half",
+    "kind": "part",
+    "lod0": "city/parts/p-bricks-half.glb",
+    "lod1": null,
+    "size": {
+      "x": 0.329,
+      "y": 0.406,
+      "z": 0.382
+    },
+    "tris": [
+      10,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.203,
+          "z": 0
+        },
+        "size": {
+          "x": 0.329,
+          "y": 0.406,
+          "z": 0.382
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-bricks-large": {
+    "id": "p-bricks-large",
+    "kind": "part",
+    "lod0": "city/parts/p-bricks-large.glb",
+    "lod1": null,
+    "size": {
+      "x": 5.774,
+      "y": 1.209,
+      "z": 0.382
+    },
+    "tris": [
+      242,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.605,
+          "z": 0
+        },
+        "size": {
+          "x": 5.774,
+          "y": 1.209,
+          "z": 0.382
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-bricks-leftstraight": {
+    "id": "p-bricks-leftstraight",
+    "kind": "part",
+    "lod0": "city/parts/p-bricks-leftstraight.glb",
+    "lod1": null,
+    "size": {
+      "x": 2.216,
+      "y": 1.209,
+      "z": 0.382
+    },
+    "tris": [
+      90,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.605,
+          "z": 0
+        },
+        "size": {
+          "x": 2.216,
+          "y": 1.209,
+          "z": 0.382
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-bricks-rightstraight": {
+    "id": "p-bricks-rightstraight",
+    "kind": "part",
+    "lod0": "city/parts/p-bricks-rightstraight.glb",
+    "lod1": null,
+    "size": {
+      "x": 2.225,
+      "y": 1.194,
+      "z": 0.382
+    },
+    "tris": [
+      102,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.597,
+          "z": 0
+        },
+        "size": {
+          "x": 2.225,
+          "y": 1.194,
+          "z": 0.382
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-bricks-single": {
+    "id": "p-bricks-single",
+    "kind": "part",
+    "lod0": "city/parts/p-bricks-single.glb",
+    "lod1": null,
+    "size": {
+      "x": 0.669,
+      "y": 0.414,
+      "z": 0.382
+    },
+    "tris": [
+      10,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.207,
+          "z": 0
+        },
+        "size": {
+          "x": 0.669,
+          "y": 0.414,
+          "z": 0.382
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-bricks-small": {
+    "id": "p-bricks-small",
+    "kind": "part",
+    "lod0": "city/parts/p-bricks-small.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.699,
+      "y": 1.209,
+      "z": 0.382
+    },
+    "tris": [
+      60,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.605,
+          "z": 0
+        },
+        "size": {
+          "x": 1.699,
+          "y": 1.209,
+          "z": 0.382
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-door-double": {
+    "id": "p-door-double",
+    "kind": "part",
+    "lod0": "city/parts/p-door-double.glb",
+    "lod1": null,
+    "size": {
+      "x": 2.099,
+      "y": 2.71,
+      "z": 0.344
+    },
+    "tris": [
+      332,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.355,
+          "z": 0
+        },
+        "size": {
+          "x": 2.099,
+          "y": 2.71,
+          "z": 0.344
+        }
+      }
+    ],
+    "avgColor": [
+      0.218,
+      0.233,
+      0.275
+    ]
+  },
+  "p-door-window": {
+    "id": "p-door-window",
+    "kind": "part",
+    "lod0": "city/parts/p-door-window.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.228,
+      "y": 2.567,
+      "z": 0.16
+    },
+    "tris": [
+      420,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.284,
+          "z": 0
+        },
+        "size": {
+          "x": 1.228,
+          "y": 2.567,
+          "z": 0.16
+        }
+      }
+    ],
+    "avgColor": [
+      0.103,
+      0.11,
+      0.16
+    ]
+  },
+  "p-door-window2": {
+    "id": "p-door-window2",
+    "kind": "part",
+    "lod0": "city/parts/p-door-window2.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.242,
+      "y": 2.538,
+      "z": 0.139
+    },
+    "tris": [
+      114,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.269,
+          "z": 0
+        },
+        "size": {
+          "x": 1.242,
+          "y": 2.538,
+          "z": 0.139
+        }
+      }
+    ],
+    "avgColor": [
+      0.107,
+      0.118,
+      0.168
+    ]
+  },
+  "p-door1": {
+    "id": "p-door1",
+    "kind": "part",
+    "lod0": "city/parts/p-door1.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.228,
+      "y": 2.567,
+      "z": 0.12
+    },
+    "tris": [
+      156,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.284,
+          "z": 0
+        },
+        "size": {
+          "x": 1.228,
+          "y": 2.567,
+          "z": 0.12
+        }
+      }
+    ],
+    "avgColor": [
+      0.1,
+      0.105,
+      0.153
+    ]
+  },
+  "p-door2": {
+    "id": "p-door2",
+    "kind": "part",
+    "lod0": "city/parts/p-door2.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.113,
+      "y": 2.571,
+      "z": 0.071
+    },
+    "tris": [
+      194,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.285,
+          "z": 0
+        },
+        "size": {
+          "x": 1.113,
+          "y": 2.571,
+          "z": 0.071
+        }
+      }
+    ],
+    "avgColor": [
+      0.1,
+      0.105,
+      0.153
+    ]
+  },
+  "p-door3": {
+    "id": "p-door3",
+    "kind": "part",
+    "lod0": "city/parts/p-door3.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.228,
+      "y": 2.567,
+      "z": 0.12
+    },
+    "tris": [
+      212,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.284,
+          "z": 0
+        },
+        "size": {
+          "x": 1.228,
+          "y": 2.567,
+          "z": 0.12
+        }
+      }
+    ],
+    "avgColor": [
+      0.1,
+      0.105,
+      0.153
+    ]
+  },
+  "p-door4": {
+    "id": "p-door4",
+    "kind": "part",
+    "lod0": "city/parts/p-door4.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.242,
+      "y": 2.565,
+      "z": 0.14
+    },
+    "tris": [
+      114,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.283,
+          "z": 0
+        },
+        "size": {
+          "x": 1.242,
+          "y": 2.565,
+          "z": 0.14
+        }
+      }
+    ],
+    "avgColor": [
+      0.1,
+      0.105,
+      0.153
+    ]
+  },
+  "p-door5": {
+    "id": "p-door5",
+    "kind": "part",
+    "lod0": "city/parts/p-door5.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.235,
+      "y": 2.561,
+      "z": 0.12
+    },
+    "tris": [
+      156,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.28,
+          "z": 0
+        },
+        "size": {
+          "x": 1.235,
+          "y": 2.561,
+          "z": 0.12
+        }
+      }
+    ],
+    "avgColor": [
+      0.1,
+      0.105,
+      0.153
+    ]
+  },
+  "p-pipe-l": {
+    "id": "p-pipe-l",
+    "kind": "part",
+    "lod0": "city/parts/p-pipe-l.glb",
+    "lod1": null,
+    "size": {
+      "x": 2.385,
+      "y": 0.269,
+      "z": 0.862
+    },
+    "tris": [
+      104,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.134,
+          "z": 0
+        },
+        "size": {
+          "x": 2.385,
+          "y": 0.269,
+          "z": 0.862
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-pipe-straight": {
+    "id": "p-pipe-straight",
+    "kind": "part",
+    "lod0": "city/parts/p-pipe-straight.glb",
+    "lod1": null,
+    "size": {
+      "x": 4.219,
+      "y": 0.269,
+      "z": 0.16
+    },
+    "tris": [
+      68,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.134,
+          "z": 0
+        },
+        "size": {
+          "x": 4.219,
+          "y": 0.269,
+          "z": 0.16
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-pipe-straight-short": {
+    "id": "p-pipe-straight-short",
+    "kind": "part",
+    "lod0": "city/parts/p-pipe-straight-short.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.756,
+      "y": 0.269,
+      "z": 0.16
+    },
+    "tris": [
+      68,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.134,
+          "z": 0
+        },
+        "size": {
+          "x": 1.756,
+          "y": 0.269,
+          "z": 0.16
+        }
+      }
+    ],
+    "avgColor": [
+      0.658,
+      0.658,
+      0.658
+    ]
+  },
+  "p-sign-bakery": {
+    "id": "p-sign-bakery",
+    "kind": "part",
+    "lod0": "city/parts/p-sign-bakery.glb",
+    "lod1": null,
+    "size": {
+      "x": 6.109,
+      "y": 2.274,
+      "z": 0.301
+    },
+    "tris": [
+      1350,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.137,
+          "z": 0
+        },
+        "size": {
+          "x": 6.109,
+          "y": 2.274,
+          "z": 0.301
+        }
+      }
+    ],
+    "avgColor": [
+      0.445,
+      0.356,
+      0.112
+    ]
+  },
+  "p-sign-barbershop": {
+    "id": "p-sign-barbershop",
+    "kind": "part",
+    "lod0": "city/parts/p-sign-barbershop.glb",
+    "lod1": null,
+    "size": {
+      "x": 5.619,
+      "y": 0.605,
+      "z": 0.135
+    },
+    "tris": [
+      1206,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.303,
+          "z": 0
+        },
+        "size": {
+          "x": 5.619,
+          "y": 0.605,
+          "z": 0.135
+        }
+      }
+    ],
+    "avgColor": [
+      0.067,
+      0.067,
+      0.067
+    ]
+  },
+  "p-sign-bookshop": {
+    "id": "p-sign-bookshop",
+    "kind": "part",
+    "lod0": "city/parts/p-sign-bookshop.glb",
+    "lod1": null,
+    "size": {
+      "x": 5.124,
+      "y": 2.082,
+      "z": 0.961
+    },
+    "tris": [
+      2184,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.041,
+          "z": 0
+        },
+        "size": {
+          "x": 5.124,
+          "y": 2.082,
+          "z": 0.961
+        }
+      }
+    ],
+    "avgColor": [
+      0.35,
+      0.348,
+      0.332
+    ]
+  },
+  "p-sign-hardware": {
+    "id": "p-sign-hardware",
+    "kind": "part",
+    "lod0": "city/parts/p-sign-hardware.glb",
+    "lod1": null,
+    "size": {
+      "x": 6.091,
+      "y": 2.14,
+      "z": 0.288
+    },
+    "tris": [
+      1080,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.07,
+          "z": 0
+        },
+        "size": {
+          "x": 6.091,
+          "y": 2.14,
+          "z": 0.288
+        }
+      }
+    ],
+    "avgColor": [
+      0.067,
+      0.067,
+      0.067
+    ]
+  },
+  "p-sign-pharmacy": {
+    "id": "p-sign-pharmacy",
+    "kind": "part",
+    "lod0": "city/parts/p-sign-pharmacy.glb",
+    "lod1": null,
+    "size": {
+      "x": 5.953,
+      "y": 1.199,
+      "z": 0.207
+    },
+    "tris": [
+      928,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.6,
+          "z": 0
+        },
+        "size": {
+          "x": 5.953,
+          "y": 1.199,
+          "z": 0.207
+        }
+      }
+    ],
+    "avgColor": [
+      0.165,
+      0.309,
+      0.262
+    ]
+  },
+  "p-staircase": {
+    "id": "p-staircase",
+    "kind": "part",
+    "lod0": "city/parts/p-staircase.glb",
+    "lod1": null,
+    "size": {
+      "x": 2.367,
+      "y": 0.505,
+      "z": 1.346
+    },
+    "tris": [
+      30,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.253,
+          "z": 0
+        },
+        "size": {
+          "x": 2.367,
+          "y": 0.505,
+          "z": 1.346
+        }
+      }
+    ],
+    "avgColor": [
+      0.376,
+      0.376,
+      0.376
+    ]
+  },
+  "p-stairs-roof": {
+    "id": "p-stairs-roof",
+    "kind": "part",
+    "lod0": "city/parts/p-stairs-roof.glb",
+    "lod1": null,
+    "size": {
+      "x": 2.367,
+      "y": 3.265,
+      "z": 2.65
+    },
+    "tris": [
+      106,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 1.632,
+          "z": 0
+        },
+        "size": {
+          "x": 2.367,
+          "y": 3.265,
+          "z": 2.65
+        }
+      }
+    ],
+    "avgColor": [
+      0.478,
+      0.478,
+      0.478
+    ]
+  },
+  "p-window": {
+    "id": "p-window",
+    "kind": "part",
+    "lod0": "city/parts/p-window.glb",
+    "lod1": null,
+    "size": {
+      "x": 0.848,
+      "y": 0.972,
+      "z": 0.158
+    },
+    "tris": [
+      124,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.486,
+          "z": 0
+        },
+        "size": {
+          "x": 0.848,
+          "y": 0.972,
+          "z": 0.158
+        }
+      }
+    ],
+    "avgColor": [
+      0.224,
+      0.23,
+      0.226
+    ]
+  },
+  "p-window-double": {
+    "id": "p-window-double",
+    "kind": "part",
+    "lod0": "city/parts/p-window-double.glb",
+    "lod1": null,
+    "size": {
+      "x": 0.848,
+      "y": 1.316,
+      "z": 0.158
+    },
+    "tris": [
+      176,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.658,
+          "z": 0
+        },
+        "size": {
+          "x": 0.848,
+          "y": 1.316,
+          "z": 0.158
+        }
+      }
+    ],
+    "avgColor": [
+      0.223,
+      0.231,
+      0.228
+    ]
+  },
+  "p-window-double-roof": {
+    "id": "p-window-double-roof",
+    "kind": "part",
+    "lod0": "city/parts/p-window-double-roof.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.009,
+      "y": 1.656,
+      "z": 0.491
+    },
+    "tris": [
+      232,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.828,
+          "z": 0
+        },
+        "size": {
+          "x": 1.009,
+          "y": 1.656,
+          "z": 0.491
+        }
+      }
+    ],
+    "avgColor": [
+      0.271,
+      0.26,
+      0.248
+    ]
+  },
+  "p-window-roof": {
+    "id": "p-window-roof",
+    "kind": "part",
+    "lod0": "city/parts/p-window-roof.glb",
+    "lod1": null,
+    "size": {
+      "x": 1.009,
+      "y": 1.363,
+      "z": 0.628
+    },
+    "tris": [
+      180,
+      0
+    ],
+    "roofY": null,
+    "colliders": [
+      {
+        "center": {
+          "x": 0,
+          "y": 0.682,
+          "z": 0
+        },
+        "size": {
+          "x": 1.009,
+          "y": 1.363,
+          "z": 0.628
+        }
+      }
+    ],
+    "avgColor": [
+      0.28,
+      0.263,
+      0.247
+    ]
+  }
+}

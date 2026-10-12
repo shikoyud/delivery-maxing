@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Piece contact sheet</title>
+    <!-- Served by sheet.ts (assets:sheet); never part of the client bundle. -->
+    <script type="importmap">
+      { "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }
+    </script>
+    <style>
+      body { margin: 0; background: #d9dde2; font: 12px/1.25 monospace; }
+      #sheet { position: relative; }
+      .label { position: absolute; padding: 3px 5px; color: #111; background: rgb(255 255 255 / 0.75); pointer-events: none; }
+      .label b { font-size: 13px; }
+      #legend { position: absolute; right: 8px; bottom: 6px; padding: 4px 6px; background: rgb(255 255 255 / 0.85); }
+      .sw { display: inline-block; width: 10px; height: 10px; margin: 0 3px 0 10px; vertical-align: -1px; }
+    </style>
+  </head>
+  <body>
+    <div id="sheet"></div>
+    <script type="module">
+      import * as THREE from 'three';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+      const params = new URLSearchParams(location.search);
+      const tile = Number(params.get('tile') ?? 300);
+      const cols = Number(params.get('cols') ?? 8);
+      const filter = new RegExp(params.get('filter') ?? '.');
+      const view = params.get('view') ?? 'front'; // 'front' (from +z, +x) or 'back' (from −z, −x)
+
+      const [pieces, { rows: atlasRows, palettes }] = await Promise.all([
+        fetch('/map/pieces.json').then((r) => r.json()),
+        fetch('/sheet-data.json').then((r) => r.json()),
+      ]);
+      const ids = Object.keys(pieces).filter((id) => filter.test(id));
+      const rows = Math.ceil(ids.length / cols);
+      const W = cols * tile;
+      const H = rows * tile;
+
+      const sheet = document.getElementById('sheet');
+      sheet.style.width = `${W}px`;
+      sheet.style.height = `${H}px`;
+      const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      renderer.setPixelRatio(1);
+      renderer.setSize(W, H);
+      renderer.setScissorTest(true);
+      sheet.appendChild(renderer.domElement);
+
+      const atlas = await new THREE.TextureLoader().loadAsync('/assets/city/palette-atlas.png');
+      atlas.flipY = false; // glTF UV convention: v = 0 is the top row
+      atlas.colorSpace = THREE.SRGBColorSpace;
+      atlas.magFilter = THREE.NearestFilter;
+      atlas.minFilter = THREE.NearestFilter;
+      atlas.generateMipmaps = false;
+      atlas.wrapS = THREE.RepeatWrapping;
+
+      const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+      const deg = THREE.MathUtils.degToRad;
+
+      function paletteMaterial(rowName) {
+        const row = atlasRows.indexOf(rowName);
+        const map = atlas.clone();
+        map.repeat.set(1, 1 / atlasRows.length);
+        map.offset.set(0, row / atlasRows.length);
+        map.needsUpdate = true;
+        return new THREE.MeshLambertMaterial({ map });
+      }
+
+      function decorations(p) {
+        const g = new THREE.Group();
+        for (const c of p.colliders) {
+          const box = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(c.size.x, c.size.y, c.size.z)),
+            new THREE.LineBasicMaterial({ color: 0xff2020, depthTest: false }),
+          );
+          box.position.set(c.center.x, c.center.y, c.center.z);
+          if (c.rotationDeg) box.rotation.set(deg(c.rotationDeg.x), deg(c.rotationDeg.y), deg(c.rotationDeg.z), 'XYZ');
+          box.renderOrder = 2;
+          g.add(box);
+        }
+        if (p.roofY !== null) {
+          // the roof plane spans the colliders whose top is the roof (so a lower annex shows without it)
+          const tops = p.colliders.filter((c) => !c.rotationDeg && Math.abs(c.center.y + c.size.y / 2 - p.roofY) < 0.05);
+          for (const c of tops) {
+            const plane = new THREE.Mesh(
+              new THREE.PlaneGeometry(c.size.x + 0.4, c.size.z + 0.4).rotateX(-Math.PI / 2),
+              new THREE.MeshBasicMaterial({ color: 0x00c040, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
+            );
+            plane.position.set(c.center.x, p.roofY, c.center.z);
+            plane.renderOrder = 1;
+            g.add(plane);
+          }
+        }
+        const len = Math.max(0.6, Math.min(4, p.size.z * 0.6));
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.05, p.size.z / 2), len, 0x1060ff, len * 0.35, len * 0.2);
+        arrow.traverse((o) => {
+          if (o.material) o.material.depthTest = false;
+          o.renderOrder = 3;
+        });
+        g.add(arrow);
+        const ground = new THREE.GridHelper(Math.max(p.size.x, p.size.z) + 2, Math.ceil(Math.max(p.size.x, p.size.z) + 2), 0x888888, 0xaaaaaa);
+        g.add(ground);
+        return g;
+      }
+
+      function label(p, i) {
+        const el = document.createElement('div');
+        el.className = 'label';
+        el.style.left = `${(i % cols) * tile}px`;
+        el.style.top = `${Math.floor(i / cols) * tile}px`;
+        const s = p.size;
+        el.innerHTML =
+          `<b>${p.id}</b><br>${s.x.toFixed(1)}×${s.y.toFixed(1)}×${s.z.toFixed(1)} m · ${p.tris[0]}/${p.tris[1]} tris` +
+          (p.roofY !== null ? `<br>roofY ${p.roofY.toFixed(2)}` : '');
+        sheet.appendChild(el);
+      }
+
+      const scenes = [];
+      for (const [i, id] of ids.entries()) {
+        const p = pieces[id];
+        const gltf = await loader.loadAsync(`/assets/${p.lod0}`);
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(i % 2 ? 0xeef0f3 : 0xe4e7eb);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.2));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+        sun.position.set(3, 6, 4);
+        scene.add(sun);
+        if (p.kind !== 'character') {
+          const mat = paletteMaterial(palettes[id]);
+          gltf.scene.traverse((o) => {
+            if (o.isMesh) o.material = mat;
+          });
+        }
+        scene.add(gltf.scene, decorations(p));
+        const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 500);
+        const r = 0.5 * Math.hypot(p.size.x, p.size.y, p.size.z);
+        const dir = view === 'back' ? new THREE.Vector3(-0.8, 0.55, -1.2) : new THREE.Vector3(0.8, 0.55, 1.2);
+        const target = new THREE.Vector3(0, p.size.y / 2, 0);
+        cam.position.copy(target).addScaledVector(dir.normalize(), (r / Math.sin(deg(15))) * 1.02);
+        cam.lookAt(target);
+        scenes.push({ scene, cam, i });
+        label(p, i);
+      }
+      const legend = document.createElement('div');
+      legend.id = 'legend';
+      legend.innerHTML =
+        `<span class="sw" style="background:#ff2020"></span>colliders` +
+        `<span class="sw" style="background:#00c040"></span>roofY` +
+        `<span class="sw" style="background:#1060ff"></span>+z (door side) · view from ${view === 'back' ? '−x −z' : '+x +z'}`;
+      sheet.appendChild(legend);
+
+      for (const { scene, cam, i } of scenes) {
+        const x = (i % cols) * tile;
+        const y = H - (Math.floor(i / cols) + 1) * tile; // WebGL origin is bottom-left
+        renderer.setViewport(x, y, tile, tile);
+        renderer.setScissor(x, y, tile, tile);
+        renderer.render(scene, cam);
+      }
+      window.sheetReady = { w: W, h: H, count: ids.length };
+    </script>
+  </body>
+</html>
