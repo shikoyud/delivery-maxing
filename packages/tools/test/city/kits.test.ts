@@ -83,7 +83,13 @@ describe('zipBetween and navLinkFor', () => {
   it('zips are bidirectional, pads and drops one-way, mantle stacks bidirectional', () => {
     const zip: ZipLine = { id: 'z1', a: { x: 0, y: 10, z: 0 }, b: { x: 30, y: 3, z: 0 } };
     expect(navLinkFor(zip)).toEqual({ id: 'z1-nav', kind: 'zip', from: zip.a, to: zip.b, bidirectional: true });
-    const pad: JumpPad & { target: Vec3 } = { id: 'p1', position: { x: 0, y: 0, z: 0 }, radius: 1.2, launch: { x: 0, y: 9, z: -5 }, target: { x: 0, y: 15, z: -12 } };
+    const pad: JumpPad & { target: Vec3 } = {
+      id: 'p1',
+      position: { x: 0, y: 0, z: 0 },
+      radius: 1.2,
+      launch: { x: 0, y: 9, z: -5 },
+      target: { x: 0, y: 15, z: -12 },
+    };
     expect(navLinkFor(pad)).toEqual({ id: 'p1-nav', kind: 'pad', from: pad.position, to: pad.target, bidirectional: false });
     const drop = { kind: 'drop' as const, id: 'd1', from: { x: 0, y: 6, z: 0 }, to: { x: 0, y: 0, z: 3 } };
     expect(navLinkFor(drop)).toEqual({ id: 'd1', kind: 'drop', from: drop.from, to: drop.to, bidirectional: false });

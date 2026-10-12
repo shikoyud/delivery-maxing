@@ -70,7 +70,9 @@ function downtownParams(ctx: DistrictContext): DowntownParams {
   nums(obj(p.pad, 'pad'), ['radius', 'apexAbove', 'inset', 'clearance'], 'pad.');
   nums(obj(p.zip, 'zip'), ['endHeight', 'endInset', 'maxSlope', 'minInto'], 'zip.');
   const d = p as unknown as DowntownParams;
-  if (d.bakeScale <= 0 || d.artScaleMin <= 0 || d.artScaleMax < d.artScaleMin) fail('need bakeScale > 0 and 0 < artScaleMin ≤ artScaleMax');
+  if (d.bakeScale <= 0 || d.artScaleMin <= 0 || d.artScaleMax < d.artScaleMin) {
+    fail('need bakeScale > 0 and 0 < artScaleMin ≤ artScaleMax');
+  }
   if (d.roofGapMax < d.roofGapMin || d.roofGapMaxUp < d.roofGapMin) fail('need roofGapMin ≤ roofGapMaxUp, roofGapMax');
   if (d.stepDownMax <= ctx.move.jump.height) fail('stepDownMax must exceed the jump height');
   const building = (id: string): PieceEntry => {
@@ -101,7 +103,7 @@ interface Building {
 }
 
 /** A row of buildings along a lot's north or south street, listed in route order (`dir` along x). */
-interface Row { lot: GridLot; side: Side; dir: 1 | -1; buildings: Building[] }
+interface Row { lot: GridLot; dir: 1 | -1; buildings: Building[] }
 
 /** The pieces of an alley's north and south walls (west to east), and the longer wall's length. */
 interface AlleyPlan { walls: [PieceEntry[], PieceEntry[]]; length: number }
@@ -136,7 +138,7 @@ const midZ = (r: Rect): number => (r.minZ + r.maxZ) / 2;
 
 /**
  * Downtown Rooftops: tall blocks on a 60 m street grid. Each arterial cell keeps its centre lot open as a plaza. Rows
- * of buildings stand along the north and south streets of every other lot, with 2.5–4.5 m roof gaps. On the two
+ * of buildings stand along the north and south streets of the other lots, with 2.5–4.5 m roof gaps. On the two
  * street sides facing each plaza the rows form marked rooftop routes: a jump pad in the plaza launches onto the first
  * roof, the route runs across the roof gaps (steps ≤ 1.2 m up or ≤ 7 m down, jump included), zip lines cross the side
  * streets to the next lots' rows, and the last row, facing the next cell's plaza, zips down into it. Lots beside a
@@ -175,7 +177,8 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
 
   const allBuildings: Building[] = [];
   const addBuilding = (piece: PieceEntry, scale: number, rotY: RotY, position: Vec3): Building => {
-    const prop: Prop = { id: `${name}-b${counters.b++}`, piece: piece.id, position: v2(position), rotY, scale, palette: palettes[Math.floor(rng() * palettes.length)]! };
+    const palette = palettes[Math.floor(rng() * palettes.length)]!;
+    const prop: Prop = { id: `${name}-b${counters.b++}`, piece: piece.id, position: v2(position), rotY, scale, palette };
     const b = shapeAt(piece, prop, p.doorOffset);
     allBuildings.push(b);
     return b;
@@ -227,7 +230,9 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
     const plan = planAlley(lot);
     if (plan) alleyPlans.set(lot, plan);
   }
-  if (alleyPlans.size < p.alley.min) throw new Error(`district ${name}: only ${alleyPlans.size} lots fit a wall-run alley (need ${p.alley.min})`);
+  if (alleyPlans.size < p.alley.min) {
+    throw new Error(`district ${name}: only ${alleyPlans.size} lots fit a wall-run alley (need ${p.alley.min})`);
+  }
   for (const lot of alleyPlans.keys()) kind.set(lot, 'alley');
 
   // ---- Rows ---------------------------------------------------------------------------------------------------
@@ -242,7 +247,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
    * bounds the first roof (the zip from the previous row). Other rows skip slots with chance 1 − fillChance.
    */
   function buildRow(lot: GridLot, side: Side, dir: 1 | -1, route: boolean, start?: { top: number; slack: number }): Row {
-    const row: Row = { lot, side, dir, buildings: [] };
+    const row: Row = { lot, dir, buildings: [] };
     const rotY = FACING[side];
     const front = side === 'n' ? lot.rect.minZ + p.setback : lot.rect.maxZ - p.setback;
     const [x0, x1] = [lot.rect.minX + reserve, lot.rect.maxX - reserve];
@@ -287,7 +292,8 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
         const z = side === 'n' ? front - trial.footprint.minZ : front - trial.footprint.maxZ;
         const fp = { ...trial.footprint, minX: trial.footprint.minX + x, maxX: trial.footprint.maxX + x };
         if (fp.minX < x0 - 1e-6 || fp.maxX > x1 + 1e-6) continue;
-        if (distToRect(plaza.center, { ...fp, minZ: trial.footprint.minZ + z, maxZ: trial.footprint.maxZ + z }) <= plaza.clearRadius) continue;
+        const placedFp = { ...fp, minZ: trial.footprint.minZ + z, maxZ: trial.footprint.maxZ + z };
+        if (distToRect(plaza.center, placedFp) <= plaza.clearRadius) continue;
         const b = addBuilding(piece, scale, rotY, { x, y: 0, z });
         // Rounding moved it by up to 5 mm: re-check the route rules on the final roofs
         if (route && last) {
@@ -430,7 +436,8 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
     const plazaNear = toward > 0 ? into.rect.minZ : into.rect.maxZ;
     const run = Math.max(Math.abs(plazaNear - a.z) + p.zip.minInto, from.roof.top / p.zip.maxSlope + 0.05);
     const b = v2({ x: a.x, y: p.zip.endHeight, z: a.z + toward * run });
-    if (toward * (b.z - (toward > 0 ? into.rect.maxZ : into.rect.minZ)) > -2) throw new Error(`district ${name}: zip ${label} runs past the plaza`);
+    const plazaFar = toward > 0 ? into.rect.maxZ : into.rect.minZ;
+    if (toward * (b.z - plazaFar) > -2) throw new Error(`district ${name}: zip ${label} runs past the plaza`);
     addZip(a, b, label);
   };
 
@@ -561,7 +568,8 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
 function shapeAt(piece: PieceEntry, prop: Prop, doorOffset: number): Building {
   const solids = propSolids(prop, piece);
   const quarter = prop.rotY === 90 || prop.rotY === 270;
-  const [hx, hz] = quarter ? [(piece.size.z * prop.scale) / 2, (piece.size.x * prop.scale) / 2] : [(piece.size.x * prop.scale) / 2, (piece.size.z * prop.scale) / 2];
+  const [sx, sz] = [(piece.size.x * prop.scale) / 2, (piece.size.z * prop.scale) / 2];
+  const [hx, hz] = quarter ? [sz, sx] : [sx, sz];
   const { x, z } = prop.position;
   const art = { minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz };
   const footprint = union([art, ...solids.map(solidRect)]);

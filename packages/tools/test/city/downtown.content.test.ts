@@ -235,7 +235,8 @@ describe('downtown: wall-run alleys', () => {
         for (const side of [0, 1] as const) {
           const label = `${a.id} from the ${end < 0 ? 'low' : 'high'} end beside wall ${side}`;
           const start = alongX ? (end < 0 ? a.floor.minX : a.floor.maxX) : end < 0 ? a.floor.minZ : a.floor.maxZ;
-          const across = alongX ? (side === 0 ? a.floor.minZ + r + 0.5 : a.floor.maxZ - r - 0.5) : side === 0 ? a.floor.minX + r + 0.5 : a.floor.maxX - r - 0.5;
+          const [lo, hi] = alongX ? [a.floor.minZ, a.floor.maxZ] : [a.floor.minX, a.floor.maxX];
+          const across = side === 0 ? lo + r + 0.5 : hi - r - 0.5;
           const dir = -end; // run into the alley
           const feet = alongX ? { x: start + dir * 1, y: 0.05, z: across } : { x: across, y: 0.05, z: start + dir * 1 };
           const yaw = alongX ? yawToward(dir, 0) : yawToward(0, dir);
