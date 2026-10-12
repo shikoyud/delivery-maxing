@@ -13,6 +13,7 @@ export * from './movement/body';
 export * from './movement/ground';
 export * from './movement/jump';
 export * from './movement/PlayerSim';
+export { createWorldFeatureState } from './movement/triggers';
 export * from './orders/types';
 export * from './orders/rules';
 export * from './orders/board';

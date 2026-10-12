@@ -1,0 +1,8 @@
+{
+  "camera": { "fovBase": 80, "fovMax": 96, "fovSpeedMin": 8, "fovSpeedMax": 18, "wallRunRollDeg": 8, "eyeHeight": 1.6, "crouchEyeHeight": 1.0, "pitchLimitDeg": 89 },
+  "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 650, "drawCallBudget": 150 },
+  "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
+    "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
+    "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "board": ["KeyQ"], "hit": ["Mouse0"],
+    "devPanel": ["Backquote"], "debugOverlay": ["F3"] } }
+}
