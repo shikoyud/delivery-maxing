@@ -242,6 +242,7 @@ export class DeliveryLoop {
         );
         const done = before.find((a) => a.order.id === e.orderId);
         if (e.onTime === false) lines.push('Express late · no bonus');
+        if (!e.withinPar) lines.push('Par over · no bonus');
         if (done?.order.modifier === 'fragile' && !done.fragileIntact) lines.push('Fragile damaged · no bonus');
         this.popups.show(`Delivered!  +${pointsText(e.points)} · +${e.coins} coins`, lines);
         break;

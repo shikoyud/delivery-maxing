@@ -119,6 +119,27 @@ describe('hudModel', () => {
     expect(hudModel(plain, map, hub, 5).orders[0]!.express).toBeNull();
   });
 
+  it('par secondsLeft counts down from parLimit and late flips after it', () => {
+    const s = system();
+    acceptOrder(s, order('p', 'dropoff', [poiA.id]), 10); // parLimit 60
+    const at = (now: number) => hudModel(s, map, hub, now).orders[0]!.par;
+    expect(at(10)).toEqual({ secondsLeft: 60, late: false });
+    expect(at(25)).toEqual({ secondsLeft: 45, late: false });
+    expect(at(70)).toEqual({ secondsLeft: 0, late: false });
+    expect(at(71)).toEqual({ secondsLeft: 0, late: true });
+  });
+
+  it('every order has a par timer, Express included (both timers, independent)', () => {
+    const s = system();
+    acceptOrder(s, order('e', 'dropoff', [poiA.id], 'express', 30), 0);
+    const m = hudModel(s, map, hub, 40).orders[0]!;
+    expect(m.express).toEqual({ secondsLeft: 0, late: true });
+    expect(m.par).toEqual({ secondsLeft: 20, late: false });
+    const chain = system();
+    acceptOrder(chain, order('c', 'chain', [poiA.id, poiB.id]));
+    expect(hudModel(chain, map, hub, 1).orders[0]!.par).toEqual({ secondsLeft: 59, late: false });
+  });
+
   it('fragileIntact is null without the modifier and tracks breaks', () => {
     const s = system();
     acceptOrder(s, order('f', 'dropoff', [poiA.id], 'fragile'));

@@ -469,6 +469,10 @@ test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
   await page.keyboard.press('KeyE');
   await expect(page.locator('.board-overlay')).toBeVisible();
   await expect(page.locator(`[data-order-id="${drop.id}"] .accept`)).toBeEnabled();
+  // Every card carries its par time and the par bonus as its own line.
+  const card = page.locator(`.board-card[data-order-id="${drop.id}"]`);
+  await expect(card.locator('.board-facts')).toContainText(/Par \d+:\d{2}/);
+  await expect(card.locator('.board-bonus', { hasText: 'coins within par' })).toHaveText('+1 pt · +10 coins within par');
   await page.screenshot({ path: `${artifacts}sp1-order-board.png` });
 
   await page.locator(`[data-order-id="${drop.id}"] .accept`).click();
@@ -493,6 +497,7 @@ test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
   await expect(popup).toBeVisible({ timeout: 10_000 });
   // toBeVisible counts opacity 0; wait for the fade-in to finish before the screenshot.
   await expect(popup).toHaveCSS('opacity', '1');
+  await expect(popup.locator('.popup-line', { hasText: /^Within par\s+\+1 pt · \+10 coins$/ })).toBeVisible();
   const totals = await page.evaluate(() => window.__dm!.orders.totals());
   expect(totals.points).toBeGreaterThanOrEqual(1);
   expect(totals.deliveries).toBe(1);
@@ -523,6 +528,9 @@ test('HUD shows the active order with distance', async ({ page }) => {
   await expect(order).toBeVisible();
   await expect(order.locator('.hud-stage')).toContainText('Deliver to');
   await expect(order.locator('.hud-distance')).toHaveText(/^\d+ m$/);
+  // Par counts down on every order; this seed's first Drop-off is Express, so its own timer shows beside it.
+  await expect(order.locator('.hud-par')).toHaveText(/^Par \d+:\d{2} left$/);
+  await expect(order.locator('.hud-timer:not(.hud-par)')).toHaveText(/^Express \d+:\d{2} left$/);
   const shown = Number((await order.locator('.hud-distance').textContent())!.replace(' m', ''));
   const { p, target } = await page.evaluate(
     (id) => ({ p: window.__dm!.player().position, target: window.__dm!.poiPosition(id) }),

@@ -45,11 +45,17 @@ export class Hud {
     const rows = m.orders.map((o) => {
       const chip = o.modifier ? `<span class="chip chip-${o.modifier}">${MODIFIER_LABEL[o.modifier]}</span>` : '';
       const extra: string[] = [];
+      // Par on every order (dimmed once over; the order still counts), Express as its own timer beside it.
+      extra.push(
+        o.par.late
+          ? '<span class="hud-timer hud-par late">Par over · no bonus</span>'
+          : `<span class="hud-timer hud-par">Par ${clock(o.par.secondsLeft)} left</span>`,
+      );
       if (o.express) {
         extra.push(
           o.express.late
-            ? '<span class="hud-timer late">Late · no bonus</span>'
-            : `<span class="hud-timer${o.express.secondsLeft < this.ui.expressUrgentSeconds ? ' urgent' : ''}">${clock(o.express.secondsLeft)} left</span>`,
+            ? '<span class="hud-timer late">Express late · no bonus</span>'
+            : `<span class="hud-timer${o.express.secondsLeft < this.ui.expressUrgentSeconds ? ' urgent' : ''}">Express ${clock(o.express.secondsLeft)} left</span>`,
         );
       }
       if (o.fragileIntact !== null) {

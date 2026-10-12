@@ -178,7 +178,8 @@ kbd {
 
 .hud-extra {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 2px 10px;
   margin-top: 4px;
   font-size: 13px;
   font-weight: 700;
@@ -188,6 +189,9 @@ kbd {
 .hud-timer.urgent { color: #ffd166; }
 .hud-timer.late,
 .hud-fragile.broken { color: #ff9a8f; }
+.hud-par { color: #9fe7dc; }
+/* Past par: dimmed, not red; the order still completes. */
+.hud-par.late { color: #fff; opacity: 0.55; }
 .hud-fragile { color: #9fe7dc; }
 
 .hud-totals {
@@ -540,6 +544,9 @@ kbd {
   font-weight: 600;
   color: #7a5ae0;
 }
+
+.board-bonus-par { color: var(--dm-teal); }
+.board-bonus + .board-bonus { margin-top: -8px; }
 
 .board-card .accept {
   margin-top: auto;

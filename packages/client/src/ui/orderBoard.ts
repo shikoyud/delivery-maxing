@@ -37,6 +37,34 @@ export function acceptBlockedReason(result: AcceptResult, order: Order, cooldown
   }
 }
 
+/** The fact chips on a card: band, route, slots, Par, and Express's own limit. */
+export function cardFacts(o: Order): string[] {
+  const facts = [
+    o.band ? BAND_LABEL[o.band] : 'Multi-stop',
+    `${Math.round(o.routeDistance)} m route`,
+    `${o.slots} slot${o.slots === 1 ? '' : 's'}`,
+    `Par ${clock(o.parLimit)}`,
+  ];
+  if (o.expressLimit !== null) facts.push(`${clock(o.expressLimit)} limit`);
+  return facts;
+}
+
+/** Bonus lines under a card's reward: the Express/Fragile bonus (not Heavy, it is in the reward) and the par bonus. */
+export function cardBonusLines(o: Order, cfg: OrdersConfig): { kind: 'modifier' | 'par'; text: string }[] {
+  const base = scoreOrder(o, { onTime: false, intact: false, withinPar: false }, cfg);
+  const best = scoreOrder(o, { onTime: true, intact: true, withinPar: false }, cfg);
+  const par = scoreOrder(o, { onTime: false, intact: false, withinPar: true }, cfg);
+  const lines: { kind: 'modifier' | 'par'; text: string }[] = [];
+  if (o.modifier && o.modifier !== 'heavy' && best.points > base.points) {
+    lines.push({
+      kind: 'modifier',
+      text: `+${pointsText(best.points - base.points)} · +${best.coins - base.coins} coins if ${o.modifier === 'express' ? 'on time' : 'intact'}`,
+    });
+  }
+  lines.push({ kind: 'par', text: `+${pointsText(par.points - base.points)} · +${par.coins - base.coins} coins within par` });
+  return lines;
+}
+
 /**
  * The personal Order Board (spec §3.3), a DOM modal opened at the HUB kiosk. Cards carry data-order-id; Accept
  * and Cancel pass the id (never a slot index), so a refresh under the cursor can't accept a different order
@@ -132,16 +160,10 @@ export class OrderBoardView {
         .join('');
       const base = scoreOrder(o, { onTime: false, intact: false, withinPar: false }, this.cfg);
       const best = scoreOrder(o, { onTime: true, intact: true, withinPar: false }, this.cfg);
-      const bonus =
-        o.modifier && o.modifier !== 'heavy' && best.points > base.points
-          ? `<div class="board-bonus">+${pointsText(best.points - base.points)} · +${best.coins - base.coins} coins if ${o.modifier === 'express' ? 'on time' : 'intact'}</div>`
-          : '';
-      const facts = [
-        o.band ? BAND_LABEL[o.band] : 'Multi-stop',
-        `${Math.round(o.routeDistance)} m route`,
-        `${o.slots} slot${o.slots === 1 ? '' : 's'}`,
-      ];
-      if (o.expressLimit !== null) facts.push(`${clock(o.expressLimit)} limit`);
+      const bonus = cardBonusLines(o, this.cfg)
+        .map((l) => `<div class="board-bonus board-bonus-${l.kind}">${l.text}</div>`)
+        .join('');
+      const facts = cardFacts(o);
       const reason = acceptBlockedReason(orders.canAccept(o.id, now, inPlaza), o, cooldownLeft, guardLeft);
       const shownPts = o.modifier === 'heavy' ? best : base;
       return (

@@ -9,6 +9,8 @@ export interface HudOrder {
   /** Straight-line metres to the current target, rounded. */
   distance: number;
   express: { secondsLeft: number; late: boolean } | null;
+  /** Par countdown (spec 3.2), present for every order; `late` once past the limit (the order still completes). */
+  par: { secondsLeft: number; late: boolean };
   fragileIntact: boolean | null;
 }
 
@@ -102,6 +104,7 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
         stage: stageText(a, pois),
         target: { ...target },
         distance: Math.round(Math.hypot(player.x - target.x, player.y - target.y, player.z - target.z)),
+        par: { secondsLeft: Math.max(0, a.order.parLimit - elapsed), late: elapsed > a.order.parLimit },
         express: limit === null ? null : { secondsLeft: Math.max(0, limit - elapsed), late: elapsed > limit },
         fragileIntact: a.order.modifier === 'fragile' ? a.fragileIntact : null,
       };
