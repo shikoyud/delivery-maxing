@@ -10,6 +10,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "build": "pnpm --filter @dm/client build",
+    "dev": "pnpm --filter @dm/client dev",
     "e2e": "pnpm --filter @dm/client e2e",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },

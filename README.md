@@ -41,7 +41,7 @@ Play the latest build at <https://shikoyud.github.io/delivery-maxing/>.
 | E | Interact (zip line, Order Board at the HUB kiosk) |
 | Q | Skateboard |
 | Left mouse | Hit (does nothing until SP4) |
-| F3 | Toggle the debug overlay |
+| F3 | Toggle the debug overlay (arrives in Task 19) |
 | `` ` `` (backtick) | Open the dev panel (arrives in Task 19) |
 
 Add `?debug=1` to the URL to turn on the debug hooks and overlay.
