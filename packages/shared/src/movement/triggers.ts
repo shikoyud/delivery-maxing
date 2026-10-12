@@ -23,6 +23,7 @@ export function enterAir(state: PlayerState, cfg: MovementConfig): void {
   state.mantle = null;
   state.zip = null;
   state.wallRun = { time: 0, normal: null, lastNormal: null };
+  state.wallChainStartY = null;
   state.grind = null;
   state.mode = 'air';
   state.grounded = false;

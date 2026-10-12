@@ -35,6 +35,10 @@ export interface MovementConfig {
     sameWallDot: number;
     /** Speed (m/s) at which a wall-runner is pulled toward the wall so contact holds. */
     stickSpeed: number;
+    /** Fastest fall (m/s) kept when a wall-run starts: vy = max(vy, -maxEntryFallSpeed) (R24). */
+    maxEntryFallSpeed: number;
+    /** Highest a wall-run may start (m) above the first wall-run start of the current chain (R25). */
+    maxChainRise: number;
   };
   zipLine: { attachDistance: number; hangDrop: number; baseSpeed: number; maxSpeed: number; levelThreshold: number };
   jumpPad: { retriggerCooldown: number };

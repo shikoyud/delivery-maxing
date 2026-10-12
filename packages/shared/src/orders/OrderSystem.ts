@@ -53,6 +53,16 @@ export class OrderSystem {
     this.backpackCapacity = n;
   }
 
+  /**
+   * Regenerates the board now (e.g. after the backpack capacity changed, so Heavy can appear) and restarts the
+   * refresh timer. Returns the boardRefreshed event for the caller to announce, like update() does.
+   */
+  refreshBoard(now: number): OrderEvent[] {
+    this.board = this.generate();
+    this.nextRefreshAt = now + this.opts.cfg.board.refreshSeconds;
+    return [{ kind: 'boardRefreshed' }];
+  }
+
   usedSlots(): number {
     return this.active.reduce((sum, a) => sum + a.order.slots, 0);
   }

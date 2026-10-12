@@ -1,6 +1,6 @@
 import type { MovementConfig } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
-import { clampHorizontal, vec3, type Vec3 } from '../math/vec3';
+import { clampHorizontal, horizontalLength, vec3, type Vec3 } from '../math/vec3';
 import type { MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
@@ -55,6 +55,7 @@ export class PlayerSim {
       airApexY: spawn.y,
       mantle: null,
       wallRun: { time: 0, normal: null, lastNormal: null },
+      wallChainStartY: null,
       zip: null,
       grind: null,
       boostLeft: 0,
@@ -268,11 +269,16 @@ export class PlayerSim {
         events.push({ kind: 'landed', fallHeight: Math.max(s.airApexY, s.position.y) - s.position.y });
       }
       // An air or wall-run landing changes the mode: a slide stays a slide (mantle steps never reach here).
-      if (s.mode === 'air' || s.mode === 'wallrun') s.mode = 'ground';
+      // Landing on foot still crouched at slide speed (a slide off a ledge, a slide-jump) slides on (R26).
+      if (s.mode === 'air' || s.mode === 'wallrun') {
+        const keepsSliding = !wasGrounded && !s.onBoard && s.crouched && horizontalLength(s.velocity) >= this.cfg.slide.endSpeed;
+        s.mode = keepsSliding ? 'slide' : 'ground';
+      }
       // A board landing points the board along the landing travel (air control may have turned it).
       if (!wasGrounded && s.onBoard) alignBoardHeading(s);
       // Landing unlocks every wall for wall-running again.
       s.wallRun = { time: 0, normal: null, lastNormal: null };
+      s.wallChainStartY = null;
       s.velocity = vec3(s.velocity.x, 0, s.velocity.z);
       s.groundNormal = move.groundNormal;
       s.lastGrounded = vec3(s.position.x, s.position.y, s.position.z);

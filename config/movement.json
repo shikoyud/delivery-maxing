@@ -7,7 +7,7 @@
   "mantle": { "minHeight": 0.4, "maxHeight": 1.5, "reach": 0.8, "duration": 0.3 },
   "slide": { "minEntrySpeed": 6, "friction": 2, "endSpeed": 3.5, "slopeGravityScale": 1 },
   "chute": { "friction": 0.4, "steerAccel": 4 },
-  "wallRun": { "maxTime": 1.5, "minSpeed": 5, "checkDistance": 0.6, "gravityScale": 0.15, "maxApproachAngleDeg": 60, "wallJumpPush": 6, "sameWallDot": 0.7, "stickSpeed": 0.5 },
+  "wallRun": { "maxTime": 1.5, "minSpeed": 5, "checkDistance": 0.6, "gravityScale": 0.15, "maxApproachAngleDeg": 60, "wallJumpPush": 6, "sameWallDot": 0.7, "stickSpeed": 0.5, "maxEntryFallSpeed": 3, "maxChainRise": 1.0 },
   "zipLine": { "attachDistance": 2, "hangDrop": 2.0, "baseSpeed": 10, "maxSpeed": 16, "levelThreshold": 0.5 },
   "jumpPad": { "retriggerCooldown": 0.5 },
   "boostOrb": { "radius": 1.0, "speedMultiplier": 1.4, "duration": 3, "respawnTime": 30 },

@@ -47,6 +47,8 @@ export interface PlayerState {
   /** The mantle in progress (mode 'mantle'), else null. */
   mantle: MantleState | null;
   wallRun: WallRunState;
+  /** Feet y of the first wall-run start since the player last landed (or was reset); null when none (R25). */
+  wallChainStartY: number | null;
   /** The zip line ride in progress (mode 'zipline'): line id, metres from its `a` end, direction (+1 toward b), speed. */
   zip: { id: string; s: number; dir: 1 | -1; speed: number } | null;
   /** The grind in progress (mode 'grind'): rail id, segment index, metres from that segment's start, direction (+1 toward the last point), speed. */

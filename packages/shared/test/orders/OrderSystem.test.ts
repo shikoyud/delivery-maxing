@@ -276,4 +276,23 @@ describe('OrderSystem', () => {
     expect(sys.backpackCapacity).toBe(3);
     expect(sys.freeSlots()).toBe(3);
   });
+
+  it('R29c: refreshBoard regenerates now (new capacity applies), resets the timer and reports boardRefreshed', () => {
+    // Capacity 1 never offers Heavy; after raising capacity a refresh can (seeded: find one that does).
+    let found = false;
+    for (let seed = 1; seed <= 200 && !found; seed++) {
+      const sys = make(seed, 1);
+      expect(sys.board.some((o) => o?.modifier === 'heavy')).toBe(false);
+      const before = new Set(sys.board.map((o) => o?.id));
+      sys.setBackpackCapacity(cfg.backpack.maxSlots);
+      const events = sys.refreshBoard(25);
+      expect(events).toEqual([{ kind: 'boardRefreshed' }]);
+      expect(sys.nextRefreshAt).toBe(25 + cfg.board.refreshSeconds);
+      expect(sys.board).toHaveLength(cfg.board.size);
+      expect(sys.board.some((o) => o && before.has(o.id))).toBe(false);
+      expect(sys.update(25 + cfg.board.refreshSeconds - 0.1, OUT)).toEqual([]);
+      found = sys.board.some((o) => o?.modifier === 'heavy');
+    }
+    expect(found).toBe(true);
+  });
 });

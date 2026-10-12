@@ -41,7 +41,8 @@ export function findWall(body: PlayerBody, state: PlayerState, cfg: MovementConf
 /**
  * All must hold: airborne (mode 'air') and not on the board; forward input above 0; horizontal speed ≥ minSpeed;
  * the angle between the horizontal velocity and the wall plane ≤ maxApproachAngleDeg; and this is not the wall
- * last run or jumped off (lastNormal null, or dot(normal, lastNormal) < sameWallDot).
+ * last run or jumped off (lastNormal null, or dot(normal, lastNormal) < sameWallDot); and the feet are at most
+ * wallRun.maxChainRise above the first wall-run start of the current chain (R25: chains keep height, never climb).
  */
 export function canStartWallRun(state: PlayerState, normal: Vec3, input: InputFrame, cfg: MovementConfig): boolean {
   const w = cfg.wallRun;
@@ -52,6 +53,8 @@ export function canStartWallRun(state: PlayerState, normal: Vec3, input: InputFr
   if (speed < w.minSpeed || speed === 0) return false;
   const sinAngle = Math.abs(v.x * normal.x + v.z * normal.z) / speed;
   if (Math.asin(Math.min(1, sinAngle)) > w.maxApproachAngleDeg * DEG) return false;
+  const chainY = state.wallChainStartY;
+  if (chainY !== null && state.position.y > chainY + w.maxChainRise) return false;
   const last = state.wallRun.lastNormal;
   return last === null || normal.x * last.x + normal.z * last.z < w.sameWallDot;
 }
@@ -64,11 +67,17 @@ function stickToWall(state: PlayerState, normal: Vec3, cfg: MovementConfig): voi
   state.velocity = vec3(v.x - normal.x * (into + k), v.y, v.z - normal.z * (into + k));
 }
 
-/** Enters a wall-run on the wall with horizontal normal `normal` (the caller checked canStartWallRun). */
+/**
+ * Enters a wall-run on the wall with horizontal normal `normal` (the caller checked canStartWallRun). A fall is
+ * arrested: vy = max(vy, -wallRun.maxEntryFallSpeed) (R24). The first start since landing begins the chain (R25).
+ */
 export function startWallRun(state: PlayerState, normal: Vec3, cfg: MovementConfig): void {
   state.mode = 'wallrun';
   state.wallRun = { time: 0, normal, lastNormal: normal };
+  state.wallChainStartY ??= state.position.y;
   state.airApexY = state.position.y;
+  const v = state.velocity;
+  state.velocity = vec3(v.x, Math.max(v.y, -cfg.wallRun.maxEntryFallSpeed), v.z);
   stickToWall(state, normal, cfg);
 }
 

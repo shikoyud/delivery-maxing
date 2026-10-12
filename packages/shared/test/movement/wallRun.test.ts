@@ -165,4 +165,47 @@ describe('wall-run', () => {
       expect(h.sim.state.mode).not.toBe('wallrun');
     }
   });
+
+  it('R24: a wall-run started while falling at -10 m/s arrests the fall (vy ≥ -maxEntryFallSpeed)', async () => {
+    const TICKS = 15;
+    const h = await makeSim({ solids: [wall('wall', LEFT_FACE, 'left')] });
+    h.sim.teleport(vec3(nextToLeftFace(LEFT_FACE), 10, 0), vec3(0, -10, -cfg.run.sprintSpeed));
+    h.runUntil(wallRunning, 5, SPRINT);
+    expect(h.sim.state.velocity.y).toBeGreaterThanOrEqual(-cfg.wallRun.maxEntryFallSpeed - 1e-9);
+    const y0 = h.sim.state.position.y;
+    for (let i = 0; i < TICKS; i++) {
+      h.tick(SPRINT);
+      expect(h.sim.state.mode).toBe('wallrun');
+    }
+    const wallDrop = y0 - h.sim.state.position.y;
+
+    const free = await makeSim();
+    free.sim.teleport(vec3(0, 10, 0), vec3(0, -10, -cfg.run.sprintSpeed));
+    free.run(1, SPRINT);
+    const f0 = free.sim.state.position.y;
+    free.run(TICKS, SPRINT);
+    const freeDrop = f0 - free.sim.state.position.y;
+    // Free fall from ~-10.7 m/s drops ~6 m in 0.5 s; the run starts at -3 m/s with gravity x0.15 (~1.9 m).
+    expect(wallDrop).toBeLessThan(0.4 * freeDrop);
+  });
+
+  it('R25: chaining wall-jumps in a 4 m alley never starts a run > maxChainRise above the first start', async () => {
+    const h = await makeSim({
+      solids: [wall('left', -2, 'left'), wall('right', 2, 'right')],
+      spawn: vec3(nextToLeftFace(-2), 0, 0),
+    });
+    h.run(10, SPRINT);
+    const starts: number[] = [];
+    let prev = h.sim.state.mode;
+    for (let i = 0; i < 240 && (i === 0 || !h.sim.state.grounded); i++) {
+      const s = h.sim.state;
+      // Ground jump on the first tick, then wall-jump 4 ticks into every run (W + Shift + Space only).
+      const jump = i === 0 || (s.mode === 'wallrun' && s.wallRun.time >= 4 / cfg.tickRate);
+      h.tick(SPRINT, jump ? ['jump'] : []);
+      if (h.sim.state.mode === 'wallrun' && prev !== 'wallrun') starts.push(h.sim.state.position.y);
+      prev = h.sim.state.mode;
+    }
+    expect(starts.length).toBeGreaterThanOrEqual(3);
+    for (const y of starts) expect(y).toBeLessThanOrEqual(starts[0]! + cfg.wallRun.maxChainRise + 1e-6);
+  });
 });
