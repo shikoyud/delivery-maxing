@@ -243,13 +243,13 @@ describe('greybox city: zip lines', () => {
   });
 });
 
-/** Where each jump pad should put the player: on top of this solid. */
+/** Where each jump pad should put the player: on top of this solid. Every pad must be listed. */
 const PAD_TARGETS: Record<string, string> = {
   'hub-pad-01': 'hub-roof-01',
   'hillside-pad-01': 'hillside-terrace-01',
   'hillside-pad-02': 'hillside-plateau',
-  'harbor-pad-01': 'harbor-crane-01',
-  'harbor-pad-02': 'harbor-crane-02',
+  'harbor-pad-01': 'harbor-crane-01-deck',
+  'harbor-pad-02': 'harbor-crane-02-deck',
   'suburbs-pad-01': 'suburbs-watertower-01',
   // Downtown rooftop access lands on generated buildings (ids follow the map seed).
   'downtown-pad-01': 'b-2--2-3',
@@ -257,19 +257,31 @@ const PAD_TARGETS: Record<string, string> = {
   'downtown-pad-03': 'b-0--2-1',
 };
 
-/** Runs the pad launch with no input from standing on the pad; returns where the player first lands. */
-function flyFromPad(padId: string): Vec3 {
+/** How the player holds input through a pad flight: nothing, W, or W + Shift, facing the launch direction. */
+type PadHold = 'none' | 'forward' | 'sprint';
+const PAD_HOLDS: PadHold[] = ['none', 'forward', 'sprint'];
+
+/** Runs a pad launch from standing on the pad; returns where the player first lands. */
+function flyFromPad(padId: string, hold: PadHold = 'none'): Vec3 {
   const pad = map.jumpPads.find((p) => p.id === padId);
   if (!pad) throw new Error(`no pad ${padId}`);
-  const sim = new PlayerSim(physics, map, cfg, pad.position, 0);
+  // facing(yaw) = (-sin yaw, 0, -cos yaw): face the launch's horizontal direction.
+  const yaw = Math.atan2(-pad.launch.x, -pad.launch.z);
+  // A fresh world per flight: a PlayerSim's capsule stays in its physics world and would block the next flight.
+  const sim = new PlayerSim(createPhysicsWorld(rapier, map), map, cfg, pad.position, yaw);
   const world = createWorldFeatureState(map);
   let launched = false;
   for (let i = 0; i < 30 * 10; i++) {
-    const events = sim.step(emptyInput(), NO_MODS, world, i * sim.dt);
+    const input = emptyInput();
+    input.look = { yaw, pitch: 0 };
+    if (hold !== 'none') input.move = { x: 0, y: 1 };
+    input.sprint.held = hold === 'sprint';
+    const events = sim.step(input, NO_MODS, world, i * sim.dt);
+    if (events.some((e) => e.kind === 'respawned')) throw new Error(`${padId} (${hold}): respawned at tick ${i}`);
     if (events.some((e) => e.kind === 'jumpPad')) launched = true;
     else if (launched && sim.state.grounded) return { ...sim.state.position };
   }
-  throw new Error(`${padId}: no landing within 10 s (launched: ${launched})`);
+  throw new Error(`${padId} (${hold}): no landing within 10 s (launched: ${launched})`);
 }
 
 describe('greybox city: jump pads', () => {
@@ -281,20 +293,151 @@ describe('greybox city: jump pads', () => {
     expect(inRect(p, rectOf(roof))).toBe(true);
   });
 
-  it('every jump pad lands the player on top of something useful', () => {
-    const targets = { ...PAD_TARGETS };
+  it('every jump pad lands on its target with no input, W, or W + Shift held toward the launch', () => {
     for (const pad of map.jumpPads) {
-      const p = flyFromPad(pad.id);
-      const t = targets[pad.id];
-      if (t) {
-        const s = byId(t);
-        expect(p.y, `${pad.id} lands on ${t}`).toBeCloseTo(top(s), 0);
-        expect(inRect(p, rectOf(s)), `${pad.id} lands on ${t}`).toBe(true);
-      } else {
-        // Every other pad (rooftop access) lands at least 8 m above where it launched.
-        expect(p.y - pad.position.y, `${pad.id} lands up high`).toBeGreaterThanOrEqual(8);
+      const t = PAD_TARGETS[pad.id];
+      expect(t, `${pad.id} has a PAD_TARGETS entry`).toBeDefined();
+      const s = byId(t!);
+      for (const hold of PAD_HOLDS) {
+        const p = flyFromPad(pad.id, hold);
+        expect(p.y, `${pad.id} (${hold}) lands on ${t}`).toBeCloseTo(top(s), 0);
+        expect(inRect(p, rectOf(s)), `${pad.id} (${hold}) lands on ${t} at ${p.x.toFixed(1)}, ${p.z.toFixed(1)}`).toBe(true);
       }
     }
+  });
+});
+
+/**
+ * Access graph over standing surfaces: the street ('ground') and the top of every unrotated solid that is not
+ * covered by a solid standing on it. Edges are the base movement kit (no upgrades):
+ * - a climb onto a touching top at most jump height + mantle reach higher (onto a solid standing on the street,
+ *   or from one top to a touching top);
+ * - a jump across a gap of at most one alley (rising at most 0.5 m), or a drop of at most fragile.maxFallMeters
+ *   (to the street, or to a touching or alley-near top);
+ * - a jump pad: the surface it sits on to its PAD_TARGETS solid (flights checked above);
+ * - a zip line: the surface under its high end to the surface under its low end;
+ * - a ramp (both ways) or a chute (down only): the surface at its high end to the one at its low end.
+ */
+const GROUND = 'ground';
+const CLIMB = cfg.jump.height + cfg.mantle.maxHeight;
+const JUMP_GAP = src.grid.alleyWidth;
+const JUMP_RISE = 0.5;
+const MAX_DROP = ordersConfig.fragile.maxFallMeters;
+
+interface Top { id: string; rect: Rect; y: number; base: number }
+const unrotated = (s: Solid): boolean => !s.rotationDeg || (s.rotationDeg.x === 0 && s.rotationDeg.y === 0 && s.rotationDeg.z === 0);
+const rectGap = (a: Rect, b: Rect): number =>
+  Math.hypot(Math.max(0, a.minX - b.maxX, b.minX - a.maxX), Math.max(0, a.minZ - b.maxZ, b.minZ - a.maxZ));
+const pointRect = (p: Vec3): Rect => ({ minX: p.x, minZ: p.z, maxX: p.x, maxZ: p.z });
+const contains = (outer: Rect, inner: Rect): boolean =>
+  inner.minX >= outer.minX && inner.maxX <= outer.maxX && inner.minZ >= outer.minZ && inner.maxZ <= outer.maxZ;
+
+function buildAccessGraph(): { tops: Top[]; edges: Map<string, Set<string>>; surfaceUnder: (p: Vec3) => string } {
+  const all: Top[] = map.solids
+    .filter((s) => s.id !== 'ground' && unrotated(s))
+    .map((s) => ({ id: s.id, rect: rectOf(s), y: top(s), base: s.center.y - s.size.y / 2 }));
+  const tops = all.filter((a) => !all.some((b) => b !== a && Math.abs(b.base - a.y) < 0.01 && contains(b.rect, a.rect)));
+  const edges = new Map<string, Set<string>>();
+  const link = (from: string, to: string): void => {
+    if (from === to) return;
+    if (!edges.has(from)) edges.set(from, new Set());
+    edges.get(from)!.add(to);
+  };
+  const surfaceUnder = (p: Vec3): string => {
+    let best: Top | undefined;
+    for (const t of tops) if (t.y <= p.y + 0.05 && inRect(p, t.rect) && (!best || t.y > best.y)) best = t;
+    return best?.id ?? GROUND;
+  };
+  const topAt = (p: Vec3): string => {
+    if (p.y < 0.3) return GROUND;
+    const t = tops.find((x) => Math.abs(x.y - p.y) < 0.3 && rectGap(x.rect, pointRect(p)) <= 0.5);
+    if (!t) throw new Error(`no surface at ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`);
+    return t.id;
+  };
+
+  for (const a of tops) {
+    if (a.base < 0.05 && a.y <= CLIMB) link(GROUND, a.id);
+    if (a.y <= MAX_DROP) link(a.id, GROUND);
+    for (const b of tops) {
+      if (a === b) continue;
+      const gap = rectGap(a.rect, b.rect);
+      const rise = b.y - a.y;
+      if (gap === 0 && rise > 0 && rise <= CLIMB) link(a.id, b.id);
+      if (gap <= JUMP_GAP && rise <= JUMP_RISE && -rise <= MAX_DROP) link(a.id, b.id);
+    }
+  }
+  for (const pad of map.jumpPads) {
+    const t = PAD_TARGETS[pad.id];
+    if (t) link(surfaceUnder(pad.position), t);
+  }
+  for (const z of map.zipLines) {
+    const [hi, lo] = z.a.y >= z.b.y ? [z.a, z.b] : [z.b, z.a];
+    link(surfaceUnder(hi), surfaceUnder(lo));
+  }
+  for (const s of map.solids.filter((x) => (x.kind === 'ramp' || x.kind === 'chute') && !unrotated(x))) {
+    const m = rotation(s);
+    const alongX = s.size.x >= s.size.z;
+    const end = (sign: number): Vec3 => {
+      const l = alongX ? [(sign * s.size.x) / 2, s.size.y / 2, 0] : [0, s.size.y / 2, (sign * s.size.z) / 2];
+      const w = [0, 1, 2].map((i) => m[i]![0]! * l[0]! + m[i]![1]! * l[1]! + m[i]![2]! * l[2]!);
+      return vec3(s.center.x + w[0]!, s.center.y + w[1]!, s.center.z + w[2]!);
+    };
+    const [e1, e2] = [end(1), end(-1)];
+    const [hi, lo] = e1.y >= e2.y ? [e1, e2] : [e2, e1];
+    const [h, l] = [topAt(hi), topAt(lo)];
+    link(h, l);
+    if (s.kind === 'ramp') link(l, h);
+  }
+  return { tops, edges, surfaceUnder };
+}
+
+function closure(start: string, edges: Map<string, Set<string>>): Set<string> {
+  const seen = new Set([start]);
+  const queue = [start];
+  while (queue.length) {
+    for (const n of edges.get(queue.shift()!) ?? []) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      queue.push(n);
+    }
+  }
+  return seen;
+}
+
+describe('greybox city: access and exits', () => {
+  const graph = () => {
+    const g = buildAccessGraph();
+    const reverse = new Map<string, Set<string>>();
+    for (const [from, tos] of g.edges) {
+      for (const to of tos) {
+        if (!reverse.has(to)) reverse.set(to, new Set());
+        reverse.get(to)!.add(from);
+      }
+    }
+    return { ...g, reach: closure(GROUND, g.edges), exit: closure(GROUND, reverse) };
+  };
+
+  it('every POI is reachable from the street with the base kit, and has a way down with no fall over the Fragile limit', () => {
+    const g = graph();
+    for (const p of map.pois) {
+      const node = g.surfaceUnder(vec3(p.position.x, p.position.y, p.position.z));
+      if (p.position.y > 0.05) expect(node, `${p.id} stands on a solid`).not.toBe(GROUND);
+      expect(g.reach.has(node), `${p.id} on ${node} is reachable`).toBe(true);
+      expect(g.exit.has(node), `${p.id} on ${node} has a Fragile-safe way down`).toBe(true);
+    }
+  });
+
+  it('every surface the base kit reaches has a Fragile-safe way back to the street (no dead-end roofs)', () => {
+    const g = graph();
+    const dead = [...g.reach].filter((n) => !g.exit.has(n));
+    expect(dead).toEqual([]);
+  });
+
+  it('is not permissive: a tall roof with no pad or zip (b-2--2-0, 35.5 m) and the crane jibs are out of reach', () => {
+    const g = graph();
+    expect(top(byId('b-2--2-0'))).toBe(35.5);
+    expect(g.reach.has('b-2--2-0')).toBe(false);
+    expect(g.reach.has('harbor-crane-01-jib')).toBe(false);
   });
 });
 
