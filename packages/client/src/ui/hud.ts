@@ -1,3 +1,4 @@
+import type { ClientConfig } from '../clientConfig';
 import { cssHex } from '../render/palette';
 import { slotColor } from '../render/waypoints';
 import { clock, el, esc, setHtml, setText } from './dom';
@@ -12,7 +13,10 @@ export class Hud {
   private readonly slots: HTMLElement;
   private readonly prompt: HTMLElement;
 
-  constructor(host: HTMLElement) {
+  constructor(
+    host: HTMLElement,
+    private readonly ui: Pick<ClientConfig['ui'], 'expressUrgentSeconds'>,
+  ) {
     const root = el('div', 'hud', host);
     this.orders = el('div', 'hud-orders', root);
     const totals = el('div', 'hud-totals', root);
@@ -44,7 +48,7 @@ export class Hud {
         extra.push(
           o.express.late
             ? '<span class="hud-timer late">Late · no bonus</span>'
-            : `<span class="hud-timer${o.express.secondsLeft < 10 ? ' urgent' : ''}">${clock(o.express.secondsLeft)} left</span>`,
+            : `<span class="hud-timer${o.express.secondsLeft < this.ui.expressUrgentSeconds ? ' urgent' : ''}">${clock(o.express.secondsLeft)} left</span>`,
         );
       }
       if (o.fragileIntact !== null) {

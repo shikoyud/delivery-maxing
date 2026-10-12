@@ -23,6 +23,7 @@ import {
 import type { ClientConfig } from '../clientConfig';
 import { buildHubMeshes, type HubMeshes } from '../render/hubMeshes';
 import { buildWaypoints, type Waypoints } from '../render/waypoints';
+import { esc, keyLabel } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { MODIFIER_LABEL, hudModel, poiIndex, stageText } from '../ui/hudModel';
 import { OrderBoardView } from '../ui/orderBoard';
@@ -81,8 +82,8 @@ export class DeliveryLoop {
     this.hubMeshes = buildHubMeshes(d.map, ordersConfig.zones.poiRadius);
     this.waypoints = buildWaypoints(ordersConfig.backpack.maxSlots, d.cfg.ui.waypointPulseHz);
     d.scene.add(this.hubMeshes.group, this.waypoints.mesh);
-    this.hud = new Hud(d.host);
-    this.popups = new Popups(d.host, d.cfg.ui.popupSeconds);
+    this.hud = new Hud(d.host, d.cfg.ui);
+    this.popups = new Popups(d.host, d.cfg.ui.popupSeconds, d.cfg.ui.maxPopups);
     this.board = new OrderBoardView(
       d.host,
       d.map,
@@ -174,7 +175,7 @@ export class DeliveryLoop {
     if (clockSeconds >= this.nextHudAt) {
       this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
       const { position } = this.d.player();
-      const prompt = !this.modalOpen && this.nearKiosk(position) ? '<kbd>E</kbd> Order Board' : null;
+      const prompt = !this.modalOpen && this.nearKiosk(position) ? `<kbd>${esc(keyLabel(this.d.cfg.input.bindings.interact[0] ?? ''))}</kbd> Order Board` : null;
       this.hud.update(hudModel(this.orders, this.d.map, position, now), prompt);
     }
     if (this.modalOpen) this.board.render(this.orders, now, this.zones.inPlaza);

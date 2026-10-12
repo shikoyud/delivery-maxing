@@ -41,10 +41,14 @@ export interface ClientConfig {
   ui: {
     /** How long a delivery popup stays on screen (s). */
     popupSeconds: number;
+    /** Popups on screen at once; the oldest is dropped first. */
+    maxPopups: number;
     /** HUD text refresh rate (Hz); the 3D waypoints still update every frame. */
     hudUpdateHz: number;
     /** Waypoint beam pulse rate (Hz). */
     waypointPulseHz: number;
+    /** Below this many seconds left, an Express timer turns to its urgent colour. */
+    expressUrgentSeconds: number;
   };
 }
 

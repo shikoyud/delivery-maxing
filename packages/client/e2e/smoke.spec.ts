@@ -145,13 +145,19 @@ test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
   expect(await page.evaluate(() => window.__dm!.boardOpen())).toBe(false);
   expect((await page.evaluate(() => window.__dm!.orders.active())).map((a) => a.order.id)).toEqual([drop.id]);
 
-  // Walk-in stand-in: land just inside the POI zone (radius 3 m), facing its post.
+  // Walk-in stand-in: land inside the POI zone (radius 3 m), 2.5 m toward the HUB, and look down the street at eye
+  // height, about 24 degrees right of the post, so the post sits left of the popup instead of behind it.
   await page.evaluate((id) => {
     const p = window.__dm!.poiPosition(id);
     const d = Math.hypot(p.x, p.z);
-    window.__dm!.viewpoint({ x: p.x - (p.x / d) * 2.5, y: p.y, z: p.z - (p.z / d) * 2.5 }, { x: p.x, y: p.y + 1.6, z: p.z });
+    const ux = p.x / d;
+    const uz = p.z / d;
+    window.__dm!.viewpoint({ x: p.x - ux * 2.5, y: p.y, z: p.z - uz * 2.5 }, { x: p.x + ux * 20 - uz * 10, y: p.y + 1.6, z: p.z + uz * 20 + ux * 10 });
   }, drop.poiId);
-  await expect(page.locator('.popup').filter({ hasText: 'pts' })).toBeVisible({ timeout: 10_000 });
+  const popup = page.locator('.popup').filter({ hasText: 'pts' });
+  await expect(popup).toBeVisible({ timeout: 10_000 });
+  // toBeVisible counts opacity 0; wait for the fade-in to finish before the screenshot.
+  await expect(popup).toHaveCSS('opacity', '1');
   const totals = await page.evaluate(() => window.__dm!.orders.totals());
   expect(totals.points).toBeGreaterThanOrEqual(1);
   expect(totals.deliveries).toBe(1);

@@ -6,5 +6,5 @@
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
     "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "board": ["KeyQ"], "hit": ["Mouse0"],
     "devPanel": ["Backquote"], "debugOverlay": ["F3"] } },
-  "ui": { "popupSeconds": 3.5, "hudUpdateHz": 12, "waypointPulseHz": 0.8 }
+  "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "expressUrgentSeconds": 10 }
 }

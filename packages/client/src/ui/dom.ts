@@ -27,3 +27,12 @@ export function setHtml(e: HTMLElement, html: string): void {
 export function setText(e: HTMLElement, text: string): void {
   if (e.textContent !== text) e.textContent = text;
 }
+
+/** A short label for a KeyboardEvent.code binding: "KeyE" → "E", "Digit1" → "1", "Mouse0" → "Mouse 1". */
+export function keyLabel(code: string): string {
+  const key = /^Key([A-Z])$/.exec(code) ?? /^Digit(\d)$/.exec(code);
+  if (key) return key[1]!;
+  const mouse = /^Mouse(\d)$/.exec(code);
+  if (mouse) return `Mouse ${Number(mouse[1]) + 1}`;
+  return code.replace(/^(Shift|Control|Alt)(Left|Right)$/, '$1');
+}
