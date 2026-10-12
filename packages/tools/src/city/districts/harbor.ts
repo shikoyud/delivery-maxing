@@ -35,11 +35,12 @@ interface HarborParams {
   /**
    * Yard rows of container stacks (`colsMin`–`colsMax` boxes side by side, `tiersMin`–`tiersMax` high), `gapMin`–
    * `gapMax` apart along the row, a stack in each slot with chance `fillChance`. Rows stand `aisle` apart, the mantle
-   * steps of each row in the aisle on one side; yards keep `margin` from their lot's edges.
+   * steps of each row in the aisle on one side (+v with chance `stepsForwardChance`); yards keep `margin` from their
+   * lot's edges. Inland, a yard's rows run along x with chance `rowsAlongXChance` (on a terminal, along the quay).
    */
   yard: {
     margin: number; aisle: number; colsMin: number; colsMax: number; tiersMin: number; tiersMax: number;
-    gapMin: number; gapMax: number; fillChance: number;
+    gapMin: number; gapMax: number; fillChance: number; rowsAlongXChance: number; stepsForwardChance: number;
   };
   /** Rise of each mantle-step crate, at most, m. */
   stepRise: number;
@@ -79,7 +80,9 @@ function harborParams(ctx: DistrictContext): HarborParams {
   nums(p, ['pitch', 'streetHalfWidth', 'edgeMargin', 'apronWidth', 'yardChance', 'stepRise', 'runUp'], '');
   nums(obj(p.warehouses, 'warehouses'), ['scaleMin', 'scaleMax', 'fillChance', 'setback', 'gapMin', 'gapMax', 'doorOffset'], 'warehouses.');
   nums(obj(p.container, 'container'), ['length', 'width', 'height'], 'container.');
-  nums(obj(p.yard, 'yard'), ['margin', 'aisle', 'colsMin', 'colsMax', 'tiersMin', 'tiersMax', 'gapMin', 'gapMax', 'fillChance'], 'yard.');
+  nums(obj(p.yard, 'yard'), [
+    'margin', 'aisle', 'colsMin', 'colsMax', 'tiersMin', 'tiersMax', 'gapMin', 'gapMax', 'fillChance', 'rowsAlongXChance', 'stepsForwardChance',
+  ], 'yard.');
   const crane = obj(p.crane, 'crane');
   nums(crane, [
     'count', 'heightMin', 'heightMax', 'setback', 'clear', 'mastSize', 'jibLength', 'counterJibLength', 'jibWidth', 'jibThickness',
@@ -97,7 +100,11 @@ function harborParams(ctx: DistrictContext): HarborParams {
   const h = p as unknown as HarborParams;
   const { yard: y, crane: c, zip: z } = h;
   const move = ctx.move;
-  for (const [k, v] of Object.entries({ yardChance: h.yardChance, 'yard.fillChance': y.fillChance, 'warehouses.fillChance': h.warehouses.fillChance })) {
+  const chances = {
+    yardChance: h.yardChance, 'yard.fillChance': y.fillChance, 'yard.rowsAlongXChance': y.rowsAlongXChance,
+    'yard.stepsForwardChance': y.stepsForwardChance, 'warehouses.fillChance': h.warehouses.fillChance,
+  };
+  for (const [k, v] of Object.entries(chances)) {
     if (v > 1) fail(`${k} must be at most 1`);
   }
   for (const [k, v] of Object.entries({ 'yard.colsMin': y.colsMin, 'yard.colsMax': y.colsMax, 'yard.tiersMin': y.tiersMin, 'yard.tiersMax': y.tiersMax, 'crane.count': c.count })) {
@@ -334,8 +341,8 @@ function buildYard(b: Build, lot: GridLot, quays: QuayEdge[], cranes: CranePlan[
   };
   for (const q of quays) cut(q, p.apronWidth);
   for (const c of cranes) cut(c.quay, p.crane.setback + p.crane.clear);
-  const axis: Axis = quays.length > 0 ? (quays[0]!.across === 'z' ? 'x' : 'z') : ctx.rng() < 0.5 ? 'x' : 'z';
-  const side: 1 | -1 = ctx.rng() < 0.5 ? 1 : -1; // the aisle holding each row's steps is on this side (in v)
+  const axis: Axis = quays.length > 0 ? (quays[0]!.across === 'z' ? 'x' : 'z') : ctx.rng() < y.rowsAlongXChance ? 'x' : 'z';
+  const side: 1 | -1 = ctx.rng() < y.stepsForwardChance ? 1 : -1; // the aisle holding each row's steps is on this side (in v)
   const { u0, u1, v0, v1 } = rectUV(axis, r);
   const { length: L, width: W } = p.container;
   const pick = (lo: number, hi: number): number => lo + Math.floor(ctx.rng() * (hi - lo + 1));

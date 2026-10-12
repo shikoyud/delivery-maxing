@@ -218,8 +218,7 @@ describe('harbor: container yards', () => {
         const s = h.sim.state;
         return s.grounded && s.mode === 'ground' && Math.abs(s.position.y - st.top) <= 0.05 && inRect(s.position, st.rect);
       };
-      let ticks = 0;
-      for (; ticks < 8 * cfg.tickRate && !onTop(); ticks++) {
+      for (let i = 0; i < 8 * cfg.tickRate && !onTop(); i++) {
         const events = h.tick({ forward: 1, yaw });
         expect(events.filter((e) => e.kind === 'respawned'), `${st.id}: respawned`).toEqual([]);
       }

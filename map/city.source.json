@@ -48,7 +48,7 @@
         "container": { "length": 6, "width": 2.4, "height": 2.6 },
         "yard": {
           "margin": 3, "aisle": 12, "colsMin": 4, "colsMax": 7, "tiersMin": 1, "tiersMax": 3,
-          "gapMin": 2.5, "gapMax": 4, "fillChance": 0.45
+          "gapMin": 2.5, "gapMax": 4, "fillChance": 0.45, "rowsAlongXChance": 0.5, "stepsForwardChance": 0.5
         },
         "stepRise": 1.4, "runUp": 2.5,
         "crane": {
