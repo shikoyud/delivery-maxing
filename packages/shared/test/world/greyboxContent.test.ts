@@ -238,7 +238,8 @@ describe('greybox city: zip lines', () => {
             const hand = vec3(feet.x, feet.y + cfg.capsule.height, feet.z);
             if (closestOnSegment(hand, z.a, z.b).dist > cfg.zipLine.attachDistance) continue;
             spots++;
-            const sim = new PlayerSim(simWorld, map, cfg, feet);
+            const other = name === 'a' ? z.b : z.a; // face along the line, away from this end (R7)
+          const sim = new PlayerSim(simWorld, map, cfg, feet, Math.atan2(-(other.x - start.x), -(other.z - start.z)));
             const input = emptyInput();
             input.interact = { held: true, pressed: true };
             const at = `${z.id}.${name} grab at ${dx}, ${dz}`;
@@ -283,52 +284,67 @@ describe('greybox city: zip lines', () => {
       }
       const { end } = highEnd(z);
       expect(dropTo(end)!, `${z.id} low end`).toBeGreaterThanOrEqual(2.2);
-      // The rider lets go at the low end; the fall from there keeps a Fragile package intact.
+      // A drop from the low end (should the dismount ever miss) keeps a Fragile package intact.
       expect(dropTo(end)!, `${z.id} low end`).toBeLessThanOrEqual(cfg.zipLine.hangDrop + ordersConfig.fragile.maxFallMeters);
     }
   });
 
-  it('every zip line can be ridden both ways from its ends and both ends exit safely', () => {
-    const maxFall = ordersConfig.fragile.maxFallMeters;
-    for (const z of map.zipLines) {
-      for (const [from, to, dir] of [[z.a, z.b, 1], [z.b, z.a, -1]] as const) {
-        const label = `${z.id} ${dir === 1 ? 'a -> b' : 'b -> a'}`;
-        const feet = grabSpot(z, from, to);
-        expect(feet, `${label}: a standing spot within reach of the cable near the start`).not.toBeNull();
-        // Face along the line toward `to`: facing(yaw) = (-sin yaw, 0, -cos yaw).
-        const yaw = Math.atan2(-(to.x - from.x), -(to.z - from.z));
-        const sim = new PlayerSim(createPhysicsWorld(rapier, map), map, cfg, feet!, yaw);
-        const world = createWorldFeatureState(map);
-        let tick = 0;
-        const step = (interact = false) => {
-          const input = emptyInput();
-          input.look = { yaw, pitch: 0 };
-          if (interact) input.interact = { held: true, pressed: true };
-          const events = sim.step(input, NO_MODS, world, tick++ * sim.dt);
-          expect(events.filter((e) => e.kind === 'respawned'), `${label}: respawned at tick ${tick}`).toEqual([]);
-          for (const e of events) {
-            if (e.kind === 'landed') expect(e.fallHeight, `${label}: fall at tick ${tick}`).toBeLessThanOrEqual(maxFall);
-          }
-          const p = sim.state.position;
-          if (sim.state.mode !== 'zipline') {
-            expect(solidAt(vec3(p.x, p.y + 0.1, p.z))?.id, `${label}: feet inside a solid at tick ${tick}`).toBeUndefined();
-          }
-        };
-        for (let i = 0; i < 3 && !sim.state.grounded; i++) step();
-        step(true);
-        expect(sim.state.zip, `${label}: grabbed`).toMatchObject({ id: z.id, dir });
-        const rideTicks = Math.ceil((distance(z.a, z.b) / cfg.zipLine.baseSpeed) * cfg.tickRate) + 5;
-        for (let i = 0; i < rideTicks && sim.state.mode === 'zipline'; i++) step();
-        expect(sim.state.mode, `${label}: ride ended`).not.toBe('zipline');
-        const off = sim.state.position;
-        expect(Math.hypot(off.x - to.x, off.z - to.z), `${label}: rode to the far end`).toBeLessThan(1);
-        // Let the courier come to rest: no respawn, no fall over the Fragile limit, never inside a solid.
-        for (let i = 0; i < 3 * cfg.tickRate; i++) step();
-        expect(sim.state.grounded, `${label}: standing after the exit`).toBe(true);
-      }
-    }
+  it('every zip line can be ridden both ways from its ends and both ends dismount onto a standing surface (R5)', () => {
+    for (const z of map.zipLines) for (const end of ['b', 'a'] as const) rideZip(z, end, 0);
+  });
+
+  it('after each dismount, holding W+Shift for 9 ticks keeps the courier on the platform (R6)', () => {
+    for (const z of map.zipLines) for (const end of ['b', 'a'] as const) rideZip(z, end, 9);
   });
 });
+
+/**
+ * Grabs `z` at the end opposite `to` facing along the line, rides it to `to` with no input and checks the exit: the
+ * detach tick is a dismount (mode ground) next to the far end, then `sprintTicks` ticks of W+Shift along the ride and
+ * 2 s idle. Throughout: no respawn, no landing with a fall over 0.1 m, feet never inside a solid off the line, and the
+ * courier ends standing at the dismount height.
+ */
+function rideZip(z: (typeof map.zipLines)[number], to: 'a' | 'b', sprintTicks: number): void {
+  const [from, target, dir] = to === 'b' ? [z.a, z.b, 1] : [z.b, z.a, -1];
+  const label = `${z.id} -> ${to}${sprintTicks ? ` (W+Shift ${sprintTicks} ticks)` : ''}`;
+  const feet = grabSpot(z, from, target);
+  expect(feet, `${label}: a standing spot within reach of the cable near the start`).not.toBeNull();
+  // Face along the line toward the target: facing(yaw) = (-sin yaw, 0, -cos yaw).
+  const yaw = Math.atan2(-(target.x - from.x), -(target.z - from.z));
+  const sim = new PlayerSim(createPhysicsWorld(rapier, map), map, cfg, feet!, yaw);
+  const world = createWorldFeatureState(map);
+  let tick = 0;
+  const step = (interact = false, sprint = false) => {
+    const input = emptyInput();
+    input.look = { yaw, pitch: 0 };
+    if (interact) input.interact = { held: true, pressed: true };
+    if (sprint) {
+      input.move = { x: 0, y: 1 };
+      input.sprint.held = true;
+    }
+    const events = sim.step(input, NO_MODS, world, tick++ * sim.dt);
+    expect(events.filter((e) => e.kind === 'respawned'), `${label}: respawned at tick ${tick}`).toEqual([]);
+    for (const e of events) {
+      if (e.kind === 'landed') expect(e.fallHeight, `${label}: fall at tick ${tick}`).toBeLessThanOrEqual(0.1);
+    }
+    const p = sim.state.position;
+    if (sim.state.mode !== 'zipline') {
+      expect(solidAt(vec3(p.x, p.y + 0.1, p.z))?.id, `${label}: feet inside a solid at tick ${tick}`).toBeUndefined();
+    }
+  };
+  for (let i = 0; i < 3 && !sim.state.grounded; i++) step();
+  step(true);
+  expect(sim.state.zip, `${label}: grabbed`).toMatchObject({ id: z.id, dir });
+  const rideTicks = Math.ceil((distance(z.a, z.b) / cfg.zipLine.baseSpeed) * cfg.tickRate) + 5;
+  for (let i = 0; i < rideTicks && sim.state.mode === 'zipline'; i++) step();
+  expect(sim.state.mode, `${label}: the ride ends in a dismount`).toBe('ground');
+  const off = sim.state.position;
+  expect(Math.hypot(off.x - target.x, off.z - target.z), `${label}: rode to the far end`).toBeLessThan(1);
+  for (let i = 0; i < sprintTicks; i++) step(false, true);
+  for (let i = 0; i < 2 * cfg.tickRate; i++) step();
+  expect(sim.state.grounded, `${label}: standing after the exit`).toBe(true);
+  expect(Math.abs(sim.state.position.y - off.y), `${label}: still on the dismount surface`).toBeLessThanOrEqual(0.05);
+}
 
 /**
  * Feet for a standing spot under the first 4 m of the cable from `from` (toward `to`) where a standing player's hand

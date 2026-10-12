@@ -24,13 +24,13 @@ const speedOf = (v: { x: number; y: number; z: number }) => Math.hypot(v.x, v.y,
 const HIGH_TOP = 8;
 /**
  * A line from a high platform (6 x 6, top at y = 8, around z = 0) down to the street at z = -30, where the courier
- * stands under the low end facing +Z (yaw π), up the line. The cable's high end is 2.3 m above the platform top,
- * 0.5 m in from its edge, so the hanging rider clears the edge on the way in.
+ * stands under the low end facing +Z (yaw π), up the line. The cable's high end is `endAbove` (default 2.3 m) above
+ * the platform top, 0.5 m in from its edge, so the hanging rider clears the edge on the way in.
  */
-const lowEndSim = () =>
+const lowEndSim = (endAbove = 2.3) =>
   makeSim({
     solids: [box('high', vec3(0, HIGH_TOP / 2, 0), vec3(6, HIGH_TOP, 6))],
-    zipLines: [line('up', [0, HIGH_TOP + 2.3, -2.5], [0, 3.5, -30])],
+    zipLines: [line('up', [0, HIGH_TOP + endAbove, -2.5], [0, 3.5, -30])],
     spawn: vec3(0, 0, -29),
     yaw: Math.PI,
   });
@@ -176,7 +176,9 @@ describe('zip line', () => {
     expect(s.grounded).toBe(true);
     expect(Math.abs(s.position.y - HIGH_TOP)).toBeLessThanOrEqual(0.05);
     expect(s.velocity.y).toBe(0);
-    expect(s.velocity.z).toBeGreaterThan(cfg.zipLine.baseSpeed * 0.9); // the ride's horizontal velocity
+    // The ride's horizontal direction (+Z), its ~9.7 m/s capped at run.runSpeed (R6).
+    expect(s.velocity.z).toBeCloseTo(cfg.run.runSpeed, 9);
+    expect(s.velocity.x).toBeCloseTo(0, 9);
     expect(h.sim.body.fitsAt(s.position, false)).toBe(true);
     // The courier stays standing on the platform: no landing with a fall, never inside it.
     for (let i = 0; i < 30; i++) {
@@ -188,6 +190,48 @@ describe('zip line', () => {
       expect(s.mode).toBe('ground');
       expect(h.sim.body.fitsAt(s.position, false)).toBe(true);
     }
+  });
+
+  it('a platform exactly dismountReach below the cable end still takes the dismount (R5)', async () => {
+    const h = await lowEndSim(cfg.zipLine.dismountReach);
+    h.tick({}, ['interact']);
+    let guard = 0;
+    while (h.sim.state.mode === 'zipline' && guard++ < 200) h.tick();
+    expect(h.sim.state.mode).toBe('ground');
+    expect(Math.abs(h.sim.state.position.y - HIGH_TOP)).toBeLessThanOrEqual(0.05);
+  });
+
+  it('a jump pressed on the dismount tick is honoured from the platform', async () => {
+    const h = await lowEndSim();
+    h.tick({}, ['interact']);
+    let guard = 0;
+    // Uphill the ride holds at baseSpeed toward a (s decreasing): the next tick ends the ride when s ≤ speed·dt.
+    while (h.sim.state.zip && h.sim.state.zip.s > h.sim.state.zip.speed * h.sim.dt && guard++ < 200) h.tick();
+    expect(h.sim.state.mode).toBe('zipline');
+    const ev = h.tick({}, ['jump']);
+    const s = h.sim.state;
+    expect(ev.some((e) => e.kind === 'jumped')).toBe(true);
+    expect(s.zip).toBeNull();
+    expect(s.mode).toBe('air');
+    expect(Math.abs(s.position.y - HIGH_TOP)).toBeLessThanOrEqual(0.05);
+    expect(s.velocity.y).toBeCloseTo(jumpVelocity(cfg, NO_MODS), 9);
+    expect(horizontalLength(s.velocity)).toBeLessThanOrEqual(cfg.run.runSpeed + 1e-9);
+    h.run(5);
+    expect(h.sim.state.position.y).toBeGreaterThan(HIGH_TOP + 0.5);
+  });
+
+  it('E at an end facing past it does not attach (less than minRideLength left)', async () => {
+    // The courier stands under end a and faces +Z, away from the line: nothing to ride that way.
+    const zip = line('z', [0, 10, 0], [0, 4, -30]);
+    const away = await rideSim(zip, Math.PI);
+    away.tick({}, ['interact']);
+    expect(away.sim.state.mode).not.toBe('zipline');
+    expect(away.sim.state.zip).toBeNull();
+    expect(horizontalLength(away.sim.state.velocity)).toBeLessThan(1);
+    // Facing along the line from the same spot rides it.
+    const along = await rideSim(zip, 0);
+    along.tick({}, ['interact']);
+    expect(along.sim.state.zip).toMatchObject({ dir: 1 });
   });
 
   it('riding off an end with nothing below detaches in the air with the ride velocity', async () => {

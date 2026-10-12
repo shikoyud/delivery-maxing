@@ -40,7 +40,20 @@ export interface MovementConfig {
     /** Highest a wall-run may start (m) above the first wall-run start of the current chain (R25). */
     maxChainRise: number;
   };
-  zipLine: { attachDistance: number; hangDrop: number; baseSpeed: number; maxSpeed: number; dismountReach: number };
+  zipLine: {
+    attachDistance: number;
+    hangDrop: number;
+    baseSpeed: number;
+    maxSpeed: number;
+    /** How far below the cable end (m) the end-of-ride dismount looks for a standing surface. */
+    dismountReach: number;
+    /** Attaching is refused when less line than this (m) remains in the ride direction. */
+    minRideLength: number;
+    /** |cos| between the facing and the line (horizontally) below which the facing does not pick the ride end. */
+    facingTie: number;
+    /** Horizontal speed along the line (m/s) below which the velocity does not pick the ride end either. */
+    velocityTie: number;
+  };
   jumpPad: { retriggerCooldown: number };
   boostOrb: { radius: number; speedMultiplier: number; duration: number; respawnTime: number };
   rail: { snapDistance: number; friction: number; minSpeedFoot: number };
