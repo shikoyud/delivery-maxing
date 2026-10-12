@@ -14,5 +14,7 @@ export default defineConfig({
     target: 'es2022',
     // three.js plus Rapier's base64-embedded WASM make one large game chunk by design (~4.9 MB, ~1.8 MB gzip).
     chunkSizeWarningLimit: 6144,
+    // Map JSON and city models are fetched at start: never inline them into the bundle, however small.
+    assetsInlineLimit: (file) => (/\.(glb|json)$/.test(file) ? false : undefined),
   },
 });

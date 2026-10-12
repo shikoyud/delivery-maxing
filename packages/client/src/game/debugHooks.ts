@@ -18,6 +18,12 @@ export interface DebugApi {
   /** Places the player on the ground at `feet` and looks at `target`. */
   viewpoint(feet: Vec3, target: Vec3): void;
   renderInfo(): { calls: number; triangles: number };
+  /** Physics chunks with colliders loaded ("cx,cz"); empty on the greybox (everything is loaded). */
+  loadedChunks(): string[];
+  /** City only: every building InstancedMesh's bounding sphere contains all the instances it draws (Review Focus 5). */
+  cityBoundsOk(): boolean;
+  /** City only: props per LOD ring after the last sort (null on the greybox). */
+  cityStats(): { lod0: number; lod1: number; lod2: number } | null;
   /** The delivery loop: copies of the board, active orders and totals; accept uses the player's position now. */
   orders: {
     board(): (Order | null)[];
@@ -92,6 +98,12 @@ export function installDebugHooks(game: Game): void {
     renderInfo() {
       return game.renderer.info();
     },
+    loadedChunks: () => [...(game.pager?.loadedChunks() ?? [])],
+    cityBoundsOk() {
+      if (!game.city) throw new Error('cityBoundsOk needs ?map=city');
+      return game.city.boundsOk();
+    },
+    cityStats: () => game.city?.stats() ?? null,
     orders: {
       board: () => structuredClone([...game.delivery.orders.board]),
       active: () => structuredClone([...game.delivery.orders.active]),

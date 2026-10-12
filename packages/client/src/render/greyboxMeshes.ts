@@ -22,7 +22,8 @@ export function solidColor(s: Solid): THREE.Color {
   return base.offsetHSL(0, 0, jitter);
 }
 
-function solidGeometry(s: Solid): THREE.BufferGeometry {
+/** A solid as a world-space box with its vertex colour and world-space UVs (1 unit = 1 m). */
+export function solidGeometry(s: Solid): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(s.size.x, s.size.y, s.size.z);
   const r = s.rotationDeg;
   const m = new THREE.Matrix4().compose(
@@ -46,7 +47,7 @@ function solidGeometry(s: Solid): THREE.BufferGeometry {
 }
 
 /** A tiling 1 m grid on a white background, multiplied over the vertex colours of the ground. */
-function gridTexture(): THREE.Texture | null {
+export function gridTexture(): THREE.Texture | null {
   if (typeof document === 'undefined') return null;
   const size = 128;
   const canvas = document.createElement('canvas');

@@ -3,7 +3,7 @@
     "chase": { "distance": 4.5, "height": 1.6, "pivotHeight": 1.3, "crouchPivotHeight": 0.8, "lookAtHeight": 1.9,
       "pitchMinDeg": -55, "pitchMaxDeg": 35, "followEaseRate": 14, "collisionRadius": 0.3,
       "minDistance": 0.8, "pushOutEaseRate": 6, "wallPivotOffset": 0.6 } },
-  "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 650, "drawCallBudget": 150,
+  "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 700, "drawCallBudget": 200, "triangleBudget": 700000,
     "waterLevel": -1.5, "waterMargin": 2000, "lights": { "hemi": 2.1, "sun": 2.4 }, "shadowBias": -0.0005, "shadowNormalBias": 0.05 },
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
@@ -33,5 +33,20 @@
         "bones": { "UpperArmL": [0, 0, -110], "UpperArmR": [0, 0, 110], "UpperLegL": [0, 0, -15], "UpperLegR": [0, 0, 15] } },
       "crouch": { "drop": 0, "hipDrop": 0.2, "body": [0, 0, 0],
         "bones": { "Abdomen": [-60.0, 0, 0], "UpperLegL": [80.0, 0, 0], "UpperLegR": [80.0, 0, 0], "LowerLegL": [-125.0, 0, 0], "LowerLegR": [-125.0, 0, 0], "UpperArmL": [125, 0, 0], "UpperArmR": [125, 0, 0] } } } },
+  "city": { "lodRadii": [160, 400, 700], "relodDistance": 25, "renderRegion": 250 },
+  "perf": {
+    "route": [
+      { "feet": { "x": 0, "y": 0.02, "z": 20 }, "target": { "x": 0, "y": 4, "z": -200 } },
+      { "feet": { "x": 400, "y": 0.02, "z": -400 }, "target": { "x": 400, "y": 5, "z": -700 } },
+      { "feet": { "x": 700, "y": 25, "z": -300 }, "target": { "x": 450, "y": 0, "z": -550 } },
+      { "feet": { "x": 400, "y": 0.02, "z": 400 }, "target": { "x": 700, "y": 3, "z": 400 } },
+      { "feet": { "x": 800, "y": 20, "z": 600 }, "target": { "x": 500, "y": 0, "z": 300 } },
+      { "feet": { "x": -400, "y": 0.02, "z": -400 }, "target": { "x": -400, "y": 5, "z": -800 } },
+      { "feet": { "x": -700, "y": 25, "z": -700 }, "target": { "x": -400, "y": 0, "z": -450 } },
+      { "feet": { "x": -400, "y": 0.02, "z": 400 }, "target": { "x": -700, "y": 3, "z": 400 } }
+    ],
+    "seconds": 60,
+    "speed": 12
+  },
   "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "expressUrgentSeconds": 10, "boardRefreshGuardSeconds": 0.75 }
 }

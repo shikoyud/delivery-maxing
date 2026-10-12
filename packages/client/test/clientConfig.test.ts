@@ -29,4 +29,24 @@ describe('clientConfig', () => {
     expect(c.pitchMinDeg).toBeLessThan(0);
     expect(c.pitchMaxDeg).toBeGreaterThan(0);
   });
+
+  it('city LOD rings are three increasing radii, the last one at the fog end', () => {
+    const r = clientConfig.city.lodRadii;
+    expect(r).toHaveLength(3);
+    expect(r[0]!).toBeGreaterThan(0);
+    expect(r[1]!).toBeGreaterThan(r[0]!);
+    expect(r[2]!).toBeGreaterThan(r[1]!);
+    expect(r[2]!).toBeLessThanOrEqual(clientConfig.graphics.fogFar);
+  });
+
+  it('perf route viewpoints lie on the 2 km map and cover all four quadrants', () => {
+    const route = clientConfig.perf.route;
+    expect(route.length).toBeGreaterThanOrEqual(8);
+    for (const { feet } of route) {
+      expect(Math.abs(feet.x)).toBeLessThanOrEqual(960);
+      expect(Math.abs(feet.z)).toBeLessThanOrEqual(960);
+    }
+    const quadrants = new Set(route.filter((v) => Math.hypot(v.feet.x, v.feet.z) > 100).map((v) => `${Math.sign(v.feet.x)},${Math.sign(v.feet.z)}`));
+    expect(quadrants.size).toBe(4);
+  });
 });

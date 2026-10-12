@@ -2,21 +2,21 @@ import * as THREE from 'three';
 import {
   FixedStepper,
   PlayerSim,
+  createPagedPhysicsWorld,
   createPhysicsWorld,
   createWorldFeatureState,
-  expandGreybox,
   horizontalLength,
   initRapier,
   lerpVec3,
   movementConfig,
   vec3,
-  type GreyboxSource,
+  worldConfig,
   type MapData,
+  type PagedPhysicsWorld,
   type SimEvent,
   type Vec3,
   type WorldFeatureState,
 } from '@dm/shared';
-import greyboxJson from '../../../../map/greybox.json';
 import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
@@ -27,12 +27,14 @@ import { CourierModel } from '../render/courier/CourierModel';
 import type { CourierView } from '../render/courier/CourierView';
 import { createCourierPlaceholder } from '../render/courierPlaceholder';
 import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
+import { CityView } from '../render/city/CityView';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
-import { Renderer } from '../render/Renderer';
+import { Renderer, toSun } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
+import { loadMap, type MapKind } from './mapLoader';
 import {
   assignNumbers,
   countOverrides,
@@ -54,6 +56,8 @@ export interface GameOptions {
   overlay?: boolean;
   /** Order Board RNG seed (?seed=N); defaults to Date.now(). */
   seed?: number;
+  /** Which map to play (?map=): the SP1 greybox by default until Task 15. */
+  map?: MapKind;
 }
 
 /**
@@ -96,6 +100,10 @@ export class Game {
     private readonly settings: DevSettings,
     private readonly devStore: DevSettingsStore,
     model: CourierModel | null,
+    /** The city's collider pager (null on the greybox, whose colliders all load at start). */
+    readonly pager: PagedPhysicsWorld | null,
+    /** The streamed city renderer (null on the greybox). */
+    readonly city: CityView | null,
   ) {
     this.prevPosition = { ...sim.state.position };
     const chase = this.cfg.camera.chase;
@@ -115,7 +123,7 @@ export class Game {
     );
     this.courier = model ?? createCourierPlaceholder(settings.movement.capsule, this.cfg.courier);
     this.renderer.scene.add(this.courier.root);
-    this.renderer.scene.add(buildGreyboxMeshes(map));
+    this.renderer.scene.add(city ? city.group : buildGreyboxMeshes(map));
     this.features = buildFeatureMeshes(map);
     this.renderer.scene.add(this.features.group);
     this.input = new InputManager(this.renderer.renderer.domElement, this.actions, {
@@ -172,14 +180,26 @@ export class Game {
 
   static async create(host: HTMLElement, opts: GameOptions): Promise<Game> {
     // The model loads alongside physics; a missing or broken file falls back to the capsule with one warning.
-    const [rapier, model] = await Promise.all([initRapier(), CourierModel.load(robotUrl, clientConfig.courier)]);
-    const map = expandGreybox(greyboxJson as GreyboxSource);
-    const physics = createPhysicsWorld(rapier, map);
+    // The city's models load alongside them; a city that fails to load fails the start (main.ts shows the error).
+    const gfx = clientConfig.graphics;
+    const [rapier, model, { map, city, view }] = await Promise.all([
+      initRapier(),
+      CourierModel.load(robotUrl, clientConfig.courier),
+      loadMap(opts.map ?? 'greybox').then(async (m) => ({
+        ...m,
+        view: m.city && m.pieces ? await CityView.load(m.city, m.pieces, clientConfig.city, gfx.shadows ? { toSun, extent: gfx.shadowExtent } : undefined) : null,
+      })),
+    ]);
+    // The city pages its colliders around the player (loaded around the spawn before the first step); the greybox keeps
+    // SP1's all-at-once world.
+    const pager = city ? createPagedPhysicsWorld(rapier, city, city.chunkSize, worldConfig.physics) : null;
+    pager?.update(map.hub.spawn);
+    const physics = pager ?? createPhysicsWorld(rapier, map);
     // One deep-cloned movement object shared by PlayerSim and the dev panel; the shared import is never mutated.
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
     const sim = new PlayerSim(physics, map, settings.movement, map.hub.spawn, map.hub.spawnYaw);
-    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model);
+    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model, pager, view);
     if (opts.debug) installDebugHooks(game);
     return game;
   }
@@ -205,6 +225,8 @@ export class Game {
 
   /** Moves the player (airborne, at velocity `v`, zero by default) and resets interpolation so the camera doesn't sweep. */
   teleport(p: Vec3, v: Vec3 = { x: 0, y: 0, z: 0 }): void {
+    // Load the colliders around the target first, so the player never lands in an unloaded chunk (Review Focus 1).
+    this.pager?.update(p);
     this.sim.teleport(vec3(p.x, p.y, p.z), vec3(v.x, v.y, v.z));
     this.prevPosition = { ...this.sim.state.position };
     this.courier.snap();
@@ -253,6 +275,8 @@ export class Game {
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
+    // Colliders around the player, before every step (a respawn last tick moved it; the pager loads the new chunks).
+    this.pager?.update(this.sim.state.position);
     const events = this.sim.step(frame, mods, this.world, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     const leftZip = wasZip && this.sim.state.mode !== 'zipline';
@@ -274,6 +298,7 @@ export class Game {
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
     this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s);
+    this.city?.update(feet, this.renderer.camera);
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
     this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);

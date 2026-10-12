@@ -620,3 +620,94 @@ test('dev panel screenshot', async ({ page }) => {
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${artifacts}sp1-devpanel.png` });
 });
+
+// ---- SP2: the generated city behind ?map=city (the greybox stays the default until Task 15) ----
+
+const CITY = '&map=city';
+
+/** Lets the sim run `ticks` ticks, then waits for two more drawn frames (the city re-sorts and culls per frame). */
+async function settle(page: Page, ticks = 3): Promise<void> {
+  await waitTicks(page, ticks);
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+}
+
+test('city loads, renders and reports ready with no console errors', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await expect(page.locator('canvas.game-canvas')).toBeVisible();
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 10);
+  const p = await page.evaluate(() => window.__dm!.player());
+  expect(p.mode).toBe('ground');
+  expect(p.position.y).toBeGreaterThan(-0.05); // on the plaza paving, colliders paged in around the spawn
+  const chunks = await page.evaluate(() => window.__dm!.loadedChunks());
+  expect(chunks).toContain('0,0');
+  expect(chunks.length).toBeLessThan(40); // paged: only the chunks around the player, not the whole 20 × 20 grid
+  const stats = await page.evaluate(() => window.__dm!.cityStats());
+  console.log(`city at spawn: rings ${JSON.stringify(stats)}, ${chunks.length} collider chunks`);
+  expect(stats!.lod0).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__dm!.cityBoundsOk())).toBe(true);
+  await page.screenshot({ path: `${artifacts}sp2-city-spawn.png` });
+  expect(errors).toEqual([]);
+});
+
+test('draw calls ≤ drawCallBudget and triangles ≤ triangleBudget at every perf-route viewpoint', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  const { drawCallBudget, triangleBudget } = clientJson.graphics;
+  const results: { feet: string; calls: number; triangles: number }[] = [];
+  for (const [i, { feet, target }] of clientJson.perf.route.entries()) {
+    await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, target] as const);
+    await settle(page);
+    const info = await page.evaluate(() => window.__dm!.renderInfo());
+    results.push({ feet: `${feet.x},${feet.y},${feet.z}`, ...info });
+    console.log(`perf viewpoint ${i} (${feet.x}, ${feet.y}, ${feet.z}): ${info.calls} draw calls, ${info.triangles} triangles`);
+    await page.screenshot({ path: `${artifacts}sp2-perf-${i}.png` });
+  }
+  for (const r of results) {
+    expect(r.calls, `draw calls at ${r.feet}`).toBeLessThanOrEqual(drawCallBudget);
+    expect(r.triangles, `triangles at ${r.feet}`).toBeLessThanOrEqual(triangleBudget);
+    expect(r.calls, `nothing drawn at ${r.feet}`).toBeGreaterThan(0);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('Review Focus 5: after teleporting 1,500 m, each LOD0 InstancedMesh bounding sphere contains all its active instance positions', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  const from = { x: -700, y: 0.02, z: -700 };
+  const to = { x: 400, y: 0.02, z: 400 }; // 1,556 m away
+  await page.evaluate(([f]) => window.__dm!.viewpoint(f, { x: f.x + 100, y: 5, z: f.z }), [from] as const);
+  await settle(page);
+  expect(await page.evaluate(() => window.__dm!.cityBoundsOk())).toBe(true);
+  await page.evaluate(([t]) => window.__dm!.viewpoint(t, { x: t.x + 300, y: 3, z: t.z }), [to] as const);
+  await settle(page);
+  expect(await page.evaluate(() => window.__dm!.cityStats()!.lod0)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__dm!.cityBoundsOk())).toBe(true);
+  const chunks = await page.evaluate(() => window.__dm!.loadedChunks());
+  expect(chunks).toContain('4,4');
+  expect(chunks).not.toContain('-7,-7');
+  // Review Focus 1 on the way: the player lands on the street at the far end, not through unloaded ground.
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  expect((await page.evaluate(() => window.__dm!.player())).position.y).toBeGreaterThan(-0.05);
+  expect(errors).toEqual([]);
+});
+
+test('sp2 city overview screenshot (high over the plaza)', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // High over the plaza's south side, looking north across it toward Downtown (NE) and Hillside (NW).
+  await airShot(page, { x: 0, y: 90, z: 140 }, { x: 0, y: 0, z: -80 }, 'sp2-city-overview.png');
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`sp2 city overview: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(errors).toEqual([]);
+});
+
+test('the default (no ?map) still loads the SP1 greybox', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  expect(await page.evaluate(() => window.__dm!.cityStats())).toBeNull();
+  expect(await page.evaluate(() => window.__dm!.loadedChunks())).toEqual([]);
+  // A greybox-only feature: the city has no boost orbs yet.
+  expect(await page.evaluate(() => window.__dm!.featurePosition('hub-orb-01'))).toBeTruthy();
+  expect(errors).toEqual([]);
+});

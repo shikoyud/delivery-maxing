@@ -1,3 +1,4 @@
+import type { Vec3 } from '@dm/shared';
 import clientJson from '../../../config/client.json';
 
 export interface ClientConfig {
@@ -24,7 +25,9 @@ export interface ClientConfig {
     shadowExtent: number;
     fogNear: number;
     fogFar: number;
+    /** CI proxies for the 60 fps target (headless Chromium can't measure real fps): per-frame draw calls and triangles. */
     drawCallBudget: number;
+    triangleBudget: number;
     /** Water plane height (m): below the ground top (0) and above movement fall.outOfBoundsY. */
     waterLevel: number;
     /** How far the water extends past the island edge on each side (m). */
@@ -39,6 +42,8 @@ export interface ClientConfig {
     bindings: Record<BindingName, string[]>;
   };
   courier: CourierConfig;
+  city: CityRenderConfig;
+  perf: PerfConfig;
   ui: {
     /** How long a delivery popup stays on screen (s). */
     popupSeconds: number;
@@ -53,6 +58,24 @@ export interface ClientConfig {
     /** After a board refresh, Accept clicks are ignored this long (s) and the board flashes (Review Focus 3). */
     boardRefreshGuardSeconds: number;
   };
+}
+
+/** City rendering (spec §5.1 streaming; plan assumption 13). Distances are horizontal, in metres. */
+export interface CityRenderConfig {
+  /** LOD ring outer radii: full model (LOD0) up to [0], LOD1 up to [1], tinted box (LOD2) up to [2], nothing beyond. */
+  lodRadii: number[];
+  /** Instances are re-sorted into rings when the player moved this far, or into another chunk, since the last sort. */
+  relodDistance: number;
+  /** Side of the square render regions the code-built geometry (ground, roads, cliffs…) is merged into. */
+  renderRegion: number;
+}
+
+/** The ?perf=1 flythrough (Task 8) and the CI budget viewpoints: street and rooftop views over every district. */
+export interface PerfConfig {
+  route: { feet: Vec3; target: Vec3 }[];
+  /** Flythrough length (s) and glide speed (m/s). */
+  seconds: number;
+  speed: number;
 }
 
 /** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */

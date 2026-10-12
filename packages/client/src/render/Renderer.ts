@@ -3,13 +3,19 @@ import type { Vec3 } from '@dm/shared';
 import type { ClientConfig } from '../clientConfig';
 import { palette } from './palette';
 
+/** Unit vector from the scene toward the sun (the shadow-casting light). */
+export const toSun: Readonly<Vec3> = (() => {
+  const v = new THREE.Vector3(-0.45, 1, 0.3).normalize();
+  return { x: v.x, y: v.y, z: v.z };
+})();
+
 /** Owns the three.js renderer, scene, camera, lights, fog, sky and water. */
 export class Renderer {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   private readonly sun: THREE.DirectionalLight;
-  private readonly sunOffset = new THREE.Vector3(-0.45, 1, 0.3).normalize();
+  private readonly sunOffset = new THREE.Vector3(toSun.x, toSun.y, toSun.z);
   private readonly resizeObserver: ResizeObserver;
 
   constructor(
