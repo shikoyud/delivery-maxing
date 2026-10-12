@@ -25,7 +25,7 @@ Promise.resolve()
       const seconds = perfSeconds > 0 ? perfSeconds : game.cfg.perf.seconds;
       void runPerf(game, { ...game.cfg.perf, seconds }).then((result) => {
         game.perfResult = result;
-      });
+      }).catch(() => undefined); // runPerf has already logged the error and shown it in the overlay
     } else if (hint && !debug) {
       const update = (): void => {
         hint.hidden = game.input.locked || game.delivery.modalOpen;

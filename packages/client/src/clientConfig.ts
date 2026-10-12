@@ -81,6 +81,12 @@ export interface PerfConfig {
   speed: number;
   /** The run passes when the overall p95 frame time is at most this (ms): 60 Hz frames read ~16.7 ms, a dropped one ~33 ms. */
   p95TargetMs: number;
+  /** Frames from the start of the run left out of the statistics (shader compiles, first uploads), s. */
+  warmupSeconds: number;
+  /** The first this-many frames after each teleport to the next viewpoint are left out (the jump itself). */
+  teleportSkipFrames: number;
+  /** Fewer counted frames than this and the run reports "too few frames" instead of PASS or FAIL. */
+  minFrames: number;
 }
 
 /** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */

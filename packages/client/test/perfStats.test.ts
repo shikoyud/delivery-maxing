@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { legSeconds, PerfRecorder, summarize, viewpointAt } from '../src/game/perf';
+import { legSeconds, PerfRecorder, summarize, viewpointAt, type FrameRender } from '../src/game/perf';
 
 describe('summarize', () => {
   it('summarize([10×16.6, 1×40]) has p50 16.6, p99 40, frames 11', () => {
@@ -76,29 +76,30 @@ describe('PerfRecorder', () => {
 
   it('leaves out the warm-up and the first 2 frames after each teleport, and splits the rest per viewpoint', () => {
     const rec = make();
+    // Each call is { viewpoint placed, ms until the next call, what the renderer reports about the frame before }.
+    const calls: { vp: number; ms: number; r: () => FrameRender }[] = [
+      ...Array.from({ length: 50 }, () => ({ vp: 0, ms: 20, r: render() })), // calls 0-49: t = 0 … 980, the warm-up
+      ...Array.from({ length: 11 }, () => ({ vp: 0, ms: 20, r: render(12, 500, 2) })), // calls 50-60 on viewpoint 0
+      { vp: 1, ms: 20, r: render(12, 500, 2) }, // call 61: teleports, but reports viewpoint 0's last frame
+      { vp: 1, ms: 20, r: render(99, 9999, 99) }, // call 62: the frame right after the jump (skipped)
+      { vp: 1, ms: 40, r: render(99, 9999, 99) }, // call 63: the second frame after the jump (skipped)
+      ...Array.from({ length: 6 }, () => ({ vp: 1, ms: 40, r: render(30, 700, 5) })), // calls 64-69: 40 ms frames
+    ];
     let t = 0;
-    const tick = (viewpoint: number, ms = 20, r = render()): void => {
-      rec.frame(t, viewpoint, r);
-      t += ms;
-    };
-    // 1 s of warm-up on viewpoint 0 (50 frames of 20 ms): nothing counts.
-    for (let i = 0; i < 50; i++) tick(0);
-    // Then 10 frames on viewpoint 0 (the first call after the warm-up still reports a warm-up frame).
-    for (let i = 0; i < 10; i++) tick(0, 20, render(12, 500, 2));
-    // Teleport to viewpoint 1; its first 2 frames are the jump; then 5 slow frames.
-    tick(1);
-    tick(1, 20, render(99, 9999, 99)); // reports the frame drawn right after the jump: skipped
-    tick(1, 20, render(99, 9999, 99)); // second frame after the jump: skipped
-    for (let i = 0; i < 5; i++) tick(1, 40, render(30, 700, 5));
-    tick(1, 40); // reports the last slow frame
+    for (const c of calls) {
+      rec.frame(t, c.vp, c.r);
+      t += c.ms;
+    }
     const r = rec.result();
-    expect(r.perViewpoint[0]!.frames).toBeGreaterThan(0);
-    expect(r.perViewpoint[0]!.p95).toBe(20);
-    expect(r.perViewpoint[1]!.frames).toBe(r.overall.frames - r.perViewpoint[0]!.frames);
-    expect(r.perViewpoint[1]!.p95).toBeGreaterThanOrEqual(20);
-    expect(r.maxCalls).toBeLessThan(99); // the post-jump frames never count
-    expect(r.maxTriangles).toBeLessThan(9999);
-    expect(r.cityUpdateP95).toBeLessThan(99);
+    // Call 50 (t = 1000) still reports a warm-up frame (it began at 980); calls 51-61 report counted frames of 20 ms.
+    expect(r.perViewpoint[0]).toEqual({ p50: 20, p95: 20, p99: 20, max: 20, frames: 11 });
+    // Calls 64-69 report six 40 ms frames; calls 62 and 63 (the jump) are left out.
+    expect(r.perViewpoint[1]).toEqual({ p50: 40, p95: 40, p99: 40, max: 40, frames: 6 });
+    expect(r.overall).toEqual({ p50: 20, p95: 40, p99: 40, max: 40, frames: 17 });
+    expect(rec.measured).toBe(17);
+    expect(r.maxCalls).toBe(30);
+    expect(r.maxTriangles).toBe(700);
+    expect(r.cityUpdateP95).toBe(5);
   });
 
   it('counts nothing before the warm-up has passed, and a viewpoint with no frames summarises to zeros', () => {

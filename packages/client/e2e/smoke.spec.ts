@@ -733,7 +733,17 @@ test('?perf=1 completes a short run (seconds=5) and reports a result', async ({ 
   expect(r.frames).toBeGreaterThan(0);
   expect(r.viewpointSeconds).toBeCloseTo(5 / clientJson.perf.route.length, 9);
   expect(r.p95TargetMs).toBe(clientJson.perf.p95TargetMs);
-  expect(r.pass).toBe(r.p95Ms <= r.p95TargetMs);
+  // Five seconds can't reach minFrames: the result says so rather than passing or failing.
+  expect(r.minFrames).toBe(clientJson.perf.minFrames);
+  expect(r.tooFewFrames).toBe(r.frames < r.minFrames);
+  expect(r.tooFewFrames).toBe(true);
+  expect(r.pass).toBe(false);
+  expect(r.elapsedSeconds).toBeGreaterThanOrEqual(5);
+  expect(r.hiddenDuringRun).toBe(false);
+  expect(r.canvas.width).toBeGreaterThan(0);
+  expect(r.canvas.height).toBeGreaterThan(0);
+  expect(r.warmupSeconds).toBe(clientJson.perf.warmupSeconds);
+  expect(r.teleportSkipFrames).toBe(clientJson.perf.teleportSkipFrames);
   // One entry per route viewpoint; the counted frames add up (very slow headless frames may leave some entries empty).
   expect(r.viewpoints.map((v) => v.feet)).toEqual(clientJson.perf.route.map((v) => v.feet));
   expect(r.viewpoints.reduce((n, v) => n + v.frames, 0)).toBe(r.frames);
@@ -755,7 +765,7 @@ test('?perf=1 completes a short run (seconds=5) and reports a result', async ({ 
   expect(Math.hypot(at.x - last.feet.x, at.z - last.feet.z)).toBeLessThan(0.625 * clientJson.perf.speed + 1);
   expect(at.x).toBeLessThanOrEqual(last.feet.x + 1e-6); // the last entry's target is toward -x
   const panel = page.locator('.perf-overlay');
-  await expect(panel.locator('.perf-title')).toContainText(r.pass ? 'PASS' : 'FAIL');
+  await expect(panel.locator('.perf-title')).toContainText('TOO FEW FRAMES');
   await expect(panel).toContainText('dropped frame');
   await expect(panel).toContainText('warm-up');
   await expect(panel).toContainText('p95 by viewpoint');

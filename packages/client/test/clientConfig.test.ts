@@ -41,7 +41,13 @@ describe('clientConfig', () => {
 
   it('perf run: positive length, speed and a p95 target above one 60 Hz frame', () => {
     const { seconds, speed, p95TargetMs, route } = clientConfig.perf;
-    expect(seconds / route.length).toBeGreaterThan(1); // each viewpoint outlasts the 1 s warm-up and the post-teleport frames
+    const { warmupSeconds, teleportSkipFrames, minFrames } = clientConfig.perf;
+    expect(warmupSeconds).toBeGreaterThanOrEqual(0);
+    expect(seconds / route.length).toBeGreaterThan(warmupSeconds); // each viewpoint outlasts the warm-up
+    expect(Number.isInteger(teleportSkipFrames) && teleportSkipFrames >= 0).toBe(true);
+    expect(Number.isInteger(minFrames) && minFrames > 0).toBe(true);
+    // A 60 s run at 30 fps still counts enough frames.
+    expect((seconds - warmupSeconds) * 30).toBeGreaterThan(minFrames);
     expect(speed).toBeGreaterThan(0);
     expect(p95TargetMs).toBeGreaterThanOrEqual(1000 / 60);
     expect(p95TargetMs).toBeLessThan(1000 / 30);

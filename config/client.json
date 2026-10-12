@@ -47,7 +47,10 @@
     ],
     "seconds": 60,
     "speed": 12,
-    "p95TargetMs": 18
+    "p95TargetMs": 18,
+    "warmupSeconds": 1,
+    "teleportSkipFrames": 2,
+    "minFrames": 300
   },
   "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "expressUrgentSeconds": 10, "boardRefreshGuardSeconds": 0.75 }
 }

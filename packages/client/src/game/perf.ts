@@ -3,9 +3,6 @@ import type { PerfConfig } from '../clientConfig';
 import { mountPerfOverlay } from '../ui/perfOverlay';
 import type { Game } from './Game';
 
-/** Frames in this many seconds from the start are left out of the statistics (shader compiles, first uploads). */
-export const WARMUP_SECONDS = 1;
-
 export interface FrameSummary {
   p50: number;
   p95: number;
@@ -157,9 +154,6 @@ export class PerfRecorder {
   }
 }
 
-/** The first frames after a teleport are left out of the statistics. */
-export const TELEPORT_SKIP_FRAMES = 2;
-
 /** One route entry's own frame times. */
 export interface ViewpointResult {
   feet: Vec3;
@@ -178,10 +172,21 @@ export interface PerfResult {
   seconds: number;
   /** Seconds each route entry was flown (seconds / entries). */
   viewpointSeconds: number;
+  /** Wall-clock seconds the run actually took (longer than `seconds` when it had to wait for a first counted frame). */
+  elapsedSeconds: number;
+  /** The tab was hidden at some point during the run (browsers throttle hidden tabs: run it again). */
+  hiddenDuringRun: boolean;
+  /** The canvas drawing-buffer size in pixels (CSS size × pixelRatio). */
+  canvas: { width: number; height: number };
+  /** The run's own counting rules, from config perf (echoed here so a pasted result is self-explanatory). */
   warmupSeconds: number;
   teleportSkipFrames: number;
   /** Overall p95 must not exceed this (config perf.p95TargetMs) to pass. */
   p95TargetMs: number;
+  /** Fewer counted frames than this (config perf.minFrames) is no result at all. */
+  minFrames: number;
+  tooFewFrames: boolean;
+  /** Not tooFewFrames and p95Ms <= p95TargetMs. */
   pass: boolean;
   /** Frames in the overall statistics (after the warm-up and the post-teleport frames). */
   frames: number;
@@ -215,12 +220,33 @@ function gpuRenderer(gl: WebGLRenderingContext | WebGL2RenderingContext): string
  */
 export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
   const overlay = mountPerfOverlay(game.host);
-  const rec = new PerfRecorder(cfg.route.length, WARMUP_SECONDS * 1000, TELEPORT_SKIP_FRAMES);
+  const rec = new PerfRecorder(cfg.route.length, cfg.warmupSeconds * 1000, cfg.teleportSkipFrames);
   const readRender = (): FrameRender => ({ ...game.renderer.info(), cityMs: game.cityUpdateMs });
 
-  return new Promise((resolve) => {
+  let hidden = document.visibilityState === 'hidden';
+  const onVisibility = (): void => {
+    if (document.visibilityState === 'hidden') hidden = true;
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+  const canvas = game.renderer.renderer.domElement;
+
+  return new Promise((resolve, reject) => {
+    const fail = (err: unknown): void => {
+      game.frameDriver = null;
+      document.removeEventListener('visibilitychange', onVisibility);
+      console.error(err);
+      overlay.error(err instanceof Error ? err.message : String(err));
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
     // Called before each frame is drawn, so what the recorder reads belongs to the frame before.
     game.frameDriver = (nowMs) => {
+      try {
+        drive(nowMs);
+      } catch (err) {
+        fail(err);
+      }
+    };
+    const drive = (nowMs: number): void => {
       const elapsed = rec.elapsedMs(nowMs) / 1000;
       const pose = viewpointAt(cfg.route, cfg.speed, cfg.seconds, elapsed);
       rec.frame(nowMs, pose.index, readRender);
@@ -228,8 +254,10 @@ export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
       // A run that was all warm-up (very slow frames) goes on until it has something to report.
       if (pose.done && rec.measured > 0) {
         game.frameDriver = null;
+        document.removeEventListener('visibilitychange', onVisibility);
         const run = rec.result();
         const dpr = window.devicePixelRatio;
+        const tooFewFrames = run.overall.frames < cfg.minFrames;
         const result: PerfResult = {
           url: window.location.href,
           screen: { width: window.screen.width, height: window.screen.height, dpr },
@@ -237,10 +265,15 @@ export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
           gpu: gpuRenderer(game.renderer.renderer.getContext()),
           seconds: cfg.seconds,
           viewpointSeconds: legSeconds(cfg.seconds, cfg.route.length),
-          warmupSeconds: WARMUP_SECONDS,
-          teleportSkipFrames: TELEPORT_SKIP_FRAMES,
+          elapsedSeconds: elapsed,
+          hiddenDuringRun: hidden,
+          canvas: { width: canvas.width, height: canvas.height },
+          warmupSeconds: cfg.warmupSeconds,
+          teleportSkipFrames: cfg.teleportSkipFrames,
           p95TargetMs: cfg.p95TargetMs,
-          pass: run.overall.p95 <= cfg.p95TargetMs,
+          minFrames: cfg.minFrames,
+          tooFewFrames,
+          pass: !tooFewFrames && run.overall.p95 <= cfg.p95TargetMs,
           frames: run.overall.frames,
           p50Ms: run.overall.p50,
           p95Ms: run.overall.p95,
