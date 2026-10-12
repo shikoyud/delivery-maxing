@@ -23,7 +23,7 @@ export interface MovementConfig {
   };
   jump: { height: number; coyoteTime: number; bufferTime: number };
   mantle: { minHeight: number; maxHeight: number; reach: number; duration: number };
-  slide: { minEntrySpeed: number; friction: number; endSpeed: number; slopeGravityScale: number };
+  slide: { minEntrySpeed: number; friction: number; endSpeed: number; slopeGravityScale: number; boostSpeed: number; boostCooldown: number };
   chute: { friction: number; steerAccel: number };
   wallRun: {
     maxTime: number;
