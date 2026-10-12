@@ -224,28 +224,30 @@ describe('greybox city: zip lines', () => {
     }
   });
 
-  it('pressing interact anywhere on a zip start platform within reach grabs that line (tryAttachZip)', () => {
+  it('pressing interact anywhere near either end of a zip line within reach grabs that line (tryAttachZip)', () => {
     const simWorld = createPhysicsWorld(rapier, map); // the players' capsules stay out of the shared query world
     for (const z of map.zipLines) {
-      const { start } = highEnd(z);
-      let spots = 0;
-      for (let dx = -3; dx <= 3; dx += 0.5) {
-        for (let dz = -3; dz <= 3; dz += 0.5) {
-          const drop = dropTo(vec3(start.x + dx, start.y, start.z + dz), 10);
-          if (drop === null || drop <= 0) continue;
-          const feet = vec3(start.x + dx, start.y - drop, start.z + dz);
-          if (solidAt(vec3(feet.x, feet.y + 1, feet.z))) continue;
-          const hand = vec3(feet.x, feet.y + cfg.capsule.height, feet.z);
-          if (closestOnSegment(hand, z.a, z.b).dist > cfg.zipLine.attachDistance) continue;
-          spots++;
-          const sim = new PlayerSim(simWorld, map, cfg, feet);
-          const input = emptyInput();
-          input.interact = { held: true, pressed: true };
-          expect(tryAttachZip(sim.state, input, map.zipLines, cfg), `${z.id} grab at ${dx}, ${dz}`).toBe(true);
-          expect(sim.state.zip?.id, `${z.id} grab at ${dx}, ${dz}`).toBe(z.id);
+      for (const [name, start] of [['a', z.a], ['b', z.b]] as const) {
+        let spots = 0;
+        for (let dx = -3; dx <= 3; dx += 0.5) {
+          for (let dz = -3; dz <= 3; dz += 0.5) {
+            const drop = dropTo(vec3(start.x + dx, start.y, start.z + dz), 10);
+            if (drop === null || drop <= 0) continue;
+            const feet = vec3(start.x + dx, start.y - drop, start.z + dz);
+            if (solidAt(vec3(feet.x, feet.y + 1, feet.z))) continue;
+            const hand = vec3(feet.x, feet.y + cfg.capsule.height, feet.z);
+            if (closestOnSegment(hand, z.a, z.b).dist > cfg.zipLine.attachDistance) continue;
+            spots++;
+            const sim = new PlayerSim(simWorld, map, cfg, feet);
+            const input = emptyInput();
+            input.interact = { held: true, pressed: true };
+            const at = `${z.id}.${name} grab at ${dx}, ${dz}`;
+            expect(tryAttachZip(sim.state, input, map.zipLines, cfg), at).toBe(true);
+            expect(sim.state.zip?.id, at).toBe(z.id);
+          }
         }
+        expect(spots, `${z.id}.${name} has standing spots in reach`).toBeGreaterThan(0);
       }
-      expect(spots, `${z.id} has standing spots in reach`).toBeGreaterThan(0);
     }
   });
 
@@ -285,7 +287,68 @@ describe('greybox city: zip lines', () => {
       expect(dropTo(end)!, `${z.id} low end`).toBeLessThanOrEqual(cfg.zipLine.hangDrop + ordersConfig.fragile.maxFallMeters);
     }
   });
+
+  it('every zip line can be ridden both ways from its ends and both ends exit safely', () => {
+    const maxFall = ordersConfig.fragile.maxFallMeters;
+    for (const z of map.zipLines) {
+      for (const [from, to, dir] of [[z.a, z.b, 1], [z.b, z.a, -1]] as const) {
+        const label = `${z.id} ${dir === 1 ? 'a -> b' : 'b -> a'}`;
+        const feet = grabSpot(z, from, to);
+        expect(feet, `${label}: a standing spot within reach of the cable near the start`).not.toBeNull();
+        // Face along the line toward `to`: facing(yaw) = (-sin yaw, 0, -cos yaw).
+        const yaw = Math.atan2(-(to.x - from.x), -(to.z - from.z));
+        const sim = new PlayerSim(createPhysicsWorld(rapier, map), map, cfg, feet!, yaw);
+        const world = createWorldFeatureState(map);
+        let tick = 0;
+        const step = (interact = false) => {
+          const input = emptyInput();
+          input.look = { yaw, pitch: 0 };
+          if (interact) input.interact = { held: true, pressed: true };
+          const events = sim.step(input, NO_MODS, world, tick++ * sim.dt);
+          expect(events.filter((e) => e.kind === 'respawned'), `${label}: respawned at tick ${tick}`).toEqual([]);
+          for (const e of events) {
+            if (e.kind === 'landed') expect(e.fallHeight, `${label}: fall at tick ${tick}`).toBeLessThanOrEqual(maxFall);
+          }
+          const p = sim.state.position;
+          if (sim.state.mode !== 'zipline') {
+            expect(solidAt(vec3(p.x, p.y + 0.1, p.z))?.id, `${label}: feet inside a solid at tick ${tick}`).toBeUndefined();
+          }
+        };
+        for (let i = 0; i < 3 && !sim.state.grounded; i++) step();
+        step(true);
+        expect(sim.state.zip, `${label}: grabbed`).toMatchObject({ id: z.id, dir });
+        const rideTicks = Math.ceil((distance(z.a, z.b) / cfg.zipLine.baseSpeed) * cfg.tickRate) + 5;
+        for (let i = 0; i < rideTicks && sim.state.mode === 'zipline'; i++) step();
+        expect(sim.state.mode, `${label}: ride ended`).not.toBe('zipline');
+        const off = sim.state.position;
+        expect(Math.hypot(off.x - to.x, off.z - to.z), `${label}: rode to the far end`).toBeLessThan(1);
+        // Let the courier come to rest: no respawn, no fall over the Fragile limit, never inside a solid.
+        for (let i = 0; i < 3 * cfg.tickRate; i++) step();
+        expect(sim.state.grounded, `${label}: standing after the exit`).toBe(true);
+      }
+    }
+  });
 });
+
+/**
+ * Feet for a standing spot under the first 4 m of the cable from `from` (toward `to`) where a standing player's hand
+ * reaches the cable and a standing capsule fits, or null.
+ */
+function grabSpot(z: (typeof map.zipLines)[number], from: Vec3, to: Vec3): Vec3 | null {
+  const len = distance(from, to);
+  for (let s = 0; s <= Math.min(4, len); s += 0.25) {
+    const k = s / len;
+    const c = vec3(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k, from.z + (to.z - from.z) * k);
+    const drop = dropTo(c, 10);
+    if (drop === null || drop <= 0) continue;
+    const feet = vec3(c.x, c.y - drop, c.z);
+    if (solidAt(vec3(feet.x, feet.y + 0.1, feet.z)) || solidAt(vec3(feet.x, feet.y + 1, feet.z))) continue;
+    if (closestOnSegment(vec3(feet.x, feet.y + cfg.capsule.height, feet.z), z.a, z.b).dist <= cfg.zipLine.attachDistance) {
+      return feet;
+    }
+  }
+  return null;
+}
 
 /** Where each jump pad should put the player: on top of this solid. Every pad must be listed. */
 const PAD_TARGETS: Record<string, string> = {
@@ -385,8 +448,8 @@ describe('greybox city: jump pads', () => {
  * - a jump across a gap of at most one alley (rising at most 0.5 m, or dropping at most fragile.maxFallMeters minus
  *   the jump height), or a walk-off drop of at most fragile.maxFallMeters (to the street or a touching top);
  * - a jump pad: the surface it sits on to its PAD_TARGETS solid, only when every simulated flight lands there with a
- *   fallHeight within fragile.maxFallMeters (zip lines: the low-end drop test above bounds their fall);
- * - a zip line: the surface under its high end to the surface under its low end;
+ *   fallHeight within fragile.maxFallMeters (zip lines: the two-way ride test above bounds their exits);
+ * - a zip line: the surfaces under its two ends, both ways;
  * - a ramp (both ways) or a chute (down only): the surface at its high end to the one at its low end.
  */
 const GROUND = 'ground';
@@ -444,9 +507,10 @@ function buildAccessGraph(): { tops: Top[]; edges: Map<string, Set<string>>; sur
     const t = PAD_TARGETS[pad.id];
     if (t && padSafe(pad.id)) link(surfaceUnder(pad.position), t);
   }
+  // Zip lines ride both ways (the two-way ride test above checks both grabs and both exits).
   for (const z of map.zipLines) {
-    const [hi, lo] = z.a.y >= z.b.y ? [z.a, z.b] : [z.b, z.a];
-    link(surfaceUnder(hi), surfaceUnder(lo));
+    link(surfaceUnder(z.a), surfaceUnder(z.b));
+    link(surfaceUnder(z.b), surfaceUnder(z.a));
   }
   for (const s of map.solids.filter((x) => (x.kind === 'ramp' || x.kind === 'chute') && !unrotated(x))) {
     const m = rotation(s);

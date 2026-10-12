@@ -40,7 +40,7 @@ export interface MovementConfig {
     /** Highest a wall-run may start (m) above the first wall-run start of the current chain (R25). */
     maxChainRise: number;
   };
-  zipLine: { attachDistance: number; hangDrop: number; baseSpeed: number; maxSpeed: number; levelThreshold: number };
+  zipLine: { attachDistance: number; hangDrop: number; baseSpeed: number; maxSpeed: number; dismountReach: number };
   jumpPad: { retriggerCooldown: number };
   boostOrb: { radius: number; speedMultiplier: number; duration: number; respawnTime: number };
   rail: { snapDistance: number; friction: number; minSpeedFoot: number };

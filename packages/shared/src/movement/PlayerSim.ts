@@ -167,11 +167,8 @@ export class PlayerSim {
       if (wasOnBoard) events.push({ kind: 'boardToggled', onBoard: false }); // attaching put the board away
     }
     const line = this.map.zipLines.find((l) => l.id === s.zip?.id);
-    if (line) updateZip(s, line, input, this.cfg, mods, this.dt);
-    else {
-      s.zip = null;
-      s.mode = 'air';
-    }
+    if (line) updateZip(s, line, input, this.cfg, mods, this.dt, this.body);
+    else enterAir(s, this.cfg);
     this.body.setFeet(s.position);
     s.position = this.body.feet;
     return true;
