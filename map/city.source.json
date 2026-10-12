@@ -21,12 +21,18 @@
       "rect": { "minX": 0, "minZ": -1000, "maxX": 1000, "maxZ": 0 },
       "template": "downtown",
       "params": {
-        "pitch": 100, "streetHalfWidth": 7, "scaleMin": 1.14, "scaleMax": 1.5, "fillChance": 0.45,
-        "setback": 1.5, "gapMin": 1, "gapMax": 5, "edgeMargin": 2, "doorOffset": 1,
-        "pieces": [
-          "b-3story-balcony", "b-3story-slim", "b-3story-small", "b-4story", "b-4story-center",
-          "b-4story-wide-2doors", "b-4story-wide-2doors-roof", "b-6story-stack", "b-2story-wide"
-        ]
+        "pitch": 60, "streetHalfWidth": 7, "edgeMargin": 2, "setback": 1.5, "rowEndMargin": 2.5, "doorOffset": 1,
+        "bakeScale": 2.8, "artScaleMin": 3.2, "artScaleMax": 4.2,
+        "roofGapMin": 2.5, "roofGapMax": 4.5, "roofGapMaxUp": 4, "stepUpMax": 1.2, "stepDownMax": 7,
+        "minRoofLength": 6, "landingMargin": 1.5,
+        "rowPieces": {
+          "b-3story-small": 4, "b-3story-balcony": 1, "b-4story": 1, "b-4story-center": 1, "b-6story-stack": 2
+        },
+        "fillChance": 0.45,
+        "alley": { "width": 4, "pieces": ["b-4story", "b-4story-center"], "artScale": 4.2, "minLength": 20, "minHeight": 8, "chance": 0.25, "min": 6 },
+        "pad": { "radius": 1.2, "apexAbove": 2.5, "inset": 3, "clearance": 0.5 },
+        "zip": { "endHeight": 3.2, "endInset": 1.2, "maxSlope": 0.6, "minInto": 8 },
+        "orbHeight": 1, "orbBackInset": 1.2
       }
     },
     {

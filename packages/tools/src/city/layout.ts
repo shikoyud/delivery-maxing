@@ -4,6 +4,12 @@ import type { CitySource, Edge } from './source';
 /** Rounds to 0.01 (the precision of every coordinate in city.json); `+ 0` turns −0 into 0. */
 export const r2 = (v: number): number => Math.round(v * 100) / 100 + 0;
 export const v2 = (v: Vec3): Vec3 => ({ x: r2(v.x), y: r2(v.y), z: r2(v.z) });
+/**
+ * Local street lines sit on whole metres: then every road and sidewalk edge (line ± half-widths, chunk borders) is
+ * exact in binary, and a slab's centre ± half-size lands exactly on a chunk border instead of a hair past it (a
+ * 66.67 m line puts slab centres on half-centimetres, and float sums 1e-14 over the border).
+ */
+const snapLine = (v: number): number => Math.round(v) + 0;
 
 export const intersectRect = (a: Rect, b: Rect): Rect => ({
   minX: Math.max(a.minX, b.minX),
@@ -52,7 +58,7 @@ export interface GridLine { at: number; kind: 'arterial' | 'local' | 'edge'; ins
 
 /**
  * The street lines across [min, max] on one axis: the arterials inside it, and local streets splitting each span
- * between arterials (or edges) into equal blocks of about `pitch` m.
+ * between arterials (or edges) into equal blocks of about `pitch` m (each line snapped to a whole metre).
  */
 export function gridLines(
   min: number,
@@ -75,7 +81,7 @@ export function gridLines(
     const next = bounds[i + 1];
     if (!next) return;
     const n = Math.max(1, Math.round((next.at - b.at) / local.pitch));
-    for (let k = 1; k < n; k++) out.push({ at: r2(b.at + ((next.at - b.at) * k) / n), kind: 'local', inset: local.halfWidth });
+    for (let k = 1; k < n; k++) out.push({ at: snapLine(b.at + ((next.at - b.at) * k) / n), kind: 'local', inset: local.halfWidth });
   });
   return out;
 }

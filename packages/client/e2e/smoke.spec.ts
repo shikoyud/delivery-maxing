@@ -702,6 +702,22 @@ test('sp2 city overview screenshot (high over the plaza)', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('sp2 Downtown screenshot (on a wall-run alley roof, looking along the alley)', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // On the north wall of downtown-alley-5 (roofs 20.69 m, alley floor x 554.8–575.2, z −502 to −498), at its west
+  // end, looking east along the alley and down into it, with the rooftop rows and the plaza's zip lines beyond.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 556, y: 20.7, z: -503 }, { x: 590, y: -16, z: -500 }));
+  await settle(page, 10);
+  const p = await page.evaluate(() => window.__dm!.player());
+  expect(p.mode).toBe('ground');
+  expect(p.position.y).toBeGreaterThan(20); // standing on the roof
+  await page.screenshot({ path: `${artifacts}sp2-downtown.png` });
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`sp2 downtown: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(errors).toEqual([]);
+});
+
 test('the default (no ?map) still loads the SP1 greybox', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
