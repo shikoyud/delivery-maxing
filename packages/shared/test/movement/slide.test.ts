@@ -204,6 +204,27 @@ describe('chutes', () => {
     expect(s.position.y).toBeLessThan(y0 - 0.5);
   });
 
+  it('a long steep chute never takes horizontal speed past speedCap, steered downhill or not', async () => {
+    const deg = 25;
+    const a = (deg * Math.PI) / 180;
+    const len = 200; // z in ±82: inside the test map's bounds
+    const chute = box('long-chute', vec3(0, -0.5 * Math.cos(a), 0.5 * Math.sin(a)), vec3(8, 1, len), {
+      rotationDeg: vec3(-deg, 0, 0),
+      kind: 'chute',
+      surface: 'chute',
+    });
+    for (const hold of [{}, { forward: 1, sprint: true }, { crouch: true }]) {
+      const h = await makeSim({ floor: false, solids: [chute], spawn: onSlope(deg, 75) });
+      let max = 0;
+      for (let i = 0; i < 6 * cfg.tickRate && h.sim.state.position.z > 5; i++) {
+        h.tick(hold);
+        max = Math.max(max, speed(h.sim.state));
+      }
+      expect(max, JSON.stringify(hold)).toBeGreaterThan(cfg.speedCap - 0.5); // the chute does reach the cap
+      expect(max, JSON.stringify(hold)).toBeLessThanOrEqual(cfg.speedCap + 1e-6);
+    }
+  });
+
   it('input on a chute only steers at chute.steerAccel', async () => {
     const h = await makeSim({
       floor: false,

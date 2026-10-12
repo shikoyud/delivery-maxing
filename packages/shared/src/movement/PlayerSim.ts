@@ -73,11 +73,15 @@ export class PlayerSim {
     enterAir(s, this.cfg);
   }
 
-  /** One tick: movement (all modes), then pads, orbs and out-of-bounds respawn. */
+  /**
+   * One tick: movement (all modes), then pads, orbs and out-of-bounds respawn. Horizontal speed leaves every step
+   * within speedCap: the move itself is capped, and so is anything added after it (slide and chute slope gravity).
+   */
   step(input: InputFrame, mods: StatModifiers, world: WorldFeatureState, time: number): SimEvent[] {
     this.state.boostLeft = Math.max(0, this.state.boostLeft - this.dt);
     const events = this.stepMovement(input, mods);
     events.push(...applyTriggers(this.state, this.body, this.map, world, this.cfg, time));
+    this.state.velocity = clampHorizontal(this.state.velocity, this.cfg.speedCap);
     return events;
   }
 
