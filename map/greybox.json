@@ -206,15 +206,15 @@
     { "id": "suburbs-zip-01", "a": { "x": -67, "y": 15, "z": 85 }, "b": { "x": -128, "y": 5, "z": 72 } }
   ],
   "jumpPads": [
-    { "id": "hub-pad-01", "position": { "x": 106.5, "y": 0, "z": 0 }, "radius": 1.6, "launch": { "x": 8.158, "y": 24.596, "z": 0 } },
-    { "id": "downtown-pad-01", "position": { "x": 135.5, "y": 0, "z": -48 }, "radius": 1.6, "launch": { "x": 0, "y": 26.03, "z": -8.182 } },
-    { "id": "downtown-pad-02", "position": { "x": 139, "y": 13.5, "z": -68 }, "radius": 1.6, "launch": { "x": 0, "y": 31.622, "z": -8.06 } },
-    { "id": "downtown-pad-03", "position": { "x": 54, "y": 0, "z": -85.5 }, "radius": 1.6, "launch": { "x": -8.148, "y": 34.741, "z": 0 } },
-    { "id": "harbor-pad-01", "position": { "x": 268, "y": 0, "z": 100 }, "radius": 1.6, "launch": { "x": 8.06, "y": 32.517, "z": 0 } },
-    { "id": "harbor-pad-02", "position": { "x": 268, "y": 0, "z": 50 }, "radius": 1.6, "launch": { "x": 8.06, "y": 32.517, "z": 0 } },
-    { "id": "hillside-pad-01", "position": { "x": -170, "y": 0, "z": -285 }, "radius": 1.6, "launch": { "x": -8.148, "y": 31.037, "z": 0 } },
-    { "id": "hillside-pad-02", "position": { "x": -199, "y": 10, "z": -285 }, "radius": 1.6, "launch": { "x": -7.931, "y": 32.782, "z": 1.724 } },
-    { "id": "suburbs-pad-01", "position": { "x": -82, "y": 0, "z": 85 }, "radius": 1.6, "launch": { "x": 8.095, "y": 27.048, "z": 0 } }
+    { "id": "hub-pad-01", "position": { "x": 106.5, "y": 0, "z": 0 }, "radius": 1.6, "launch": { "x": 8.06, "y": 24.083, "z": 0 } },
+    { "id": "downtown-pad-01", "position": { "x": 135.5, "y": 0, "z": -48 }, "radius": 1.6, "launch": { "x": 0, "y": 26.833, "z": -8.06 } },
+    { "id": "downtown-pad-02", "position": { "x": 139, "y": 13.5, "z": -68 }, "radius": 1.6, "launch": { "x": 0, "y": 31.305, "z": -8.06 } },
+    { "id": "downtown-pad-03", "position": { "x": 54, "y": 0, "z": -85.5 }, "radius": 1.6, "launch": { "x": -8.06, "y": 31.305, "z": 0 } },
+    { "id": "harbor-pad-01", "position": { "x": 268, "y": 0, "z": 100 }, "radius": 1.6, "launch": { "x": 8.06, "y": 32.558, "z": 0 } },
+    { "id": "harbor-pad-02", "position": { "x": 268, "y": 0, "z": 50 }, "radius": 1.6, "launch": { "x": 8.06, "y": 32.558, "z": 0 } },
+    { "id": "hillside-pad-01", "position": { "x": -170, "y": 0, "z": -285 }, "radius": 1.6, "launch": { "x": -8.06, "y": 24.083, "z": 0 } },
+    { "id": "hillside-pad-02", "position": { "x": -199, "y": 10, "z": -285 }, "radius": 1.6, "launch": { "x": -8.06, "y": 24.083, "z": 0 } },
+    { "id": "suburbs-pad-01", "position": { "x": -82, "y": 0, "z": 85 }, "radius": 1.6, "launch": { "x": 8.06, "y": 25.69, "z": 0 } }
   ],
   "boostOrbs": [
     { "id": "hub-orb-01", "position": { "x": 33, "y": 1.2, "z": 0 } },

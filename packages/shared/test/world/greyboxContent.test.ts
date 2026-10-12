@@ -261,8 +261,13 @@ const PAD_TARGETS: Record<string, string> = {
 type PadHold = 'none' | 'forward' | 'sprint';
 const PAD_HOLDS: PadHold[] = ['none', 'forward', 'sprint'];
 
-/** Runs a pad launch from standing on the pad; returns where the player first lands. */
-function flyFromPad(padId: string, hold: PadHold = 'none'): Vec3 {
+interface Flight { hold: PadHold; position: Vec3; fallHeight: number }
+
+/**
+ * Runs a pad launch from standing on the pad; returns where the player first lands and the landing's fallHeight
+ * (apex of the flight − landing height, the value the Fragile rule reads).
+ */
+function flyFromPad(padId: string, hold: PadHold = 'none'): Flight {
   const pad = map.jumpPads.find((p) => p.id === padId);
   if (!pad) throw new Error(`no pad ${padId}`);
   // facing(yaw) = (-sin yaw, 0, -cos yaw): face the launch's horizontal direction.
@@ -278,30 +283,51 @@ function flyFromPad(padId: string, hold: PadHold = 'none'): Vec3 {
     input.sprint.held = hold === 'sprint';
     const events = sim.step(input, NO_MODS, world, i * sim.dt);
     if (events.some((e) => e.kind === 'respawned')) throw new Error(`${padId} (${hold}): respawned at tick ${i}`);
-    if (events.some((e) => e.kind === 'jumpPad')) launched = true;
-    else if (launched && sim.state.grounded) return { ...sim.state.position };
+    if (events.some((e) => e.kind === 'jumpPad')) {
+      launched = true;
+      continue;
+    }
+    const landed = events.find((e) => e.kind === 'landed');
+    if (launched && landed) return { hold, position: { ...sim.state.position }, fallHeight: landed.fallHeight };
   }
   throw new Error(`${padId} (${hold}): no landing within 10 s (launched: ${launched})`);
+}
+
+/** Every pad flown with every input variant, once per run (the access graph reuses these). */
+let flightCache: Map<string, Flight[]> | undefined;
+function padFlights(): Map<string, Flight[]> {
+  flightCache ??= new Map(map.jumpPads.map((pad) => [pad.id, PAD_HOLDS.map((h) => flyFromPad(pad.id, h))]));
+  return flightCache;
+}
+
+/** Whether every variant of a pad's flight lands on its target with a Fragile-safe fall. */
+function padSafe(padId: string): boolean {
+  const t = PAD_TARGETS[padId];
+  if (!t) return false;
+  const s = byId(t);
+  return (padFlights().get(padId) ?? []).every(
+    (f) => Math.abs(f.position.y - top(s)) < 0.5 && inRect(f.position, rectOf(s)) && f.fallHeight <= ordersConfig.fragile.maxFallMeters,
+  );
 }
 
 describe('greybox city: jump pads', () => {
   it('the playground pad lands the player on its 10 m roof', () => {
     const roof = byId('hub-roof-01');
     expect(top(roof)).toBe(10);
-    const p = flyFromPad('hub-pad-01');
+    const p = flyFromPad('hub-pad-01').position;
     expect(p.y).toBeCloseTo(10, 1);
     expect(inRect(p, rectOf(roof))).toBe(true);
   });
 
-  it('every jump pad lands on its target with no input, W, or W + Shift held toward the launch', () => {
+  it('every jump pad lands on its target with no input, W, or W + Shift held toward the launch, within the Fragile fall limit', () => {
     for (const pad of map.jumpPads) {
       const t = PAD_TARGETS[pad.id];
       expect(t, `${pad.id} has a PAD_TARGETS entry`).toBeDefined();
       const s = byId(t!);
-      for (const hold of PAD_HOLDS) {
-        const p = flyFromPad(pad.id, hold);
+      for (const { hold, position: p, fallHeight } of padFlights().get(pad.id)!) {
         expect(p.y, `${pad.id} (${hold}) lands on ${t}`).toBeCloseTo(top(s), 0);
         expect(inRect(p, rectOf(s)), `${pad.id} (${hold}) lands on ${t} at ${p.x.toFixed(1)}, ${p.z.toFixed(1)}`).toBe(true);
+        expect(fallHeight, `${pad.id} (${hold}) fall`).toBeLessThanOrEqual(ordersConfig.fragile.maxFallMeters);
       }
     }
   });
@@ -312,9 +338,10 @@ describe('greybox city: jump pads', () => {
  * covered by a solid standing on it. Edges are the base movement kit (no upgrades):
  * - a climb onto a touching top at most jump height + mantle reach higher (onto a solid standing on the street,
  *   or from one top to a touching top);
- * - a jump across a gap of at most one alley (rising at most 0.5 m), or a drop of at most fragile.maxFallMeters
- *   (to the street, or to a touching or alley-near top);
- * - a jump pad: the surface it sits on to its PAD_TARGETS solid (flights checked above);
+ * - a jump across a gap of at most one alley (rising at most 0.5 m, or dropping at most fragile.maxFallMeters minus
+ *   the jump height), or a walk-off drop of at most fragile.maxFallMeters (to the street or a touching top);
+ * - a jump pad: the surface it sits on to its PAD_TARGETS solid, only when every simulated flight lands there with a
+ *   fallHeight within fragile.maxFallMeters (zip lines: the low-end drop test above bounds their fall);
  * - a zip line: the surface under its high end to the surface under its low end;
  * - a ramp (both ways) or a chute (down only): the surface at its high end to the one at its low end.
  */
@@ -363,12 +390,15 @@ function buildAccessGraph(): { tops: Top[]; edges: Map<string, Set<string>>; sur
       const gap = rectGap(a.rect, b.rect);
       const rise = b.y - a.y;
       if (gap === 0 && rise > 0 && rise <= CLIMB) link(a.id, b.id);
-      if (gap <= JUMP_GAP && rise <= JUMP_RISE && -rise <= MAX_DROP) link(a.id, b.id);
+      if (gap === 0 && rise <= 0 && -rise <= MAX_DROP) link(a.id, b.id); // walk off onto a touching top
+      // A jump across adds its apex to the fall.
+      if (gap <= JUMP_GAP && rise <= JUMP_RISE && -rise <= MAX_DROP - cfg.jump.height) link(a.id, b.id);
     }
   }
+  // A pad counts only when its simulated flights (all input variants) land on the target within the Fragile limit.
   for (const pad of map.jumpPads) {
     const t = PAD_TARGETS[pad.id];
-    if (t) link(surfaceUnder(pad.position), t);
+    if (t && padSafe(pad.id)) link(surfaceUnder(pad.position), t);
   }
   for (const z of map.zipLines) {
     const [hi, lo] = z.a.y >= z.b.y ? [z.a, z.b] : [z.b, z.a];
