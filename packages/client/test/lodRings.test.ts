@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { vec3, type Prop } from '@dm/shared';
+import { clientConfig } from '../src/clientConfig';
 import { assignLods } from '../src/render/city/lodRings';
 
 const prop = (id: string, x: number, y = 0, z = 0): Prop => ({
@@ -10,11 +11,13 @@ const prop = (id: string, x: number, y = 0, z = 0): Prop => ({
   scale: 1,
   palette: null,
 });
-const RADII: [number, number, number] = [160, 400, 700];
+const RADII = clientConfig.city.lodRadii as [number, number, number];
+const [R0, R1, R2] = RADII;
 
 describe('assignLods', () => {
-  it('a prop at 159 m is lod0, 161 m lod1, 401 m lod2, 701 m none', () => {
-    const props = [prop('a', 159), prop('b', 0, 0, -161), prop('c', 401), prop('d', 0, 0, 701)];
+  it('a prop at 159 m is lod0, 161 m lod1, 371 m lod2, 701 m none (config rings 160 / 370 / 700)', () => {
+    expect(RADII).toEqual([160, 370, 700]);
+    const props = [prop('a', R0 - 1), prop('b', 0, 0, -(R0 + 1)), prop('c', R1 + 1), prop('d', 0, 0, R2 + 1)];
     const r = assignLods(props, vec3(0, 0, 0), RADII);
     expect(r).toEqual({ lod0: [0], lod1: [1], lod2: [2] });
   });
@@ -27,7 +30,7 @@ describe('assignLods', () => {
   });
 
   it('ring edges are inclusive and indices keep prop order', () => {
-    const props = [prop('a', 160), prop('b', 5), prop('c', 400), prop('d', 700)];
+    const props = [prop('a', R0), prop('b', 5), prop('c', R1), prop('d', R2)];
     expect(assignLods(props, vec3(0, 0, 0), RADII)).toEqual({ lod0: [0, 1], lod1: [2], lod2: [3] });
   });
 });

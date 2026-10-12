@@ -3,11 +3,13 @@ import * as THREE from 'three';
 import { parsePieceCatalog, vec3, type CityMap, type Prop, type Solid, type Vec3 } from '@dm/shared';
 import piecesJson from '../../../map/pieces.json';
 import { CityView, type PieceModels } from '../src/render/city/CityView';
+import { clientConfig } from '../src/clientConfig';
 import { paletteRow } from '../src/render/city/paletteMaterial';
 import { toSun } from '../src/render/Renderer';
 
 const pieces = parsePieceCatalog(piecesJson);
-const cfg = { lodRadii: [160, 400, 700], relodDistance: 25, renderRegion: 250 };
+const cfg = clientConfig.city;
+const [R0, R1, R2] = cfg.lodRadii as [number, number, number];
 
 /** Props every 50 m along x (and a second row along z), two pieces, alternating palettes. */
 function cityWith(props: Prop[], solids: Solid[] = []): CityMap {
@@ -64,7 +66,7 @@ describe('CityView', () => {
         active++;
       }
     }
-    expect(active).toBe(props.filter((p) => Math.abs(p.position.x - 700) <= 160).length);
+    expect(active).toBe(props.filter((p) => Math.abs(p.position.x - 700) <= R0).length);
     expect(before.flat().every((x) => x < -600)).toBe(true);
     expect(view.stats().lod0).toBe(active);
   });
@@ -75,7 +77,7 @@ describe('CityView', () => {
     view.update(vec3(0, 0, 10));
     const s = view.stats();
     const within = (r: number): number => props.filter((p) => Math.abs(p.position.x) <= r).length;
-    expect(s).toEqual({ lod0: within(160), lod1: within(400) - within(160), lod2: within(700) - within(400) });
+    expect(s).toEqual({ lod0: within(R0), lod1: within(R1) - within(R0), lod2: within(R2) - within(R1) });
     const meshes = view.group.children.filter((c): c is THREE.InstancedMesh => (c as THREE.InstancedMesh).isInstancedMesh);
     const byRing = (prefix: string): number => meshes.filter((m) => m.name.startsWith(prefix)).reduce((n, m) => n + m.count, 0);
     expect([byRing('city-lod0'), byRing('city-lod1'), byRing('city-lod2')]).toEqual([s.lod0, s.lod1, s.lod2]);
