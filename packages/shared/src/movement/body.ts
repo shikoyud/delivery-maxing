@@ -34,6 +34,8 @@ const GROUND_PROBE_REACH = 0.1;
 const FIT_SKIN = 0.01;
 /** A ground gap this much under controller.offset is left alone (float noise, not a sink). */
 const SKIN_TOLERANCE = 1e-4;
+/** skinDeficit's -normal ray must meet the face within this of its plane distance (m). */
+const FACE_MATCH = 1e-3;
 /**
  * Rapier's controller is given this fraction of controller.offset as its own gap, while the body rests a full
  * controller.offset above the ground (skinDeficit restores it after every move). A capsule resting exactly at the
@@ -100,7 +102,10 @@ export class PlayerBody {
     this.controller.enableAutostep(k.maxStepHeight, k.minStepWidth, false);
     this.controller.setMaxSlopeClimbAngle(k.maxSlopeClimbDeg * DEG);
     this.controller.setMinSlopeSlideAngle(k.minSlopeSlideDeg * DEG);
-    if (snapToGround) this.controller.enableSnapToGround(k.snapToGround);
+    // Rapier snaps down to its own (smaller) gap, so the snap reaches further by the gap difference, measured
+    // vertically on the steepest walkable slope: the feet follow drops of up to snapToGround, as before.
+    const gapDiff = (k.offset * (1 - CAST_GAP_FRACTION)) / Math.cos(k.maxSlopeClimbDeg * DEG);
+    if (snapToGround) this.controller.enableSnapToGround(k.snapToGround + gapDiff);
     else this.controller.disableSnapToGround();
   }
 
@@ -149,19 +154,28 @@ export class PlayerBody {
    *
    * Rapier's shape casts against a large cuboid are off by centimetres (up to ~5 cm on the 600 m ground slab), so
    * the controller can leave the capsule inside its own offset gap, or inside the slab; the next moves then start
-   * in contact and stall. A ray cast is exact, so the gap is measured along the vertical through the bottom
-   * sphere's centre: its distance to the ground plane is the ray distance × n.y. The correction is bounded by the
-   * capsule radius, so it only ever settles a shallow sink.
+   * in contact and stall. A ray cast is exact, so the gap is measured with rays from the bottom sphere's centre:
+   * straight down to find the walkable face below, then along that face's -normal, which is the sphere's true
+   * distance to the face only when the foot of that perpendicular lies on the face. Near a convex edge (a flat top
+   * running into a ramp going down) it does not: the ramp's plane is closer than the edge the sphere rests on, and
+   * lifting to that plane would launch the player off the crest. So the gap counts only when the -normal ray meets
+   * the same plane (within FACE_MATCH), and the correction is bounded by the capsule radius, so it only ever
+   * settles a shallow sink.
    */
   private skinDeficit(center: Vec3): number {
     const { radius } = this.cfg.capsule;
     const { offset, maxSlopeClimbDeg } = this.cfg.controller;
-    const sphereY = center.y - this.halfHeight(this.crouchedNow);
-    const probe = this.rayHit(vec3(center.x, sphereY, center.z), vec3(0, -1, 0), radius + offset + GROUND_PROBE_REACH);
-    if (!probe) return 0;
-    const n = probe.hit.normal;
-    if (n.y < Math.cos(maxSlopeClimbDeg * DEG)) return 0;
-    const gap = probe.hit.distance * n.y - radius;
+    const minNy = Math.cos(maxSlopeClimbDeg * DEG);
+    const sphere = vec3(center.x, center.y - this.halfHeight(this.crouchedNow), center.z);
+    // Straight down to a walkable face: (r + gap) / n.y, so the reach covers the steepest climbable slope.
+    const down = this.rayHit(sphere, vec3(0, -1, 0), (radius + offset) / minNy + GROUND_PROBE_REACH);
+    if (!down) return 0;
+    const n = down.hit.normal;
+    if (n.y < minNy) return 0;
+    const planeDist = down.hit.distance * n.y;
+    const along = this.rayHit(sphere, vec3(-n.x, -n.y, -n.z), planeDist + FACE_MATCH);
+    if (!along || Math.abs(along.hit.distance - planeDist) > FACE_MATCH) return 0;
+    const gap = planeDist - radius;
     if (gap >= offset - SKIN_TOLERANCE) return 0;
     return Math.min((offset - gap) / n.y, radius);
   }

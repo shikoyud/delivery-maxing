@@ -9,6 +9,8 @@ import { NO_MODS } from '../../src/movement/types';
 import { expandGreybox } from '../../src/world/greybox';
 import type { GreyboxSource, MapData } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier, type Rapier } from '../../src/world/physicsWorld';
+import { vec3 } from '../../src/math/vec3';
+import { box, makeSim } from '../helpers/simHarness';
 
 /**
  * Playtest blocker: on the real map's 600 m ground slab, sprinting across open ground stalled for seconds at a time
@@ -99,5 +101,57 @@ describe('sprinting across the real map ground', () => {
     expect(landings).toBeGreaterThanOrEqual(5);
     expect(sim.state.position.x - -30).toBeGreaterThanOrEqual(MIN_DISTANCE);
     expect(minFeetY).toBeGreaterThanOrEqual(-0.01);
+  });
+});
+
+/**
+ * Walking off a flat top onto a ramp going down (a convex crest): the ground gap restore after each move must
+ * measure the gap to the surface the capsule really rests on. Measuring it to the ramp's plane lifted the body by
+ * up to 0.17 m just past the crest, and the next drop outran snap-to-ground, so the player launched off the crest.
+ */
+describe('walking off a ramp crest', () => {
+  const L = 20;
+  it.each([30, 40, 48])('%i° crest: stays on the ground from every start offset', async (deg) => {
+    const a = (deg * Math.PI) / 180;
+    const H = Math.sin(a) * L;
+    const zTop = -L * Math.cos(a); // crest; the ramp runs down toward +Z to the floor at z = 0
+    const ramp = box('ramp', vec3(0, H / 2 - 0.5 * Math.cos(a), zTop / 2 - 0.5 * Math.sin(a)), vec3(8, 1, L), {
+      rotationDeg: vec3(deg, 0, 0),
+    });
+    const top = box('top', vec3(0, H / 2, zTop - 10), vec3(8, H, 20));
+    for (let k = 0; k < 20; k++) {
+      const h = await makeSim({ solids: [ramp, top], spawn: vec3(0, H, zTop - 4 - (k * 0.27) / 20), yaw: Math.PI });
+      expect(h.sim.state.grounded).toBe(true);
+      let airTicks = 0;
+      let maxFall = 0;
+      for (let i = 0; i < 60; i++) {
+        for (const e of h.tick({ forward: 1 })) if (e.kind === 'landed') maxFall = Math.max(maxFall, e.fallHeight);
+        if (!h.sim.state.grounded) airTicks++;
+      }
+      expect(h.sim.state.position.z, `offset ${k}: walked past the crest`).toBeGreaterThan(zTop + 3);
+      expect(airTicks, `offset ${k}: airborne ticks`).toBe(0);
+      expect(maxFall, `offset ${k}: landing fall`).toBeLessThanOrEqual(0.05);
+    }
+  });
+
+  it('sprinting down a 48° ramp from mid-slope keeps the feet on it', async () => {
+    const deg = 48;
+    const a = (deg * Math.PI) / 180;
+    const H = Math.sin(a) * L;
+    const zTop = -L * Math.cos(a);
+    const ramp = box('ramp', vec3(0, H / 2 - 0.5 * Math.cos(a), zTop / 2 - 0.5 * Math.sin(a)), vec3(8, 1, L), {
+      rotationDeg: vec3(deg, 0, 0),
+    });
+    for (let k = 0; k < 10; k++) {
+      const z = zTop + 3 + k * 0.05;
+      const h = await makeSim({ solids: [ramp], spawn: vec3(0, -z * Math.tan(a) + 0.05, z), yaw: Math.PI });
+      let airTicks = 0;
+      for (let i = 0; i < 25; i++) {
+        h.tick({ forward: 1, sprint: true });
+        if (!h.sim.state.grounded) airTicks++;
+      }
+      expect(h.sim.state.position.z, `start ${k}: ran down the ramp`).toBeGreaterThan(z + 4);
+      expect(airTicks, `start ${k}: airborne ticks`).toBe(0);
+    }
   });
 });
