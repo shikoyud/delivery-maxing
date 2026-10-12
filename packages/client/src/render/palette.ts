@@ -15,9 +15,6 @@ export const palette = {
   coral: 0xf27166,
 } as const;
 
-/** Light intensities (art direction, like the colours). */
-export const lighting = { hemi: 2.1, sun: 2.4 } as const;
-
 /** Base colour per solid kind; each solid is tinted around it by a hash of its id. */
 export const kindColor: Record<SolidKind, number> = {
   ground: 0xd9d1c0,

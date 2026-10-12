@@ -10,6 +10,9 @@ export interface ClientConfig {
     eyeHeight: number;
     crouchEyeHeight: number;
     pitchLimitDeg: number;
+    /** Near and far clip planes (m). */
+    near: number;
+    far: number;
   };
   graphics: {
     maxPixelRatio: number;
@@ -19,6 +22,13 @@ export interface ClientConfig {
     fogNear: number;
     fogFar: number;
     drawCallBudget: number;
+    /** Water plane height (m): below the ground top (0) and above movement fall.outOfBoundsY. */
+    waterLevel: number;
+    /** How far the water extends past the island edge on each side (m). */
+    waterMargin: number;
+    lights: { hemi: number; sun: number };
+    shadowBias: number;
+    shadowNormalBias: number;
   };
   input: {
     mouseSensitivity: number;

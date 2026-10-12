@@ -50,19 +50,15 @@ test('loads, renders the greybox and reports ready', async ({ page }) => {
 });
 
 test('holding W + Shift for 1 s runs at ~8 m/s', async ({ page }) => {
-  // Headless Chromium renders on the CPU (SwiftShader) and is fill-rate bound: at 1280x720 it draws ~4 fps, and
-  // below 30 / maxStepsPerFrame fps the fixed stepper drops time by design. A small viewport keeps the frame rate
-  // high enough (480x270: ~15 fps) that sim time tracks wall time, so this measures movement, not the rasteriser.
-  await page.setViewportSize({ width: 480, height: 270 });
+  // Timed in simulation ticks, not wall time: headless Chromium renders on the CPU and can drop below
+  // 30 / maxStepsPerFrame fps, where the fixed stepper drops time by design.
   await boot(page);
-  await page.waitForFunction(() => window.__dm?.player().mode === 'ground' && window.__dm.tick > 15);
-  const start = await page.evaluate(() => window.__dm!.player().position);
-  const tick0 = await page.evaluate(() => window.__dm!.tick);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const { start, tick0 } = await page.evaluate(() => ({ start: window.__dm!.player().position, tick0: window.__dm!.tick }));
   await page.keyboard.down('KeyW');
   await page.keyboard.down('ShiftLeft');
-  await page.waitForTimeout(1000);
-  const p = await page.evaluate(() => window.__dm!.player());
-  const ticks = (await page.evaluate(() => window.__dm!.tick)) - tick0;
+  await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 30, tick0); // 1 s of sim time
+  const { p, ticks } = await page.evaluate((t0) => ({ p: window.__dm!.player(), ticks: window.__dm!.tick - t0 }), tick0);
   await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   const speed = Math.hypot(p.velocity.x, p.velocity.z);

@@ -25,6 +25,7 @@ import { eyeHeight, fovForSpeed } from '../render/cameraRig';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer } from '../render/Renderer';
 import { installDebugHooks } from './debugHooks';
+import { interpolationStart } from './interpolation';
 
 export interface GameOptions {
   debug: boolean;
@@ -112,9 +113,10 @@ export class Game {
 
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
-    this.prevPosition = { ...this.sim.state.position };
+    const before = { ...this.sim.state.position };
     const frame = this.actions.sampleTick();
     const events = this.sim.step(frame, NO_MODS, this.world, this.time);
+    this.prevPosition = interpolationStart(before, this.sim.state.position, events);
     this.tick++;
     return events;
   }

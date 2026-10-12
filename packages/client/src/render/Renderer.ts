@@ -1,12 +1,7 @@
 import * as THREE from 'three';
 import type { Vec3 } from '@dm/shared';
 import type { ClientConfig } from '../clientConfig';
-import { lighting, palette } from './palette';
-
-/** Water level (m): below the ground top (y = 0) and above movement fall.outOfBoundsY, so a fall shows a splash-down. */
-const WATER_Y = -1.5;
-/** How far the water plane extends past the island edge on each side (m). */
-const WATER_MARGIN = 2000;
+import { palette } from './palette';
 
 /** Owns the three.js renderer, scene, camera, lights, fog, sky and water. */
 export class Renderer {
@@ -31,14 +26,14 @@ export class Renderer {
     this.renderer.domElement.className = 'game-canvas';
     host.prepend(this.renderer.domElement); // under the HUD overlays
 
-    this.camera = new THREE.PerspectiveCamera(cam.fovBase, 1, 0.1, gfx.fogFar * 1.5);
+    this.camera = new THREE.PerspectiveCamera(cam.fovBase, 1, cam.near, cam.far);
     this.camera.rotation.order = 'YXZ';
 
     this.scene.background = new THREE.Color(palette.sky);
     this.scene.fog = new THREE.Fog(palette.sky, gfx.fogNear, gfx.fogFar);
 
-    this.scene.add(new THREE.HemisphereLight(palette.hemiSky, palette.hemiGround, lighting.hemi));
-    this.sun = new THREE.DirectionalLight(palette.sun, lighting.sun);
+    this.scene.add(new THREE.HemisphereLight(palette.hemiSky, palette.hemiGround, gfx.lights.hemi));
+    this.sun = new THREE.DirectionalLight(palette.sun, gfx.lights.sun);
     this.sun.castShadow = gfx.shadows;
     const sc = this.sun.shadow.camera;
     sc.left = sc.bottom = -gfx.shadowExtent;
@@ -46,18 +41,19 @@ export class Renderer {
     sc.near = 1;
     sc.far = gfx.shadowExtent * 4;
     this.sun.shadow.mapSize.set(gfx.shadowMapSize, gfx.shadowMapSize);
-    this.sun.shadow.bias = -0.0005;
-    this.sun.shadow.normalBias = 0.05;
+    this.sun.shadow.bias = gfx.shadowBias;
+    this.sun.shadow.normalBias = gfx.shadowNormalBias;
     this.scene.add(this.sun, this.sun.target);
 
-    const waterSize = mapSize + WATER_MARGIN * 2;
+    const waterSize = mapSize + gfx.waterMargin * 2;
     const water = new THREE.Mesh(
       new THREE.PlaneGeometry(waterSize, waterSize),
       new THREE.MeshLambertMaterial({ color: palette.water }),
     );
     water.name = 'water';
     water.rotation.x = -Math.PI / 2;
-    water.position.y = WATER_Y;
+    // Below the ground top and above fall.outOfBoundsY, so a fall reads as a splash-down (spec §5.1).
+    water.position.y = gfx.waterLevel;
     water.receiveShadow = false;
     water.updateMatrix();
     water.matrixAutoUpdate = false;
