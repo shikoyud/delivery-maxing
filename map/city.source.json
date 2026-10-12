@@ -28,10 +28,10 @@
         "rowPieces": {
           "b-3story-small": 4, "b-3story-balcony": 1, "b-4story": 1, "b-4story-center": 1, "b-6story-stack": 2
         },
-        "fillChance": 0.45,
+        "fillChance": 0.45, "skipMin": 6, "skipMax": 12, "eastwardChance": 0.5, "gapLandingInset": 2,
         "alley": { "width": 4, "pieces": ["b-4story", "b-4story-center"], "artScale": 4.2, "minLength": 20, "minHeight": 8, "chance": 0.25, "min": 6 },
-        "pad": { "radius": 1.2, "apexAbove": 2.5, "inset": 3, "clearance": 0.5 },
-        "zip": { "endHeight": 3.2, "endInset": 1.2, "maxSlope": 0.6, "minInto": 8 },
+        "pad": { "radius": 1.2, "apexAbove": 2.5, "inset": 3, "clearance": 0.5, "retryInsets": [0, 3, 6, 9], "retryApex": [0, 1, 2] },
+        "zip": { "endHeight": 3.2, "endInset": 1.2, "maxSlope": 0.6, "minInto": 8, "slackFactor": 0.95 },
         "orbHeight": 1, "orbBackInset": 1.2
       }
     },

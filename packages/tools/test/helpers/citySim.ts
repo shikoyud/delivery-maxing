@@ -1,54 +1,27 @@
 import {
   createPagedPhysicsWorld,
   createWorldFeatureState,
-  emptyInput,
   initRapier,
   movementConfig,
   NO_MODS,
   PlayerSim,
   worldConfig,
   type CityMap,
-  type InputFrame,
   type PagedPhysicsWorld,
-  type PlayerState,
   type SimEvent,
-  type StatModifiers,
   type Vec3,
-  type WorldFeatureState,
 } from '@dm/shared';
+// The SP1 harness API and input semantics (sprint toggle taps), shared so the two harnesses cannot diverge
+import { makeInput, type Harness } from '../../../shared/test/helpers/simHarness';
 
-/** As the SP1 harness (packages/shared/test/helpers/simHarness.ts). */
-export interface Hold {
-  forward?: number;
-  strafe?: number;
-  /** Sprint should be on: the harness taps Shift on the tick where the sprint state differs (and a move key is held). */
-  sprint?: boolean;
-  crouch?: boolean;
-  jump?: boolean;
-  /** Absolute look yaw; defaults to the spawn yaw. */
-  yaw?: number;
-}
+export type { Harness, Hold, Press } from '../../../shared/test/helpers/simHarness';
 
-export type Press = 'jump' | 'crouch' | 'interact' | 'board';
-
-/** The SP1 harness API on the city. */
-export interface Harness {
-  sim: PlayerSim;
-  world: WorldFeatureState;
-  map: CityMap;
-  /** Simulation time in seconds, advanced by sim.dt per tick. */
-  time: number;
-  tick(hold?: Hold, press?: Press[], mods?: StatModifiers): SimEvent[];
-  run(ticks: number, hold?: Hold, mods?: StatModifiers): SimEvent[];
-  /** Ticks until `pred(state)` holds after a tick; returns the number of ticks run. Throws past maxTicks. */
-  runUntil(pred: (s: PlayerState) => boolean, maxTicks: number, hold?: Hold): number;
-}
-
-export interface CityHarness extends Harness {
+export interface CityHarness extends Harness<CityMap> {
   physics: PagedPhysicsWorld;
   /**
-   * Starts a fresh courier at `feet` facing `yaw`: a new PlayerSim (the previous capsule is removed from the world), a
-   * fresh feature state (orbs available) and time 0. Then, like makeSim, runs idle ticks (at most 3) until grounded.
+   * Starts a fresh courier at `feet` facing `yaw`: a new PlayerSim (the previous one's capsule and character
+   * controller leave the world), a fresh feature state (orbs available) and time 0. Then, like makeSim, runs idle
+   * ticks (at most 3) until grounded.
    */
   spawnAt(feet: Vec3, yaw: number): void;
   /** Distance from `from` straight down to the first surface within `max` m (0 when `from` is inside a solid), or null. */
@@ -57,24 +30,6 @@ export interface CityHarness extends Harness {
 
 /** facing(yaw) = (−sin yaw, 0, −cos yaw): the yaw that faces along the horizontal direction (dx, dz). */
 export const yawToward = (dx: number, dz: number): number => Math.atan2(-dx, -dz);
-
-function makeInput(hold: Hold, press: Press[], defaultYaw: number, state: PlayerState): InputFrame {
-  const input = emptyInput();
-  input.move = { x: hold.strafe ?? 0, y: hold.forward ?? 0 };
-  input.look = { yaw: hold.yaw ?? defaultYaw, pitch: 0 };
-  const wantSprint = hold.sprint ?? false;
-  const moving = input.move.x !== 0 || input.move.y !== 0;
-  // Sprint is a toggle: tap Shift when the wanted state differs. With no move key it is off anyway, so no tap.
-  if (moving && wantSprint !== state.sprinting) input.sprint.pressed = true;
-  input.sprint.held = input.sprint.pressed;
-  input.crouch.held = hold.crouch ?? false;
-  input.jump.held = hold.jump ?? false;
-  for (const p of press) {
-    input[p].pressed = true;
-    input[p].held = true;
-  }
-  return input;
-}
 
 /**
  * A courier on the generated city. Physics is the game's paged collider world: every tick pages the chunks around the
@@ -116,7 +71,7 @@ export async function cityHarness(city: CityMap): Promise<CityHarness> {
       throw new Error(`runUntil: predicate not met within ${maxTicks} ticks`);
     },
     spawnAt(feet, spawnYaw) {
-      physics.world.removeRigidBody(h.sim.body.collider.parent()!);
+      h.sim.body.dispose();
       yaw = spawnYaw;
       h.sim = fresh(feet);
       h.world = createWorldFeatureState(city);

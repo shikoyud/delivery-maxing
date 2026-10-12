@@ -187,6 +187,12 @@ export class PlayerBody {
     this.feetPos = vec3(t.x, t.y - c, t.z);
   }
 
+  /** Removes the capsule (its rigid body and collider) and its character controller from the world. */
+  dispose(): void {
+    this.physics.world.removeCharacterController(this.controller);
+    this.physics.world.removeRigidBody(this.body);
+  }
+
   /** Places the feet at `p` immediately. */
   setFeet(p: Vec3): void {
     const c = this.centerOf(p, this.crouchedNow);

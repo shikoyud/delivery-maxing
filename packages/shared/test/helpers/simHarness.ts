@@ -20,10 +20,11 @@ export interface Hold {
 
 export type Press = 'jump' | 'crouch' | 'interact' | 'board';
 
-export interface Harness {
+/** A courier on a map (the city harness in packages/tools/test/helpers/citySim.ts shares this API). */
+export interface Harness<M extends MapData = MapData> {
   sim: PlayerSim;
   world: WorldFeatureState;
-  map: MapData;
+  map: M;
   /** Simulation time in seconds, advanced by sim.dt per tick. */
   time: number;
   tick(hold?: Hold, press?: Press[], mods?: StatModifiers): SimEvent[];
@@ -52,7 +53,8 @@ export const box = (id: string, center: Vec3, size: Vec3, extra?: Partial<Solid>
   ...extra,
 });
 
-function makeInput(hold: Hold, press: Press[], defaultYaw: number, state: PlayerState): InputFrame {
+/** The input frame for one tick holding `hold` and pressing `press` (shared with the city harness). */
+export function makeInput(hold: Hold, press: Press[], defaultYaw: number, state: PlayerState): InputFrame {
   const input = emptyInput();
   input.move = { x: hold.strafe ?? 0, y: hold.forward ?? 0 };
   input.look = { yaw: hold.yaw ?? defaultYaw, pitch: 0 };

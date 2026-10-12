@@ -1,4 +1,4 @@
-import { solidRect, type PieceEntry, type Prop, type Rect, type RotY, type Solid, type Vec3 } from '@dm/shared';
+import { ordersConfig, solidRect, type PieceEntry, type Prop, type Rect, type RotY, type Solid, type Vec3 } from '@dm/shared';
 import {
   districtGrid,
   emptyOutput,
@@ -38,11 +38,22 @@ interface DowntownParams {
   landingMargin: number;
   /** Building piece ids with pick weights, for every row. */
   rowPieces: Record<string, number>;
-  /** Chance that each slot of a row off the marked routes gets a building. */
+  /** Chance that each slot of a row off the marked routes gets a building; an empty slot skips skipMin–skipMax m. */
   fillChance: number;
+  skipMin: number;
+  skipMax: number;
+  /** Chance that a row off the marked routes is laid out eastward (else westward). */
+  eastwardChance: number;
+  /** A marked gap's landing point lies this far past the near edge of the roof ahead. */
+  gapLandingInset: number;
   alley: { width: number; pieces: string[]; artScale: number; minLength: number; minHeight: number; chance: number; min: number };
-  pad: { radius: number; apexAbove: number; inset: number; clearance: number };
-  zip: { endHeight: number; endInset: number; maxSlope: number; minInto: number };
+  /**
+   * A pad stands `inset` m inside the plaza and launches over apexAbove; when that flight is not clear, the search
+   * moves it `retryInsets` m further back and adds `retryApex` m to the apex (the apex never above the Fragile limit).
+   */
+  pad: { radius: number; apexAbove: number; inset: number; clearance: number; retryInsets: number[]; retryApex: number[] };
+  /** `slackFactor` keeps the next row's first roof safely inside maxSlope of the zip that reaches it. */
+  zip: { endHeight: number; endInset: number; maxSlope: number; minInto: number; slackFactor: number };
   /** Boost orb height above a roof (the courier's centre is 1 m above the feet), and inset from the roof's back edge. */
   orbHeight: number;
   orbBackInset: number;
@@ -64,17 +75,28 @@ function downtownParams(ctx: DistrictContext): DowntownParams {
   nums(p, [
     'pitch', 'streetHalfWidth', 'edgeMargin', 'setback', 'rowEndMargin', 'doorOffset', 'bakeScale', 'artScaleMin', 'artScaleMax',
     'roofGapMin', 'roofGapMax', 'roofGapMaxUp', 'stepUpMax', 'stepDownMax', 'minRoofLength', 'landingMargin', 'fillChance', 'orbHeight',
-    'orbBackInset',
+    'orbBackInset', 'skipMin', 'skipMax', 'eastwardChance', 'gapLandingInset',
   ], '');
   nums(obj(p.alley, 'alley'), ['width', 'artScale', 'minLength', 'minHeight', 'chance', 'min'], 'alley.');
-  nums(obj(p.pad, 'pad'), ['radius', 'apexAbove', 'inset', 'clearance'], 'pad.');
-  nums(obj(p.zip, 'zip'), ['endHeight', 'endInset', 'maxSlope', 'minInto'], 'zip.');
+  const pad = obj(p.pad, 'pad');
+  nums(pad, ['radius', 'apexAbove', 'inset', 'clearance'], 'pad.');
+  for (const k of ['retryInsets', 'retryApex']) {
+    const v = pad[k];
+    if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'number' && Number.isFinite(x) && x >= 0)) {
+      fail(`pad.${k} must list non-negative numbers`);
+    }
+  }
+  nums(obj(p.zip, 'zip'), ['endHeight', 'endInset', 'maxSlope', 'minInto', 'slackFactor'], 'zip.');
   const d = p as unknown as DowntownParams;
   if (d.bakeScale <= 0 || d.artScaleMin <= 0 || d.artScaleMax < d.artScaleMin) {
     fail('need bakeScale > 0 and 0 < artScaleMin ≤ artScaleMax');
   }
   if (d.roofGapMax < d.roofGapMin || d.roofGapMaxUp < d.roofGapMin) fail('need roofGapMin ≤ roofGapMaxUp, roofGapMax');
   if (d.stepDownMax <= ctx.move.jump.height) fail('stepDownMax must exceed the jump height');
+  const fractions = { fillChance: d.fillChance, eastwardChance: d.eastwardChance, 'alley.chance': d.alley.chance, 'zip.slackFactor': d.zip.slackFactor };
+  for (const [k, v] of Object.entries(fractions)) if (v > 1) fail(`${k} must be at most 1`);
+  if (!Number.isInteger(d.alley.min)) fail('alley.min must be an integer');
+  if (d.skipMax < d.skipMin) fail('need skipMin ≤ skipMax');
   const building = (id: string): PieceEntry => {
     const e = ctx.pieces[id];
     if (e?.kind !== 'building' || e.roofY === null) fail(`${id} is not a flat-roofed building piece`);
@@ -160,6 +182,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
   const { radius } = move.capsule;
   const g = move.gravity;
   const maxDrop = p.stepDownMax - move.jump.height;
+  const maxFall = ordersConfig.fragile.maxFallMeters;
 
   // ---- Grid cells and lot kinds -------------------------------------------------------------------------------
   const cx = spanCells(grid.xs);
@@ -257,7 +280,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
       const gap = last ? p.roofGapMin + rng() * (p.roofGapMax - p.roofGapMin) : 0;
       if (!route && rng() >= p.fillChance) {
         // An empty slot: skip about one building's width
-        edge += dir * (gap + 6 + rng() * 6);
+        edge += dir * (gap + p.skipMin + rng() * (p.skipMax - p.skipMin));
         last = null;
         if ((edge - x0) * (x1 - edge) < 0) break;
         continue;
@@ -321,7 +344,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
   const zipSlack = (a: Building, nextLot: GridLot, dir: 1 | -1): number => {
     const edgeA = dir > 0 ? a.roof.rect.maxX : a.roof.rect.minX;
     const edgeB = dir > 0 ? nextLot.rect.minX + reserve : nextLot.rect.maxX - reserve;
-    return p.zip.maxSlope * (Math.abs(edgeB - edgeA) + 2 * p.zip.endInset) * 0.95;
+    return p.zip.maxSlope * (Math.abs(edgeB - edgeA) + 2 * p.zip.endInset) * p.zip.slackFactor;
   };
   const czCells = [...new Set(cz.map((c) => c.cell))];
   const cxCells = [...new Set(cx.map((c) => c.cell))];
@@ -351,7 +374,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
     if (kind.get(lot) !== 'rows') continue;
     for (const side of ['n', 's'] as const) {
       if (!lot.streets[side] || routeRows.has(`${lot.i},${lot.j},${side}`)) continue;
-      buildRow(lot, side, rng() < 0.5 ? 1 : -1, false);
+      buildRow(lot, side, rng() < p.eastwardChance ? 1 : -1, false);
     }
   }
 
@@ -381,10 +404,11 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
 
   const addPad = (at: Vec3, onto: Building, label: string): void => {
     const target = v2({ x: midX(onto.roof.rect), y: onto.roof.top, z: midZ(onto.roof.rect) });
-    for (const extraInset of [0, 3, 6, 9]) {
-      for (const extraApex of [0, 1, 2]) {
+    for (const extraInset of p.pad.retryInsets) {
+      for (const extraApex of p.pad.retryApex) {
+        // The pad's fall onto a higher roof is its apex: keep it Fragile-safe
         const apex = p.pad.apexAbove + extraApex;
-        if (apex > p.stepDownMax) continue;
+        if (apex > maxFall) continue;
         const toward = Math.sign(target.z - at.z) || 1;
         const position = v2({ x: at.x, y: at.y, z: at.z - toward * extraInset });
         const launch = padLaunchFor(position, target, apex, g);
@@ -424,7 +448,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
       const z = sharedZ(b, next);
       const from = v2({ x: row.dir > 0 ? b.roof.rect.maxX : b.roof.rect.minX, y: b.roof.top, z });
       const nearEdge = row.dir > 0 ? next.roof.rect.minX : next.roof.rect.maxX;
-      report.rooftopGaps.push({ from, to: v2({ x: nearEdge + row.dir * 2, y: next.roof.top, z }), landing: next.roof.rect });
+      report.rooftopGaps.push({ from, to: v2({ x: nearEdge + row.dir * p.gapLandingInset, y: next.roof.top, z }), landing: next.roof.rect });
     });
   };
 
@@ -523,7 +547,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
     const gx = r2((Math.max(n0.roof.rect.minX, s0.roof.rect.minX) + Math.min(n0.roof.rect.maxX, s0.roof.rect.maxX)) / 2);
     report.rooftopGaps.push({
       from: v2({ x: gx, y: n0.roof.top, z: n0.roof.rect.maxZ }),
-      to: v2({ x: gx, y: s0.roof.top, z: s0.roof.rect.minZ + 2 }),
+      to: v2({ x: gx, y: s0.roof.top, z: s0.roof.rect.minZ + p.gapLandingInset }),
       landing: s0.roof.rect,
     });
     for (const b of [...north, ...south]) roofSlots.add(b);
