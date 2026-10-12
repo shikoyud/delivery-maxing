@@ -16,3 +16,4 @@ export * from './movement/PlayerSim';
 export * from './orders/types';
 export * from './orders/rules';
 export * from './orders/board';
+export * from './orders/OrderSystem';
