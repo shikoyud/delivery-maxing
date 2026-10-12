@@ -46,6 +46,7 @@ import {
 import { browserStorage, createProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe } from './cameraQueries';
 import { interpolationStart } from './interpolation';
+import type { PerfResult } from './perf';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
@@ -82,12 +83,21 @@ export class Game {
   readonly chase: ChaseCamera;
   /** Sphere cast of the camera's collision ball against the map (the courier's own collider excluded). */
   private readonly cameraCast: RayCast;
+  /** The last ?perf=1 flythrough's result (null until one has finished). */
+  perfResult: PerfResult | null = null;
   /** The animated courier, or the capsule when the model failed to load (Review Focus 4). */
   readonly courier: CourierView;
   private prevPosition: Vec3;
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
   private lastFrameMs: number | null = null;
+  /**
+   * When set, takes over each frame (the ?perf=1 flythrough): it is called with the frame's wall clock (ms) before the
+   * frame is drawn, input and the simulation do not run, and it moves the player itself (viewpoint()).
+   */
+  frameDriver: ((nowMs: number) => void) | null = null;
+  /** Wall-clock cost (ms) of the last frame's CityView.update; 0 on the greybox. */
+  cityUpdateMs = 0;
   private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
 
@@ -249,6 +259,11 @@ export class Game {
     // Long gaps (tab switches) are safe: the stepper runs at most maxStepsPerFrame and drops the rest.
     const dt = this.lastFrameMs === null ? 0 : (nowMs - this.lastFrameMs) / 1000;
     this.lastFrameMs = nowMs;
+    if (this.frameDriver) {
+      this.frameDriver(nowMs);
+      this.renderFrame(1, dt, nowMs / 1000);
+      return;
+    }
     const steps = this.stepper.advance(dt);
     for (let i = 0; i < steps; i++) this.step();
     this.renderFrame(this.stepper.alpha, dt, nowMs / 1000);
@@ -298,7 +313,11 @@ export class Game {
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
     this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s);
-    this.city?.update(feet, this.renderer.camera);
+    if (this.city) {
+      const t0 = performance.now();
+      this.city.update(feet, this.renderer.camera);
+      this.cityUpdateMs = performance.now() - t0;
+    }
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
     this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);

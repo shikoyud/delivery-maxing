@@ -720,3 +720,40 @@ test('sp2 side view: the 700 m LOD cutoff is fogged out at the screen sides', as
   await airShot(page, { x: -400, y: 60, z: 400 }, { x: 400, y: 0, z: 400 }, 'sp2-city-side.png');
   expect(errors).toEqual([]);
 });
+
+test('?perf=1 completes a short run (seconds=5) and reports a result', async ({ page, context }) => {
+  test.setTimeout(90_000);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const errors = await boot(page, '&perf=1&perfSeconds=5'); // ?perf=1 implies the city map
+  await expect(page.locator('.perf-overlay')).toContainText('Running');
+  await page.waitForFunction(() => window.__dm?.perf() != null, undefined, { timeout: 60_000 });
+  const r = await page.evaluate(() => window.__dm!.perf()!);
+  console.log(`perf result (swiftshader): ${JSON.stringify(r)}`);
+  expect(r.seconds).toBe(5);
+  expect(r.frames).toBeGreaterThan(0);
+  expect(r.p50Ms).toBeGreaterThan(0);
+  expect(r.p50Ms).toBeLessThanOrEqual(r.p95Ms);
+  expect(r.p95Ms).toBeLessThanOrEqual(r.p99Ms);
+  expect(r.p99Ms).toBeLessThanOrEqual(r.maxMs);
+  expect(r.fpsAtP95).toBeCloseTo(1000 / r.p95Ms, 6);
+  expect(r.maxDrawCalls).toBeGreaterThan(0);
+  expect(r.maxDrawCalls).toBeLessThanOrEqual(clientJson.graphics.drawCallBudget);
+  expect(r.maxTriangles).toBeGreaterThan(0);
+  expect(r.cityUpdateP95Ms).toBeGreaterThan(0); // the city map was loaded and timed
+  expect(r.gpu.length).toBeGreaterThan(0);
+  expect(r.url).toContain('perf=1');
+  expect(r.pixelRatio).toBeGreaterThan(0);
+  // The player was glided along the first leg (5 s × 12 m/s ≈ 60 m from the start of the route), not left at the spawn.
+  const start = clientJson.perf.route[0]!.feet;
+  const at = (await page.evaluate(() => window.__dm!.player())).position;
+  expect(Math.hypot(at.x - start.x, at.z - start.z)).toBeGreaterThan(30);
+  const panel = page.locator('.perf-overlay');
+  await expect(panel).toContainText('fps at p95');
+  await expect(panel).toContainText('warm-up');
+  await page.screenshot({ path: `${artifacts}sp2-perf-result.png` });
+  await page.getByRole('button', { name: 'Copy result' }).click();
+  await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
+  const copied = JSON.parse(await page.evaluate(() => navigator.clipboard.readText())) as typeof r;
+  expect(copied.frames).toBe(r.frames);
+  expect(errors).toEqual([]);
+});

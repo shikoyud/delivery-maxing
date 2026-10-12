@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, MoveMode, Order, Totals, Vec3 } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { Game } from './Game';
+import type { PerfResult } from './perf';
 
 /** Test and debugging API on window.__dm, installed only with ?debug. */
 export interface DebugApi {
@@ -24,6 +25,8 @@ export interface DebugApi {
   cityBoundsOk(): boolean;
   /** City only: props per LOD ring after the last sort (null on the greybox). */
   cityStats(): { lod0: number; lod1: number; lod2: number } | null;
+  /** The finished ?perf=1 flythrough's result (null until it has finished or without ?perf=1). */
+  perf(): PerfResult | null;
   /** The delivery loop: copies of the board, active orders and totals; accept uses the player's position now. */
   orders: {
     board(): (Order | null)[];
@@ -104,6 +107,7 @@ export function installDebugHooks(game: Game): void {
       return game.city.boundsOk();
     },
     cityStats: () => game.city?.stats() ?? null,
+    perf: () => (game.perfResult ? structuredClone(game.perfResult) : null),
     orders: {
       board: () => structuredClone([...game.delivery.orders.board]),
       active: () => structuredClone([...game.delivery.orders.active]),
