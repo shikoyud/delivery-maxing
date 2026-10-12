@@ -1,0 +1,94 @@
+{
+  "seed": 20261013,
+  "size": 2000,
+  "hub": {
+    "center": { "x": 0, "y": 0, "z": 0 },
+    "plazaRadius": 30,
+    "dropZoneRadius": 6,
+    "zoneHeight": 6,
+    "kiosk": { "x": 0, "y": 0, "z": -8 },
+    "kioskRange": 3,
+    "spawn": { "x": 0, "y": 0, "z": 5 },
+    "spawnYaw": 0,
+    "kioskSize": { "x": 2.3, "y": 1.05, "z": 1.1 },
+    "clearRadius": 45
+  },
+  "arterials": { "pitch": 200, "halfWidth": 10 },
+  "streets": { "roadTop": 0.02, "sidewalkTop": 0.15, "sidewalkWidth": 3 },
+  "districts": [
+    {
+      "district": "downtown",
+      "rect": { "minX": 0, "minZ": -1000, "maxX": 1000, "maxZ": 0 },
+      "template": "downtown",
+      "params": {
+        "pitch": 100, "streetHalfWidth": 7, "scaleMin": 1.14, "scaleMax": 1.5, "fillChance": 0.45,
+        "setback": 1.5, "gapMin": 1, "gapMax": 5, "edgeMargin": 2, "doorOffset": 1,
+        "pieces": [
+          "b-3story-balcony", "b-3story-slim", "b-3story-small", "b-4story", "b-4story-center",
+          "b-4story-wide-2doors", "b-4story-wide-2doors-roof", "b-6story-stack", "b-2story-wide"
+        ]
+      }
+    },
+    {
+      "district": "harbor",
+      "rect": { "minX": 0, "minZ": 0, "maxX": 1000, "maxZ": 1000 },
+      "template": "harbor",
+      "params": {
+        "pitch": 100, "streetHalfWidth": 7, "scaleMin": 1, "scaleMax": 1.2, "fillChance": 0.37,
+        "setback": 1.5, "gapMin": 2, "gapMax": 8, "edgeMargin": 2, "doorOffset": 1,
+        "pieces": [
+          "b-2story-wide", "b-2story-wide-2doors", "b-4story-wide-2doors", "b-2story-sidehouse",
+          "b-2story-double", "b-1story", "b-2story"
+        ]
+      }
+    },
+    {
+      "district": "hillside",
+      "rect": { "minX": -1000, "minZ": -1000, "maxX": 0, "maxZ": 0 },
+      "template": "hillside",
+      "params": {
+        "pitch": 100, "streetHalfWidth": 6, "scaleMin": 1, "scaleMax": 1.1, "fillChance": 0.27,
+        "setback": 1.5, "gapMin": 3, "gapMax": 8, "edgeMargin": 2, "doorOffset": 1,
+        "pieces": [
+          "b-1story-gableroof", "b-1story-roundroof", "b-2story-gableroof", "b-2story-roundroof",
+          "b-2story-balcony", "b-2story-columns", "b-3story-small", "b-2story-slim"
+        ]
+      }
+    },
+    {
+      "district": "suburbs",
+      "rect": { "minX": -1000, "minZ": 0, "maxX": 0, "maxZ": 1000 },
+      "template": "suburbs",
+      "params": {
+        "pitch": 100, "streetHalfWidth": 7, "scaleMin": 1, "scaleMax": 1, "fillChance": 0.32,
+        "setback": 3, "gapMin": 4, "gapMax": 10, "edgeMargin": 2, "doorOffset": 1,
+        "pieces": [
+          "b-1story", "b-1story-gableroof", "b-1story-roundroof", "b-1story-sign", "b-2story",
+          "b-2story-2", "b-2story-gableroof", "b-2story-roundroof", "b-2story-center", "b-2story-stairs"
+        ]
+      }
+    }
+  ],
+  "boundary": {
+    "cliffEdges": ["north", "west"],
+    "waterEdges": ["east", "south"],
+    "cliffHeight": 40,
+    "cliffDepth": 10,
+    "quayInset": 30,
+    "quayDepth": 4,
+    "quayWallThickness": 1
+  },
+  "buildingPalettes": [
+    "Texture_Light", "Texture_Light2", "Texture_Grey", "Texture_Dark", "Texture_Blue",
+    "Texture_DarkBlue", "Texture_DarkPurple", "Texture_Green", "Texture_Red", "Texture_Yellow"
+  ],
+  "landmarks": [],
+  "pois": {
+    "total": 150,
+    "elevatedTarget": 0.45,
+    "minSpacing": 25,
+    "perDistrict": { "downtown": 45, "harbor": 35, "hillside": 35, "suburbs": 35 },
+    "perBandMin": 20
+  },
+  "checkpoints": { "spacing": 150 }
+}
