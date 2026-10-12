@@ -479,6 +479,9 @@ test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
   // Every card carries its par time and the par bonus as its own line.
   const card = page.locator(`.board-card[data-order-id="${drop.id}"]`);
   await expect(card.locator('.board-facts')).toContainText(/Par \d+:\d{2}/);
+  // This seed's first Drop-off is Express: its own timer chip is labelled.
+  await expect(card.locator('.board-facts')).toContainText(/Express \d+:\d{2}/);
+  await expect(card.locator('.board-facts')).not.toContainText('limit');
   await expect(card.locator('.board-bonus', { hasText: 'coins within par' })).toHaveText('+1 pt · +10 coins within par');
   await page.screenshot({ path: `${artifacts}sp1-order-board.png` });
 

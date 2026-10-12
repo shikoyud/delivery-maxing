@@ -45,7 +45,7 @@ export function cardFacts(o: Order): string[] {
     `${o.slots} slot${o.slots === 1 ? '' : 's'}`,
     `Par ${clock(o.parLimit)}`,
   ];
-  if (o.expressLimit !== null) facts.push(`${clock(o.expressLimit)} limit`);
+  if (o.expressLimit !== null) facts.push(`Express ${clock(o.expressLimit)}`);
   return facts;
 }
 

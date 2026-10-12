@@ -264,7 +264,7 @@ describe('zip line', () => {
   });
 
   it('riding off an end with nothing below detaches in the air with the ride velocity', async () => {
-    // The low end b is 7 m above the floor (hang point 5 m), beyond dismountReach (4 m), so the rider lets go in the air.
+    // The low end b is 7 m above the floor, beyond dismountReach (4 m down from the cable), so the rider lets go in the air.
     const zip = line('z', [0, 10, 0], [0, 7, -12]);
     const h = await rideSim(zip);
     h.tick({}, ['interact']);

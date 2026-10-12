@@ -47,6 +47,13 @@ describe('board card par (spec 3.2)', () => {
     expect(cardFacts(card({ parLimit: 125.2 }))).toContain('Par 2:06');
   });
 
+  it('labels the Express time chip "Express m:ss" (only on Express orders)', () => {
+    const facts = cardFacts(card({ modifier: 'express', expressLimit: 60, parLimit: 75 }));
+    expect(facts.slice(-2)).toEqual(['Par 1:15', 'Express 1:00']);
+    expect(facts.some((f) => f.endsWith('limit'))).toBe(false);
+    expect(cardFacts(card({})).some((f) => f.startsWith('Express'))).toBe(false);
+  });
+
   it('lists the par bonus on its own line, from config', () => {
     const lines = cardBonusLines(card({}), ordersConfig).map((l) => l.text);
     expect(lines).toEqual([`+${pointsText(ordersConfig.points.withinPar)} · +${ordersConfig.coins.withinPar} coins within par`]);

@@ -239,7 +239,7 @@ describe('greybox city: zip lines', () => {
             if (closestOnSegment(hand, z.a, z.b).dist > cfg.zipLine.attachDistance) continue;
             spots++;
             const other = name === 'a' ? z.b : z.a; // face along the line, away from this end (R7)
-          const sim = new PlayerSim(simWorld, map, cfg, feet, Math.atan2(-(other.x - start.x), -(other.z - start.z)));
+            const sim = new PlayerSim(simWorld, map, cfg, feet, Math.atan2(-(other.x - start.x), -(other.z - start.z)));
             const input = emptyInput();
             input.interact = { held: true, pressed: true };
             const at = `${z.id}.${name} grab at ${dx}, ${dz}`;

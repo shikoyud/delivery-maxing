@@ -148,8 +148,9 @@ it('config pins par {1.3, 10}, withinPar 1/10, fragileIntact 2/20', ...);
   ```json
   { "distance": 4.5, "height": 1.6, "pivotHeight": 1.3, "crouchPivotHeight": 0.8,
     "pitchMinDeg": -55, "pitchMaxDeg": 35, "followEaseRate": 14, "collisionRadius": 0.25,
-    "minDistance": 0.8, "pullInEaseRate": 30, "pushOutEaseRate": 6 }
+    "minDistance": 0.8, "pushOutEaseRate": 6 }
   ```
+  Pull-in is instant, so there is no `pullInEaseRate` (ruling R11: the camera is never past a hit, even for a frame).
   Remove the first-person-only `eyeHeight`, `crouchEyeHeight` and `pitchLimitDeg`. Keep the FOV, roll and crouch ease keys.
 - Create: `packages/client/src/render/chaseCamera.ts`
 - Modify: `render/cameraRig.ts` (drop `eyeHeight`/`easeEyeHeight`), `game/Game.ts`, `input/actionState.ts` (pitch clamped to `[pitchMinDeg, pitchMaxDeg]`)
@@ -161,7 +162,7 @@ it('config pins par {1.3, 10}, withinPar 1/10, fragileIntact 2/20', ...);
   - `target` is the interpolated feet position plus the pivot height.
   - The desired camera point is `target − forward(yaw, pitch) × distance + (0, height − pivotHeight, 0)`.
   - If `cast` from the target toward that point hits at `d`, the distance becomes `max(minDistance, d − collisionRadius)`.
-- `class ChaseCamera { update(frameDt, target, yaw, pitch, speed, state): void; readonly camera: THREE.PerspectiveCamera }` eases position (`followEaseRate`) and distance. The distance pulls in fast (`pullInEaseRate`) and pushes out slowly (`pushOutEaseRate`). It also applies the existing `fovForSpeed`/`rollForWallRun` easing.
+- `class ChaseCamera { update(frameDt, target, yaw, pitch, speed, state): void; readonly camera: THREE.PerspectiveCamera }` eases position (`followEaseRate`) and distance. The distance pulls in instantly (ruling R11) and pushes out slowly (`pushOutEaseRate`). It also applies the existing `fovForSpeed`/`rollForWallRun` easing.
 - `Game` builds `cast` from the PhysicsWorld (`world.castRay` excluding the player collider) and stops rendering the first-person view.
 
 - [ ] **Step 1: Write the failing tests**
