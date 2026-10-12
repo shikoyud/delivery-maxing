@@ -49,8 +49,8 @@ export interface DeliveryDeps {
   player(): { position: Vec3; mode: MoveMode };
 }
 
-const BONUS_LINE = { express: 'Express on time', fragile: 'Fragile intact', heavy: 'Heavy package' } as const;
-const BONUS_KEY = { express: 'expressOnTime', fragile: 'fragileIntact', heavy: 'heavy' } as const;
+const BONUS_LINE = { express: 'Express on time', fragile: 'Fragile intact', heavy: 'Heavy package', par: 'Within par' } as const;
+const BONUS_KEY = { express: 'expressOnTime', fragile: 'fragileIntact', heavy: 'heavy', par: 'withinPar' } as const;
 
 /**
  * The delivery loop on the client (spec §3, §11): owns the OrderSystem, local progress, the HUB/POI markers,

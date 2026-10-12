@@ -82,6 +82,7 @@ export interface OrdersConfig {
     expressOnTime: number;
     fragileIntact: number;
     heavy: number;
+    withinPar: number;
   };
   coins: {
     short: number;
@@ -91,8 +92,10 @@ export interface OrdersConfig {
     expressOnTime: number;
     fragileIntact: number;
     heavy: number;
+    withinPar: number;
   };
   express: { distanceFactor: number; extraSeconds: number };
+  par: { distanceFactor: number; extraSeconds: number };
   fragile: { maxFallMeters: number };
   heavy: { slots: number; jumpHeightMultiplier: number };
   mix: {

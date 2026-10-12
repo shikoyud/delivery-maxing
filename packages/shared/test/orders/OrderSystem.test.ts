@@ -155,9 +155,10 @@ describe('OrderSystem', () => {
     const key = order.band as 'short' | 'medium' | 'long';
     const events = sys.update(2, zones({ pois: [poiOf(order)] }));
     expect(events).toContainEqual({
-      kind: 'completed', orderId: order.id, points: cfg.points[key], coins: cfg.coins[key], bonuses: [], onTime: null,
+      kind: 'completed', orderId: order.id, points: cfg.points[key] + cfg.points.withinPar, coins: cfg.coins[key] + cfg.coins.withinPar,
+      bonuses: ['par'], onTime: null, withinPar: true,
     });
-    expect(sys.totals).toEqual({ points: cfg.points[key], coins: cfg.coins[key], deliveries: 1 });
+    expect(sys.totals).toEqual({ points: cfg.points[key] + cfg.points.withinPar, coins: cfg.coins[key] + cfg.coins.withinPar, deliveries: 1 });
     expect(sys.active).toHaveLength(0);
     expect(sys.freeSlots()).toBe(1);
   });
@@ -179,7 +180,7 @@ describe('OrderSystem', () => {
     expect(sys.totals.deliveries).toBe(1);
   });
 
-  it('chain: B before A does nothing; A → B → drop zone completes with 4 pts / 40 coins', () => {
+  it('chain: B before A does nothing; A → B → drop zone completes with 4 pts / 40 coins plus par', () => {
     const { sys, order } = find((o) => o.type === 'chain');
     sys.accept(order.id, 0, true);
     expect(sys.update(1, zones({ pois: [poiOf(order, 1)] }))).toEqual([]);
@@ -188,8 +189,8 @@ describe('OrderSystem', () => {
     expect(sys.update(3, zones({ pois: [poiOf(order, 1)] })).map((e) => e.kind)).toEqual(['stepReached']);
     expect(sys.update(4, zones({ plaza: true }))).toEqual([]);
     const done = sys.update(5, zones({ plaza: true, drop: true }));
-    expect(done).toContainEqual(expect.objectContaining({ kind: 'completed', points: 4, coins: 40, bonuses: [] }));
-    expect(sys.totals).toEqual({ points: 4, coins: 40, deliveries: 1 });
+    expect(done).toContainEqual(expect.objectContaining({ kind: 'completed', points: 5, coins: 50, bonuses: ['par'], withinPar: true }));
+    expect(sys.totals).toEqual({ points: 5, coins: 50, deliveries: 1 });
   });
 
   it('express: on time earns +1; late still completes without it', () => {
@@ -205,8 +206,33 @@ describe('OrderSystem', () => {
     const late = dropoff('express');
     late.sys.accept(late.order.id, 0, true);
     const ev2 = late.sys.update(0.001 + (late.order.expressLimit as number), zones({ pois: [poiOf(late.order)] }));
-    expect(ev2).toContainEqual(expect.objectContaining({ kind: 'completed', onTime: false, bonuses: [] }));
+    expect(ev2).toContainEqual(expect.objectContaining({ kind: 'completed', onTime: false, withinPar: false, bonuses: [] }));
     expect(late.sys.totals.deliveries).toBe(1);
+  });
+
+  it('completed reports withinPar from sim time since accept (par inclusive, hidden-tab pause safe)', () => {
+    const a = dropoff('any');
+    const limit = a.order.parLimit;
+    expect(limit).toBe((cfg.par.distanceFactor * a.order.routeDistance) / 8 + cfg.par.extraSeconds);
+    a.sys.accept(a.order.id, 100, true);
+    const ev = a.sys.update(100 + limit, zones({ pois: [poiOf(a.order)] }));
+    expect(ev).toContainEqual(expect.objectContaining({ kind: 'completed', withinPar: true }));
+
+    const b = dropoff('any');
+    b.sys.accept(b.order.id, 0, true);
+    const ev2 = b.sys.update(b.order.parLimit + 0.001, zones({ pois: [poiOf(b.order)] }));
+    expect(ev2).toContainEqual(expect.objectContaining({ kind: 'completed', withinPar: false }));
+    expect(b.sys.totals.deliveries).toBe(1);
+  });
+
+  it('par stacks with the modifier bonus: fragile intact within par is +2 and +1', () => {
+    const d = dropoff('fragile');
+    d.sys.accept(d.order.id, 0, true);
+    const ev = d.sys.update(1, zones({ pois: [poiOf(d.order)] }));
+    const key = d.order.band as 'short' | 'medium' | 'long';
+    expect(ev).toContainEqual(expect.objectContaining({
+      kind: 'completed', bonuses: ['fragile', 'par'], points: cfg.points[key] + 2 + 1, coins: cfg.coins[key] + 20 + 10,
+    }));
   });
 
   it('fragile: a 7.5 m fall while carried breaks it; 7.0 m does not; falls before pick-up collection do not count', () => {
@@ -221,7 +247,7 @@ describe('OrderSystem', () => {
     expect(d.sys.active[0]?.fragileIntact).toBe(false);
     expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: 9 }])).toEqual([]); // already broken
     const ev = d.sys.update(1, zones({ pois: [poiOf(d.order)] }));
-    expect(ev).toContainEqual(expect.objectContaining({ kind: 'completed', bonuses: [] }));
+    expect(ev).toContainEqual(expect.objectContaining({ kind: 'completed', bonuses: ['par'] }));
 
     const p = pickup('fragile');
     p.sys.accept(p.order.id, 0, true);
@@ -231,7 +257,7 @@ describe('OrderSystem', () => {
     expect(p.sys.onSimEvents([{ kind: 'landed', fallHeight: 7.0 }])).toEqual([]);
     expect(p.sys.onSimEvents([{ kind: 'landed', fallHeight: 7.5 }]).map((e) => e.kind)).toEqual(['fragileBroken']);
     const done = p.sys.update(2, zones({ drop: true, plaza: true }));
-    expect(done).toContainEqual(expect.objectContaining({ kind: 'completed', bonuses: [] }));
+    expect(done).toContainEqual(expect.objectContaining({ kind: 'completed', bonuses: ['par'] }));
   });
 
   it('fragile: respawn while carried breaks it', () => {

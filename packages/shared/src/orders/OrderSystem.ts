@@ -15,7 +15,7 @@ export type OrderEvent =
   | { kind: 'boardRefreshed' }
   | { kind: 'stepReached'; orderId: string; stepIndex: number; step: Step }
   | { kind: 'fragileBroken'; orderId: string; reason: 'fall' | 'respawn' }
-  | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; onTime: boolean | null };
+  | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; onTime: boolean | null; withinPar: boolean };
 export interface Totals { points: number; coins: number; deliveries: number }
 
 export interface OrderSystemOptions {
@@ -124,9 +124,10 @@ export class OrderSystem {
       }
       const onTime =
         a.order.modifier === 'express' && a.order.expressLimit !== null ? now - a.acceptedAt <= a.order.expressLimit : null;
+      const withinPar = now - a.acceptedAt <= a.order.parLimit;
       const { points, coins, bonuses } = scoreOrder(
         a.order,
-        { onTime: onTime ?? false, intact: a.fragileIntact },
+        { onTime: onTime ?? false, intact: a.fragileIntact, withinPar },
         this.opts.cfg,
       );
       this.totals = {
@@ -134,7 +135,7 @@ export class OrderSystem {
         coins: this.totals.coins + coins,
         deliveries: this.totals.deliveries + 1,
       };
-      events.push({ kind: 'completed', orderId: a.order.id, points, coins, bonuses, onTime });
+      events.push({ kind: 'completed', orderId: a.order.id, points, coins, bonuses, onTime, withinPar });
     }
     this.active = remaining;
     return events;

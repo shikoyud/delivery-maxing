@@ -49,6 +49,7 @@ function order(id: string, type: OrderType, poiIds: string[], modifier: Modifier
     routeDistance: type === 'pickup' ? 200 : 100,
     slots: 1,
     expressLimit,
+    parLimit: 60,
   };
 }
 

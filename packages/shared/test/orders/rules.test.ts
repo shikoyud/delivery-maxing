@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import { expressLimit, orderSteps, scoreOrder, slotsFor } from '../../src/orders/rules';
+import { expressLimit, orderSteps, parLimit, scoreOrder, slotsFor } from '../../src/orders/rules';
 import type { Modifier, Order, OrderType } from '../../src/orders/types';
 import type { Band } from '../../src/world/distance';
 
@@ -15,10 +15,11 @@ function order(type: OrderType, band: Band | null, modifier: Modifier | null = n
     routeDistance: 100,
     slots: slotsFor(modifier, ordersConfig),
     expressLimit: null,
+    parLimit: 50,
   };
 }
-const ok = { onTime: true, intact: true };
-const bad = { onTime: false, intact: false };
+const ok = { onTime: true, intact: true, withinPar: false };
+const bad = { onTime: false, intact: false, withinPar: false };
 
 describe('scoreOrder', () => {
   it('base points/coins by band: short 1/10, medium 2/20, long 3/30, chain 4/40', () => {
@@ -35,14 +36,39 @@ describe('scoreOrder', () => {
 
   it('express on time adds +1/+10; late adds nothing', () => {
     const o = order('dropoff', 'short', 'express');
-    expect(scoreOrder(o, { onTime: true, intact: true }, ordersConfig)).toEqual({ points: 2, coins: 20, bonuses: ['express'] });
-    expect(scoreOrder(o, { onTime: false, intact: true }, ordersConfig)).toEqual({ points: 1, coins: 10, bonuses: [] });
+    expect(scoreOrder(o, { onTime: true, intact: true, withinPar: false }, ordersConfig)).toEqual({ points: 2, coins: 20, bonuses: ['express'] });
+    expect(scoreOrder(o, { onTime: false, intact: true, withinPar: false }, ordersConfig)).toEqual({ points: 1, coins: 10, bonuses: [] });
   });
 
-  it('fragile intact adds +1/+10; broken adds nothing', () => {
+  it('fragile intact now adds +2/+20; broken adds nothing', () => {
     const o = order('pickup', 'long', 'fragile');
-    expect(scoreOrder(o, { onTime: true, intact: true }, ordersConfig)).toEqual({ points: 4, coins: 40, bonuses: ['fragile'] });
-    expect(scoreOrder(o, { onTime: true, intact: false }, ordersConfig)).toEqual({ points: 3, coins: 30, bonuses: [] });
+    expect(scoreOrder(o, { onTime: true, intact: true, withinPar: false }, ordersConfig)).toEqual({ points: 5, coins: 50, bonuses: ['fragile'] });
+    expect(scoreOrder(o, { onTime: true, intact: false, withinPar: false }, ordersConfig)).toEqual({ points: 3, coins: 30, bonuses: [] });
+  });
+
+  it('within par adds +1/+10 on every type incl. chain; late adds nothing', () => {
+    const cases: [Order, number, number][] = [
+      [order('dropoff', 'short'), 1, 10],
+      [order('pickup', 'medium'), 2, 20],
+      [order('dropoff', 'long'), 3, 30],
+      [order('chain', null), 4, 40],
+    ];
+    for (const [o, points, coins] of cases) {
+      const base = { onTime: false, intact: false };
+      expect(scoreOrder(o, { ...base, withinPar: true }, ordersConfig)).toEqual({ points: points + 1, coins: coins + 10, bonuses: ['par'] });
+      expect(scoreOrder(o, { ...base, withinPar: false }, ordersConfig)).toEqual({ points, coins, bonuses: [] });
+    }
+  });
+
+  it('express on time and within par earns both bonuses', () => {
+    const o = order('dropoff', 'short', 'express');
+    expect(scoreOrder(o, { onTime: true, intact: true, withinPar: true }, ordersConfig)).toEqual({
+      points: 3, coins: 30, bonuses: ['express', 'par'],
+    });
+    // within par but late for express: par only
+    expect(scoreOrder(o, { onTime: false, intact: true, withinPar: true }, ordersConfig)).toEqual({
+      points: 2, coins: 20, bonuses: ['par'],
+    });
   });
 
   it('heavy always adds +1/+10', () => {
@@ -56,6 +82,13 @@ describe('expressLimit', () => {
   it('uses distanceFactor x route / sprint speed + extra seconds', () => {
     expect(expressLimit(160, 8, ordersConfig)).toBe(40); // drop-off 160 m
     expect(expressLimit(320, 8, ordersConfig)).toBe(70); // pick-up 160 m one-way
+  });
+});
+
+describe('parLimit', () => {
+  it('uses distanceFactor x route / sprint speed + extra seconds', () => {
+    expect(parLimit(160, 8, ordersConfig)).toBe(36); // 160 / 8 x 1.3 + 10
+    expect(parLimit(320, 8, ordersConfig)).toBe(62);
   });
 });
 

@@ -130,8 +130,8 @@ export class OrderBoardView {
       const route = stepTexts(o, pois)
         .map((t) => `<li>${esc(t)}</li>`)
         .join('');
-      const base = scoreOrder(o, { onTime: false, intact: false }, this.cfg);
-      const best = scoreOrder(o, { onTime: true, intact: true }, this.cfg);
+      const base = scoreOrder(o, { onTime: false, intact: false, withinPar: false }, this.cfg);
+      const best = scoreOrder(o, { onTime: true, intact: true, withinPar: false }, this.cfg);
       const bonus =
         o.modifier && o.modifier !== 'heavy' && best.points > base.points
           ? `<div class="board-bonus">+${pointsText(best.points - base.points)} · +${best.coins - base.coins} coins if ${o.modifier === 'express' ? 'on time' : 'intact'}</div>`

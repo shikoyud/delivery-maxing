@@ -2,7 +2,7 @@ import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
 import { pickWeighted, type Rng } from '../util/rng';
 import type { PathDistance, PoiInfo } from '../world/distance';
-import { expressLimit, orderSteps, slotsFor } from './rules';
+import { expressLimit, orderSteps, parLimit, slotsFor } from './rules';
 import type { Modifier, Order, OrderType, Unlocks } from './types';
 
 export interface BoardContext {
@@ -48,6 +48,7 @@ export function generateBoard(ctx: BoardContext): Order[] {
         routeDistance,
         slots: slotsFor(null, cfg),
         expressLimit: null,
+        parLimit: parLimit(routeDistance, ctx.baseSprintSpeed, cfg),
       });
       continue;
     }
@@ -72,6 +73,7 @@ export function generateBoard(ctx: BoardContext): Order[] {
       routeDistance,
       slots: slotsFor(modifier, cfg),
       expressLimit: modifier === 'express' ? expressLimit(routeDistance, ctx.baseSprintSpeed, cfg) : null,
+      parLimit: parLimit(routeDistance, ctx.baseSprintSpeed, cfg),
     });
   }
   return orders;

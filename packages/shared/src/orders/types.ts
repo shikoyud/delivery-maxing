@@ -2,7 +2,7 @@ import type { Band } from '../world/distance';
 
 export type OrderType = 'dropoff' | 'pickup' | 'chain';
 export type Modifier = 'express' | 'fragile' | 'heavy';
-export type Bonus = 'express' | 'fragile' | 'heavy';
+export type Bonus = 'express' | 'fragile' | 'heavy' | 'par';
 export type Step = { kind: 'poi'; poiId: string } | { kind: 'hub' };
 
 export interface Order {
@@ -19,6 +19,8 @@ export interface Order {
   slots: number;
   /** Seconds; express only. */
   expressLimit: number | null;
+  /** Seconds from accept; every order. Delivering within it earns the par bonus. */
+  parLimit: number;
 }
 
 export interface Unlocks {

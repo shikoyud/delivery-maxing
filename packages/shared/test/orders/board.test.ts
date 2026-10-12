@@ -117,6 +117,14 @@ describe('generateBoard', () => {
     }
   });
 
+  it('every order, chain included, carries parLimit from its route distance', () => {
+    const all = seeds.flatMap((s) => generateBoard(ctx(s)));
+    expect(all.some((o) => o.type === 'chain')).toBe(true);
+    for (const o of all) {
+      expect(o.parLimit).toBe((ordersConfig.par.distanceFactor * o.routeDistance) / 8 + ordersConfig.par.extraSeconds);
+    }
+  });
+
   it('stops early when POIs run out', () => {
     const board = generateBoard(ctx(5, { pois: pois.slice(0, 3) }));
     expect(board.length).toBeLessThanOrEqual(3);
