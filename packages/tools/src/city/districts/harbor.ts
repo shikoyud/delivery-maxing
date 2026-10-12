@@ -15,7 +15,7 @@ import {
   type QuayEdge,
 } from '../district';
 import { cableClear, mantleSteps, navLinkFor, padFlightClear, padLaunchFor, zipBetween, type Obstacle } from '../kits';
-import { r2, v2 } from '../layout';
+import { box, distToRect, r2, top, v2 } from '../layout';
 import { fillLot, type FillerParams } from '../lots';
 
 /** Harbor Docks parameters (`params` of the harbor district in city.source.json). */
@@ -148,15 +148,6 @@ const rectOf = (axis: Axis, u0: number, u1: number, v0: number, v1: number): Rec
   axis === 'x' ? { minX: u0, maxX: u1, minZ: v0, maxZ: v1 } : { minX: v0, maxX: v1, minZ: u0, maxZ: u1 };
 /** The yaw that faces +v (`sign` 1) or −v along the v axis of `axis`. */
 const faceV = (axis: Axis, sign: 1 | -1): RotY => (axis === 'x' ? (sign > 0 ? 0 : 180) : sign > 0 ? 90 : 270);
-const distToRect = (p: { x: number; z: number }, r: Rect): number =>
-  Math.hypot(Math.max(0, r.minX - p.x, p.x - r.maxX), Math.max(0, r.minZ - p.z, p.z - r.maxZ));
-const top = (s: Solid): number => s.center.y + s.size.y / 2;
-const box = (id: string, kind: Solid['kind'], r: Rect, y0: number, y1: number): Solid => ({
-  id,
-  kind,
-  center: v2({ x: (r.minX + r.maxX) / 2, y: (y0 + y1) / 2, z: (r.minZ + r.maxZ) / 2 }),
-  size: v2({ x: r.maxX - r.minX, y: y1 - y0, z: r.maxZ - r.minZ }),
-});
 
 /** Solids bucketed on a coarse grid, for clearance checks along cables and pad flights. */
 class ObstacleIndex {

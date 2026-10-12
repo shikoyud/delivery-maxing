@@ -1,14 +1,7 @@
-import type { Rect, Solid, SolidKind } from '@dm/shared';
-import { groundRect, intersectRect, r2, v2 } from './layout';
+import type { Rect, Solid } from '@dm/shared';
+import { box, groundRect, intersectRect, r2 } from './layout';
 import { splitAtChunks } from './streets';
 import type { CitySource, Edge } from './source';
-
-const box = (id: string, kind: SolidKind, r: Rect, y0: number, y1: number): Solid => ({
-  id,
-  kind,
-  center: v2({ x: (r.minX + r.maxX) / 2, y: (y0 + y1) / 2, z: (r.minZ + r.maxZ) / 2 }),
-  size: v2({ x: r.maxX - r.minX, y: y1 - y0, z: r.maxZ - r.minZ }),
-});
 
 /** One 1 m thick ground tile per chunk with land, top at y = 0, clipped to the quay lines. */
 export function groundTiles(src: CitySource, chunkSize: number): Solid[] {

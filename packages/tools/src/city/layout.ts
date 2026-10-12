@@ -1,9 +1,29 @@
-import type { Rect, Vec3 } from '@dm/shared';
+import type { Rect, Solid, SolidKind, Vec3 } from '@dm/shared';
 import type { CitySource, Edge } from './source';
 
 /** Rounds to 0.01 (the precision of every coordinate in city.json); `+ 0` turns −0 into 0. */
 export const r2 = (v: number): number => Math.round(v * 100) / 100 + 0;
 export const v2 = (v: Vec3): Vec3 => ({ x: r2(v.x), y: r2(v.y), z: r2(v.z) });
+
+/** An axis-aligned solid over footprint `r`, from `y0` up to `y1` (rounded to 0.01 m). */
+export const box = (id: string, kind: SolidKind, r: Rect, y0: number, y1: number): Solid => ({
+  id,
+  kind,
+  center: v2({ x: (r.minX + r.maxX) / 2, y: (y0 + y1) / 2, z: (r.minZ + r.maxZ) / 2 }),
+  size: v2({ x: r.maxX - r.minX, y: y1 - y0, z: r.maxZ - r.minZ }),
+});
+/** The top of an axis-aligned solid. */
+export const top = (s: Solid): number => s.center.y + s.size.y / 2;
+/** Horizontal distance from a point to a rect (0 inside it). */
+export const distToRect = (p: { x: number; z: number }, r: Rect): number =>
+  Math.hypot(Math.max(0, r.minX - p.x, p.x - r.maxX), Math.max(0, r.minZ - p.z, p.z - r.maxZ));
+/** The smallest rect holding every rect of `rs`. */
+export const union = (rs: readonly Rect[]): Rect => ({
+  minX: Math.min(...rs.map((r) => r.minX)),
+  minZ: Math.min(...rs.map((r) => r.minZ)),
+  maxX: Math.max(...rs.map((r) => r.maxX)),
+  maxZ: Math.max(...rs.map((r) => r.maxZ)),
+});
 /**
  * Local street lines sit on whole metres: then every road and sidewalk edge (line ± half-widths, chunk borders) is
  * exact in binary, and a slab's centre ± half-size lands exactly on a chunk border instead of a hair past it (a

@@ -1,5 +1,5 @@
 import { solidRect, type PieceEntry, type Prop, type Rect, type Rng, type RotY, type Solid, type Vec3 } from '@dm/shared';
-import { r2, v2 } from './layout';
+import { distToRect, r2, union, v2 } from './layout';
 
 type M3 = [[number, number, number], [number, number, number], [number, number, number]];
 const RAD = Math.PI / 180;
@@ -110,14 +110,6 @@ const inside = (r: Rect, outer: Rect): boolean =>
   r.minX >= outer.minX - EPS && r.maxX <= outer.maxX + EPS && r.minZ >= outer.minZ - EPS && r.maxZ <= outer.maxZ + EPS;
 const near = (a: Rect, b: Rect, gap: number): boolean =>
   a.minX < b.maxX + gap - EPS && a.maxX > b.minX - gap + EPS && a.minZ < b.maxZ + gap - EPS && a.maxZ > b.minZ - gap + EPS;
-const distToRect = (p: Vec3, r: Rect): number =>
-  Math.hypot(Math.max(0, r.minX - p.x, p.x - r.maxX), Math.max(0, r.minZ - p.z, p.z - r.maxZ));
-const union = (rs: Rect[]): Rect => ({
-  minX: Math.min(...rs.map((r) => r.minX)),
-  minZ: Math.min(...rs.map((r) => r.minZ)),
-  maxX: Math.max(...rs.map((r) => r.maxX)),
-  maxZ: Math.max(...rs.map((r) => r.maxZ)),
-});
 
 type Side = 'n' | 's' | 'w' | 'e';
 /** Facing each street side: the door (+z) turned toward it. */

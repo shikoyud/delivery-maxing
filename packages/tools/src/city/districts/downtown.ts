@@ -10,7 +10,7 @@ import {
   type PoiSlot,
 } from '../district';
 import { cableClear, navLinkFor, padFlightClear, padLaunchFor, zipBetween, type Obstacle } from '../kits';
-import { r2, v2, type GridLine } from '../layout';
+import { distToRect, r2, top, union, v2, type GridLine } from '../layout';
 import { propSolids } from '../lots';
 
 /** Downtown Rooftops parameters (`params` of the downtown district in city.source.json). */
@@ -137,15 +137,6 @@ function spanCells(lines: GridLine[]): { cell: number; local: number; count: num
   return out;
 }
 
-const union = (rs: Rect[]): Rect => ({
-  minX: Math.min(...rs.map((r) => r.minX)),
-  minZ: Math.min(...rs.map((r) => r.minZ)),
-  maxX: Math.max(...rs.map((r) => r.maxX)),
-  maxZ: Math.max(...rs.map((r) => r.maxZ)),
-});
-const distToRect = (p: Vec3, r: Rect): number =>
-  Math.hypot(Math.max(0, r.minX - p.x, p.x - r.maxX), Math.max(0, r.minZ - p.z, p.z - r.maxZ));
-const top = (s: Solid): number => s.center.y + s.size.y / 2;
 const midX = (r: Rect): number => (r.minX + r.maxX) / 2;
 const midZ = (r: Rect): number => (r.minZ + r.maxZ) / 2;
 
