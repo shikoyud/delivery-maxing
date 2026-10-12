@@ -176,16 +176,30 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   expect(z).toBeLessThan(-55.5); // flush with the wall
   // Grazing yaws: the boom runs almost along the wall (the review's see-through case at π ± 1.3).
   await sweep('wall', [Math.PI + 1.3, Math.PI - 1.3, Math.PI + 1.45, Math.PI - 1.45]);
-  // Looking almost along the wall (the review's see-through case is π + 1.3, swept above; this one is a little more
-  // grazing so the boom stays over minDistance): the boom is pulled in and the courier stays in view.
-  await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.48, -15 * (Math.PI / 180)));
+  // The review's see-through case exactly: flush with the wall, looking at π + 1.3. The pivot is only ~0.37 m from the
+  // wall, so the collision ball touches it within minDistance: the camera stops there and the courier hides (R10).
+  await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.3, -15 * (Math.PI / 180)));
   await waitTicks(page, 3);
-  const cam = await page.evaluate(() => window.__dm!.camera());
-  console.log(`against the wall: boom ${cam.distance.toFixed(2)} m, courier hidden ${cam.courierHidden}`);
-  expect(cam.distance).toBeLessThan(clientJson.camera.chase.distance);
-  expect(cam.courierHidden).toBe(false);
+  const flush = await page.evaluate(() => window.__dm!.camera());
+  console.log(`flush with the wall at π+1.3: boom ${flush.distance.toFixed(2)} m, courier hidden ${flush.courierHidden}`);
+  expect(flush.distance).toBeLessThan(clientJson.camera.chase.minDistance);
+  expect(flush.courierHidden).toBe(true);
   expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
   await page.screenshot({ path: `${artifacts}sp1-camera-wall.png` });
+
+  // One metre off the same wall at the same grazing yaw: the boom is pulled in short of the wall and the courier stays
+  // in view, with the wall running beside the camera.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 14.5, y: 0.3, z: -55 }, { x: 14.5, y: 1.6, z: -30 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.3, -15 * (Math.PI / 180)));
+  await waitTicks(page, 3);
+  const graze = await page.evaluate(() => window.__dm!.camera());
+  console.log(`1 m off the wall at π+1.3: boom ${graze.distance.toFixed(2)} m, courier hidden ${graze.courierHidden}`);
+  expect(graze.distance).toBeLessThan(clientJson.camera.chase.distance);
+  expect(graze.distance).toBeGreaterThan(clientJson.camera.chase.minDistance);
+  expect(graze.courierHidden).toBe(false);
+  expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
+  await page.screenshot({ path: `${artifacts}sp1-camera-wall-graze.png` });
   expect(errors).toEqual([]);
 });
 

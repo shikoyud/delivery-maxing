@@ -19,6 +19,8 @@ export interface ChasePose {
   lookAt: Vec3;
   /** Boom length from the pivot to `position` (collision-shortened, never below minDistance). */
   distance: number;
+  /** Boom length to the desired point (the unblocked boom). */
+  full: number;
   /** Unit vector from the pivot toward the camera. */
   direction: Vec3;
   /** Unit view direction. */
@@ -61,18 +63,44 @@ export function clampPivotHeight(feet: Vec3, height: number, cast: RayCast, chas
 const add = (a: Vec3, d: Vec3, k: number): Vec3 => ({ x: a.x + d.x * k, y: a.y + d.y * k, z: a.z + d.z * k });
 
 /**
+ * How far the collision ball can rise straight up from the pivot before touching a ceiling, probed up to
+ * height + distance (the most the desired camera point can ever rise above the pivot).
+ */
+export function headroom(target: Vec3, cam: ChaseConfig, cast: RayCast): number {
+  const probe = cam.height + cam.distance;
+  return cast(target, UP, probe) ?? probe;
+}
+
+/** How far the desired camera point sits above the pivot at this pitch on open ground: height − sin(pitch) × distance. */
+export function lookRise(pitch: number, cam: ChaseConfig): number {
+  return cam.height - Math.sin(pitch) * cam.distance;
+}
+
+/** A value that drops at once and recovers at `rate` (1/s): boom extent and ceiling share after a blockage. */
+function recover(current: number, target: number, snap: boolean, dt: number, rate: number): number {
+  return snap || target <= current ? target : easeToward(current, target, dt, rate);
+}
+
+/**
  * Third-person chase pose (spec §4 "Camera", R9). `target` is the pivot (feet + pivot height). On open ground the camera
  * sits at the desired point target − look(yaw, pitch) × distance + (0, height, 0) and looks at the aim point
- * lookAtHeight above the feet. A low ceiling trims the lift first (a cast straight up), so in a tunnel the boom runs
- * back under the roof instead of into it. The boom itself is one cast from the pivot toward the desired point, so the
- * camera always has a clear line of sight to the courier; a hit at d (the collision ball's travel, so no radius is
- * subtracted again) shortens it to max(minDistance, d). The view direction is the desired point's view of the aim
- * point, so pulling the boom in never swings the view.
+ * lookAtHeight above the feet. A ceiling over the pivot caps how far the desired point rises (`room`, by default the
+ * pivot's headroom), so in a low tunnel the boom runs back under the roof instead of into it. The boom itself is one
+ * sphere cast from the pivot toward the desired point, so the camera always has a clear line of sight to the courier;
+ * a hit at d (the collision ball's travel, so no radius is subtracted again) shortens it to max(minDistance, d).
+ * The view direction is the desired point's view of the aim point, so pulling the boom in never swings the view.
  */
-export function chaseCameraPose(target: Vec3, yaw: number, pitch: number, cam: ChaseConfig, cast: RayCast): ChasePose {
-  const lift = cast(target, UP, cam.height) ?? cam.height;
+export function chaseCameraPose(
+  target: Vec3,
+  yaw: number,
+  pitch: number,
+  cam: ChaseConfig,
+  cast: RayCast,
+  room: number = headroom(target, cam, cast),
+): ChasePose {
   const f = lookDirection(yaw, pitch);
-  const desired = { x: target.x - f.x * cam.distance, y: target.y + lift - f.y * cam.distance, z: target.z - f.z * cam.distance };
+  const rise = Math.min(cam.height - f.y * cam.distance, room);
+  const desired = { x: target.x - f.x * cam.distance, y: target.y + rise, z: target.z - f.z * cam.distance };
   const ox = desired.x - target.x;
   const oy = desired.y - target.y;
   const oz = desired.z - target.z;
@@ -89,18 +117,23 @@ export function chaseCameraPose(target: Vec3, yaw: number, pitch: number, cam: C
   const vz = target.z - desired.z;
   const len = Math.hypot(vx, vy, vz);
   const view = { x: vx / len, y: vy / len, z: vz / len };
-  return { position, lookAt: add(position, view, 1), distance, direction, view, blocked, clear };
+  return { position, lookAt: add(position, view, 1), distance, full, direction, view, blocked, clear };
 }
 
 /**
  * The chase camera: follows the pivot with a slight lag (followEaseRate), pulls the boom in at once when geometry
  * blocks it and lets it back out slowly (pushOutEaseRate), widens the FOV with speed and rolls during wall-runs.
- * R10: the camera never passes the point where its collision ball touches a surface; when that is closer than
- * minDistance, `courierHidden` turns true.
+ * Recovery is eased as a share of the open-ground pose (boom extent, and the rise a ceiling allowed), so mouse look on
+ * open ground moves the camera at once. R10: the camera never passes the point where its collision ball touches a
+ * surface; when that is closer than minDistance, `courierHidden` turns true.
  */
 export class ChaseCamera {
   private follow: Vec3 | null = null;
   private dist = 0;
+  /** Boom length as a share of the open-ground boom (1 when nothing blocked it lately). */
+  private extent = 1;
+  /** Rise above the pivot as a share of the open-ground rise (below 1 under or just after a ceiling). */
+  private riseShare = 1;
   private roll = 0;
   private hidden = false;
 
@@ -134,10 +167,14 @@ export class ChaseCamera {
     const follow = snapping ? { ...target } : this.easeFollow(this.follow!, target, dt, ch);
     this.follow = follow;
 
-    const pose = chaseCameraPose(follow, yaw, pitch, ch, this.cast);
+    // A ceiling lowers the camera at once; once it is gone the camera rises back at pushOutEaseRate.
+    const want = lookRise(pitch, ch);
+    const room = headroom(follow, ch, this.cast);
+    this.riseShare = recover(this.riseShare, want > 0 ? Math.min(1, room / want) : 1, snapping, dt, ch.pushOutEaseRate);
+    const pose = chaseCameraPose(follow, yaw, pitch, ch, this.cast, want > 0 ? this.riseShare * want : room);
     // Pull in at once, push out slowly; R10: never past the hit, even when that is under minDistance.
-    if (snapping || pose.distance <= this.dist) this.dist = pose.distance;
-    else this.dist = easeToward(this.dist, pose.distance, dt, ch.pushOutEaseRate);
+    this.extent = recover(this.extent, pose.distance / pose.full, snapping, dt, ch.pushOutEaseRate);
+    this.dist = this.extent * pose.full;
     if (pose.blocked) this.dist = Math.min(this.dist, pose.clear);
 
     const p = add(follow, pose.direction, this.dist);

@@ -7,6 +7,7 @@ import {
   ChaseCamera,
   chaseCameraPose,
   clampPivotHeight,
+  headroom,
   isLow,
   pivotHeightFor,
   type RayCast,
@@ -114,6 +115,26 @@ describe('chaseCameraPose', () => {
     const p = chaseCameraPose(crouched, 0, 0, chase, roofAt(feet.y + 1.4));
     expect(p.position.y).toBeCloseTo(feet.y + 1.4 - R, 6);
     expect(p.position.z - feet.z).toBeCloseTo(4.5, 6);
+  });
+  it('crouch tunnel, looking down: the boom runs back under the roof instead of into it, courier in frame', () => {
+    const crouched = pivot(feet, chase.crouchPivotHeight);
+    const pitch = -20 * DEG;
+    const p = chaseCameraPose(crouched, 0, pitch, chase, roofAt(feet.y + 1.4));
+    expect(p.position.y).toBeLessThanOrEqual(feet.y + 1.4 - R + 1e-9);
+    expect(p.position.z - feet.z).toBeCloseTo(chase.distance * Math.cos(pitch), 6);
+    expect(p.distance).toBeGreaterThan(chase.minDistance);
+    const c = new THREE.PerspectiveCamera(cam.fovBase, 16 / 9, cam.near, cam.far);
+    c.position.set(p.position.x, p.position.y, p.position.z);
+    c.lookAt(p.lookAt.x, p.lookAt.y, p.lookAt.z);
+    c.updateMatrixWorld(true);
+    const ndc = new THREE.Vector3(crouched.x, crouched.y, crouched.z).project(c);
+    expect(ndc.y).toBeLessThan(0);
+    expect(ndc.y).toBeGreaterThan(-1);
+  });
+
+  it('headroom: how far the collision ball rises above the pivot, up to height + distance', () => {
+    expect(headroom(pivot(), chase, open)).toBe(chase.height + chase.distance);
+    expect(headroom(pivot(feet, chase.crouchPivotHeight), chase, roofAt(feet.y + 1.4))).toBeCloseTo(1.4 - chase.crouchPivotHeight - R, 9);
   });
 });
 
@@ -233,6 +254,38 @@ describe('ChaseCamera', () => {
     c.update(1 / 60, pivot(feet, chase.crouchPivotHeight), 0, 0, 0, standing);
     expect(c.camera.position.y).toBeLessThanOrEqual(feet.y + 1.4 - R + 1e-9);
     expect(c.courierHidden).toBe(false);
+  });
+
+  it('crouched in the tunnel looking down, the courier stays in view', () => {
+    const c = make(roofAt(feet.y + 1.4));
+    c.update(1 / 60, pivot(feet, chase.crouchPivotHeight), 0, -20 * DEG, 0, standing);
+    expect(c.camera.position.y).toBeLessThanOrEqual(feet.y + 1.4 - R + 1e-9);
+    expect(c.courierHidden).toBe(false);
+  });
+
+  it('leaving a low ceiling, the camera rises back smoothly (no pop), then settles on the open pose', () => {
+    let geo: RayCast = roofAt(feet.y + 1.4);
+    const c = make((f, d, m) => geo(f, d, m));
+    const low = pivot(feet, chase.crouchPivotHeight);
+    const pitch = -20 * DEG;
+    for (let i = 0; i < 5; i++) c.update(1 / 60, low, 0, pitch, 0, standing);
+    const y0 = c.camera.position.y;
+    geo = open;
+    c.update(1 / 60, low, 0, pitch, 0, standing);
+    const rose = c.camera.position.y - y0;
+    expect(rose).toBeGreaterThan(0);
+    expect(rose).toBeLessThan(0.5);
+    for (let i = 0; i < 300; i++) c.update(1 / 60, low, 0, pitch, 0, standing);
+    expect(c.camera.position.y).toBeCloseTo(chaseCameraPose(low, 0, pitch, chase, open).position.y, 6);
+  });
+
+  it('on open ground the mouse pitch moves the camera at once (no easing lag)', () => {
+    const c = make();
+    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, chase.pitchMinDeg * DEG, 0, standing);
+    const want = chaseCameraPose(pivot(), 0, chase.pitchMinDeg * DEG, chase, open).position;
+    expect(c.camera.position.y).toBeCloseTo(want.y, 9);
+    expect(c.camera.position.z).toBeCloseTo(want.z, 9);
   });
 
   it('keeps the FOV kick and the wall-run roll easing', () => {
