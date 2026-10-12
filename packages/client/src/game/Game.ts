@@ -21,8 +21,11 @@ import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
 import { easeToward } from '../render/cameraRig';
-import { ChaseCamera, clampPivotHeight, isLow, pivotHeightFor, type RayCast } from '../render/chaseCamera';
-import { createCourierPlaceholder, type CourierView } from '../render/courierPlaceholder';
+import robotUrl from '../../../../assets/models/RobotExpressive.glb?url';
+import { ChaseCamera, clampPivotHeight, pivotHeightFor, type RayCast } from '../render/chaseCamera';
+import { CourierModel } from '../render/courier/CourierModel';
+import type { CourierView } from '../render/courier/CourierView';
+import { createCourierPlaceholder } from '../render/courierPlaceholder';
 import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer } from '../render/Renderer';
@@ -40,7 +43,7 @@ import {
 } from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe } from './cameraQueries';
-import { interpolationStart, lerpAngle } from './interpolation';
+import { interpolationStart } from './interpolation';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
@@ -75,9 +78,9 @@ export class Game {
   readonly chase: ChaseCamera;
   /** Sphere cast of the camera's collision ball against the map (the courier's own collider excluded). */
   private readonly cameraCast: RayCast;
+  /** The animated courier, or the capsule when the model failed to load (Review Focus 4). */
   readonly courier: CourierView;
   private prevPosition: Vec3;
-  private prevHeading: number;
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
   private lastFrameMs: number | null = null;
@@ -92,9 +95,9 @@ export class Game {
     readonly world: WorldFeatureState,
     private readonly settings: DevSettings,
     private readonly devStore: DevSettingsStore,
+    model: CourierModel | null,
   ) {
     this.prevPosition = { ...sim.state.position };
-    this.prevHeading = sim.state.heading;
     const chase = this.cfg.camera.chase;
     this.actions = new ActionState(
       this.cfg.input,
@@ -110,8 +113,8 @@ export class Game {
       this.cameraCast,
       { probe: physicsWallProbe(sim.physics, sim.body.collider), courierRadius: () => settings.movement.capsule.radius },
     );
-    this.courier = createCourierPlaceholder(settings.movement.capsule);
-    this.renderer.scene.add(this.courier.object);
+    this.courier = model ?? createCourierPlaceholder(settings.movement.capsule, this.cfg.courier);
+    this.renderer.scene.add(this.courier.root);
     this.renderer.scene.add(buildGreyboxMeshes(map));
     this.features = buildFeatureMeshes(map);
     this.renderer.scene.add(this.features.group);
@@ -168,14 +171,15 @@ export class Game {
   }
 
   static async create(host: HTMLElement, opts: GameOptions): Promise<Game> {
-    const rapier = await initRapier();
+    // The model loads alongside physics; a missing or broken file falls back to the capsule with one warning.
+    const [rapier, model] = await Promise.all([initRapier(), CourierModel.load(robotUrl, clientConfig.courier)]);
     const map = expandGreybox(greyboxJson as GreyboxSource);
     const physics = createPhysicsWorld(rapier, map);
     // One deep-cloned movement object shared by PlayerSim and the dev panel; the shared import is never mutated.
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
     const sim = new PlayerSim(physics, map, settings.movement, map.hub.spawn, map.hub.spawnYaw);
-    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore);
+    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model);
     if (opts.debug) installDebugHooks(game);
     return game;
   }
@@ -203,7 +207,7 @@ export class Game {
   teleport(p: Vec3, v: Vec3 = { x: 0, y: 0, z: 0 }): void {
     this.sim.teleport(vec3(p.x, p.y, p.z), vec3(v.x, v.y, v.z));
     this.prevPosition = { ...this.sim.state.position };
-    this.prevHeading = this.sim.state.heading;
+    this.courier.snap();
     this.chase.snap();
   }
 
@@ -245,16 +249,17 @@ export class Game {
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
-    const headingBefore = this.sim.state.heading;
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
     const events = this.sim.step(frame, mods, this.world, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
-    const respawned = events.some((e) => e.kind === 'respawned');
-    this.prevHeading = respawned ? this.sim.state.heading : headingBefore;
-    if (respawned) this.chase.snap();
+    if (events.some((e) => e.kind === 'respawned')) {
+      // A teleport: no camera sweep, and no turn or animation blend across it.
+      this.chase.snap();
+      this.courier.snap();
+    }
     this.tick++;
     return events;
   }
@@ -267,7 +272,8 @@ export class Game {
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
     this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s);
-    this.courier.update(feet, lerpAngle(this.prevHeading, s.heading, alpha), isLow(s));
+    this.courier.update(dt, s, feet, horizontalLength(s.velocity));
+    this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);
     for (const orb of this.map.boostOrbs) {
       this.features.setOrbVisible(orb.id, this.time >= (this.world.orbAvailableAt.get(orb.id) ?? 0));

@@ -38,6 +38,7 @@ export interface ClientConfig {
     invertY: boolean;
     bindings: Record<BindingName, string[]>;
   };
+  courier: CourierConfig;
   ui: {
     /** How long a delivery popup stays on screen (s). */
     popupSeconds: number;
@@ -84,6 +85,48 @@ export interface ChaseConfig {
    * axis along the wall normal, so the boom has room and the courier stays in view.
    */
   wallPivotOffset: number;
+}
+
+/** A procedural pose layered over the courier's clip (see render/courier). */
+export type CourierPoseName = 'slide' | 'wallrunL' | 'wallrunR' | 'zip' | 'grind' | 'mantle' | 'board' | 'fall' | 'crouch';
+
+/**
+ * One procedural pose. Angles are degrees about the courier's own axes (+X right, +Y up, +Z back; the courier faces
+ * −Z), so +X leans an upright part back and swings a hanging limb forward, and +Z tips an upright part to the left.
+ */
+export interface CourierPose {
+  /** Lowers the whole model (feet included), m. */
+  drop: number;
+  /** Lowers the hips only (the feet stay where the legs put them), m. */
+  hipDrop: number;
+  /** Whole-model rotation [x, y, z] about the feet. */
+  body: number[];
+  /** Extra rotation [x, y, z] per bone name, applied over the clip's own rotation. */
+  bones: Record<string, number[]>;
+}
+
+/** The animated courier model (Task 5). Speeds in m/s, rates in 1/s, times in s, lengths in m. */
+export interface CourierConfig {
+  /** The model is scaled to this height (feet to the top of the head). */
+  height: number;
+  /** Exponential ease rate of the model's yaw toward the sim heading. */
+  turnEaseRate: number;
+  /** Clip cross-fade and pose blend time. */
+  crossFade: number;
+  /** The Running clip plays at normal speed at this ground speed (faster above, slower below). */
+  runSpeedForFullRun: number;
+  /** Below this the courier idles; up to walkMaxSpeed it walks; above it runs. */
+  idleSpeed: number;
+  walkMaxSpeed: number;
+  /** In the air and falling faster than this (downward m/s), the fall pose plays. */
+  fallSpeed: number;
+  /** [from, to] s of the model's Jump clip used in the air: played once from take-off, then held. */
+  airClip: number[];
+  /** One box per carried package on the courier's back, in this many columns. */
+  packages: { size: number; gap: number; columns: number };
+  /** The skateboard deck under the feet while on the board. */
+  deck: { length: number; width: number; thickness: number; wheelGap: number };
+  poses: Record<CourierPoseName, CourierPose>;
 }
 
 export type BindingName =

@@ -292,6 +292,118 @@ test('camera stays outside geometry on a zip line beside a building', async ({ p
   expect(errors).toEqual([]);
 });
 
+test('courier model loads and animates (mixer time advances)', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const c0 = await page.evaluate(() => window.__dm!.courier());
+  expect(c0.loaded).toBe(true);
+  expect(c0.clip).toBe('Idle');
+  await waitTicks(page, 6);
+  const c1 = await page.evaluate(() => window.__dm!.courier());
+  expect(c1.time).toBeGreaterThan(c0.time);
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  // W + D + Shift: a diagonal sprint, so the chase camera sees the courier three-quarters from behind.
+  for (const k of ['KeyW', 'KeyD', 'ShiftLeft']) await page.keyboard.down(k);
+  await page.waitForFunction(() => window.__dm!.courier().clip === 'Running', undefined, { timeout: 10_000 });
+  await waitTicks(page, 8);
+  await page.screenshot({ path: `${artifacts}sp1-courier-run.png` });
+  // Still sprinting: crouch into a slide.
+  await page.keyboard.down('KeyC');
+  await page.waitForFunction(() => window.__dm!.player().mode === 'slide', undefined, { timeout: 10_000 });
+  await waitTicks(page, 4);
+  expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('slide');
+  await page.screenshot({ path: `${artifacts}sp1-courier-slide.png` });
+  for (const k of ['KeyC', 'ShiftLeft', 'KeyD', 'KeyW']) await page.keyboard.up(k);
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`courier model: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
+  expect(errors).toEqual([]);
+});
+
+test('courier poses: wall-run, zip line and board', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const deg = Math.PI / 180;
+
+  // Wall-run along hub-wall-01's north face (as in the camera test), looking 30° off the wall toward it.
+  await page.keyboard.down('KeyW');
+  await page.evaluate(() => {
+    window.__dm!.setLook(Math.PI / 2, 0);
+    window.__dm!.teleport({ x: 86, y: 2, z: -1.5 }, { x: -8, y: 0, z: 0 });
+  });
+  await page.waitForFunction(() => window.__dm!.player().mode === 'wallrun', undefined, { timeout: 10_000 });
+  await page.evaluate((y) => window.__dm!.setLook(y, -10 * (Math.PI / 180)), Math.PI / 2 - 30 * deg);
+  await waitTicks(page, 3);
+  expect(await page.evaluate(() => window.__dm!.player().mode)).toBe('wallrun');
+  expect(await page.evaluate(() => window.__dm!.courier().pose)).toMatch(/^wallrun[LR]$/);
+  await page.screenshot({ path: `${artifacts}sp1-courier-wallrun.png` });
+  await page.keyboard.up('KeyW');
+
+  // Zip line: downtown-zip-03 from its top end, the camera swung out to the side.
+  await page.evaluate(() => {
+    const a = { x: 43.8, y: 23, z: -92 };
+    const b = { x: 50, y: 2.8, z: -160 };
+    const t = 0.02;
+    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+    window.__dm!.viewpoint({ x: p.x, y: p.y - 2, z: p.z }, { x: b.x, y: b.y, z: b.z });
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
+  });
+  await page.waitForFunction(() => window.__dm!.player().mode === 'zipline', undefined, { timeout: 10_000 });
+  const rideYaw = Math.atan2(-(50 - 43.8), -(-160 - -92));
+  await page.evaluate((y) => window.__dm!.setLook(y, -5 * (Math.PI / 180)), rideYaw + 0.7);
+  await waitTicks(page, 4);
+  expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('zip');
+  await page.screenshot({ path: `${artifacts}sp1-courier-zip.png` });
+
+  // Board: back on the plaza, Q, then roll forward and a little right.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.keyboard.press('KeyQ');
+  await page.waitForFunction(() => window.__dm!.player().onBoard === true, undefined, { timeout: 10_000 });
+  await page.keyboard.down('KeyW');
+  await waitTicks(page, 15);
+  await page.keyboard.up('KeyW');
+  await page.evaluate(() => window.__dm!.setLook(Math.PI / 2 - 0.6, -10 * (Math.PI / 180)));
+  await waitTicks(page, 3);
+  expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('board');
+  await page.screenshot({ path: `${artifacts}sp1-courier-board.png` });
+  expect(errors).toEqual([]);
+});
+
+test('a missing model falls back to the capsule without console errors (Review Focus 4)', async ({ page }) => {
+  const warnings: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'warning') warnings.push(m.text());
+  });
+  // A wrong Pages base path: the .glb request 404s. Chromium itself logs the failed fetch; any other error fails.
+  await page.route('**/*.glb', (r) => r.fulfill({ status: 404, body: 'not found' }));
+  const errors = await boot(page);
+  const ours = errors.filter((e) => !/^Failed to load resource: .*404/.test(e));
+  expect(ours).toEqual([]);
+  expect(await page.evaluate(() => window.__dm!.courier().loaded)).toBe(false);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  expect(await page.evaluate(() => window.__dm!.player().mode)).toBe('ground');
+  const courierWarnings = warnings.filter((w) => w.startsWith('Courier model unavailable'));
+  expect(courierWarnings).toHaveLength(1);
+  expect(await page.evaluate(() => window.__dm!.camera().courierHidden)).toBe(false);
+  await page.screenshot({ path: `${artifacts}sp1-courier-fallback.png` });
+});
+
+test('a corrupt model file falls back to the capsule with one warning and no errors', async ({ page }) => {
+  const warnings: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'warning') warnings.push(m.text());
+  });
+  await page.route('**/*.glb', (r) => r.fulfill({ status: 200, contentType: 'model/gltf-binary', body: 'this is not a glb' }));
+  const errors = await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  expect(await page.evaluate(() => window.__dm!.courier().loaded)).toBe(false);
+  expect(warnings.filter((w) => w.startsWith('Courier model unavailable'))).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
 /**
  * Viewpoints in the air: the player starts falling at once, so the screenshot is taken after a few frames
  * (a fall of well under a metre) rather than after a fixed settle time.
@@ -361,6 +473,8 @@ test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
 
   await page.locator(`[data-order-id="${drop.id}"] .accept`).click();
   await expect(page.locator('.board-active-row')).toHaveCount(1);
+  // A drop-off is collected at accept: one box on the courier's back.
+  await page.waitForFunction(() => window.__dm!.courier().packages === 1);
   await page.keyboard.press('Escape');
   await expect(page.locator('.board-overlay')).toBeHidden();
   expect(await page.evaluate(() => window.__dm!.boardOpen())).toBe(false);

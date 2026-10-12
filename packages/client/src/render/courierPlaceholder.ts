@@ -1,17 +1,11 @@
 import * as THREE from 'three';
-import type { MovementConfig, Vec3 } from '@dm/shared';
+import type { MovementConfig } from '@dm/shared';
+import type { CourierConfig } from '../clientConfig';
+import { easeYaw } from './courier/animState';
+import type { CourierView } from './courier/CourierView';
 import { palette } from './palette';
 
 type Capsule = MovementConfig['capsule'];
-
-/** The visible courier. Task 5's animated model implements the same shape; this capsule stays as its fallback. */
-export interface CourierView {
-  readonly object: THREE.Object3D;
-  /** Feet position, heading (yaw: 0 faces −Z, positive turns left) and whether crouched or sliding. */
-  update(feet: Vec3, heading: number, crouched: boolean): void;
-  /** Hides the courier from the camera while it keeps casting its shadow (R10: camera closer than minDistance). */
-  setHidden(hidden: boolean): void;
-}
 
 export interface CourierPlaceholder extends CourierView {
   /** The front marker (a coral visor), exposed so tests can check which way the courier faces. */
@@ -26,11 +20,12 @@ const VISOR_DEPTH = 0.3;
 const VISOR_HALF_WIDTH = 0.3;
 
 /**
- * Greybox courier: a teal capsule as tall as the movement capsule with a coral visor on its front, so the heading
+ * The courier's fallback when the animated model fails to load (ruling R1, Review Focus 4).
+ * A teal capsule as tall as the movement capsule with a coral visor on its front, so the heading
  * reads at a glance from the chase camera. Everything stays inside the collision capsule. Two meshes (two draw calls,
  * plus their shadows). `capsule` is read on every update, so dev-panel edits to the capsule size show at once.
  */
-export function createCourierPlaceholder(capsule: Capsule): CourierPlaceholder {
+export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfig): CourierPlaceholder {
   const r0 = capsule.radius;
   const h0 = capsule.height;
   const root = new THREE.Group();
@@ -55,13 +50,17 @@ export function createCourierPlaceholder(capsule: Capsule): CourierPlaceholder {
     body.add(m);
   }
 
+  let snapNext = true;
+  let packages = 0;
   return {
-    object: root,
+    root,
     front: visor,
-    update(feet, heading, crouched) {
+    update(dt, state, feet) {
       root.position.set(feet.x, feet.y, feet.z);
-      root.rotation.y = heading;
-      const h = crouched ? capsule.crouchHeight : capsule.height;
+      root.rotation.y = snapNext ? state.heading : easeYaw(root.rotation.y, state.heading, dt, courier.turnEaseRate);
+      snapNext = false;
+      const low = state.crouched || state.mode === 'slide';
+      const h = low ? capsule.crouchHeight : capsule.height;
       const s = capsule.radius / r0;
       body.scale.set(s, h / h0, s);
     },
@@ -72,5 +71,12 @@ export function createCourierPlaceholder(capsule: Capsule): CourierPlaceholder {
         m.material.depthWrite = !hidden;
       }
     },
+    setPackages(n) {
+      packages = n; // the fallback carries no visible packages
+    },
+    snap() {
+      snapNext = true;
+    },
+    debug: () => ({ loaded: false, clip: null, pose: 'none', time: 0, packages }),
   };
 }

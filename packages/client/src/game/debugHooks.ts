@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, MoveMode, Order, Totals, Vec3 } from '@dm/shared';
+import type { CourierDebug } from '../render/courier/CourierView';
 import type { Game } from './Game';
 
 /** Test and debugging API on window.__dm, installed only with ?debug. */
@@ -32,6 +33,8 @@ export interface DebugApi {
   kiosk(): Vec3;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
+  /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
+  courier(): CourierDebug;
   /** Whether any of the camera's near plane is inside a map solid (a ball reaching the near-plane corners). */
   cameraInsideSolid(): boolean;
   /**
@@ -104,9 +107,10 @@ export function installDebugHooks(game: Game): void {
     kiosk: () => ({ ...game.map.hub.kiosk }),
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
     cameraInsideSolid: () => game.cameraInsideSolid(),
+    courier: () => game.courier.debug(),
     camera() {
       const cam = game.renderer.camera;
-      const c = game.courier.object.position;
+      const c = game.courier.root.position;
       const h = game.sim.cfg.capsule.height;
       const mid = new THREE.Vector3(c.x, c.y + h / 2, c.z).project(cam);
       const top = new THREE.Vector3(c.x, c.y + h, c.z).project(cam);

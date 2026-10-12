@@ -30,6 +30,8 @@ export const palette = {
   kioskScreen: 0x16323a,
   poiIdle: 0x7d929c,
   poiTarget: 0xf27166,
+  /** Cardboard parcels on the courier's back. */
+  parcel: 0xd8b98a,
 } as const;
 
 /**

@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { movementConfig } from '@dm/shared';
+import { movementConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
+import { clientConfig } from '../src/clientConfig';
 import { createCourierPlaceholder } from '../src/render/courierPlaceholder';
 
 const cap = movementConfig.capsule;
+const courierCfg = clientConfig.courier;
+const make = () => createCourierPlaceholder(cap, courierCfg);
+
+/** A partial PlayerState with the fields the placeholder reads. */
+const st = (heading: number, crouched = false, mode: MoveMode = 'ground'): PlayerState =>
+  ({ heading, crouched, mode, onBoard: false, velocity: { x: 0, y: 0, z: 0 }, wallRun: { time: 0, normal: null, lastNormal: null } }) as unknown as PlayerState;
+
+/** Snaps the placeholder to `feet` and `heading`. */
+const place = (c: ReturnType<typeof make>, feet: Vec3, heading: number, crouched = false): void => {
+  c.snap();
+  c.update(0, st(heading, crouched), feet, 0);
+};
 
 /** World-space bounding box of the placeholder. */
 const box = (o: THREE.Object3D): THREE.Box3 => {
@@ -13,57 +26,75 @@ const box = (o: THREE.Object3D): THREE.Box3 => {
 
 describe('courier placeholder', () => {
   it('a capsule as tall as the courier, standing on the feet', () => {
-    const c = createCourierPlaceholder(cap);
-    c.update({ x: 5, y: 2, z: -3 }, 0, false);
-    const b = box(c.object);
+    const c = make();
+    place(c, { x: 5, y: 2, z: -3 }, 0);
+    const b = box(c.root);
     expect(b.min.y).toBeCloseTo(2, 3);
     expect(b.max.y).toBeCloseTo(2 + cap.height, 3);
     expect((b.min.x + b.max.x) / 2).toBeCloseTo(5, 1);
   });
 
   it('crouched or sliding it is crouchHeight tall', () => {
-    const c = createCourierPlaceholder(cap);
-    c.update({ x: 0, y: 0, z: 0 }, 0, true);
-    expect(box(c.object).max.y).toBeCloseTo(cap.crouchHeight, 3);
+    const c = make();
+    place(c, { x: 0, y: 0, z: 0 }, 0, true);
+    expect(box(c.root).max.y).toBeCloseTo(cap.crouchHeight, 3);
+    c.update(0, st(0, true, 'slide'), { x: 0, y: 0, z: 0 }, 8);
+    expect(box(c.root).max.y).toBeCloseTo(cap.crouchHeight, 3);
   });
 
   it('the front marker points along the heading (yaw 0 faces −Z, positive turns left)', () => {
-    const c = createCourierPlaceholder(cap);
+    const c = make();
     const front = (): THREE.Vector3 => c.front.getWorldPosition(new THREE.Vector3());
-    c.update({ x: 0, y: 0, z: 0 }, 0, false);
-    c.object.updateMatrixWorld(true);
+    place(c, { x: 0, y: 0, z: 0 }, 0);
+    c.root.updateMatrixWorld(true);
     expect(front().z).toBeLessThan(-cap.radius * 0.7);
-    c.update({ x: 0, y: 0, z: 0 }, Math.PI / 2, false);
-    c.object.updateMatrixWorld(true);
+    place(c, { x: 0, y: 0, z: 0 }, Math.PI / 2);
+    c.root.updateMatrixWorld(true);
     expect(front().x).toBeLessThan(-cap.radius * 0.7);
     expect(Math.abs(front().z)).toBeLessThan(1e-6);
   });
 
+  it('turns toward the heading at turnEaseRate (no snap) once placed', () => {
+    const c = make();
+    place(c, { x: 0, y: 0, z: 0 }, 0);
+    c.update(0.05, st(1), { x: 0, y: 0, z: 0 }, 0);
+    expect(c.root.rotation.y).toBeGreaterThan(0);
+    expect(c.root.rotation.y).toBeLessThan(1);
+    c.update(10, st(1), { x: 0, y: 0, z: 0 }, 0);
+    expect(c.root.rotation.y).toBeCloseTo(1, 5);
+  });
+
   it('the visor stays inside the capsule radius (nothing pokes past the collision capsule)', () => {
-    const c = createCourierPlaceholder(cap);
-    c.update({ x: 0, y: 0, z: 0 }, 0, false);
-    const b = box(c.object);
+    const c = make();
+    place(c, { x: 0, y: 0, z: 0 }, 0);
+    const b = box(c.root);
     expect(Math.max(-b.min.x, b.max.x, -b.min.z, b.max.z)).toBeLessThanOrEqual(cap.radius + 1e-9);
   });
 
   it('hiding the courier keeps its shadow', () => {
-    const c = createCourierPlaceholder(cap);
+    const c = make();
     c.setHidden(true);
     const meshes: THREE.Mesh[] = [];
-    c.object.traverse((o) => {
+    c.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
     });
-    expect(c.object.visible).toBe(true);
+    expect(c.root.visible).toBe(true);
     // Hidden from the camera (colourWrite off) but still drawn into the shadow map.
     expect(meshes.every((m) => m.castShadow && (m.material as THREE.Material).colorWrite === false)).toBe(true);
     c.setHidden(false);
     expect(meshes.every((m) => (m.material as THREE.Material).colorWrite)).toBe(true);
   });
 
+  it('reports itself as the fallback (not loaded) and ignores packages', () => {
+    const c = make();
+    c.setPackages(3);
+    expect(c.debug()).toMatchObject({ loaded: false, clip: null, packages: 3 });
+  });
+
   it('casts shadows and costs two meshes', () => {
-    const c = createCourierPlaceholder(cap);
+    const c = make();
     const meshes: THREE.Mesh[] = [];
-    c.object.traverse((o) => {
+    c.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
     });
     expect(meshes).toHaveLength(2);

@@ -122,6 +122,11 @@ export class DeliveryLoop {
     this.modalListeners.push(fn);
   }
 
+  /** Packages the courier is carrying now (accepted and collected, not yet delivered). */
+  carriedCount(): number {
+    return this.orders.active.filter((a) => this.orders.isCarried(a)).length;
+  }
+
   statModifiers(): StatModifiers {
     return this.orders.statModifiers();
   }
