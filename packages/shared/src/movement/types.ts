@@ -63,6 +63,8 @@ export interface PlayerState {
   grind: { id: string; segment: number; s: number; dir: 1 | -1; speed: number } | null;
   /** Seconds of boost-orb speed boost left (0 when none). */
   boostLeft: number;
+  /** Seconds until a slide start gets its speed burst again (0 when ready); counted from the start of the last boosted slide. */
+  slideBoostCooldown: number;
   /** Seconds until each jump pad (by id) can trigger again; absent or 0 when ready. */
   padCooldown: Record<string, number>;
 }
@@ -80,7 +82,8 @@ export type SimEvent =
   | { kind: 'jumpPad'; padId: string }
   | { kind: 'orbCollected'; orbId: string }
   | { kind: 'respawned'; checkpointId: string }
-  | { kind: 'boardToggled'; onBoard: boolean };
+  | { kind: 'boardToggled'; onBoard: boolean }
+  | { kind: 'slideStarted'; boosted: boolean };
 
 /** Shared, room-wide feature state (see triggers.ts). */
 export interface WorldFeatureState {

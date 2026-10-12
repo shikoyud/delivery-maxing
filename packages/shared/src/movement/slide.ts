@@ -8,13 +8,22 @@ import type { PlayerState } from './types';
 /**
  * Starts a crouch-slide. Needs all of: crouch pressed this tick, grounded (on foot, in ground mode), sprinting (the sprint toggle is on),
  * not on the board, and horizontal speed ≥ slide.minEntrySpeed. The caller crouches the body.
+ * With the burst ready (slideBoostCooldown ≤ 0) the start adds slide.boostSpeed along the horizontal velocity (horizontal speed
+ * stays within speedCap) and starts the cooldown: 'boosted'. During the cooldown the slide keeps its speed: 'plain'.
+ * Slides that begin by landing (R26) or on a chute never come through here, so they never get a burst.
  */
-export function startSlide(state: PlayerState, input: InputFrame, cfg: MovementConfig): boolean {
-  if (!input.crouch.pressed || !state.sprinting) return false;
-  if (!state.grounded || state.mode !== 'ground' || state.onBoard) return false;
-  if (horizontalLength(state.velocity) < cfg.slide.minEntrySpeed) return false;
+export function startSlide(state: PlayerState, input: InputFrame, cfg: MovementConfig): 'none' | 'boosted' | 'plain' {
+  if (!input.crouch.pressed || !state.sprinting) return 'none';
+  if (!state.grounded || state.mode !== 'ground' || state.onBoard) return 'none';
+  const speed = horizontalLength(state.velocity);
+  if (speed < cfg.slide.minEntrySpeed) return 'none';
   state.mode = 'slide';
-  return true;
+  if (state.slideBoostCooldown > 0) return 'plain';
+  const boosted = Math.min(speed + cfg.slide.boostSpeed, cfg.speedCap);
+  const k = Math.max(boosted, speed) / speed; // never slows a start that is already past the cap
+  state.velocity = vec3(state.velocity.x * k, state.velocity.y, state.velocity.z * k);
+  state.slideBoostCooldown = cfg.slide.boostCooldown;
+  return 'boosted';
 }
 
 /**

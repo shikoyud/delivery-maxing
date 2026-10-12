@@ -62,6 +62,7 @@ export class PlayerSim {
       zip: null,
       grind: null,
       boostLeft: 0,
+      slideBoostCooldown: 0,
       padCooldown: {},
     };
   }
@@ -82,6 +83,7 @@ export class PlayerSim {
    */
   step(input: InputFrame, mods: StatModifiers, world: WorldFeatureState, time: number): SimEvent[] {
     this.state.boostLeft = Math.max(0, this.state.boostLeft - this.dt);
+    this.state.slideBoostCooldown = Math.max(0, this.state.slideBoostCooldown - this.dt);
     const events = this.stepMovement(input, mods);
     events.push(...applyTriggers(this.state, this.body, this.map, world, this.cfg, time));
     this.state.velocity = clampHorizontal(this.state.velocity, this.cfg.speedCap);
@@ -98,7 +100,8 @@ export class PlayerSim {
     this.updateLookAndTimers(input, wish);
     this.updateCrouch(input);
     if (input.board.pressed && toggleBoard(this.state)) events.push({ kind: 'boardToggled', onBoard: this.state.onBoard });
-    startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
+    const slide = startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
+    if (slide !== 'none') events.push({ kind: 'slideStarted', boosted: slide === 'boosted' });
 
     // 2. Special modes run here and return early: mantle (Task 6); zip line (Task 8); grind rail (Task 10).
     //    Ledge detection runs before the move, so the stored horizontal velocity is the approach velocity

@@ -5,7 +5,7 @@
   "run": { "runSpeed": 5.5, "sprintSpeed": 8, "crouchSpeed": 3, "groundAccel": 60, "groundDecel": 40, "airAccel": 14, "overspeedDecay": 4 },
   "jump": { "height": 1.2, "coyoteTime": 0.1, "bufferTime": 0.1 },
   "mantle": { "minHeight": 0.4, "maxHeight": 1.5, "reach": 0.8, "duration": 0.3 },
-  "slide": { "minEntrySpeed": 6, "friction": 2, "endSpeed": 3.5, "slopeGravityScale": 1 },
+  "slide": { "minEntrySpeed": 6, "friction": 1.2, "endSpeed": 3.5, "slopeGravityScale": 1, "boostSpeed": 4, "boostCooldown": 2 },
   "chute": { "friction": 0.4, "steerAccel": 4 },
   "wallRun": { "maxTime": 1.5, "minSpeed": 5, "checkDistance": 0.6, "gravityScale": 0.15, "maxApproachAngleDeg": 60, "wallJumpPush": 6, "sameWallDot": 0.7, "stickSpeed": 0.5, "maxEntryFallSpeed": 3, "maxChainRise": 1.0 },
   "zipLine": { "attachDistance": 2, "hangDrop": 2.0, "baseSpeed": 10, "maxSpeed": 16, "dismountReach": 4.0, "minRideLength": 1.0, "facingTie": 0.1, "velocityTie": 0.1 },
