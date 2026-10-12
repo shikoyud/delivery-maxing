@@ -17,7 +17,10 @@ describe('config pins spec values', () => {
     expect(ordersConfig.points).toEqual({ short: 1, medium: 2, long: 3, chain: 4, expressOnTime: 1, fragileIntact: 2, heavy: 1, withinPar: 1 });
     expect(ordersConfig.coins).toEqual({ short: 10, medium: 20, long: 30, chain: 40, expressOnTime: 10, fragileIntact: 20, heavy: 10, withinPar: 10 });
     expect(ordersConfig.bands).toEqual({ shortMax: 150, mediumMax: 350 });
-    expect(ordersConfig.express).toEqual({ distanceFactor: 1.5, extraSeconds: 10 });
+    expect(ordersConfig.express).toEqual({ distanceFactor: 1.1, extraSeconds: 10 });
+    // Express keeps its own tighter timer (spec §3.2): tighter than par, with the same extra seconds.
+    expect(ordersConfig.express.distanceFactor).toBeLessThan(ordersConfig.par.distanceFactor);
+    expect(ordersConfig.express.extraSeconds).toBeLessThanOrEqual(ordersConfig.par.extraSeconds);
     expect(ordersConfig.par).toEqual({ distanceFactor: 1.3, extraSeconds: 10 });
     expect(ordersConfig.fragile.maxFallMeters).toBe(7);
     expect(ordersConfig.heavy).toEqual({ slots: 2, jumpHeightMultiplier: 0.9 });

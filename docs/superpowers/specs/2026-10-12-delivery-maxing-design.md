@@ -44,6 +44,7 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium 
 | City size | 2 × 2 km, crossed in about 4 minutes (changed from 600 m after the SP1 playtest). Needs streaming and LOD to hold 60 fps. |
 | Thieves | Street-only NPCs chase couriers carrying packages; a catch steals the packages and costs 1 Delivery Point from the current epoch. |
 | Par times | Every order has a par time; beating it pays a bonus. |
+| Express timer | Tightened from 1.5× to 1.1× (route distance ÷ base sprint speed) + 10 s after the SP1 playtest, so it stays tighter than par (1.3×). |
 
 ## 3. Core loop
 
@@ -70,7 +71,7 @@ A modifier can be added to a Drop-off or Pick-up order.
 
 | Modifier | Rule | Unlocked at |
 |---|---|---|
-| **Express** | Has a timer: `1.5 × (route distance ÷ base sprint speed) + 10 s`. Delivering in time earns a bonus. Delivering late still completes the order, without the bonus. | Courier |
+| **Express** | Has a timer: `1.1 × (route distance ÷ base sprint speed) + 10 s`. Delivering in time earns a bonus. Delivering late still completes the order, without the bonus. | Courier |
 | **Fragile** | Earns a bonus if delivered intact. A fall of more than 7 m, being hit by another player, or an out-of-bounds respawn cancels the bonus. The order itself is never lost. | Rookie |
 | **Heavy** | Takes 2 backpack slots and reduces jump height by 10% while carried. Earns a bonus. Offered only to players whose backpack has 2 or more slots. | Rookie |
 

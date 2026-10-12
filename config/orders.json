@@ -4,7 +4,7 @@
   "bands": { "shortMax": 150, "mediumMax": 350 },
   "points": { "short": 1, "medium": 2, "long": 3, "chain": 4, "expressOnTime": 1, "fragileIntact": 2, "heavy": 1, "withinPar": 1 },
   "coins": { "short": 10, "medium": 20, "long": 30, "chain": 40, "expressOnTime": 10, "fragileIntact": 20, "heavy": 10, "withinPar": 10 },
-  "express": { "distanceFactor": 1.5, "extraSeconds": 10 },
+  "express": { "distanceFactor": 1.1, "extraSeconds": 10 },
   "par": { "distanceFactor": 1.3, "extraSeconds": 10 },
   "fragile": { "maxFallMeters": 7 },
   "heavy": { "slots": 2, "jumpHeightMultiplier": 0.9 },

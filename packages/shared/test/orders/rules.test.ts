@@ -80,8 +80,8 @@ describe('scoreOrder', () => {
 
 describe('expressLimit', () => {
   it('uses distanceFactor x route / sprint speed + extra seconds', () => {
-    expect(expressLimit(160, 8, ordersConfig)).toBe(40); // drop-off 160 m
-    expect(expressLimit(320, 8, ordersConfig)).toBe(70); // pick-up 160 m one-way
+    expect(expressLimit(160, 8, ordersConfig)).toBeCloseTo(32, 9); // drop-off 160 m: 1.1 x 160 / 8 + 10
+    expect(expressLimit(320, 8, ordersConfig)).toBeCloseTo(54, 9); // pick-up 160 m one-way
   });
 });
 

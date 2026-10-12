@@ -196,18 +196,29 @@ describe('OrderSystem', () => {
   it('express: on time earns +1; late still completes without it', () => {
     const on = dropoff('express');
     const limit = on.order.expressLimit as number;
+    // Express is tighter than par (spec §3.2), so on time is within par too: both bonuses.
+    expect(limit).toBeLessThan(on.order.parLimit);
     on.sys.accept(on.order.id, 100, true);
     const ev = on.sys.update(100 + limit, zones({ pois: [poiOf(on.order)] }));
     const key = on.order.band as 'short' | 'medium' | 'long';
     expect(ev).toContainEqual(expect.objectContaining({
-      kind: 'completed', onTime: true, bonuses: ['express'], points: cfg.points[key] + cfg.points.expressOnTime,
+      kind: 'completed', onTime: true, withinPar: true, bonuses: ['express', 'par'],
+      points: cfg.points[key] + cfg.points.expressOnTime + cfg.points.withinPar,
     }));
 
+    // Just past the Express limit: no Express bonus, but still within par.
     const late = dropoff('express');
     late.sys.accept(late.order.id, 0, true);
     const ev2 = late.sys.update(0.001 + (late.order.expressLimit as number), zones({ pois: [poiOf(late.order)] }));
-    expect(ev2).toContainEqual(expect.objectContaining({ kind: 'completed', onTime: false, withinPar: false, bonuses: [] }));
+    expect(ev2).toContainEqual(expect.objectContaining({ kind: 'completed', onTime: false, withinPar: true, bonuses: ['par'] }));
     expect(late.sys.totals.deliveries).toBe(1);
+
+    // Past par as well: completes with no bonus.
+    const later = dropoff('express');
+    later.sys.accept(later.order.id, 0, true);
+    const ev3 = later.sys.update(0.001 + later.order.parLimit, zones({ pois: [poiOf(later.order)] }));
+    expect(ev3).toContainEqual(expect.objectContaining({ kind: 'completed', onTime: false, withinPar: false, bonuses: [] }));
+    expect(later.sys.totals.deliveries).toBe(1);
   });
 
   it('completed reports withinPar from sim time since accept (par inclusive, hidden-tab pause safe)', () => {

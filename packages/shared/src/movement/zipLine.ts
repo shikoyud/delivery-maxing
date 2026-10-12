@@ -47,7 +47,8 @@ function attachDirection(state: PlayerState, line: ZipLine, cfg: MovementConfig)
 /**
  * Attaches to the nearest line when interact was pressed and the hand point (feet + capsule height) is within
  * zipLine.attachDistance of it. Lines are two-way: the ride runs toward the end the courier faces (attachDirection).
- * Attaching is refused when less than zipLine.minRideLength of line remains in that direction (no free burst of ride
+ * When less than zipLine.minRideLength of line remains that way (facing past an end) the ride runs the other way
+ * instead (R15), and attaching is refused only when neither way has minRideLength left (R7: no free burst of ride
  * speed at an end). The starting speed is max(baseSpeed, velocity · direction).
  * The caller checks the mode. Attaching works on the board too and puts the board away (onBoard false; the caller
  * emits boardToggled). Returns whether the player attached.
@@ -66,9 +67,15 @@ export function tryAttachZip(state: PlayerState, input: InputFrame, lines: ZipLi
   if (!best) return false;
 
   const { line } = best;
-  const dir = attachDirection(state, line, cfg);
-  const remaining = dir === 1 ? lineLength(line) - best.s : best.s;
-  if (remaining < cfg.zipLine.minRideLength) return false;
+  const len = lineLength(line);
+  const left = (d: 1 | -1): number => (d === 1 ? len - best.s : best.s);
+  let dir = attachDirection(state, line, cfg);
+  if (left(dir) < cfg.zipLine.minRideLength) {
+    // Facing past an end (R15): ride the only way the line goes, if it is long enough that way (R7).
+    const other = dir === 1 ? -1 : 1;
+    if (left(other) < cfg.zipLine.minRideLength) return false;
+    dir = other;
+  }
   const speed = Math.max(cfg.zipLine.baseSpeed, dot(state.velocity, rideDirection(line, dir)));
   state.zip = { id: line.id, s: best.s, dir, speed };
   state.mode = 'zipline';
