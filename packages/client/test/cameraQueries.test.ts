@@ -9,7 +9,7 @@ import {
   type PhysicsWorld,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
-import { ballInSolid, physicsSphereCast } from '../src/game/cameraQueries';
+import { ballInSolid, physicsSphereCast, physicsWallProbe } from '../src/game/cameraQueries';
 
 const map = expandGreybox(greybox as GreyboxSource);
 let physics: PhysicsWorld;
@@ -49,5 +49,17 @@ describe('camera physics queries (greybox crouch tunnel: roof underside y 1.4, x
   it('ballInSolid: a ball poking into the roof is solid; one clear of it is not', () => {
     expect(ballInSolid(physics, { x: 98, y: 1.2, z: 0 }, 0.25, sim.body.collider)).toBe(true);
     expect(ballInSolid(physics, { x: 98, y: 1.1, z: 0 }, 0.25, sim.body.collider)).toBe(false);
+  });
+
+  it('wall probe: the horizontal normal of a wall face within reach; ceilings, floors and the courier never count', () => {
+    const probe = physicsWallProbe(physics, sim.body.collider);
+    // 0.4 m from the inner face z = 2 of hub-tunnel-wall-02.
+    const n = probe({ x: 98, y: 0.8, z: 1.6 }, 0.6)!;
+    expect(n.x).toBeCloseTo(0, 6);
+    expect(n.y).toBe(0);
+    expect(n.z).toBeCloseTo(-1, 6);
+    expect(probe({ x: 98, y: 0.8, z: 1.6 }, 0.3)).toBeNull();
+    // Roof underside 0.2 m above, floor 1.2 m below, walls 2 m away, the courier's capsule right here: nothing.
+    expect(probe({ x: 98, y: 1.2, z: 0 }, 0.6)).toBeNull();
   });
 });

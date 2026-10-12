@@ -79,6 +79,11 @@ export interface ChaseConfig {
   minDistance: number;
   /** Ease rate of the boom growing back out once geometry stops blocking it. Pulling in is immediate (R10). */
   pushOutEaseRate: number;
+  /**
+   * R12: while wall-running, or with a wall face this close to the pivot, the pivot moves this far off the courier's
+   * axis along the wall normal, so the boom has room and the courier stays in view.
+   */
+  wallPivotOffset: number;
 }
 
 export type BindingName =

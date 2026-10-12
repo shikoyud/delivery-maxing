@@ -8,7 +8,8 @@ export interface DebugApi {
   readonly ready: boolean;
   readonly tick: number;
   player(): { position: Vec3; velocity: Vec3; mode: MoveMode; onBoard: boolean };
-  teleport(p: Vec3): void;
+  /** Moves the player into the air at `p`, optionally moving at velocity `v` (m/s). */
+  teleport(p: Vec3, v?: Vec3): void;
   /** False while a boost orb is collected and waiting to respawn. */
   orbVisible(id: string): boolean;
   /** Position of a boost orb, zip line end `a`, jump pad or rail start, by feature id. */
@@ -64,8 +65,8 @@ export function installDebugHooks(game: Game): void {
       const s = game.sim.state;
       return { position: { ...s.position }, velocity: { ...s.velocity }, mode: s.mode, onBoard: s.onBoard };
     },
-    teleport(p) {
-      game.teleport(p);
+    teleport(p, v) {
+      game.teleport(p, v);
     },
     orbVisible(id) {
       return game.features.isOrbVisible(id);

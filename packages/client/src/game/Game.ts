@@ -39,7 +39,7 @@ import {
   type DevSettingsStore,
 } from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
-import { ballInSolid, physicsSphereCast } from './cameraQueries';
+import { ballInSolid, physicsSphereCast, physicsWallProbe } from './cameraQueries';
 import { interpolationStart, lerpAngle } from './interpolation';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
@@ -104,7 +104,12 @@ export class Game {
     this.actions.setLook(map.hub.spawnYaw, 0);
     this.renderer = new Renderer(host, this.cfg.graphics, this.cfg.camera, map.size);
     this.cameraCast = physicsSphereCast(sim.physics, chase.collisionRadius, sim.body.collider);
-    this.chase = new ChaseCamera(this.renderer.camera, this.cfg.camera, this.cameraCast);
+    this.chase = new ChaseCamera(
+      this.renderer.camera,
+      this.cfg.camera,
+      this.cameraCast,
+      physicsWallProbe(sim.physics, sim.body.collider),
+    );
     this.courier = createCourierPlaceholder(settings.movement.capsule);
     this.renderer.scene.add(this.courier.object);
     this.renderer.scene.add(buildGreyboxMeshes(map));
@@ -194,9 +199,9 @@ export class Game {
     this.running = false;
   }
 
-  /** Moves the player (airborne, zero velocity) and resets interpolation so the camera doesn't sweep. */
-  teleport(p: Vec3): void {
-    this.sim.teleport(vec3(p.x, p.y, p.z));
+  /** Moves the player (airborne, at velocity `v`, zero by default) and resets interpolation so the camera doesn't sweep. */
+  teleport(p: Vec3, v: Vec3 = { x: 0, y: 0, z: 0 }): void {
+    this.sim.teleport(vec3(p.x, p.y, p.z), vec3(v.x, v.y, v.z));
     this.prevPosition = { ...this.sim.state.position };
     this.prevHeading = this.sim.state.heading;
     this.chase.snap();

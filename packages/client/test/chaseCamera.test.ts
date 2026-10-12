@@ -11,6 +11,7 @@ import {
   isLow,
   pivotHeightFor,
   type RayCast,
+  type WallProbe,
 } from '../src/render/chaseCamera';
 
 const cam = clientConfig.camera;
@@ -34,6 +35,16 @@ const wallAtZ =
     const gap = zWall - from.z;
     if (dir.z === 0 || Math.sign(gap) !== Math.sign(dir.z)) return null;
     const d = Math.max(0, (Math.abs(gap) - R) / Math.abs(dir.z));
+    return d <= maxDist ? d : null;
+  };
+
+/** Sphere-cast mock: an infinite wall plane at x = xWall, blocking from either side. */
+const wallAtX =
+  (xWall: number): RayCast =>
+  (from, dir, maxDist) => {
+    const gap = xWall - from.x;
+    if (dir.x === 0 || Math.sign(gap) !== Math.sign(dir.x)) return null;
+    const d = Math.max(0, (Math.abs(gap) - R) / Math.abs(dir.x));
     return d <= maxDist ? d : null;
   };
 
@@ -158,8 +169,70 @@ describe('pivot helpers', () => {
 });
 
 describe('ChaseCamera', () => {
-  const make = (cast: RayCast = open): ChaseCamera =>
-    new ChaseCamera(new THREE.PerspectiveCamera(cam.fovBase, 1, cam.near, cam.far), cam, cast);
+  const make = (cast: RayCast = open, probe?: WallProbe): ChaseCamera =>
+    new ChaseCamera(new THREE.PerspectiveCamera(cam.fovBase, 1, cam.near, cam.far), cam, cast, probe);
+
+  describe('R12: wall pivot offset', () => {
+    // A wall on the courier's left (face x = feet.x − 0.36, normal +X) while it runs toward −Z (yaw 0).
+    const xWall = feet.x - 0.36;
+    const normal = { x: 1, y: 0, z: 0 };
+    const wallRunning = { ...standing, mode: 'wallrun', wallRun: { time: 0.1, normal, lastNormal: normal } } as unknown as PlayerState;
+    /** Look 30° off the wall, turned away from it, so the boom swings toward the wall. */
+    const yaw30 = -30 * DEG;
+
+    it('wall-running, wall 0.36 m from the pivot, look 30° off it: boom ≥ minDistance and the courier stays visible', () => {
+      expect(chase.wallPivotOffset).toBe(0.6);
+      const c = make(wallAtX(xWall));
+      for (let i = 0; i < 60; i++) c.update(1 / 60, pivot(), yaw30, 0, 0, wallRunning);
+      expect(c.distance).toBeGreaterThanOrEqual(chase.minDistance);
+      expect(c.courierHidden).toBe(false);
+      expect(c.camera.position.x).toBeGreaterThanOrEqual(xWall + R - 1e-9);
+      // Settled: the pivot sits wallPivotOffset off the courier's axis, away from the wall.
+      const shifted = { ...pivot(), x: feet.x + chase.wallPivotOffset };
+      const want = chaseCameraPose(shifted, yaw30, 0, chase, wallAtX(xWall));
+      expect(c.camera.position.x).toBeCloseTo(want.position.x, 4);
+      expect(c.camera.position.z).toBeCloseTo(want.position.z, 4);
+    });
+
+    it('not wall-running: a wall the probe finds near the pivot shifts it the same way', () => {
+      const probe: WallProbe = (p, reach) => (Math.abs(p.x - xWall) < reach ? normal : null);
+      const c = make(wallAtX(xWall), probe);
+      for (let i = 0; i < 60; i++) c.update(1 / 60, pivot(), yaw30, 0, 0, standing);
+      expect(c.distance).toBeGreaterThanOrEqual(chase.minDistance);
+      expect(c.courierHidden).toBe(false);
+    });
+
+    it('the offset eases in (no jump) and back out when the run ends', () => {
+      const c = make(wallAtX(xWall));
+      c.update(1 / 60, pivot(), 0, 0, 0, standing);
+      const x0 = c.camera.position.x;
+      c.update(1 / 60, pivot(), 0, 0, 0, wallRunning);
+      const step = c.camera.position.x - x0;
+      expect(step).toBeGreaterThan(0);
+      expect(step).toBeLessThan(chase.wallPivotOffset / 2);
+      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0, wallRunning);
+      expect(c.camera.position.x).toBeCloseTo(x0 + chase.wallPivotOffset, 4);
+      c.update(1 / 60, pivot(), 0, 0, 0, standing);
+      const back = c.camera.position.x - (x0 + chase.wallPivotOffset);
+      expect(back).toBeLessThan(0);
+      expect(back).toBeGreaterThan(-chase.wallPivotOffset / 2);
+      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0, standing);
+      expect(c.camera.position.x).toBeCloseTo(x0, 4);
+    });
+
+    it('in a gap narrower than the offset, the shifted pivot stops short of the opposite wall', () => {
+      // A second wall 0.5 m from the pivot on the other side.
+      const xOther = feet.x + 0.5;
+      const geo: RayCast = (f, d, m) => {
+        const hits = [wallAtX(xWall)(f, d, m), wallAtX(xOther)(f, d, m)].filter((h): h is number => h !== null);
+        return hits.length ? Math.min(...hits) : null;
+      };
+      const c = make(geo);
+      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0, wallRunning);
+      expect(c.camera.position.x).toBeLessThanOrEqual(xOther - R + 1e-9);
+      expect(c.camera.position.x).toBeGreaterThanOrEqual(xWall + R - 1e-9);
+    });
+  });
 
   it('the first update places the camera at the pose (no sweep in from the origin)', () => {
     const c = make();

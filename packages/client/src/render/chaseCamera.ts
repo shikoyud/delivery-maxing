@@ -12,6 +12,14 @@ type CameraConfig = ClientConfig['camera'];
  */
 export type RayCast = (from: Vec3, dir: Vec3, maxDist: number) => number | null;
 
+/**
+ * Wall probe for R12: the horizontal unit normal of the nearest near-vertical solid face within `reach` of `p`
+ * (pointing away from the face), or null. In the game this is a Rapier point projection (game/cameraQueries.ts).
+ */
+export type WallProbe = (p: Vec3, reach: number) => Vec3 | null;
+
+const noWalls: WallProbe = () => null;
+
 export interface ChasePose {
   /** Where the camera goes. */
   position: Vec3;
@@ -141,6 +149,7 @@ export class ChaseCamera {
     readonly camera: THREE.PerspectiveCamera,
     private readonly cfg: CameraConfig,
     private readonly cast: RayCast,
+    private readonly probe: WallProbe = noWalls,
   ) {
     camera.rotation.order = 'YXZ';
   }
@@ -164,7 +173,8 @@ export class ChaseCamera {
     const ch = this.cfg.chase;
     const dt = Math.max(0, frameDt);
     const snapping = this.follow === null;
-    const follow = snapping ? { ...target } : this.easeFollow(this.follow!, target, dt, ch);
+    const pivot = this.wallShifted(target, state);
+    const follow = snapping ? { ...pivot } : this.easeFollow(this.follow!, pivot, dt, ch);
     this.follow = follow;
 
     // A ceiling lowers the camera at once; once it is gone the camera rises back at pushOutEaseRate.
@@ -189,6 +199,20 @@ export class ChaseCamera {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
+  }
+
+  /**
+   * R12: the pivot moved wallPivotOffset along the normal of the wall being run (state.wallRun.normal) or, otherwise,
+   * of a wall face the probe finds within wallPivotOffset of the pivot, so the boom has room beside the wall. A sphere
+   * cast from the courier's pivot limits the move (a narrow gap never pushes it into the opposite wall). The followed
+   * point eases toward the result (followEaseRate), so the shift eases in and out instead of jumping.
+   */
+  private wallShifted(target: Vec3, state: PlayerState): Vec3 {
+    const k = this.cfg.chase.wallPivotOffset;
+    if (k <= 0) return target;
+    const n = state.mode === 'wallrun' && state.wallRun.normal ? state.wallRun.normal : this.probe(target, k);
+    if (!n) return target;
+    return add(target, n, this.cast(target, n, k) ?? k);
   }
 
   /**

@@ -177,13 +177,13 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   // Grazing yaws: the boom runs almost along the wall (the review's see-through case at π ± 1.3).
   await sweep('wall', [Math.PI + 1.3, Math.PI - 1.3, Math.PI + 1.45, Math.PI - 1.45]);
   // The review's see-through case exactly: flush with the wall, looking at π + 1.3. The pivot is only ~0.37 m from the
-  // wall, so the collision ball touches it within minDistance: the camera stops there and the courier hides (R10).
+  // wall, so R12 shifts it wallPivotOffset away from the wall: the boom has room and the courier stays in view.
   await page.evaluate(() => window.__dm!.setLook(Math.PI + 1.3, -15 * (Math.PI / 180)));
   await waitTicks(page, 3);
   const flush = await page.evaluate(() => window.__dm!.camera());
   console.log(`flush with the wall at π+1.3: boom ${flush.distance.toFixed(2)} m, courier hidden ${flush.courierHidden}`);
-  expect(flush.distance).toBeLessThan(clientJson.camera.chase.minDistance);
-  expect(flush.courierHidden).toBe(true);
+  expect(flush.distance).toBeGreaterThanOrEqual(clientJson.camera.chase.minDistance);
+  expect(flush.courierHidden).toBe(false);
   expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
   await page.screenshot({ path: `${artifacts}sp1-camera-wall.png` });
 
@@ -200,6 +200,40 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   expect(graze.courierHidden).toBe(false);
   expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
   await page.screenshot({ path: `${artifacts}sp1-camera-wall-graze.png` });
+  expect(errors).toEqual([]);
+});
+
+test('wall-run: the courier stays in view at every look offset from the wall (R12)', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const deg = Math.PI / 180;
+  const { minDistance } = clientJson.camera.chase;
+  // hub-wall-01's north face (z = −2, normal +Z) runs x 68..88 along the playground alley. Each check starts a fresh
+  // run: airborne beside the face at 8 m/s toward −X (look yaw π/2 runs along it), W held.
+  const alongYaw = Math.PI / 2;
+  await page.keyboard.down('KeyW');
+  for (const offset of [0, 15, -15, 30, -30, 60, -60]) {
+    await page.evaluate((y) => {
+      window.__dm!.setLook(y, 0);
+      window.__dm!.teleport({ x: 86, y: 2, z: -1.5 }, { x: -8, y: 0, z: 0 });
+    }, alongYaw);
+    await page.waitForFunction(() => window.__dm!.player().mode === 'wallrun', undefined, { timeout: 10_000 });
+    await page.evaluate((y) => window.__dm!.setLook(y, 0), alongYaw + offset * deg);
+    await waitTicks(page, 2);
+    const { mode, cam, inside } = await page.evaluate(() => ({
+      mode: window.__dm!.player().mode,
+      cam: window.__dm!.camera(),
+      inside: window.__dm!.cameraInsideSolid(),
+    }));
+    console.log(`wall-run, look ${offset}° off the wall: boom ${cam.distance.toFixed(2)} m, courier hidden ${cam.courierHidden}`);
+    expect(mode, `offset ${offset}°`).toBe('wallrun');
+    expect(cam.distance, `offset ${offset}°`).toBeGreaterThanOrEqual(minDistance);
+    expect(cam.courierHidden, `offset ${offset}°`).toBe(false);
+    expect(inside, `offset ${offset}°`).toBe(false);
+    // Positive offsets look away from the wall, so the boom swings toward it.
+    if (offset === 30) await page.screenshot({ path: `${artifacts}sp1-camera-wallrun.png` });
+  }
+  await page.keyboard.up('KeyW');
   expect(errors).toEqual([]);
 });
 
