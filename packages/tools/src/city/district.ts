@@ -12,15 +12,16 @@ import type {
   Rail,
   Rect,
   Rng,
+  RotY,
   Solid,
   StreetEdge,
   StreetNode,
   Vec3,
   ZipLine,
 } from '@dm/shared';
-import { type ArterialLines, gridLines, intersectRect, r2, type GridLine } from './layout';
+import { type ArterialLines, gridLines, intersectRect, r2, v2, type GridLine } from './layout';
 import { type FillerParams, fillLot, type Lot } from './lots';
-import type { StreetStyle } from './source';
+import type { Edge, StreetStyle } from './source';
 import { GraphBuilder, type StreetGraph } from './streets';
 
 /** A place a POI could go; Task 13 picks the POIs from these. */
@@ -37,6 +38,10 @@ export interface CityFrame {
   /** Palette basenames buildings may use. */
   palettes: readonly string[];
   chunkSize: number;
+  /** Map edges that are water: the land stops at the quay line inside each. */
+  waterEdges: readonly Edge[];
+  /** Quay checkpoints stand at most this far apart along a quay, m. */
+  checkpointSpacing: number;
 }
 
 export interface DistrictContext {
@@ -59,12 +64,25 @@ export interface WallRunAlley { id: string; floor: Rect; axis: 'x' | 'z'; walls:
 /** Where a jump pad should put its rider: feet near `target`, standing on `landing` (a roof). */
 export interface PadTarget { pad: string; target: Vec3; landing: Rect }
 
+/**
+ * A container stack: `tiers` containers high over `rect`, its top at `top`. It is climbed over the mantle-step crates
+ * `steps` (lowest first), facing `dir` (the yaw that turns +z toward the stack).
+ */
+export interface ContainerStack { id: string; rect: Rect; top: number; tiers: number; steps: string[]; dir: RotY }
+/** A crane: the walkable top of its jib (`jib` at `height`), the pads up to it and the zip lines leaving it. */
+export interface CraneReport { id: string; height: number; jib: Rect; pads: string[]; zips: string[] }
+/** A district's quays: where the land stops (`line` on the `across` axis), and the checkpoints along them. */
+export interface QuayReport { quays: QuayEdge[]; checkpoints: string[] }
+
 /** Test metadata about what a district built, for its content tests (map:build never writes it). */
 export interface DistrictReport {
   rooftopGaps: RooftopGap[];
   alleys: WallRunAlley[];
   padTargets: PadTarget[];
   zipLines: string[];
+  containerStacks: ContainerStack[];
+  cranes: CraneReport[];
+  quay: QuayReport;
 }
 
 export interface DistrictOutput {
@@ -150,6 +168,88 @@ export function emptyOutput(streets: StreetGraph): DistrictOutput {
     streets,
     poiSlots: [],
   };
+}
+
+/** Checks for a district's `params` (each failure names the district, the template and the field). */
+export interface ParamChecks {
+  fail: (why: string) => never;
+  /** `v` as an object, or fail naming it. */
+  obj: (v: unknown, name: string) => Record<string, unknown>;
+  /** Each of `keys` of `o` is a non-negative finite number (failures name `prefix` + key). */
+  nums: (o: Record<string, unknown>, keys: readonly string[], prefix: string) => void;
+}
+
+export function paramChecks(district: District, template: string): ParamChecks {
+  const fail = (why: string): never => {
+    throw new Error(`district ${district}: ${template} params: ${why}`);
+  };
+  return {
+    fail,
+    obj: (v, name) => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : fail(`${name} must be an object`)),
+    nums: (o, keys, prefix) => {
+      for (const k of keys) {
+        const v = o[k];
+        if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) fail(`${prefix}${k} must be a non-negative number`);
+      }
+    },
+  };
+}
+
+/**
+ * A quay along one water edge of a district: the land stops at `line` on the `across` axis, the water lies beyond it
+ * toward `out`, and the quay runs from `from` to `to` along the other axis (inside the district).
+ */
+export interface QuayEdge { edge: Edge; across: 'x' | 'z'; line: number; out: 1 | -1; from: number; to: number }
+
+/** The quays of a district: one along each water edge of the land that the district's rect reaches. */
+export function districtQuays(ctx: DistrictContext): QuayEdge[] {
+  const { land, waterEdges } = ctx.city;
+  const r = ctx.rect;
+  const out: QuayEdge[] = [];
+  const alongX = { from: Math.max(r.minX, land.minX), to: Math.min(r.maxX, land.maxX) };
+  const alongZ = { from: Math.max(r.minZ, land.minZ), to: Math.min(r.maxZ, land.maxZ) };
+  for (const edge of waterEdges) {
+    if (edge === 'east' && r.maxX >= land.maxX) out.push({ edge, across: 'x', line: land.maxX, out: 1, ...alongZ });
+    if (edge === 'west' && r.minX <= land.minX) out.push({ edge, across: 'x', line: land.minX, out: -1, ...alongZ });
+    if (edge === 'south' && r.maxZ >= land.maxZ) out.push({ edge, across: 'z', line: land.maxZ, out: 1, ...alongX });
+    if (edge === 'north' && r.minZ <= land.minZ) out.push({ edge, across: 'z', line: land.minZ, out: -1, ...alongX });
+  }
+  return out.filter((q) => q.to > q.from);
+}
+
+/** The point `inset` m inland of quay `q`'s line at `along` (rounded to 0.01 m), at height `y`. */
+export function quayPoint(q: QuayEdge, along: number, inset: number, y: number): Vec3 {
+  const across = q.line - q.out * inset;
+  return v2(q.across === 'x' ? { x: across, y, z: along } : { x: along, y, z: across });
+}
+
+/**
+ * Checkpoints along quay `q`, `inset` m inland of its line: as few as keep consecutive ones at most `spacing` apart
+ * and the quay's ends within spacing / 2, each moved off the street corridors crossing the quay (`streets`: centre
+ * lines with their half-widths) by `clearance`. Ids are `<prefix><k>`.
+ */
+export function quayCheckpoints(
+  q: QuayEdge,
+  streets: readonly { at: number; halfWidth: number }[],
+  opts: { spacing: number; inset: number; clearance: number; prefix: string },
+): Checkpoint[] {
+  const len = q.to - q.from;
+  for (let n = Math.max(1, Math.ceil(len / opts.spacing)); n <= Math.ceil(len) + 1; n++) {
+    const at: number[] = [];
+    for (let k = 0; k < n; k++) {
+      let a = q.from + (len * (k + 0.5)) / n;
+      for (const s of streets) {
+        const clear = s.halfWidth + opts.clearance;
+        if (Math.abs(a - s.at) < clear) a = a < s.at ? s.at - clear : s.at + clear;
+      }
+      at.push(r2(a));
+    }
+    const gaps = at.slice(1).map((a, k) => a - at[k]!);
+    const ends = [at[0]! - q.from, q.to - at[n - 1]!];
+    const ok = ends.every((e) => e >= 0 && e <= opts.spacing / 2) && gaps.every((g) => g > 0 && g <= opts.spacing);
+    if (ok) return at.map((a, k) => ({ id: `${opts.prefix}${k}`, position: quayPoint(q, a, opts.inset, 0) }));
+  }
+  throw new Error(`quay ${q.edge}: no checkpoint layout keeps them ${opts.spacing} m apart off the streets`);
 }
 
 const FILLER_NUMBERS = [

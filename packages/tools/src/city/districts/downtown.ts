@@ -2,6 +2,7 @@ import { ordersConfig, solidRect, type PieceEntry, type Prop, type Rect, type Ro
 import {
   districtGrid,
   emptyOutput,
+  paramChecks,
   type DistrictContext,
   type DistrictOutput,
   type DistrictReport,
@@ -60,17 +61,7 @@ interface DowntownParams {
 }
 
 function downtownParams(ctx: DistrictContext): DowntownParams {
-  const fail = (why: string): never => {
-    throw new Error(`district ${ctx.district}: downtown params: ${why}`);
-  };
-  const obj = (v: unknown, name: string): Record<string, unknown> =>
-    typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : fail(`${name} must be an object`);
-  const nums = (o: Record<string, unknown>, keys: string[], name: string): void => {
-    for (const k of keys) {
-      const v = o[k];
-      if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) fail(`${name}${k} must be a non-negative number`);
-    }
-  };
+  const { fail, obj, nums } = paramChecks(ctx.district, 'downtown');
   const p = ctx.params;
   nums(p, [
     'pitch', 'streetHalfWidth', 'edgeMargin', 'setback', 'rowEndMargin', 'doorOffset', 'bakeScale', 'artScaleMin', 'artScaleMax',
@@ -173,7 +164,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
   const { plaza, palettes } = ctx.city;
   const grid = districtGrid(ctx, { pitch: p.pitch, halfWidth: p.streetHalfWidth, edgeMargin: p.edgeMargin });
   const out = emptyOutput(grid.streets);
-  const report: DistrictReport = { rooftopGaps: [], alleys: [], padTargets: [], zipLines: [] };
+  const report: Pick<DistrictReport, 'rooftopGaps' | 'alleys' | 'padTargets' | 'zipLines'> = { rooftopGaps: [], alleys: [], padTargets: [], zipLines: [] };
   const name = ctx.district;
   const counters = { b: 0, pad: 0, zip: 0, orb: 0, alley: 0 };
   const scaleMin = p.artScaleMin / p.bakeScale;

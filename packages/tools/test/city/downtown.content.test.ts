@@ -12,12 +12,11 @@ import {
   type Rect,
   type Solid,
   type Vec3,
-  type ZipLine,
 } from '@dm/shared';
 import type { DistrictReport } from '../../src/city/district';
 import { generateCityWithReport } from '../../src/city/generate';
 import { parseCitySource } from '../../src/city/source';
-import { cityHarness, yawToward, type CityHarness } from '../helpers/citySim';
+import { cityHarness, rideZip, untilLanded, yawToward, type CityHarness } from '../helpers/citySim';
 
 // Runs PlayerSim on the generated city (real committed inputs).
 const here = dirname(fileURLToPath(import.meta.url));
@@ -46,33 +45,6 @@ let h: CityHarness;
 beforeAll(async () => {
   h = await cityHarness(city);
 });
-
-/** Settling after a landing: this many ticks with no input. */
-const SETTLE_TICKS = 10;
-
-/**
- * Lands the courier: runs `hold` until grounded in ground mode after being airborne (already airborne when
- * `airborne`), then lets go of the keys for SETTLE_TICKS. Returns the largest fall seen and the feet on the landing
- * tick. Fails on a respawn.
- */
-function untilLanded(label: string, hold: Parameters<CityHarness['tick']>[0], maxTicks: number, airborne = false): { fall: number; at: Vec3 } {
-  let fall = 0;
-  const watch = (events: ReturnType<CityHarness['tick']>): void => {
-    expect(events.filter((e) => e.kind === 'respawned'), `${label}: respawned`).toEqual([]);
-    for (const e of events) if (e.kind === 'landed') fall = Math.max(fall, e.fallHeight);
-  };
-  for (let i = 0; i < maxTicks; i++) {
-    watch(h.tick(hold));
-    const s = h.sim.state;
-    if (!s.grounded) airborne = true;
-    else if (airborne && s.mode === 'ground') {
-      const at = { ...s.position };
-      for (let k = 0; k < SETTLE_TICKS; k++) watch(h.tick());
-      return { fall, at };
-    }
-  }
-  throw new Error(`${label}: not standing again within ${maxTicks} ticks (at ${JSON.stringify(h.sim.state.position)})`);
-}
 
 describe('downtown: layout', () => {
   it('downtown has ≥ 6 alleys and ≥ 12 pads', () => {
@@ -168,7 +140,7 @@ describe('downtown: jump pads', () => {
       // Standing on the pad launches the courier at once (during spawnAt's settling ticks)
       h.spawnAt(pad.position, yawToward(pad.launch.x, pad.launch.z));
       expect(h.sim.state.padCooldown[pad.id] ?? 0, `${pad.id} launched`).toBeGreaterThan(0);
-      const { fall, at } = untilLanded(pad.id, {}, 10 * cfg.tickRate, true);
+      const { fall, at } = untilLanded(h, pad.id, {}, 10 * cfg.tickRate, true);
       const p = h.sim.state.position;
       expect(h.sim.state.grounded, `${pad.id} grounded`).toBe(true);
       expect(distance(at, t!.target), `${pad.id} lands at ${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}`).toBeLessThanOrEqual(1.5);
@@ -178,50 +150,10 @@ describe('downtown: jump pads', () => {
   }, SIM_TIMEOUT);
 });
 
-/**
- * Feet for a standing spot under the first 4 m of the cable from `from` (toward `to`) where a standing courier's hand
- * reaches the cable, or null.
- */
-function grabSpot(z: ZipLine, from: Vec3, to: Vec3): Vec3 | null {
-  const len = distance(from, to);
-  for (let s = 0; s <= Math.min(4, len); s += 0.25) {
-    const k = s / len;
-    const c = { x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k, z: from.z + (to.z - from.z) * k };
-    const drop = h.dropTo(c, 10);
-    if (drop === null || drop <= 0) continue;
-    const feet = { x: c.x, y: c.y - drop, z: c.z };
-    const hand = { x: feet.x, y: feet.y + cfg.capsule.height, z: feet.z };
-    if (closestOnSegment(hand, z.a, z.b).dist <= cfg.zipLine.attachDistance) return feet;
-  }
-  return null;
-}
-
 describe('downtown: zip lines', () => {
   it('every downtown zip line rides both ways and ends in a dismount (mode ground on the detach tick)', () => {
     expect(new Set(downtown.zipLines)).toEqual(new Set(zips.map((z) => z.id)));
-    for (const z of zips) {
-      for (const to of ['b', 'a'] as const) {
-        const [from, target, dir] = to === 'b' ? [z.a, z.b, 1] : [z.b, z.a, -1];
-        const label = `${z.id} -> ${to}`;
-        const feet = grabSpot(z, from, target);
-        expect(feet, `${label}: a standing spot within reach of the cable near the start`).not.toBeNull();
-        h.spawnAt(feet!, yawToward(target.x - from.x, target.z - from.z));
-        h.tick({}, ['interact']);
-        expect(h.sim.state.zip, `${label}: grabbed`).toMatchObject({ id: z.id, dir });
-        const rideTicks = Math.ceil((distance(z.a, z.b) / cfg.zipLine.baseSpeed) * cfg.tickRate) + 5;
-        for (let i = 0; i < rideTicks && h.sim.state.mode === 'zipline'; i++) {
-          const events = h.tick();
-          expect(events.filter((e) => e.kind === 'respawned'), `${label}: respawned`).toEqual([]);
-        }
-        expect(h.sim.state.mode, `${label}: the ride ends in a dismount`).toBe('ground');
-        const off = { ...h.sim.state.position };
-        expect(Math.hypot(off.x - target.x, off.z - target.z), `${label}: rode to the far end`).toBeLessThan(1);
-        const events = h.run(cfg.tickRate / 2);
-        expect(events.filter((e) => e.kind === 'landed' && e.fallHeight > 0.1), `${label}: no fall after the dismount`).toEqual([]);
-        expect(h.sim.state.grounded, `${label}: standing after the exit`).toBe(true);
-        expect(Math.abs(h.sim.state.position.y - off.y), `${label}: still on the dismount surface`).toBeLessThanOrEqual(0.05);
-      }
-    }
+    for (const z of zips) for (const to of ['b', 'a'] as const) rideZip(h, z, to);
   }, SIM_TIMEOUT);
 });
 
@@ -279,7 +211,7 @@ describe('downtown: rooftop routes', () => {
         } else h.tick(hold);
       }
       expect(jumped, `${label}: reached the edge`).toBe(true);
-      const { fall } = untilLanded(label, hold, 3 * cfg.tickRate);
+      const { fall } = untilLanded(h, label, hold, 3 * cfg.tickRate);
       const p = h.sim.state.position;
       expect(Math.abs(p.y - g.to.y), `${label}: lands at y ${p.y.toFixed(2)}`).toBeLessThanOrEqual(0.05);
       expect(inRect(p, g.landing), `${label}: lands on the roof ahead at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}`).toBe(true);
