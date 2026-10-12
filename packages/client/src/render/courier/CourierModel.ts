@@ -8,8 +8,6 @@ import { animFor, easeYaw, type CourierAnim, type CourierClip } from './animStat
 import type { CourierDebug, CourierView } from './CourierView';
 
 const CLIPS: readonly CourierClip[] = ['Idle', 'Walking', 'Running', 'Jump'];
-/** Clips that play once and hold their last frame (the rest loop). */
-const ONCE: ReadonlySet<CourierClip> = new Set(['Jump']);
 const DEG = Math.PI / 180;
 
 /** A bone's local position and rotation, saved before a pose is layered over the clip and restored before the next mixer update. */
@@ -87,7 +85,7 @@ export class CourierModel implements CourierView {
   private readonly packagesRest = new THREE.Matrix4();
   private readonly materials = new Set<THREE.Material>();
   private saved: Saved[] = [];
-  private deckTop: number;
+  private readonly deckTop: number;
   private snapNext = true;
   private packageCount = 0;
 
@@ -131,17 +129,23 @@ export class CourierModel implements CourierView {
     for (const name of CLIPS) {
       const source = gltf.animations.find((a) => a.name === name);
       if (!source) throw new Error(`courier model has no "${name}" clip`);
-      const clip = name === 'Jump' ? source.clone() : source;
-      if (name === 'Jump') {
-        // The airborne part only: played once from take-off, then held.
-        clip.tracks = clip.tracks.map((t) => t.clone().trim(cfg.airClip[0]!, cfg.airClip[1]!).shift(-cfg.airClip[0]!));
-        clip.resetDuration();
+      if (name !== 'Jump') {
+        actions[name] = this.mixer.clipAction(source);
+        continue;
       }
-      const action = this.mixer.clipAction(clip);
-      if (ONCE.has(name)) {
-        action.setLoop(THREE.LoopOnce, 1);
-        action.clampWhenFinished = true;
-      }
+      // Jump: the airborne part only (its hop is taken out below), played once from take-off and then held.
+      const [from, to] = cfg.airClip as [number, number];
+      const air = source.clone();
+      air.tracks = air.tracks.map((t) => {
+        const c = t.clone(); // shares the source's arrays: copy them, since shift and settleOnFeet edit in place
+        c.times = c.times.slice();
+        c.values = c.values.slice();
+        return c.trim(from, to).shift(-from);
+      });
+      air.resetDuration();
+      const action = this.mixer.clipAction(air);
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
       actions[name] = action;
     }
     this.actions = actions;
@@ -196,7 +200,7 @@ export class CourierModel implements CourierView {
       this.root.updateMatrixWorld(true);
       return new THREE.Box3().setFromObject(this.figure, true).min.y;
     });
-    // In place: the action's interpolants already hold these arrays (the trimmed copies, not the file's clip).
+    // In place: the action's interpolants already hold these arrays (the Jump copies made in the constructor).
     for (const t of moved) {
       for (let i = 0; i < t.times.length; i++) t.values[i * 3 + 1]! -= sample(hips.times, lows, t.times[i]!) / scale;
     }

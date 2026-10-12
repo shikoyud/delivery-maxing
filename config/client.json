@@ -16,9 +16,9 @@
     "poses": {
       "slide": { "drop": 0, "hipDrop": 0.42, "body": [0, 0, 0],
         "bones": { "Abdomen": [55, 0, 0], "UpperLegL": [80, 0, 0], "UpperLegR": [80, 0, 0], "UpperArmL": [-20, 0, -70], "UpperArmR": [-20, 0, 70] } },
-      "wallrunL": { "drop": 0, "hipDrop": 0, "body": [0, 0, -25],
+      "wallrunL": { "drop": 0, "hipDrop": 0, "body": [0, 0, -32],
         "bones": {  } },
-      "wallrunR": { "drop": 0, "hipDrop": 0, "body": [0, 0, 25],
+      "wallrunR": { "drop": 0, "hipDrop": 0, "body": [0, 0, 32],
         "bones": {  } },
       "zip": { "drop": 0, "hipDrop": 0, "body": [0, 0, 0],
         "bones": { "UpperArmL": [20, 0, -145], "UpperArmR": [20, 0, 145], "UpperLegL": [20, 0, 0], "UpperLegR": [20, 0, 0], "LowerLegL": [-35, 0, 0], "LowerLegR": [-35, 0, 0] } },
