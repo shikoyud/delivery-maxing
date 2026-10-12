@@ -1,0 +1,15 @@
+{
+  "name": "@dm/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0"
+  }
+}

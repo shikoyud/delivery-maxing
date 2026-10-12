@@ -1,0 +1,25 @@
+{
+  "name": "delivery-maxing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.28.2",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "build": "pnpm --filter @dm/client build",
+    "dev": "pnpm --filter @dm/client dev",
+    "e2e": "pnpm --filter @dm/client e2e",
+    "check": "pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^10.0.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "~8.71.0",
+    "vitest": "^5.0.0"
+  }
+}
