@@ -77,3 +77,25 @@ test('draw calls stay under the budget', async ({ page }) => {
   expect(info.calls).toBeGreaterThan(0);
   expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
 });
+
+test('a collected orb disappears', async ({ page }) => {
+  await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  expect(await page.evaluate(() => window.__dm!.orbVisible('hub-orb-01'))).toBe(true);
+  // Feet 1 m below the orb centre, so the capsule centre is on it.
+  await page.evaluate(() => {
+    const o = window.__dm!.featurePosition('hub-orb-01');
+    window.__dm!.teleport({ x: o.x, y: o.y - 1, z: o.z });
+  });
+  await page.waitForFunction(() => window.__dm!.orbVisible('hub-orb-01') === false, undefined, { timeout: 10_000 });
+});
+
+test('feature screenshot', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // Stand at the hub looking east at the feature cluster.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 6, y: 0, z: 8 }, { x: 28, y: 2, z: 0 }));
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${artifacts}sp1-features.png` });
+  expect(errors).toEqual([]);
+});

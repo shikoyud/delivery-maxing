@@ -6,11 +6,23 @@
     { "district": "downtown", "rect": { "minX": -240, "minZ": -240, "maxX": 240, "maxZ": 240 }, "heightMin": 12, "heightMax": 45, "fillChance": 0.85 }
   ],
   "reserved": [{ "minX": -40, "minZ": -40, "maxX": 40, "maxZ": 40 }],
-  "solids": [],
-  "zipLines": [],
-  "jumpPads": [],
-  "boostOrbs": [],
-  "rails": [],
+  "solids": [
+    { "id": "hub-tower-01", "kind": "prop", "center": { "x": 36, "y": 2, "z": 22 }, "size": { "x": 4, "y": 4, "z": 4 } },
+    { "id": "hub-ramp-01", "kind": "ramp", "center": { "x": 36, "y": 1.85, "z": 28.9 }, "size": { "x": 3, "y": 0.4, "z": 10.8 }, "rotationDeg": { "x": 21.8, "y": 0, "z": 0 } },
+    { "id": "hub-chute-01", "kind": "chute", "surface": "chute", "center": { "x": 29.1, "y": 1.85, "z": 22 }, "size": { "x": 10.8, "y": 0.4, "z": 3 }, "rotationDeg": { "x": 0, "y": 0, "z": 21.8 } }
+  ],
+  "zipLines": [
+    { "id": "hub-zip-01", "a": { "x": 18, "y": 5, "z": 14 }, "b": { "x": 36, "y": 3.5, "z": 14 } }
+  ],
+  "jumpPads": [
+    { "id": "hub-pad-01", "position": { "x": 14, "y": 0, "z": -4 }, "radius": 2, "launch": { "x": 5, "y": 13, "z": 0 } }
+  ],
+  "boostOrbs": [
+    { "id": "hub-orb-01", "position": { "x": 22, "y": 1.5, "z": -4 } }
+  ],
+  "rails": [
+    { "id": "hub-rail-01", "points": [{ "x": 20, "y": 1, "z": -14 }, { "x": 30, "y": 1, "z": -14 }, { "x": 36, "y": 1.6, "z": -20 }] }
+  ],
   "checkpoints": [{ "id": "cp-1", "position": { "x": 50, "y": 0, "z": 50 } }],
   "pois": [
     { "id": "poi-1", "position": { "x": 100, "y": 0, "z": 0 }, "district": "downtown", "kind": "door" },

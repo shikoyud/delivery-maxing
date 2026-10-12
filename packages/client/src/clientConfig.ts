@@ -7,6 +7,9 @@ export interface ClientConfig {
     fovSpeedMin: number;
     fovSpeedMax: number;
     wallRunRollDeg: number;
+    /** Exponential ease rates (1/s) for the wall-run roll and the speed FOV kick. */
+    rollEaseRate: number;
+    fovEaseRate: number;
     eyeHeight: number;
     crouchEyeHeight: number;
     pitchLimitDeg: number;

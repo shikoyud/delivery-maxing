@@ -13,6 +13,14 @@ export const palette = {
   gridLine: 0xc4bba6,
   teal: 0x1f9e93,
   coral: 0xf27166,
+  cable: 0x4a5a63,
+  post: 0x5f7480,
+  rail: 0xe6edf0,
+  padDisc: 0x1f9e93,
+  padRing: 0xffffff,
+  padArrow: 0xfff1a8,
+  orb: 0xffd94a,
+  chuteStripe: 0xfff6ea,
 } as const;
 
 /** Base colour per solid kind; each solid is tinted around it by a hash of its id. */
