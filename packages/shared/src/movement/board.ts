@@ -1,12 +1,12 @@
 import type { MovementConfig } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
-import { horizontalLength, vec3 } from '../math/vec3';
-import { boostMultiplier, facing, wishDirection, yawOf } from './ground';
+import { horizontalLength, vec3, type Vec3 } from '../math/vec3';
+import { boostMultiplier, facing, hasMoveInput, yawOf } from './ground';
 import type { PlayerState, StatModifiers } from './types';
 
 /** Below this horizontal speed (m/s) a velocity has no usable direction: the courier heading is used instead. */
 const DIRECTION_EPS = 1e-6;
-/** Input whose direction has a dot product with the board heading below this brakes instead of steering. */
+/** Input whose direction has a dot product with the board heading below this points back: it brakes (above brakeMinSpeed). */
 const BRAKE_DOT = -0.5;
 
 /** Wraps an angle to (-π, π]. */
@@ -45,10 +45,13 @@ const approach = (value: number, target: number, maxDelta: number): number =>
 /**
  * Grounded board locomotion. There is no strafing: the board rolls along its heading at a signed speed (the
  * velocity's share along the heading, so any sideways velocity is lost to the wheels' grip). Per tick:
- * - input whose (camera-relative) wish direction has dot < -0.5 with the heading brakes at board.brakeDecel toward 0
- *   (never reversing) and does not turn;
- * - other input turns the heading toward the wish direction at no more than board.turnRate·dt and accelerates at
- *   board.accel toward boardTopSpeed (above it, friction slows it back to it);
+ * - back input (the camera-relative wish direction has dot < -0.5 with the heading) above board.brakeMinSpeed along
+ *   the heading brakes at board.brakeDecel toward 0 (never reversing) and does not turn;
+ * - back input at or below brakeMinSpeed turns the board around: the heading turns toward the wish direction at no
+ *   more than board.turnRate·dt and friction slows the board (no acceleration until the input no longer points back)
+ *   (R3);
+ * - other input, sideways included (R4), turns the heading toward the wish direction at no more than
+ *   board.turnRate·dt and accelerates at board.accel toward boardTopSpeed (above it, friction slows it back to it);
  * - no input: board.friction slows it toward 0;
  * - on a slope the board gains g·sinθ along the downhill direction's share of the heading.
  * Brake and acceleration scale with the stick magnitude. Sprint and crouch are ignored. Vertical velocity is left
@@ -57,16 +60,17 @@ const approach = (value: number, target: number, maxDelta: number): number =>
 export function applyBoardVelocity(
   state: PlayerState,
   input: InputFrame,
+  wish: Vec3,
   cfg: MovementConfig,
   mods: StatModifiers,
   dt: number,
 ): void {
   const b = cfg.board;
-  const wish = wishDirection(input);
   const magnitude = Math.min(1, Math.hypot(input.move.x, input.move.y));
-  const hasInput = magnitude > 0 && (wish.x !== 0 || wish.z !== 0);
+  const hasInput = hasMoveInput(input);
   const h0 = facing(state.boardHeading);
-  const braking = hasInput && wish.x * h0.x + wish.z * h0.z < BRAKE_DOT;
+  const back = hasInput && wish.x * h0.x + wish.z * h0.z < BRAKE_DOT;
+  const braking = back && state.velocity.x * h0.x + state.velocity.z * h0.z > b.brakeMinSpeed;
   if (hasInput && !braking) {
     const turn = wrapAngle(yawOf(wish) - state.boardHeading);
     const maxTurn = b.turnRate * dt;
@@ -85,6 +89,7 @@ export function applyBoardVelocity(
 
   const top = boardTopSpeed(state, cfg, mods);
   if (braking) speed = approach(speed, 0, b.brakeDecel * magnitude * dt);
+  else if (back) speed = approach(speed, 0, b.friction * dt); // turning around (R3)
   else if (hasInput) speed = speed > top ? Math.max(top, speed - b.friction * dt) : Math.min(top, speed + b.accel * magnitude * dt);
   else speed = approach(speed, 0, b.friction * dt);
 

@@ -48,6 +48,8 @@ export interface MovementConfig {
     topSpeed: number;
     accel: number;
     brakeDecel: number;
+    /** Back input (dot(wish, heading) < -0.5) brakes only above this speed along the heading; at or below it, it steers (R3). */
+    brakeMinSpeed: number;
     friction: number;
     turnRate: number;
     railMinSpeed: number;

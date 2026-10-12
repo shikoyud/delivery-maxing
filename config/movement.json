@@ -12,6 +12,6 @@
   "jumpPad": { "retriggerCooldown": 0.5 },
   "boostOrb": { "radius": 1.0, "speedMultiplier": 1.4, "duration": 3, "respawnTime": 30 },
   "rail": { "snapDistance": 0.6, "friction": 0.5, "minSpeedFoot": 6 },
-  "board": { "topSpeed": 12, "accel": 6, "brakeDecel": 12, "friction": 1, "turnRate": 2.5, "railMinSpeed": 10 },
+  "board": { "topSpeed": 12, "accel": 6, "brakeDecel": 12, "brakeMinSpeed": 1.0, "friction": 1, "turnRate": 2.5, "railMinSpeed": 10 },
   "fall": { "outOfBoundsY": -3, "boundsMargin": 20 }
 }

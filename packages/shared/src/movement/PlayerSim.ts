@@ -5,7 +5,7 @@ import type { MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
 import { alignBoardHeading, applyBoardVelocity, toggleBoard } from './board';
-import { applyAirVelocity, applyGroundVelocity, facing, targetGroundSpeed, wishDirection, yawOf } from './ground';
+import { applyAirVelocity, applyGroundVelocity, hasMoveInput, targetGroundSpeed, wishDirection, yawOf } from './ground';
 import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
@@ -92,7 +92,8 @@ export class PlayerSim {
 
     // 1. Look, courier heading and timers; crouch (stays crouched while standing is blocked; ignored on the board); board toggle (Q);
     //    crouch-slide entry (never on the board).
-    this.updateLookAndTimers(input);
+    const wish = wishDirection(input); // camera-relative; computed once per tick
+    this.updateLookAndTimers(input, wish);
     this.updateCrouch(input);
     if (input.board.pressed && toggleBoard(this.state)) events.push({ kind: 'boardToggled', onBoard: this.state.onBoard });
     startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
@@ -112,7 +113,7 @@ export class PlayerSim {
       events.push({ kind: 'jumped' });
     } else {
       if (this.state.mode === 'wallrun') updateWallRun(this.state, this.body, input, this.cfg, this.dt);
-      if (this.state.mode !== 'slide' && this.state.mode !== 'wallrun') this.applyLocomotion(input, mods);
+      if (this.state.mode !== 'slide' && this.state.mode !== 'wallrun') this.applyLocomotion(input, wish, mods);
 
       // 4. Jump (buffer + coyote).
       if (tryJump(this.state, input, this.cfg, mods, this.dt)) events.push({ kind: 'jumped' });
@@ -139,7 +140,9 @@ export class PlayerSim {
   private tryMantle(input: InputFrame): boolean {
     const s = this.state;
     if (s.mode !== 'mantle') {
-      const canStart = !s.onBoard && this.inputAlongHeading(input) && (s.mode === 'ground' || s.mode === 'air');
+      // The ledge probe runs along the heading. Off the board, any movement input has already turned the heading to
+      // the wish direction this tick (updateLookAndTimers), so "input along the heading" is just "has movement input".
+      const canStart = !s.onBoard && hasMoveInput(input) && (s.mode === 'ground' || s.mode === 'air');
       const top = canStart ? findLedge(this.body, s, this.cfg) : null;
       if (!top) return false;
       startMantle(s, top);
@@ -148,13 +151,6 @@ export class PlayerSim {
     this.body.setFeet(s.position);
     s.position = this.body.feet;
     return true;
-  }
-
-  /** True when the wish direction points along the courier heading (dot > 0.5). */
-  private inputAlongHeading(input: InputFrame): boolean {
-    const wish = wishDirection(input);
-    const f = facing(this.state.heading);
-    return wish.x * f.x + wish.z * f.z > 0.5;
   }
 
   /**
@@ -210,12 +206,11 @@ export class PlayerSim {
    * (camera-relative) wish direction; with no input the heading holds. On the board the heading mirrors boardHeading
    * (set by the board code and at the end of the step).
    */
-  private updateLookAndTimers(input: InputFrame): void {
+  private updateLookAndTimers(input: InputFrame, wish: Vec3): void {
     const s = this.state;
     s.yaw = input.look.yaw;
     s.pitch = input.look.pitch;
-    const wish = wishDirection(input);
-    if (!s.onBoard && (wish.x !== 0 || wish.z !== 0)) s.heading = yawOf(wish);
+    if (!s.onBoard && hasMoveInput(input)) s.heading = yawOf(wish);
     ageJumpBuffer(s, input, this.cfg);
   }
 
@@ -229,13 +224,12 @@ export class PlayerSim {
     this.state.crouched = this.body.crouched;
   }
 
-  private applyLocomotion(input: InputFrame, mods: StatModifiers): void {
+  private applyLocomotion(input: InputFrame, wish: Vec3, mods: StatModifiers): void {
     const s = this.state;
     if (s.onBoard && s.grounded) {
-      applyBoardVelocity(s, input, this.cfg, mods, this.dt);
+      applyBoardVelocity(s, input, wish, this.cfg, mods, this.dt);
       return;
     }
-    const wish = wishDirection(input);
     const target = targetGroundSpeed(input, s, this.cfg, mods);
     if (s.grounded) applyGroundVelocity(s, wish, target, this.cfg, this.dt);
     else applyAirVelocity(s, wish, target, this.cfg, this.dt);

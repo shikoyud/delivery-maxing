@@ -72,9 +72,11 @@ describe('skateboard', () => {
     const before = speed(h.sim.state);
     h.tick({});
     expect(speed(h.sim.state)).toBeCloseTo(before - cfg.board.friction / cfg.tickRate, 6);
-    // Braking stops the board and does not roll it backwards.
-    h.run(seconds(2), { forward: -1 });
-    expect(speed(h.sim.state)).toBe(0);
+    // Braking slows the board to brakeMinSpeed without turning it or rolling it backwards; below that, S turns the
+    // board around instead (R3, covered in heading.test.ts).
+    h.runUntil((s) => speed(s) <= cfg.board.brakeMinSpeed, seconds(2), { forward: -1 });
+    expect(h.sim.state.boardHeading).toBe(0);
+    expect(h.sim.state.velocity.z).toBeLessThanOrEqual(0);
   });
 
   it('turning 90° takes at least (π/2) / turnRate seconds', async () => {

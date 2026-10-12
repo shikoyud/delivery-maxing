@@ -112,3 +112,73 @@ describe('courier heading', () => {
     expect(h.sim.state.yaw).toBe(0);
   });
 });
+
+describe('board turning (R3 slow turn-around, R4 sideways input)', () => {
+  const dt = 1 / cfg.tickRate;
+  const maxStep = cfg.board.turnRate * dt;
+  /** dot(facing(board heading), facing(yaw)). */
+  const alignment = (s: PlayerState, yaw: number) => {
+    const a = facing(s.boardHeading);
+    const b = facing(yaw);
+    return a.x * b.x + a.z * b.z;
+  };
+
+  it('board.brakeMinSpeed is 1 m/s', () => {
+    expect(cfg.board.brakeMinSpeed).toBe(1);
+  });
+
+  it('a stopped board with the camera behind turns around on W, then accelerates', async () => {
+    const h = await makeSim();
+    boardOn(h);
+    expect(speed(h.sim.state)).toBe(0);
+    const BACK = Math.PI; // camera turned 180°: W wishes toward +Z, behind the board
+    const W_BACK: Hold = { forward: 1, yaw: BACK };
+    let ticks = 0;
+    while (alignment(h.sim.state, BACK) < 1 - 1e-9) {
+      const before = h.sim.state.boardHeading;
+      h.tick(W_BACK);
+      ticks++;
+      expect(Math.abs(h.sim.state.boardHeading - before)).toBeGreaterThan(0);
+      expect(ticks).toBeLessThanOrEqual(Math.ceil(Math.PI / maxStep) + 3);
+    }
+    expect(h.sim.state.heading).toBe(h.sim.state.boardHeading);
+    h.run(seconds(1), W_BACK);
+    expect(speed(h.sim.state)).toBeGreaterThan(2);
+    expect(h.sim.state.velocity.z).toBeGreaterThan(0);
+  });
+
+  it('a board at 8 m/s with the camera behind brakes on W without turning until ≤ brakeMinSpeed, then turns', async () => {
+    const h = await makeSim();
+    boardOn(h);
+    h.runUntil((s) => speed(s) >= 8, seconds(3), { forward: 1 });
+    expect(speed(h.sim.state)).toBeLessThan(8.3);
+    const W_BACK: Hold = { forward: 1, yaw: Math.PI };
+    let braked = 0;
+    while (speed(h.sim.state) > cfg.board.brakeMinSpeed) {
+      const before = speed(h.sim.state);
+      h.tick(W_BACK);
+      braked++;
+      expect(h.sim.state.boardHeading).toBe(0);
+      expect(speed(h.sim.state)).toBeCloseTo(before - cfg.board.brakeDecel * dt, 6);
+      expect(braked).toBeLessThanOrEqual(seconds(1));
+    }
+    // At or below brakeMinSpeed the same input steers.
+    h.tick(W_BACK);
+    expect(Math.abs(h.sim.state.boardHeading)).toBeCloseTo(maxStep, 9);
+  });
+
+  it('sideways input (−0.5 ≤ dot ≤ 0) turns and accelerates, even above brakeMinSpeed', async () => {
+    const h = await makeSim();
+    boardOn(h);
+    h.runUntil((s) => speed(s) >= 5, seconds(2), { forward: 1 });
+    // D with the camera at yaw 0 (dot 0), then W with the camera 110° to the right (dot cos 110° ≈ −0.34).
+    for (const hold of [{ strafe: 1 }, { forward: 1, yaw: (-110 * Math.PI) / 180 }] as Hold[]) {
+      const heading = h.sim.state.boardHeading;
+      const before = speed(h.sim.state);
+      h.tick(hold);
+      expect(h.sim.state.boardHeading).toBeCloseTo(heading - maxStep, 9);
+      // The carve keeps the speed's share along the new heading (wheel grip), then accelerates.
+      expect(speed(h.sim.state)).toBeCloseTo(before * Math.cos(maxStep) + cfg.board.accel * dt, 6);
+    }
+  });
+});
