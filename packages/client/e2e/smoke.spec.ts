@@ -711,3 +711,12 @@ test('the default (no ?map) still loads the SP1 greybox', async ({ page }) => {
   expect(await page.evaluate(() => window.__dm!.featurePosition('hub-orb-01'))).toBeTruthy();
   expect(errors).toEqual([]);
 });
+
+test('sp2 side view: the 700 m LOD cutoff is fogged out at the screen sides', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // Above the Suburbs arterial looking east along it: the screen sides look ~56° off-axis, where props and render
+  // regions end at 700 m horizontally (view depth only ~390 m). Radial fog must already be full there.
+  await airShot(page, { x: -400, y: 60, z: 400 }, { x: 400, y: 0, z: 400 }, 'sp2-city-side.png');
+  expect(errors).toEqual([]);
+});

@@ -15,18 +15,17 @@ const RADII = clientConfig.city.lodRadii as [number, number, number];
 const [R0, R1, R2] = RADII;
 
 describe('assignLods', () => {
-  it('a prop at 159 m is lod0, 161 m lod1, 371 m lod2, 701 m none (config rings 160 / 370 / 700)', () => {
-    expect(RADII).toEqual([160, 370, 700]);
+  it('a prop 1 m inside lodRadii[0] is lod0, 1 m beyond it lod1, 1 m beyond lodRadii[1] lod2, 1 m beyond lodRadii[2] none', () => {
     const props = [prop('a', R0 - 1), prop('b', 0, 0, -(R0 + 1)), prop('c', R1 + 1), prop('d', 0, 0, R2 + 1)];
     const r = assignLods(props, vec3(0, 0, 0), RADII);
     expect(r).toEqual({ lod0: [0], lod1: [1], lod2: [2] });
   });
 
-  it('distance is horizontal (a prop 300 m above is still lod0 at 0 m horizontal)', () => {
-    const r = assignLods([prop('up', 10, 300, 10)], vec3(10, 0, 10), RADII);
+  it('distance is horizontal (a prop lodRadii[2] above is still lod0 at 0 m horizontal)', () => {
+    const r = assignLods([prop('up', 10, R2, 10)], vec3(10, 0, 10), RADII);
     expect(r.lod0).toEqual([0]);
     // and the centre's own height does not count either
-    expect(assignLods([prop('p', 100)], vec3(0, 500, 0), RADII).lod0).toEqual([0]);
+    expect(assignLods([prop('p', R0 / 2)], vec3(0, R2, 0), RADII).lod0).toEqual([0]);
   });
 
   it('ring edges are inclusive and indices keep prop order', () => {

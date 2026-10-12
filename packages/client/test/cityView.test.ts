@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { parsePieceCatalog, vec3, type CityMap, type Prop, type Solid, type Vec3 } from '@dm/shared';
+import { parsePieceCatalog, vec3, worldConfig, type CityMap, type Prop, type Solid, type Vec3 } from '@dm/shared';
 import piecesJson from '../../../map/pieces.json';
 import { CityView, type PieceModels } from '../src/render/city/CityView';
 import { clientConfig } from '../src/clientConfig';
 import { paletteRow } from '../src/render/city/paletteMaterial';
+import { regionOf } from '../src/render/city/regions';
 import { toSun } from '../src/render/Renderer';
 
 const pieces = parsePieceCatalog(piecesJson);
 const cfg = clientConfig.city;
 const [R0, R1, R2] = cfg.lodRadii as [number, number, number];
+/** Relod step and chunk size the re-sort test moves by (city.relodDistance, world chunkSize). */
+const D = cfg.relodDistance;
+const CHUNK = worldConfig.chunkSize;
 
 /** Props every 50 m along x (and a second row along z), two pieces, alternating palettes. */
 function cityWith(props: Prop[], solids: Solid[] = []): CityMap {
-  return { kind: 'city', size: 2000, chunkSize: 100, props, solids } as unknown as CityMap;
+  return { kind: 'city', size: 2000, chunkSize: CHUNK, props, solids } as unknown as CityMap;
 }
 const prop = (i: number, p: Vec3): Prop => ({
   id: `p${i}`,
@@ -61,13 +65,13 @@ describe('CityView', () => {
     for (const m of lod0Meshes(view)) {
       expect(m.boundingSphere).not.toBeNull();
       for (const p of activePositions(m)) {
-        expect(p.x).toBeGreaterThan(500); // near the new centre, none left over from x = -800
+        expect(Math.abs(p.x - 700)).toBeLessThanOrEqual(R0); // near the new centre, none left over from x = -800
         expect(m.boundingSphere!.containsPoint(p)).toBe(true);
         active++;
       }
     }
     expect(active).toBe(props.filter((p) => Math.abs(p.position.x - 700) <= R0).length);
-    expect(before.flat().every((x) => x < -600)).toBe(true);
+    expect(before.flat().every((x) => Math.abs(x + 800) <= R0)).toBe(true);
     expect(view.stats().lod0).toBe(active);
   });
 
@@ -104,20 +108,25 @@ describe('CityView', () => {
   });
 
   it('re-sorts only after moving more than relodDistance or into another chunk', () => {
-    const props = lineProps();
-    const view = new CityView(cityWith(props), pieces, models(), new THREE.Texture(), cfg);
-    view.update(vec3(10, 0, 10));
-    const s0 = view.stats();
-    view.update(vec3(34, 0, 10)); // 24 m, same chunk: the rings stay although x = -150 is now beyond 160 m
-    expect(view.stats()).toEqual(s0);
-    view.update(vec3(36, 0, 10)); // 26 m from the last sort
-    expect(view.stats().lod0).toBe(s0.lod0 - 1);
+    expect(CHUNK).toBeGreaterThan(2 * D); // the moves below stay inside one chunk
+    const one = (x: number): CityMap => cityWith([prop(0, vec3(x, 0, 10))]);
+    // Moves within one chunk: a prop that a re-sort would bring into LOD0 stays in LOD1 until the move exceeds D.
+    const x0 = CHUNK / 2 - 0.5 * D;
+    const view = new CityView(one(x0 + R0 + 0.5 * D), pieces, models(), new THREE.Texture(), cfg);
+    view.update(vec3(x0, 0, 10));
+    expect(view.stats().lod0).toBe(0);
+    view.update(vec3(x0 + 0.9 * D, 0, 10)); // now R0 - 0.4 D away, but no re-sort yet
+    expect(view.stats().lod0).toBe(0);
+    view.update(vec3(x0 + 1.1 * D, 0, 10)); // moved more than D since the last sort
+    expect(view.stats().lod0).toBe(1);
 
-    const other = new CityView(cityWith(props), pieces, models(), new THREE.Texture(), cfg);
-    other.update(vec3(95, 0, 10));
-    const s1 = other.stats();
-    other.update(vec3(111, 0, 10)); // 16 m, but into chunk (1,0): x = -50 drops out of LOD0
-    expect(other.stats().lod0).toBe(s1.lod0 - 1);
+    // A short move across a chunk border re-sorts.
+    const x1 = CHUNK - 0.2 * D;
+    const other = new CityView(one(x1 + R0 + 0.3 * D), pieces, models(), new THREE.Texture(), cfg);
+    other.update(vec3(x1, 0, 10));
+    expect(other.stats().lod0).toBe(0);
+    other.update(vec3(CHUNK + 0.2 * D, 0, 10)); // 0.4 D, into the next chunk
+    expect(other.stats().lod0).toBe(1);
   });
 
   it('draws only instances inside the camera frustum when given a camera, with bounds still tight', () => {
@@ -137,18 +146,24 @@ describe('CityView', () => {
 
   it('hides render regions beyond lodRadii[2]', () => {
     const ground = (id: string, x: number): Solid => ({ id, kind: 'ground', center: vec3(x, -0.5, 50), size: vec3(100, 1, 100) });
-    const view = new CityView(cityWith([], [ground('near', 50), ground('far', 950)]), pieces, models(), new THREE.Texture(), cfg);
+    const farX = R2 + 150; // the far tile's nearest edge is R2 + 100 from the centre
+    const view = new CityView(cityWith([], [ground('near', 50), ground('far', farX)]), pieces, models(), new THREE.Texture(), cfg);
     view.update(vec3(0, 0, 50));
     const regions = view.group.children.filter((c) => c.name.startsWith('region'));
     expect(regions.map((r) => [r.name, r.visible])).toEqual([
-      ['region 0,0', true],
-      ['region 3,0', false],
+      [`region ${regionOf(50, 50, cfg.renderRegion)}`, true],
+      [`region ${regionOf(farX, 50, cfg.renderRegion)}`, false],
     ]);
   });
 
   it('the shadow pass draws only the LOD0 instances inside the shadow camera, then the full list is restored', () => {
     const props = lineProps();
-    const view = new CityView(cityWith(props), pieces, models(), new THREE.Texture(), cfg, { toSun, extent: 80 });
+    // A shadow camera half as wide as the LOD0 ring, so part of the ring lies outside it.
+    const extent = R0 / 2;
+    // Light-space x of a prop at (x, ·, 10) is |x|·0.555 for this sun: beyond (extent + max radius + slack) / 0.555
+    // nothing can be in the shadow camera (the largest test instance has a bounding radius under 13 m).
+    const reach = (extent + 14) / 0.55;
+    const view = new CityView(cityWith(props), pieces, models(), new THREE.Texture(), cfg, { toSun, extent });
     view.update(vec3(0, 0, 10));
     let inShadow = 0;
     for (const m of lod0Meshes(view)) {
@@ -160,11 +175,11 @@ describe('CityView', () => {
       m.onAfterShadow(...args);
       expect(m.count).toBe(full);
       expect(shadowed).toEqual(all.slice(0, shadowed.length)); // the shadow casters lead the list
-      for (const x of shadowed) expect(Math.abs(x)).toBeLessThanOrEqual(120);
+      for (const x of shadowed) expect(Math.abs(x)).toBeLessThanOrEqual(reach);
       inShadow += shadowed.length;
     }
     const lod0 = view.stats().lod0;
     expect(inShadow).toBeGreaterThan(0);
-    expect(inShadow).toBeLessThan(lod0); // x = ±150 is LOD0 but outside the 80 m shadow camera
+    expect(inShadow).toBeLessThan(lod0); // the outer part of the LOD0 ring is outside the shadow camera
   });
 });

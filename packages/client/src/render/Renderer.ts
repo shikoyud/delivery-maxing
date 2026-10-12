@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Vec3 } from '@dm/shared';
 import type { ClientConfig } from '../clientConfig';
 import { palette } from './palette';
+import { installRadialFog } from './radialFog';
 
 /** Unit vector from the scene toward the sun (the shadow-casting light). */
 export const toSun: Readonly<Vec3> = (() => {
@@ -36,6 +37,8 @@ export class Renderer {
     this.camera.rotation.order = 'YXZ';
 
     this.scene.background = new THREE.Color(palette.sky);
+    // Radial, so the city's horizontal-radius cutoff at fogFar is fully fogged at the screen sides too.
+    installRadialFog();
     this.scene.fog = new THREE.Fog(palette.sky, gfx.fogNear, gfx.fogFar);
 
     this.scene.add(new THREE.HemisphereLight(palette.hemiSky, palette.hemiGround, gfx.lights.hemi));
