@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AcceptResult, ActiveOrder, MoveMode, Order, Totals, Vec3 } from '@dm/shared';
+import type { Hospital, MoveMode, Vec3 } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { Game } from './Game';
 
@@ -11,26 +11,15 @@ export interface DebugApi {
   player(): { position: Vec3; velocity: Vec3; mode: MoveMode; onBoard: boolean; heading: number };
   /** Moves the player into the air at `p`, optionally moving at velocity `v` (m/s). */
   teleport(p: Vec3, v?: Vec3): void;
-  /** False while a boost orb is collected and waiting to respawn. */
-  orbVisible(id: string): boolean;
-  /** Position of a boost orb, zip line end `a`, jump pad or rail start, by feature id. */
-  featurePosition(id: string): Vec3;
   /** Places the player on the ground at `feet` and looks at `target`. */
   viewpoint(feet: Vec3, target: Vec3): void;
   renderInfo(): { calls: number; triangles: number };
-  /** The delivery loop: copies of the board, active orders and totals; accept uses the player's position now. */
-  orders: {
-    board(): (Order | null)[];
-    active(): ActiveOrder[];
-    totals(): Totals;
-    accept(id: string): AcceptResult;
-  };
-  /** Whether the Order Board is open. */
-  boardOpen(): boolean;
   /** Ground point of a POI zone, by id. */
   poiPosition(id: string): Vec3;
-  /** Position of the HUB Order Board kiosk. */
-  kiosk(): Vec3;
+  /** Copies of the map's hospitals (spawn points and safe zones). */
+  hospitals(): Hospital[];
+  /** Id of the hospital whose safe zone the player is in (as of the last tick), or null. */
+  safeZone(): string | null;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
   /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
@@ -73,38 +62,19 @@ export function installDebugHooks(game: Game): void {
     teleport(p, v) {
       game.teleport(p, v);
     },
-    orbVisible(id) {
-      return game.features.isOrbVisible(id);
-    },
-    featurePosition(id) {
-      const m = game.map;
-      const p =
-        m.boostOrbs.find((o) => o.id === id)?.position ??
-        m.jumpPads.find((o) => o.id === id)?.position ??
-        m.zipLines.find((o) => o.id === id)?.a ??
-        m.rails.find((o) => o.id === id)?.points[0];
-      if (!p) throw new Error(`unknown feature ${id}`);
-      return { ...p };
-    },
     viewpoint(feet, target) {
       game.viewpoint(feet, target);
     },
     renderInfo() {
       return game.renderer.info();
     },
-    orders: {
-      board: () => structuredClone([...game.delivery.orders.board]),
-      active: () => structuredClone([...game.delivery.orders.active]),
-      totals: () => ({ ...game.delivery.orders.totals }),
-      accept: (id) => game.delivery.accept(id),
-    },
-    boardOpen: () => game.delivery.modalOpen,
     poiPosition(id) {
       const p = game.map.pois.find((x) => x.id === id);
       if (!p) throw new Error(`unknown POI ${id}`);
       return { ...p.position };
     },
-    kiosk: () => ({ ...game.map.hub.kiosk }),
+    hospitals: () => structuredClone(game.map.hospitals),
+    safeZone: () => game.delivery.safeZone,
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),

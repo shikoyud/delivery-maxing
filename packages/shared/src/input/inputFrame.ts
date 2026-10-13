@@ -1,4 +1,4 @@
-export const ACTIONS = ['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'board'] as const;
+export const ACTIONS = ['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'board', 'phone', 'accept', 'mount'] as const;
 export type Action = (typeof ACTIONS)[number];
 
 export interface ButtonState {
@@ -20,6 +20,12 @@ export interface InputFrame {
   interact: ButtonState;
   hit: ButtonState;
   board: ButtonState;
+  /** Opens or closes the phone (Tab). */
+  phone: ButtonState;
+  /** Accepts the highlighted offer (Y). */
+  accept: ButtonState;
+  /** Mounts or dismounts a vehicle (F); bound but unused until SP4. */
+  mount: ButtonState;
 }
 
 const button = (): ButtonState => ({ held: false, pressed: false });
@@ -34,5 +40,8 @@ export function emptyInput(): InputFrame {
     interact: button(),
     hit: button(),
     board: button(),
+    phone: button(),
+    accept: button(),
+    mount: button(),
   };
 }

@@ -1,10 +1,10 @@
 import { emptyInput, type ButtonState, type InputFrame } from '@dm/shared';
 import type { BindingName, ClientConfig } from '../clientConfig';
 
-type ButtonAction = 'jump' | 'crouch' | 'sprint' | 'interact' | 'hit' | 'board';
+export type ButtonAction = 'jump' | 'crouch' | 'sprint' | 'interact' | 'hit' | 'board' | 'phone' | 'accept' | 'mount';
 export type UiKey = 'devPanel' | 'debugOverlay';
 
-const BUTTONS: readonly ButtonAction[] = ['jump', 'crouch', 'sprint', 'interact', 'hit', 'board'];
+const BUTTONS: readonly ButtonAction[] = ['jump', 'crouch', 'sprint', 'interact', 'hit', 'board', 'phone', 'accept', 'mount'];
 const UI_KEYS: readonly UiKey[] = ['devPanel', 'debugOverlay'];
 
 /** Raw code for a mouse button, as used in bindings ("Mouse0" = left). */

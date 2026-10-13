@@ -1,4 +1,9 @@
-import type { Totals } from '@dm/shared';
+/** Lifetime points, coins and deliveries (Task 8 moves this to the v2 progress record). */
+export interface Totals {
+  points: number;
+  coins: number;
+  deliveries: number;
+}
 
 /** localStorage key for the player's points, coins and delivery count (spec assumption 10). */
 export const PROGRESS_KEY = 'dm.progress.v1';

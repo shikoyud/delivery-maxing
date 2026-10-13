@@ -16,10 +16,9 @@ Game.create(host, { debug, seed })
     game.start();
     if (hint && !debug) {
       const update = (): void => {
-        hint.hidden = game.input.locked || game.delivery.modalOpen;
+        hint.hidden = game.input.locked;
       };
       document.addEventListener('pointerlockchange', update);
-      game.delivery.onModalChange(update);
       update();
     }
   })

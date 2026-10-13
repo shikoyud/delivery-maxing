@@ -6,12 +6,21 @@ import {
   movementConfig,
   PlayerSim,
   type GreyboxSource,
+  type MapData,
   type PhysicsWorld,
+  type Solid,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { ballInSolid, physicsSphereCast, physicsWallProbe } from '../src/game/cameraQueries';
 
-const map = expandGreybox(greybox as GreyboxSource);
+/** A low tunnel on open ground (roof underside y 1.4, x 92..104, inner walls z ±2), added to the greybox for these tests. */
+const TUNNEL: Solid[] = [
+  { id: 'test-tunnel-wall-01', kind: 'prop', center: { x: 98, y: 0.7, z: -2.25 }, size: { x: 12, y: 1.4, z: 0.5 } },
+  { id: 'test-tunnel-wall-02', kind: 'prop', center: { x: 98, y: 0.7, z: 2.25 }, size: { x: 12, y: 1.4, z: 0.5 } },
+  { id: 'test-tunnel-roof', kind: 'prop', center: { x: 98, y: 1.65, z: 0 }, size: { x: 12, y: 0.5, z: 5 } },
+];
+const base = expandGreybox(greybox as GreyboxSource);
+const map: MapData = { ...base, solids: [...base.solids, ...TUNNEL] };
 let physics: PhysicsWorld;
 let sim: PlayerSim;
 
@@ -22,7 +31,7 @@ beforeAll(async () => {
 
 const UP = { x: 0, y: 1, z: 0 };
 
-describe('camera physics queries (greybox crouch tunnel: roof underside y 1.4, x 92..104, inner walls z ±2)', () => {
+describe('camera physics queries (test tunnel: roof underside y 1.4, x 92..104, inner walls z ±2)', () => {
   it('sphere cast: the ball centre stops one radius short of the roof', () => {
     const cast = physicsSphereCast(physics, 0.3, sim.body.collider);
     expect(cast({ x: 98, y: 0.8, z: 0 }, UP, 5)).toBeCloseTo(0.3, 3);
@@ -53,7 +62,7 @@ describe('camera physics queries (greybox crouch tunnel: roof underside y 1.4, x
 
   it('wall probe: the horizontal normal of a wall face within reach; ceilings, floors and the courier never count', () => {
     const probe = physicsWallProbe(physics, sim.body.collider);
-    // 0.4 m from the inner face z = 2 of hub-tunnel-wall-02.
+    // 0.4 m from the inner face z = 2 of test-tunnel-wall-02.
     const hit = probe({ x: 98, y: 0.8, z: 1.6 }, 0.6)!;
     expect(hit.normal.x).toBeCloseTo(0, 6);
     expect(hit.normal.y).toBe(0);

@@ -6,9 +6,7 @@ export interface ClientConfig {
     fovMax: number;
     fovSpeedMin: number;
     fovSpeedMax: number;
-    wallRunRollDeg: number;
-    /** Exponential ease rates (1/s) for the wall-run roll and the speed FOV kick. */
-    rollEaseRate: number;
+    /** Exponential ease rate (1/s) of the speed FOV kick. */
     fovEaseRate: number;
     /** Exponential ease rate (1/s) of the chase pivot height between standing and crouched (no camera snap). */
     crouchEaseRate: number;
@@ -50,8 +48,6 @@ export interface ClientConfig {
     waypointPulseHz: number;
     /** Below this many seconds left, an Express timer turns to its urgent colour. */
     expressUrgentSeconds: number;
-    /** After a board refresh, Accept clicks are ignored this long (s) and the board flashes (Review Focus 3). */
-    boardRefreshGuardSeconds: number;
   };
 }
 
@@ -81,14 +77,14 @@ export interface ChaseConfig {
   /** Ease rate of the boom growing back out once geometry stops blocking it. Pulling in is immediate (R10). */
   pushOutEaseRate: number;
   /**
-   * R12: while wall-running, or with a wall face this close to the pivot, the pivot moves this far off the courier's
-   * axis along the wall normal, so the boom has room and the courier stays in view.
+   * R12: with a wall face this close to the pivot, the pivot moves up to this far off the courier's axis along the
+   * wall normal, so the boom has room and the courier stays in view.
    */
   wallPivotOffset: number;
 }
 
 /** A procedural pose layered over the courier's clip (see render/courier). */
-export type CourierPoseName = 'slide' | 'wallrunL' | 'wallrunR' | 'zip' | 'grind' | 'mantle' | 'board' | 'fall' | 'crouch';
+export type CourierPoseName = 'slide' | 'mantle' | 'board' | 'fall' | 'crouch';
 
 /**
  * One procedural pose. Angles are degrees about the courier's own axes (+X right, +Y up, +Z back; the courier faces
@@ -111,10 +107,8 @@ export interface CourierConfig {
   height: number;
   /** Exponential ease rate of the model's yaw toward the way it faces (displayYaw). */
   turnEaseRate: number;
-  /** On a zip line, in a slide, grind or wall-run the courier faces its velocity above this horizontal speed (R14). */
+  /** In a slide the courier faces its velocity above this horizontal speed (R14). */
   facingMinSpeed: number;
-  /** After leaving a zip line the courier eases down onto the feet at this exponential rate (1/s, R16). */
-  dismountEaseRate: number;
   /** Clip cross-fade and pose blend time. */
   crossFade: number;
   /** The Running clip plays at normal speed at this ground speed (faster above, slower below). */
@@ -137,6 +131,6 @@ export interface CourierConfig {
 
 export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
-  | 'interact' | 'board' | 'hit' | 'devPanel' | 'debugOverlay';
+  | 'interact' | 'board' | 'hit' | 'phone' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
 
 export const clientConfig: ClientConfig = clientJson;

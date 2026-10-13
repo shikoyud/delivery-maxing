@@ -1,11 +1,8 @@
 import GUI, { type Controller } from 'lil-gui';
-import { ordersConfig } from '@dm/shared';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import { el } from './dom';
 
 export interface DevPanelHooks {
-  /** The backpack slots slider moved. */
-  onBackpack(n: number): void;
   /** "Reset tuning": the host restores defaults into `settings` in place; the panel then refreshes its sliders. */
   onReset(): void;
   /** "Reset progress": the host zeroes stored and running totals. */
@@ -76,15 +73,6 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
       walk(gui.addFolder(key).close(), val);
     }
   }
-
-  const pack = gui.addFolder('delivery');
-  pack
-    .add(settings, 'backpackSlots', 1, ordersConfig.backpack.maxSlots, 1)
-    .name('backpack slots')
-    .onChange((n: number) => {
-      hooks.onBackpack(n);
-      hooks.onChange();
-    });
 
   const refresh = (): void => gui.controllersRecursive().forEach((c: Controller) => c.updateDisplay());
   const actions = {

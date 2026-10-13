@@ -73,8 +73,7 @@ body {
 /* ---------- Shared bits ---------- */
 
 .hud,
-.popups,
-.board-overlay {
+.popups {
   font-variant-numeric: tabular-nums;
 }
 
@@ -276,6 +275,22 @@ kbd {
 
 .hud-prompt[hidden] { display: none; }
 
+.hud-safe {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(31, 158, 147, 0.9);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.hud-safe[hidden] { display: none; }
+
 /* ---------- Popups ---------- */
 
 .popups {
@@ -325,296 +340,6 @@ kbd {
   8% { opacity: 1; transform: none; }
   85% { opacity: 1; }
   100% { opacity: 0; transform: translateY(-6px); }
-}
-
-/* ---------- Order Board ---------- */
-
-.board-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(22, 50, 58, 0.45);
-  backdrop-filter: blur(2px);
-}
-
-.board-overlay[hidden] { display: none; }
-
-.board-panel {
-  width: min(920px, 100%);
-  max-height: 100%;
-  overflow: auto;
-  padding: 18px 20px 20px;
-  border-radius: 16px;
-  background: var(--dm-paper);
-  border-top: 6px solid var(--dm-teal);
-  box-shadow: 0 16px 50px rgba(22, 50, 58, 0.4);
-}
-
-.board-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.board-brand {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dm-teal);
-}
-
-.board-brand b { color: var(--dm-coral); }
-
-.board-title h2 {
-  margin: 2px 0 0;
-  font-size: 28px;
-}
-
-.board-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.board-pill {
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(31, 158, 147, 0.12);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.board-panel button {
-  font: inherit;
-  cursor: pointer;
-}
-
-.board-close {
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--dm-ink);
-  color: var(--dm-paper);
-  font-size: 13px !important;
-  font-weight: 700 !important;
-}
-
-/* Board refresh flash (R28): while Accept is guarded after a refresh, the cards and the timer pill glow. */
-.board-refreshed .board-card:not(.empty) {
-  box-shadow: 0 0 0 3px var(--dm-teal);
-  transition: box-shadow 0.2s ease-out;
-}
-
-.board-refreshed .board-refresh {
-  background: var(--dm-teal);
-  color: var(--dm-paper);
-}
-
-.board-notice {
-  margin-top: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(242, 113, 102, 0.14);
-  border-left: 4px solid var(--dm-coral);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.board-notice[hidden] { display: none; }
-
-.board-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-@media (max-width: 760px) {
-  .board-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-.board-card {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 12px;
-  border-radius: 12px;
-  background: #fff;
-  border: 2px solid rgba(22, 50, 58, 0.1);
-}
-
-.board-card.empty {
-  align-items: center;
-  justify-content: center;
-  min-height: 150px;
-  background: transparent;
-  border-style: dashed;
-  color: rgba(22, 50, 58, 0.6);
-  text-align: center;
-}
-
-.board-card.empty span { font-weight: 700; }
-.board-card.empty small { font-size: 12px; }
-
-.board-card-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.type-badge {
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--dm-teal);
-}
-
-.type-pickup .type-badge,
-.board-active-row .type-badge { background: #2f7f9e; }
-.type-chain .type-badge { background: #5b6b9e; }
-
-.board-route {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.board-route li {
-  position: relative;
-  padding-left: 16px;
-}
-
-/* A dotted stop line: one dot per step. */
-.board-route li::before {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dm-teal);
-}
-
-.board-route li + li::after {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: -6px;
-  height: 11px;
-  border-left: 1px dashed rgba(22, 50, 58, 0.35);
-}
-
-.board-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.board-facts span {
-  padding: 2px 7px;
-  border-radius: 5px;
-  background: rgba(22, 50, 58, 0.07);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.board-reward {
-  font-size: 15px;
-}
-
-.board-reward b { color: var(--dm-teal); }
-
-.board-bonus {
-  margin-top: -4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #7a5ae0;
-}
-
-.board-bonus-par { color: var(--dm-teal); }
-.board-bonus + .board-bonus { margin-top: -8px; }
-
-.board-card .accept {
-  margin-top: auto;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: var(--dm-coral);
-  color: #fff;
-  font-weight: 800;
-  font-size: 15px;
-}
-
-.board-card .accept:hover:not(:disabled) { filter: brightness(1.06); }
-
-.board-card .accept:disabled {
-  background: rgba(22, 50, 58, 0.12);
-  color: rgba(22, 50, 58, 0.7);
-  cursor: default;
-}
-
-.board-section {
-  margin: 18px 0 8px;
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-.board-active {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.board-active-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: #fff;
-  border-left: 6px solid var(--slot, var(--dm-teal));
-}
-
-.board-active-stage {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.board-active-row .cancel {
-  margin-left: auto;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 2px solid var(--dm-coral);
-  background: transparent;
-  color: #c2463c;
-  font-weight: 700;
-}
-
-.board-active-row .cancel:disabled {
-  border-color: rgba(22, 50, 58, 0.2);
-  color: rgba(22, 50, 58, 0.5);
-  cursor: default;
-}
-
-.board-active-empty {
-  font-size: 14px;
-  opacity: 0.7;
 }
 
 .debug-overlay {

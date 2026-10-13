@@ -106,7 +106,7 @@ describe('createDevSettingsStore', () => {
     const back = store.load();
     expect(back.movement.run.sprintSpeed).toBe(9.5);
     expect(back.movement.run.runSpeed).toBe(movementConfig.run.runSpeed);
-    expect(back.movement.wallRun).toEqual(movementConfig.wallRun);
+    expect(back.movement.slide).toEqual(movementConfig.slide);
   });
 
   it('R27: saving settings equal to the defaults leaves no saved key', () => {

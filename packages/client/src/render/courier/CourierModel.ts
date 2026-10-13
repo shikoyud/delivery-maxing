@@ -4,7 +4,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { ordersConfig, type PlayerState, type Vec3 } from '@dm/shared';
 import type { CourierConfig, CourierPoseName } from '../../clientConfig';
 import { palette } from '../palette';
-import { animFor, createDismountEase, displayYaw, easeYaw, stepDismountEase, type CourierAnim, type CourierClip } from './animState';
+import { animFor, displayYaw, easeYaw, type CourierAnim, type CourierClip } from './animState';
 import type { CourierDebug, CourierView } from './CourierView';
 
 const CLIPS: readonly CourierClip[] = ['Idle', 'Walking', 'Running', 'Jump'];
@@ -69,7 +69,7 @@ function depth(o: THREE.Object3D): number {
  * while a pose is on they are carried rigidly with the shins, and lifted back onto the floor if a pose swings one below
  * it. Packages ride on the back; a deck shows on the board.
  *
- * Hierarchy: root (feet plus the dismount ease, eased displayYaw) → body (pose lean and drop; the frame pose angles are given in) → figure (glTF
+ * Hierarchy: root (feet, eased displayYaw) → body (pose lean and drop; the frame pose angles are given in) → figure (glTF
  * scene, scaled, turned 180° because the file faces +Z), plus the packages (in body) and the deck (in root).
  */
 export class CourierModel implements CourierView {
@@ -118,7 +118,6 @@ export class CourierModel implements CourierView {
   readonly deckTop: number;
   private snapNext = true;
   private packageCount = 0;
-  private readonly dismount = createDismountEase();
 
   static async load(url: string, cfg: CourierConfig): Promise<CourierModel | null> {
     try {
@@ -268,8 +267,7 @@ export class CourierModel implements CourierView {
     const anim = animFor(state, speed, this.cfg);
     const snap = this.snapNext;
     this.snapNext = false;
-    const dy = stepDismountEase(this.dismount, state.mode, feet.y, dt, this.cfg.dismountEaseRate, snap);
-    this.root.position.set(feet.x, feet.y + dy, feet.z);
+    this.root.position.set(feet.x, feet.y, feet.z);
     const yaw = displayYaw(state, this.cfg);
     this.root.rotation.y = snap ? yaw : easeYaw(this.root.rotation.y, yaw, dt, this.cfg.turnEaseRate);
     this.playClip(anim.clip, anim.timeScale, snap);
@@ -474,7 +472,7 @@ export class CourierModel implements CourierView {
         wheels.push(w.translate((x * (width - r)) / 2, r, z * (length / 2 - width / 2)));
       }
     }
-    const wheelMesh = new THREE.Mesh(mergeGeometries(wheels), new THREE.MeshLambertMaterial({ color: palette.rail }));
+    const wheelMesh = new THREE.Mesh(mergeGeometries(wheels), new THREE.MeshLambertMaterial({ color: palette.wheel }));
     for (const m of [deck, wheelMesh]) {
       m.castShadow = true;
       m.receiveShadow = false;

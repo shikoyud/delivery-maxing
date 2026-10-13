@@ -29,4 +29,19 @@ describe('clientConfig', () => {
     expect(c.pitchMinDeg).toBeLessThan(0);
     expect(c.pitchMaxDeg).toBeGreaterThan(0);
   });
+
+  it('binds phone to Tab, accept to Y and mount to F; no wall-run camera roll', () => {
+    const b = clientConfig.input.bindings as Record<string, string[]>;
+    expect(b.phone).toEqual(['Tab']);
+    expect(b.accept).toEqual(['KeyY']);
+    expect(b.mount).toEqual(['KeyF']);
+    expect(b.crouch).toEqual(['KeyC']);
+    expect(b.interact).toEqual(['KeyE']);
+    expect('wallRunRollDeg' in clientConfig.camera).toBe(false);
+    expect('rollEaseRate' in clientConfig.camera).toBe(false);
+  });
+
+  it('the courier has no parkour poses left', () => {
+    for (const p of ['wallrunL', 'wallrunR', 'zip', 'grind']) expect(Object.keys(clientConfig.courier.poses)).not.toContain(p);
+  });
 });

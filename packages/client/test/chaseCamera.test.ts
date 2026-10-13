@@ -66,7 +66,7 @@ const both =
 
 const feet = { x: 10, y: 2, z: -5 };
 const pivot = (f: Vec3 = feet, h: number = chase.pivotHeight): Vec3 => ({ x: f.x, y: f.y + h, z: f.z });
-const standing = { mode: 'ground', crouched: false, yaw: 0, wallRun: { time: 0, normal: null, lastNormal: null } } as unknown as PlayerState;
+const standing = { mode: 'ground', crouched: false, yaw: 0 } as unknown as PlayerState;
 
 /** Unit view direction of a pose. */
 const view = (p: { position: Vec3; lookAt: Vec3 }): THREE.Vector3 =>
@@ -179,7 +179,7 @@ describe('ChaseCamera', () => {
 
   it('courierDistance is the camera\'s distance to the courier\'s own pivot', () => {
     const c = make();
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     const p = c.camera.position;
     expect(c.courierDistance).toBeCloseTo(Math.hypot(p.x - feet.x, p.y - pivot().y, p.z - feet.z), 9);
     expect(c.courierDistance).toBeCloseTo(FULL, 9);
@@ -187,10 +187,9 @@ describe('ChaseCamera', () => {
   });
 
   describe('R12: wall pivot offset', () => {
-    // A wall on the courier's left (face x = feet.x − 0.36, normal +X) while it runs toward −Z (yaw 0).
+    // A wall on the courier's left (face x = feet.x − 0.36, normal +X) while it faces −Z (yaw 0).
     const xWall = feet.x - 0.36;
     const normal = { x: 1, y: 0, z: 0 };
-    const wallRunning = { ...standing, mode: 'wallrun', wallRun: { time: 0.1, normal, lastNormal: normal } } as unknown as PlayerState;
     /** Look 30° off the wall, turned away from it, so the boom swings toward the wall. */
     const yaw30 = -30 * DEG;
     /** Probe mock for a wall face at x = xw: its normal and distance when within reach. */
@@ -204,37 +203,15 @@ describe('ChaseCamera', () => {
     /** Where the settled camera goes for a pivot shifted `shift` along +X. */
     const settledX = (shift: number, yaw: number, cast: RayCast): number =>
       chaseCameraPose({ ...pivot(), x: feet.x + shift }, yaw, 0, chase, cast).position.x;
+    const reachWanted = CAP_R + chase.wallPivotOffset;
 
-    it('wall-running, wall 0.36 m from the pivot, look 30° off it: boom ≥ minDistance and the courier stays visible', () => {
+    it('the probe shift is continuous, max(0, capsuleRadius + wallPivotOffset − d), probed to that reach', () => {
       expect(chase.wallPivotOffset).toBe(0.6);
-      const c = make(wallAtX(xWall));
-      for (let i = 0; i < 60; i++) c.update(1 / 60, pivot(), yaw30, 0, 0, wallRunning);
-      expect(c.distance).toBeGreaterThanOrEqual(chase.minDistance);
-      expect(c.courierDistance).toBeGreaterThanOrEqual(chase.minDistance);
-      expect(c.courierHidden).toBe(false);
-      expect(c.camera.position.x).toBeGreaterThanOrEqual(xWall + R - 1e-9);
-      // Settled: wall-running holds the courier flush, so the pivot sits the full wallPivotOffset off its axis.
-      const want = chaseCameraPose({ ...pivot(), x: feet.x + chase.wallPivotOffset }, yaw30, 0, chase, wallAtX(xWall));
-      expect(c.camera.position.x).toBeCloseTo(want.position.x, 4);
-      expect(c.camera.position.z).toBeCloseTo(want.position.z, 4);
-    });
-
-    it('hides by the real camera-to-courier distance: shifted boom ≥ minDistance, camera < minDistance from the courier', () => {
-      // Look 60° off the wall: the boom from the shifted pivot runs back toward the wall and ends beside the courier.
-      const c = make(wallAtX(xWall));
-      for (let i = 0; i < 60; i++) c.update(1 / 60, pivot(), -60 * DEG, 0, 0, wallRunning);
-      expect(c.distance).toBeGreaterThanOrEqual(chase.minDistance);
-      expect(c.courierDistance).toBeLessThan(chase.minDistance);
-      expect(c.courierHidden).toBe(true);
-    });
-
-    it('not wall-running: the probe shift is continuous, max(0, capsuleRadius + wallPivotOffset − d), probed to that reach', () => {
-      const reachWanted = CAP_R + chase.wallPivotOffset;
       for (const d of [0.36, 0.5, 0.7, 0.9, reachWanted - 0.01, reachWanted + 0.01, 1.3]) {
         const xw = feet.x - d;
         const reaches: number[] = [];
         const c = make(wallAtX(xw), probeAtX(xw, reaches));
-        for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0, standing);
+        for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0);
         expect(reaches.every((r) => Math.abs(r - reachWanted) < 1e-12), `reach at d ${d}`).toBe(true);
         const shift = Math.max(0, reachWanted - d);
         expect(c.camera.position.x, `d ${d}`).toBeCloseTo(settledX(shift, 0, wallAtX(xw)), 4);
@@ -244,28 +221,45 @@ describe('ChaseCamera', () => {
       expect(Math.max(0, reachWanted - (reachWanted - 0.01))).toBeLessThan(0.02);
     });
 
-    it('not wall-running, flush with the wall, look 30° off it: the courier stays visible', () => {
+    it('flush with the wall, look 30° off it: boom ≥ minDistance and the courier stays visible', () => {
       const c = make(wallAtX(xWall), probeAtX(xWall));
-      for (let i = 0; i < 60; i++) c.update(1 / 60, pivot(), yaw30, 0, 0, standing);
+      for (let i = 0; i < 60; i++) c.update(1 / 60, pivot(), yaw30, 0, 0);
+      expect(c.distance).toBeGreaterThanOrEqual(chase.minDistance);
       expect(c.courierDistance).toBeGreaterThanOrEqual(chase.minDistance);
       expect(c.courierHidden).toBe(false);
+      expect(c.camera.position.x).toBeGreaterThanOrEqual(xWall + R - 1e-9);
     });
 
-    it('the offset eases in (no jump) and back out when the run ends', () => {
-      const c = make(wallAtX(xWall));
-      c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    it('hides by the real camera-to-courier distance: shifted boom ≥ minDistance, camera < minDistance from the courier', () => {
+      // Look 60° off the wall: the boom from the shifted pivot runs back toward the wall and ends beside the courier.
+      // The probe reports the face flush with the capsule, so the pivot shifts the full wallPivotOffset.
+      const c = make(wallAtX(xWall), () => ({ normal, distance: CAP_R }));
+      for (let i = 0; i < 60; i++) c.update(1 / 60, pivot(), -60 * DEG, 0, 0);
+      expect(c.distance).toBeGreaterThanOrEqual(chase.minDistance);
+      expect(c.courierDistance).toBeLessThan(chase.minDistance);
+      expect(c.courierHidden).toBe(true);
+    });
+
+    it('the offset eases in (no jump) when a wall comes within reach, and back out when it goes', () => {
+      let near = false;
+      const probe: WallProbe = (p, reach) => (near ? probeAtX(xWall)(p, reach) : null);
+      const c = make(wallAtX(xWall), probe);
+      const shift = reachWanted - 0.36;
+      c.update(1 / 60, pivot(), 0, 0, 0);
       const x0 = c.camera.position.x;
-      c.update(1 / 60, pivot(), 0, 0, 0, wallRunning);
+      near = true;
+      c.update(1 / 60, pivot(), 0, 0, 0);
       const step = c.camera.position.x - x0;
       expect(step).toBeGreaterThan(0);
-      expect(step).toBeLessThan(chase.wallPivotOffset / 2);
-      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0, wallRunning);
-      expect(c.camera.position.x).toBeCloseTo(x0 + chase.wallPivotOffset, 4);
-      c.update(1 / 60, pivot(), 0, 0, 0, standing);
-      const back = c.camera.position.x - (x0 + chase.wallPivotOffset);
+      expect(step).toBeLessThan(shift / 2);
+      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0);
+      expect(c.camera.position.x).toBeCloseTo(x0 + shift, 4);
+      near = false;
+      c.update(1 / 60, pivot(), 0, 0, 0);
+      const back = c.camera.position.x - (x0 + shift);
       expect(back).toBeLessThan(0);
-      expect(back).toBeGreaterThan(-chase.wallPivotOffset / 2);
-      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0, standing);
+      expect(back).toBeGreaterThan(-shift / 2);
+      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0);
       expect(c.camera.position.x).toBeCloseTo(x0, 4);
     });
 
@@ -276,8 +270,8 @@ describe('ChaseCamera', () => {
         const hits = [wallAtX(xWall)(f, d, m), wallAtX(xOther)(f, d, m)].filter((h): h is number => h !== null);
         return hits.length ? Math.min(...hits) : null;
       };
-      const c = make(geo);
-      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0, wallRunning);
+      const c = make(geo, probeAtX(xWall));
+      for (let i = 0; i < 120; i++) c.update(1 / 60, pivot(), 0, 0, 0);
       expect(c.camera.position.x).toBeLessThanOrEqual(xOther - R + 1e-9);
       expect(c.camera.position.x).toBeGreaterThanOrEqual(xWall + R - 1e-9);
     });
@@ -285,38 +279,38 @@ describe('ChaseCamera', () => {
 
   it('the first update places the camera at the pose (no sweep in from the origin)', () => {
     const c = make();
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     expect(c.camera.position.z).toBeCloseTo(feet.z + 4.5, 6);
     expect(c.camera.position.y).toBeCloseTo(feet.y + chase.pivotHeight + 1.6, 6);
   });
 
   it('the camera faces the pose look-at point', () => {
     const c = make();
-    c.update(1 / 60, pivot(), 0.4, -0.2, 0, standing);
+    c.update(1 / 60, pivot(), 0.4, -0.2, 0);
     const p = chaseCameraPose(pivot(), 0.4, -0.2, chase, open);
     const v = c.camera.getWorldDirection(new THREE.Vector3());
     expect(v.distanceTo(view(p))).toBeLessThan(1e-6);
   });
 
-  it('follows with a slight lag: a 2 m drop (zip dismount) is eased, not snapped', () => {
+  it('follows with a slight lag: a 2 m drop (off a ledge) is eased, not snapped', () => {
     const c = make();
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     const y0 = c.camera.position.y;
     const dropped = pivot({ ...feet, y: feet.y - 2 });
-    c.update(1 / 60, dropped, 0, 0, 0, standing);
+    c.update(1 / 60, dropped, 0, 0, 0);
     const fell = y0 - c.camera.position.y;
     expect(fell).toBeGreaterThan(0);
     expect(fell).toBeLessThan(1);
-    for (let i = 0; i < 60; i++) c.update(1 / 60, dropped, 0, 0, 0, standing);
+    for (let i = 0; i < 60; i++) c.update(1 / 60, dropped, 0, 0, 0);
     expect(c.camera.position.y).toBeCloseTo(feet.y - 2 + chase.pivotHeight + 1.6, 3);
   });
 
   it('snap() jumps straight to the new pose (teleport, respawn)', () => {
     const c = make();
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     c.snap();
     const far = { x: 200, y: 0, z: 300 };
-    c.update(1 / 60, pivot(far), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(far), 0, 0, 0);
     expect(c.camera.position.x).toBeCloseTo(200, 6);
     expect(c.camera.position.z).toBeCloseTo(304.5, 6);
   });
@@ -324,18 +318,18 @@ describe('ChaseCamera', () => {
   it('pulls in at once when a wall blocks the boom, and pushes back out slowly', () => {
     let wall: RayCast = open;
     const c = make((f, d, m) => wall(f, d, m));
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     expect(c.distance).toBeCloseTo(FULL, 9);
     wall = wallAtZ(feet.z + 2);
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     const blocked = (2 - R) / DIR_Z;
     expect(c.distance).toBeCloseTo(blocked, 9);
     expect(c.camera.position.z).toBeCloseTo(feet.z + 2 - R, 6);
     wall = open;
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     const k = 1 - Math.exp(-chase.pushOutEaseRate / 60);
     expect(c.distance).toBeCloseTo(blocked + (FULL - blocked) * k, 9);
-    for (let i = 0; i < 300; i++) c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    for (let i = 0; i < 300; i++) c.update(1 / 60, pivot(), 0, 0, 0);
     expect(c.distance).toBeCloseTo(FULL, 6);
   });
 
@@ -345,18 +339,18 @@ describe('ChaseCamera', () => {
     let geo: RayCast = both(roofAt(feet.y + 1.4), wallAtZ(feet.z + 0.4));
     const c = make((f, d, m) => geo(f, d, m));
     const low = pivot(feet, chase.crouchPivotHeight);
-    c.update(1 / 60, low, 0, 0, 0, standing);
+    c.update(1 / 60, low, 0, 0, 0);
     expect(c.camera.position.z).toBeLessThanOrEqual(feet.z + 0.4 - R + 1e-9);
     expect(c.camera.position.y).toBeLessThanOrEqual(feet.y + 1.4 - R + 1e-9);
     expect(c.courierHidden).toBe(true);
     geo = open;
-    for (let i = 0; i < 300; i++) c.update(1 / 60, low, 0, 0, 0, standing);
+    for (let i = 0; i < 300; i++) c.update(1 / 60, low, 0, 0, 0);
     expect(c.courierHidden).toBe(false);
   });
 
   it('standing flush against a wall: the camera stays in front of it, the courier hides and the view holds steady', () => {
     const c = make(wallAtZ(feet.z + 0.4));
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     expect(c.camera.position.z).toBeLessThanOrEqual(feet.z + 0.4 - R + 1e-9);
     expect(c.courierHidden).toBe(true);
     const openView = chaseCameraPose(pivot(), 0, 0, chase, open);
@@ -365,22 +359,22 @@ describe('ChaseCamera', () => {
 
   it('the eased follow point never crosses a wall the courier went around', () => {
     const c = make(wallAtZ(-4));
-    c.update(1 / 60, pivot({ x: 0, y: 0, z: -10 }), 0, 0, 0, standing);
-    c.update(1 / 60, pivot({ x: 0, y: 0, z: -3 }), Math.PI, 0, 0, standing);
+    c.update(1 / 60, pivot({ x: 0, y: 0, z: -10 }), 0, 0, 0);
+    c.update(1 / 60, pivot({ x: 0, y: 0, z: -3 }), Math.PI, 0, 0);
     // The lagging follow point stays on the courier's side of the wall, so the camera ball does too.
     expect(c.camera.position.z).toBeGreaterThanOrEqual(-4 + R - 1e-9);
   });
 
   it('a low ceiling over open ground behind keeps the camera under it at full distance', () => {
     const c = make(roofAt(feet.y + 1.4));
-    c.update(1 / 60, pivot(feet, chase.crouchPivotHeight), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(feet, chase.crouchPivotHeight), 0, 0, 0);
     expect(c.camera.position.y).toBeLessThanOrEqual(feet.y + 1.4 - R + 1e-9);
     expect(c.courierHidden).toBe(false);
   });
 
   it('crouched in the tunnel looking down, the courier stays in view', () => {
     const c = make(roofAt(feet.y + 1.4));
-    c.update(1 / 60, pivot(feet, chase.crouchPivotHeight), 0, -20 * DEG, 0, standing);
+    c.update(1 / 60, pivot(feet, chase.crouchPivotHeight), 0, -20 * DEG, 0);
     expect(c.camera.position.y).toBeLessThanOrEqual(feet.y + 1.4 - R + 1e-9);
     expect(c.courierHidden).toBe(false);
   });
@@ -390,37 +384,33 @@ describe('ChaseCamera', () => {
     const c = make((f, d, m) => geo(f, d, m));
     const low = pivot(feet, chase.crouchPivotHeight);
     const pitch = -20 * DEG;
-    for (let i = 0; i < 5; i++) c.update(1 / 60, low, 0, pitch, 0, standing);
+    for (let i = 0; i < 5; i++) c.update(1 / 60, low, 0, pitch, 0);
     const y0 = c.camera.position.y;
     geo = open;
-    c.update(1 / 60, low, 0, pitch, 0, standing);
+    c.update(1 / 60, low, 0, pitch, 0);
     const rose = c.camera.position.y - y0;
     expect(rose).toBeGreaterThan(0);
     expect(rose).toBeLessThan(0.5);
-    for (let i = 0; i < 300; i++) c.update(1 / 60, low, 0, pitch, 0, standing);
+    for (let i = 0; i < 300; i++) c.update(1 / 60, low, 0, pitch, 0);
     expect(c.camera.position.y).toBeCloseTo(chaseCameraPose(low, 0, pitch, chase, open).position.y, 6);
   });
 
   it('on open ground the mouse pitch moves the camera at once (no easing lag)', () => {
     const c = make();
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
-    c.update(1 / 60, pivot(), 0, chase.pitchMinDeg * DEG, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
+    c.update(1 / 60, pivot(), 0, chase.pitchMinDeg * DEG, 0);
     const want = chaseCameraPose(pivot(), 0, chase.pitchMinDeg * DEG, chase, open).position;
     expect(c.camera.position.y).toBeCloseTo(want.y, 9);
     expect(c.camera.position.z).toBeCloseTo(want.z, 9);
   });
 
-  it('keeps the FOV kick and the wall-run roll easing', () => {
+  it('keeps the FOV kick easing and never rolls', () => {
     const c = make();
-    c.update(1 / 60, pivot(), 0, 0, 0, standing);
+    c.update(1 / 60, pivot(), 0, 0, 0);
     expect(c.camera.fov).toBeCloseTo(cam.fovBase, 6);
-    c.update(1 / 60, pivot(), 0, 0, 30, standing);
+    c.update(1 / 60, pivot(), 0, 0, 30);
     expect(c.camera.fov).toBeGreaterThan(cam.fovBase);
     expect(c.camera.fov).toBeLessThan(fovForSpeed(30, cam));
-    const wallRun = { ...standing, mode: 'wallrun', wallRun: { time: 0.2, normal: { x: -1, y: 0, z: 0 }, lastNormal: null } } as unknown as PlayerState;
-    c.update(1 / 60, pivot(), 0, 0, 0, wallRun);
-    // Wall on the right: roll −8° clockwise → rotation.z eases toward +8°.
-    expect(c.camera.rotation.z).toBeGreaterThan(0);
-    expect(c.camera.rotation.z).toBeLessThan(cam.wallRunRollDeg * DEG);
+    expect(c.camera.rotation.z).toBe(0);
   });
 });

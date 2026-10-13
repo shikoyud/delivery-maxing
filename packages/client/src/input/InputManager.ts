@@ -55,8 +55,8 @@ export class InputManager {
     const t = e.target;
     if (!ui && t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
     if (!ui && !this.active) return;
-    // Keep the browser from scrolling (Space) or using F3 as find.
-    if (ui || e.code === 'Space') e.preventDefault();
+    // Keep the browser from scrolling (Space), moving focus (Tab, the phone key) or using F3 as find.
+    if (ui || e.code === 'Space' || e.code === 'Tab') e.preventDefault();
     this.actions.keyDown(e.code);
   }
 

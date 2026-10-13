@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { MovementConfig } from '@dm/shared';
 import type { CourierConfig } from '../clientConfig';
 import { isLow } from './chaseCamera';
-import { createDismountEase, displayYaw, easeYaw, stepDismountEase } from './courier/animState';
+import { displayYaw, easeYaw } from './courier/animState';
 import type { CourierView } from './courier/CourierView';
 import { palette } from './palette';
 
@@ -53,13 +53,11 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
 
   let snapNext = true;
   let packages = 0;
-  const dismount = createDismountEase();
   return {
     root,
     front: visor,
     update(dt, state, feet) {
-      const dy = stepDismountEase(dismount, state.mode, feet.y, dt, courier.dismountEaseRate, snapNext);
-      root.position.set(feet.x, feet.y + dy, feet.z);
+      root.position.set(feet.x, feet.y, feet.z);
       const yaw = displayYaw(state, courier);
       root.rotation.y = snapNext ? yaw : easeYaw(root.rotation.y, yaw, dt, courier.turnEaseRate);
       snapNext = false;

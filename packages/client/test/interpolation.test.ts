@@ -11,14 +11,8 @@ describe('interpolationStart', () => {
     expect(interpolationStart(before, after, events)).toEqual(before);
   });
 
-  it('a tick that leaves the zip line starts y at the post-step height (the courier eases the drop, R16)', () => {
-    const p = interpolationStart(before, after, [], true);
-    expect(p).toEqual({ x: before.x, y: after.y, z: before.z });
-    expect(interpolationStart(before, after, [{ kind: 'respawned', checkpointId: 'cp-1' }], true)).toEqual(after);
-  });
-
   it('snaps to the post-step position after a respawn (no camera streak)', () => {
-    const p = interpolationStart(before, after, [{ kind: 'respawned', checkpointId: 'cp-1' }]);
+    const p = interpolationStart(before, after, [{ kind: 'respawned', hospitalId: 'downtown-hospital' }]);
     expect(p).toEqual(after);
     expect(p).not.toBe(after); // a copy, not the live state object
   });
