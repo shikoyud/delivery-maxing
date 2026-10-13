@@ -215,11 +215,15 @@ describe('hillside: chutes', () => {
   it('every hillside chute slides start to end without stopping (mode slide until the end, speed ≥ endSpeed)', () => {
     for (const c of hill.chutes) {
       const len = flat(c.start, c.end);
-      // Feet on the chute surface 1 m down from its top end, facing downhill
-      const feet = lerp(c.start, c.end, 1 / len);
-      h.spawnAt({ ...feet, y: feet.y + 0.02 }, yawToward(c.end.x - c.start.x, c.end.z - c.start.z));
-      expect(h.sim.state.grounded, `${c.id}: on the chute`).toBe(true);
-      expect(h.sim.state.mode, `${c.id}: sliding`).toBe('slide');
+      const yaw = yawToward(c.end.x - c.start.x, c.end.z - c.start.z);
+      // Standing on the top terrace 1 m before the chute's top end, then walking onto it until it takes over
+      const before = lerp(c.start, c.end, -1 / len);
+      h.spawnAt({ ...before, y: surfaceY(h, before) + 0.02 }, yaw);
+      expect(h.sim.state.grounded && h.sim.state.mode === 'ground', `${c.id}: standing above the chute`).toBe(true);
+      for (let i = 0; h.sim.state.mode !== 'slide'; i++) {
+        h.tick({ forward: 1, yaw });
+        expect(i, `${c.id}: the chute takes over`).toBeLessThan(cfg.tickRate);
+      }
       // The end: where the feet come within a capsule radius of the chute's foot (the ground beyond takes over there)
       const endAt = len - cfg.capsule.radius;
       for (let ticks = 1; ; ticks++) {

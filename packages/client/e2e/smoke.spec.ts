@@ -674,8 +674,8 @@ test('draw calls ≤ drawCallBudget and triangles ≤ triangleBudget at every pe
 test('Review Focus 5: after teleporting 1,500 m, each LOD0 InstancedMesh bounding sphere contains all its active instance positions', async ({ page }) => {
   const errors = await boot(page, CITY);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
-  const from = { x: -700, y: 0.02, z: -700 };
-  const to = { x: 400, y: 0.02, z: 400 }; // 1,556 m away
+  const from = { x: -600, y: 0.02, z: -800 }; // a Hillside arterial crossing
+  const to = { x: 400, y: 0.02, z: 400 }; // 1,562 m away
   await page.evaluate(([f]) => window.__dm!.viewpoint(f, { x: f.x + 100, y: 5, z: f.z }), [from] as const);
   await settle(page);
   expect(await page.evaluate(() => window.__dm!.cityBoundsOk())).toBe(true);
@@ -731,6 +731,23 @@ test('sp2 Harbor screenshot (on a crane jib, looking along its zip line over the
   await page.screenshot({ path: `${artifacts}sp2-harbor.png` });
   const info = await page.evaluate(() => window.__dm!.renderInfo());
   console.log(`sp2 harbor: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(errors).toEqual([]);
+});
+
+test('sp2 Hillside screenshot (at the foot of a chute, looking up it to the top terrace)', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // In the chute lane of cell c1-1 (x −790 to −783), 8 m below the foot of hillside-c1-1-chute (which runs from the
+  // 27 m top terrace's front edge at z −740 down to the ground at z −620), looking north up the slide; the terraces
+  // (9, 18, 27 m) step up on the right.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: -786.5, y: 0, z: -612 }, { x: -786.5, y: 27, z: -740 }));
+  await settle(page, 10);
+  const p = await page.evaluate(() => window.__dm!.player());
+  expect(p.mode).toBe('ground');
+  expect(Math.abs(p.position.y)).toBeLessThan(0.05); // standing on the ground below the chute
+  await page.screenshot({ path: `${artifacts}sp2-hillside.png` });
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`sp2 hillside: ${info.calls} draw calls, ${info.triangles} triangles`);
   expect(errors).toEqual([]);
 });
 
