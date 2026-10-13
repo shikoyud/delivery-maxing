@@ -150,3 +150,32 @@ export interface NavConfig {
   /** Size budget of the exported navmesh (map/city.navmesh.bin) */
   maxNavMeshMB: number;
 }
+
+/** Street thieves (spec §7.3): distances in metres, speeds in m/s, times in seconds. */
+export interface ThievesConfig {
+  /** A patrolling thief starts a chase when a carrying courier comes this close (3D) in line of sight. */
+  triggerRadius: number;
+  chaseSpeed: number;
+  patrolSpeed: number;
+  /** Speed back to the street graph after a chase, before patrolling again. */
+  returnSpeed: number;
+  maxChaseSeconds: number;
+  /** A robbed courier is ignored this long. */
+  robbedCooldownSeconds: number;
+  /** A catch: horizontal distance at most catchRadius and |dy| at most catchHeight. */
+  catchRadius: number;
+  catchHeight: number;
+  /** A courier more than catchHeight above the thief this long ends the chase. */
+  aboveGiveUpSeconds: number;
+  /** A chase ends when the courier gets farther than this (3D). */
+  loseDistance: number;
+  /** Thieves stay outside hub.plazaRadius + plazaMargin. */
+  plazaMargin: number;
+  /** Line-of-sight checks start this far above the thief's feet. */
+  eyeHeight: number;
+  /** Delivery Points a robbed courier loses in the current epoch (Task 17). */
+  penaltyPoints: number;
+  /** Thief spawns per district, plus longStreetExtra on long-distance streets. */
+  perDistrict: { downtown: number; harbor: number; hillside: number; suburbs: number };
+  longStreetExtra: number;
+}

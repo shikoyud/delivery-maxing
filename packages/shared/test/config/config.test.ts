@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { movementConfig, ordersConfig, worldConfig } from '../../src/config';
+import { movementConfig, ordersConfig, thievesConfig, worldConfig } from '../../src/config';
 
 describe('config pins spec values', () => {
   it('movement', () => {
@@ -38,5 +38,13 @@ describe('config pins spec values', () => {
     // Plan Task 14: cs 0.4, ch 0.2; links reach 0.6 m; a path counts within 1 m of its target. Tiles are 640 voxels
     // (256 m), not the plan's 64: Detour joins an off-mesh link only to neighbouring tiles and the crane zips run 250 m
     expect(worldConfig.nav).toMatchObject({ cellSize: 0.4, cellHeight: 0.2, tileSize: 640, linkRadius: 0.6, reachTolerance: 1, maxNavMeshMB: 6 });
+  });
+  it('thieves', () => {
+    // Spec §7.3: 15 m trigger, chase between run (5.5) and sprint (8), 10 s chase, 20 s robbed cooldown, 1 point penalty
+    expect(thievesConfig).toMatchObject({ triggerRadius: 15, chaseSpeed: 7, maxChaseSeconds: 10, robbedCooldownSeconds: 20, penaltyPoints: 1 });
+    expect(thievesConfig.chaseSpeed).toBeGreaterThan(movementConfig.run.runSpeed);
+    expect(thievesConfig.chaseSpeed).toBeLessThan(movementConfig.run.sprintSpeed);
+    expect(thievesConfig.perDistrict).toEqual({ downtown: 4, harbor: 3, hillside: 3, suburbs: 3 });
+    expect(thievesConfig.longStreetExtra).toBe(4);
   });
 });
