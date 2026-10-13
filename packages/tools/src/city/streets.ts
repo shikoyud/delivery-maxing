@@ -203,12 +203,14 @@ export function streetSolids(graph: StreetGraph, style: StreetStyle, chunkSize: 
   };
 
   const cells: Cell[] = [];
-  let level = 0;
-  const add = (kind: Kind, r: Rect): void => {
-    if (r.maxX - r.minX > EPS && r.maxZ - r.minZ > EPS) cells.push({ kind, r, level });
-  };
+  /** Adds cells to the street level `level` (empty rects are dropped). */
+  const adder =
+    (level: number) =>
+    (kind: Kind, r: Rect): void => {
+      if (r.maxX - r.minX > EPS && r.maxZ - r.minZ > EPS) cells.push({ kind, r, level });
+    };
   for (const { a, b, hw, horizontal } of flat) {
-    level = a.p.y;
+    const add = adder(a.p.y);
     const rw = hw - sw;
     if (horizontal) {
       const x0 = a.p.x + box(a.id).hx;
@@ -233,7 +235,7 @@ export function streetSolids(graph: StreetGraph, style: StreetStyle, chunkSize: 
     if (hx === 0) continue;
     const m = arms.get(n.id)!;
     const { x, z } = n.p;
-    level = n.p.y;
+    const add = adder(n.p.y);
     const [rx, rz] = [hx - sw, hz - sw];
     const xs = [x - hx, x - rx, x + rx, x + hx];
     const zs = [z - hz, z - rz, z + rz, z + hz];

@@ -53,6 +53,8 @@ interface HillsideParams {
 /** Spec ranges the hillside params must stay within. */
 const SPEC = { topHeight: [35, 40], rampDeg: [15, 25], chuteLength: [100, 300], minChutes: 3 } as const;
 const DEG = 180 / Math.PI;
+/** A stair run's reported standing points are this far off its ends (in front of the lowest step, past the top), m. */
+const STAND_OFF = 1.5;
 
 function hillsideParams(ctx: DistrictContext): HillsideParams {
   const { fail, obj, nums } = paramChecks(ctx.district, 'hillside');
@@ -268,9 +270,9 @@ function layoutCell(b: Build, cell: Cell): CellLayout {
     const rise = tiers[k + 1]!.level - t.level;
     const room = t.zS - 2 * hw - t.zN; // between the terrace street and the wall above
     if (rampRun(p, rise) + p.rampFlat > room) fail(`terrace ${k} has ${room} m for a ${rampRun(p, rise)} m ramp`);
-    if (stairsDepth(p, rise) + 1.5 > room || p.pad.back + p.pad.radius > room) fail(`terrace ${k} cannot hold its stairs and pad`);
+    if (stairsDepth(p, rise) + STAND_OFF > room || p.pad.back + p.pad.radius > room) fail(`terrace ${k} cannot hold its stairs and pad`);
   }
-  if (stairsDepth(p, cell.levels[0]!) + 1.5 > r.maxZ - frontS) fail('the ground in front cannot hold the first stairs');
+  if (stairsDepth(p, cell.levels[0]!) + STAND_OFF > r.maxZ - frontS) fail('the ground in front cannot hold the first stairs');
   return { cell, xs, featureX, tiers };
 }
 
@@ -440,9 +442,9 @@ function buildStairs(b: Build, lay: CellLayout, k: number): void {
   b.report.stairRuns.push({
     id,
     steps: steps.map((s) => s.id),
-    from: v2({ x, y: lo.level, z: wall + n * depth + 1.5 }),
+    from: v2({ x, y: lo.level, z: wall + n * depth + STAND_OFF }),
     // Onto the sidewalk of the street along the terrace's front edge
-    to: v2({ x, y: hi.level + ctx.city.streets.sidewalkTop, z: wall - 1.5 }),
+    to: v2({ x, y: hi.level + ctx.city.streets.sidewalkTop, z: wall - STAND_OFF }),
   });
 }
 
