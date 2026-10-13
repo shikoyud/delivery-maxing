@@ -1,1 +1,9 @@
-{ "chunkSize": 100, "physics": { "loadRadius": 150, "unloadRadius": 220 } }
+{
+  "chunkSize": 100,
+  "physics": { "loadRadius": 150, "unloadRadius": 220 },
+  "nav": {
+    "cellSize": 0.4, "cellHeight": 0.2, "tileSize": 640, "minRegionArea": 2, "maxEdgeLen": 0, "buildBvTree": true, "linkRadius": 0.6,
+    "queryHalfExtents": { "x": 1, "y": 0.5, "z": 1 }, "maxNodes": 65535, "maxPathPolys": 4096, "maxStraightPathPoints": 4096, "reachTolerance": 1,
+    "maxNavMeshMB": 6
+  }
+}

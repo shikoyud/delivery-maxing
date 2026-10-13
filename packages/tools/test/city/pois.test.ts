@@ -56,13 +56,14 @@ describe('POI candidates', () => {
   });
 
   it('≥ 20 POIs per estimated band', () => {
-    // Straight line from the hub × 1.25 (the navmesh confirms in Task 14), on the city bands
+    // Straight line from the hub × 1.05: Task 14's navmesh paths run a median 1.06× the straight line (1.00–1.29), so
+    // the plan's 1.25 put too few POIs in the long band; the navmesh POI table confirms the bands (map:check)
     expect(ordersConfig.bands.city).toEqual({ shortMax: 500, mediumMax: 1200 });
     const counts = { short: 0, medium: 0, long: 0 };
     for (const p of pois) counts[bandFor(flat(p.position, hub) * q.bandEstimateFactor, ordersConfig.bands.city)]++;
-    expect(q.bandEstimateFactor).toBe(1.25);
+    expect(q.bandEstimateFactor).toBe(1.05);
     for (const [band, n] of Object.entries(counts)) expect(n, band).toBeGreaterThanOrEqual(q.perBandMin);
-    // …with a margin for Task 14's longer path distances
+    // …with a margin for path distances longer than the estimate
     expect(q.bandMargin).toBeGreaterThan(0);
     for (const [band, n] of Object.entries(counts)) expect(n, band).toBeGreaterThanOrEqual(q.perBandMin + q.bandMargin);
   });

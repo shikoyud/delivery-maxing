@@ -38,17 +38,21 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isVec3 = (v: unknown): v is Vec3 => isObj(v) && isNum(v.x) && isNum(v.y) && isNum(v.z);
 
-/** Half-extents of the AABB of a box with half-extents `h` rotated by XYZ Euler degrees `r`. */
-export function rotatedHalfExtents(h: Vec3, r: Vec3 | undefined): Vec3 {
-  if (!r) return h;
+/** The rotation matrix (rows) of an XYZ Euler rotation in degrees: R = Rx(a) · Ry(b) · Rz(c), three.js 'XYZ' order. */
+export function rotationMatrixXYZ(r: Vec3): [[number, number, number], [number, number, number], [number, number, number]] {
   const [a, b, c] = [r.x, r.y, r.z].map((d) => (d * Math.PI) / 180) as [number, number, number];
   const [ca, sa, cb, sb, cc, sc] = [Math.cos(a), Math.sin(a), Math.cos(b), Math.sin(b), Math.cos(c), Math.sin(c)];
-  // R = Rx(a) · Ry(b) · Rz(c)  (three.js 'XYZ' order)
-  const m = [
+  return [
     [cb * cc, -cb * sc, sb],
     [ca * sc + sa * sb * cc, ca * cc - sa * sb * sc, -sa * cb],
     [sa * sc - ca * sb * cc, sa * cc + ca * sb * sc, ca * cb],
-  ] as const;
+  ];
+}
+
+/** Half-extents of the AABB of a box with half-extents `h` rotated by XYZ Euler degrees `r`. */
+export function rotatedHalfExtents(h: Vec3, r: Vec3 | undefined): Vec3 {
+  if (!r) return h;
+  const m = rotationMatrixXYZ(r);
   const e = (row: readonly [number, number, number]) =>
     Math.abs(row[0]) * h.x + Math.abs(row[1]) * h.y + Math.abs(row[2]) * h.z;
   return { x: e(m[0]), y: e(m[1]), z: e(m[2]) };

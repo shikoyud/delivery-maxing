@@ -12,6 +12,7 @@ export * from './world/zones';
 export * from './world/pieces';
 export * from './world/cityTypes';
 export * from './world/chunks';
+export * from './world/poiTable';
 export * from './movement/types';
 export * from './movement/body';
 export * from './movement/ground';

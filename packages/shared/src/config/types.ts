@@ -107,10 +107,40 @@ export interface OrdersConfig {
     modifierWeights: { none: number; express: number; fragile: number; heavy: number };
   };
   zones: { poiRadius: number; poiHeight: number };
+  /** What the build-time POI table must show (spec §5.3): reachable POIs, elevated share of them, POIs per band. */
+  poiChecks: { minReachable: number; minElevatedShare: number; minPerBand: number };
 }
 
 export interface WorldConfig {
   /** Side of a streamed chunk, metres */
   chunkSize: number;
   physics: { loadRadius: number; unloadRadius: number };
+  nav: NavConfig;
+}
+
+/** The build-time navmesh (recast) and its path queries. */
+export interface NavConfig {
+  /** Voxel size across and up, metres */
+  cellSize: number;
+  cellHeight: number;
+  /** Tile side, voxels */
+  tileSize: number;
+  /** Smallest isolated walkable island kept (side of the square, voxels): balconies and kit crates are islands */
+  minRegionArea: number;
+  /** Longest polygon edge along a wall, voxels; 0 leaves edges unsplit (half the polygons on the open streets) */
+  maxEdgeLen: number;
+  /** Per-tile bounding-volume trees speed nearest-polygon lookups but add ~1 MB to the export */
+  buildBvTree: boolean;
+  /** How far (horizontally) a navigation link's ends reach for the navmesh, metres */
+  linkRadius: number;
+  /** The box a path's start and end snap to the navmesh within; small vertically so a roof never snaps to the street */
+  queryHalfExtents: { x: number; y: number; z: number };
+  /** A* node pool of the path query (Detour caps it at 65535): a smaller pool ends long paths early, as partial paths */
+  maxNodes: number;
+  maxPathPolys: number;
+  maxStraightPathPoints: number;
+  /** A path counts only when it ends (and starts) within this of its target, metres */
+  reachTolerance: number;
+  /** Size budget of the exported navmesh (map/city.navmesh.bin) */
+  maxNavMeshMB: number;
 }

@@ -23,10 +23,15 @@ describe('config pins spec values', () => {
     expect(ordersConfig.express.extraSeconds).toBeLessThanOrEqual(ordersConfig.par.extraSeconds);
     expect(ordersConfig.par).toEqual({ distanceFactor: 1.3, extraSeconds: 10 });
     expect(ordersConfig.fragile.maxFallMeters).toBe(7);
+    // Spec §5.3: ≥ 40% elevated; plan Task 14: ≥ 20 POIs per band and ≥ 140 reachable
+    expect(ordersConfig.poiChecks).toEqual({ minReachable: 140, minElevatedShare: 0.4, minPerBand: 20 });
     expect(ordersConfig.heavy).toEqual({ slots: 2, jumpHeightMultiplier: 0.9 });
     expect(ordersConfig.backpack.baseSlots).toBe(1);
   });
   it('world', () => {
-    expect(worldConfig).toEqual({ chunkSize: 100, physics: { loadRadius: 150, unloadRadius: 220 } });
+    expect(worldConfig.chunkSize).toBe(100);
+    expect(worldConfig.physics).toEqual({ loadRadius: 150, unloadRadius: 220 });
+    // Plan Task 14: cs 0.4, ch 0.2, tile 64; links reach 0.6 m; a path counts within 1 m of its target
+    expect(worldConfig.nav).toMatchObject({ cellSize: 0.4, cellHeight: 0.2, tileSize: 64, linkRadius: 0.6, reachTolerance: 1 });
   });
 });

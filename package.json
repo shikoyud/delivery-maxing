@@ -15,7 +15,7 @@
     "assets:build": "pnpm --filter @dm/tools assets:build",
     "map:build": "pnpm --filter @dm/tools map:build",
     "map:check": "pnpm --filter @dm/tools map:check",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm map:check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

@@ -142,7 +142,7 @@
     "minSpacing": 25,
     "perDistrict": { "downtown": 45, "harbor": 35, "hillside": 35, "suburbs": 35 },
     "perBandMin": 20,
-    "bandEstimateFactor": 1.25,
+    "bandEstimateFactor": 1.05,
     "bandMargin": 6,
     "elevatedMin": 2.5,
     "pickWeights": { "street": 1, "route": 4, "mantle": 1, "padZip": 0.25 },
@@ -153,7 +153,7 @@
       "pad": { "radius": 1.2, "apexAbove": 2.5, "clearance": 0.5, "distances": [4, 6, 8, 10] },
       "zip": { "endHeight": 3.2, "endInset": 1.2, "maxSlope": 0.6, "directions": 16, "runStep": 5, "runSteps": 8 }
     },
-    "balcony": { "width": 3, "depth": 1.5, "thickness": 0.5, "floorHeight": 3.5, "headroom": 2 },
+    "balcony": { "width": 3, "depth": 2, "thickness": 0.5, "floorHeight": 3.5, "headroom": 2 },
     "furniture": {
       "step": 100, "endClearance": 12,
       "mailbox": { "width": 0.5, "depth": 0.5, "height": 1.1, "inset": 0.25 },
