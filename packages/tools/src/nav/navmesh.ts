@@ -17,10 +17,10 @@ export function initNav(): Promise<void> {
 
 /**
  * Where each navigation link's ends stand: a link end (a zip line's cable end hangs above its roof or street) drops to
- * the highest flat surface under it, as `Reach` sees it at generation. An end with nothing flat under it stays put.
- * Ends sit one cell height above the surface, where recast puts the navmesh (it rounds span tops up a voxel): Detour
- * drops a connection whose start lies below its tile's lowest polygon less the climb height, and a start exactly on
- * the solid's top lands right on that limit.
+ * the highest flat surface under it, as `Reach` sees it at generation; an end with nothing flat under it keeps its
+ * height. Ends sit one cell height above the surface, where recast puts the navmesh (it rounds span tops up a voxel):
+ * Detour drops a connection whose start lies below its tile's lowest polygon less the climb height, and a start
+ * exactly on the solid's top lands right on that limit.
  */
 function offMeshConnections(city: CityMap, nav: NavConfig): OffMeshConnectionParams[] {
   const space = new Space(city.chunkSize / 4);
@@ -45,7 +45,7 @@ function offMeshConnections(city: CityMap, nav: NavConfig): OffMeshConnectionPar
 export function buildCityNavMesh(city: CityMap, move: MovementConfig, nav: NavConfig = worldConfig.nav): NavMesh {
   const cs = nav.cellSize;
   const ch = nav.cellHeight;
-  const tile = nav.tileSize * cs;
+  const tile = Number((nav.tileSize * cs).toFixed(3));
   for (const l of city.navLinks) {
     const across = Math.hypot(l.to.x - l.from.x, l.to.z - l.from.z);
     if (across > tile) throw new Error(`navmesh: link ${l.id} spans ${across.toFixed(1)} m, more than a ${tile} m tile (raise nav.tileSize)`);

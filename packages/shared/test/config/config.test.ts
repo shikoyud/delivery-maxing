@@ -31,7 +31,8 @@ describe('config pins spec values', () => {
   it('world', () => {
     expect(worldConfig.chunkSize).toBe(100);
     expect(worldConfig.physics).toEqual({ loadRadius: 150, unloadRadius: 220 });
-    // Plan Task 14: cs 0.4, ch 0.2, tile 64; links reach 0.6 m; a path counts within 1 m of its target
-    expect(worldConfig.nav).toMatchObject({ cellSize: 0.4, cellHeight: 0.2, tileSize: 64, linkRadius: 0.6, reachTolerance: 1 });
+    // Plan Task 14: cs 0.4, ch 0.2; links reach 0.6 m; a path counts within 1 m of its target. Tiles are 640 voxels
+    // (256 m), not the plan's 64: Detour joins an off-mesh link only to neighbouring tiles and the crane zips run 250 m
+    expect(worldConfig.nav).toMatchObject({ cellSize: 0.4, cellHeight: 0.2, tileSize: 640, linkRadius: 0.6, reachTolerance: 1, maxNavMeshMB: 6 });
   });
 });

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { movementConfig, ordersConfig, parseCityMap, worldConfig, parsePieceCatalog, parsePoiTable, type CityMap, type PoiTableFile } from '@dm/shared';
+import { movementConfig, ordersConfig, parseCityMap, parsePieceCatalog, parsePoiTable, worldConfig, type CityMap, type PoiTableFile } from '@dm/shared';
 import { exportNavMesh } from 'recast-navigation';
 import { generateCity } from '../city/generate';
 import { parseCitySource } from '../city/source';
