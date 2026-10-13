@@ -140,6 +140,8 @@ export class Game {
       onResetProgress: () => {
         this.delivery.resetProgress();
       },
+      capacityTier: () => this.delivery.capacityTier,
+      setCapacityTier: (t) => this.delivery.setCapacityTier(t),
       onChange: () => {
         this.saver.schedule();
         this.devPanel.setOverrideCount(countOverrides(settings));
@@ -252,6 +254,19 @@ export class Game {
     this.sim.state.heading = yaw;
     this.teleport(feet);
     this.actions.setLook(yaw, Math.atan2(dy, Math.hypot(dx, dz)));
+  }
+
+  /**
+   * Debug and tests: runs `ticks` fixed simulation ticks now, synchronously and without drawing (the render loop
+   * carries on afterwards). Returns the player's horizontal speed after each tick.
+   */
+  advanceTicks(ticks: number): number[] {
+    const speeds: number[] = [];
+    for (let i = 0; i < ticks; i++) {
+      this.step();
+      speeds.push(horizontalLength(this.sim.state.velocity));
+    }
+    return speeds;
   }
 
   /** One fixed simulation tick. */

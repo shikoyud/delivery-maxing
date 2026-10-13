@@ -1,4 +1,5 @@
 import GUI, { type Controller } from 'lil-gui';
+import { vehiclesConfig, type VehicleTier } from '@dm/shared';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import { el } from './dom';
 
@@ -9,6 +10,10 @@ export interface DevPanelHooks {
   onResetProgress(): void;
   /** Any value changed (the host saves, debounced). */
   onChange(): void;
+  /** The carrier capacity tier in use. */
+  capacityTier(): VehicleTier;
+  /** Dev capacity preset (until vehicles in SP4): switch tiers; false when refused (the host shows why). */
+  setCapacityTier(t: VehicleTier): boolean;
 }
 
 export interface DevPanel {
@@ -74,6 +79,20 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     }
   }
 
+  // Capacity preset: the tier's slots and package weight (spec §3.3), switched here until vehicles exist (SP4).
+  const capacity = { tier: hooks.capacityTier() };
+  const syncTier = (): void => {
+    capacity.tier = hooks.capacityTier();
+    tierCtrl.updateDisplay();
+  };
+  const tierCtrl = gui
+    .add(capacity, 'tier', Object.keys(vehiclesConfig) as VehicleTier[])
+    .name('Capacity (dev, until SP4)')
+    .onChange((t: VehicleTier) => {
+      // Refused (the active orders don't fit): the select goes back to the tier still in use.
+      if (!hooks.setCapacityTier(t)) syncTier();
+    });
+
   const refresh = (): void => gui.controllersRecursive().forEach((c: Controller) => c.updateDisplay());
   const actions = {
     copy: () => void copyOrShow(gui, JSON.stringify(settings.movement, null, 2)),
@@ -81,7 +100,10 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
       hooks.onReset();
       refresh();
     },
-    resetProgress: () => hooks.onResetProgress(),
+    resetProgress: () => {
+      hooks.onResetProgress();
+      syncTier();
+    },
   };
   gui.add(actions, 'copy').name('Copy movement JSON');
   gui.add(actions, 'reset').name('Reset tuning');
@@ -93,8 +115,10 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
       statusCtrl.updateDisplay();
     },
     toggle() {
-      if (gui._hidden) gui.show();
-      else gui.hide();
+      if (gui._hidden) {
+        syncTier(); // the tier may have changed since (debug API, a reset)
+        gui.show();
+      } else gui.hide();
     },
     get isOpen() {
       return !gui._hidden;

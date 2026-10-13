@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, Totals, Vec3 } from '@dm/shared';
+import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, Totals, Vec3, VehicleTier } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { PhoneApp } from '../ui/phone/Phone';
 import type { Game } from './Game';
@@ -30,6 +30,15 @@ export interface DebugApi {
   cancel(orderId: string): CancelResult;
   /** Delivery Points, Coins and deliveries so far. */
   totals(): Totals;
+  /** The carrier capacity tier in use (the dev panel's capacity preset until vehicles arrive in SP4). */
+  capacityTier(): VehicleTier;
+  /** Switches the capacity tier as the dev panel does; false (with a warning popup) when the active orders don't fit. */
+  setCapacityTier(t: VehicleTier): boolean;
+  /**
+   * Runs `ticks` simulation ticks synchronously, with the current input, and returns the player's horizontal speed
+   * (m/s) after each one: long sim windows in tests without waiting on the headless frame rate.
+   */
+  advance(ticks: number): number[];
   /** Whether the phone is up (Tab). */
   phoneOpen(): boolean;
   /** Opens the phone on `app` (as Tab does, for Orders), or switches to it when open. */
@@ -96,6 +105,9 @@ export function installDebugHooks(game: Game): void {
     accept: (id) => game.delivery.accept(id),
     cancel: (id) => game.delivery.cancel(id),
     totals: () => ({ ...game.delivery.orders.totals }),
+    capacityTier: () => game.delivery.capacityTier,
+    setCapacityTier: (t) => game.delivery.setCapacityTier(t),
+    advance: (ticks) => game.advanceTicks(ticks),
     phoneOpen: () => game.delivery.phoneOpen,
     openPhone: (app) => game.delivery.openPhone(app),
     closePhone: () => game.delivery.closePhone(),

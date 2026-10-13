@@ -6,6 +6,9 @@ import type {} from '../src/game/debugHooks';
 
 const artifacts = fileURLToPath(new URL('../e2e-artifacts/', import.meta.url));
 mkdirSync(artifacts, { recursive: true });
+/** SP3 playtest screenshots are committed (plan Global Constraints: the phone, a delivery, the hospital spawn). */
+const sp3 = fileURLToPath(new URL('../../../docs/playtest/sp3/', import.meta.url));
+mkdirSync(sp3, { recursive: true });
 
 /** Opens the game in debug mode and waits for the first frame; returns the console errors seen. */
 async function boot(page: Page, query = ''): Promise<string[]> {
@@ -316,24 +319,233 @@ test('dev panel screenshot', async ({ page }) => {
   await page.screenshot({ path: `${artifacts}sp1-devpanel.png` });
 });
 
-test('phone: Tab opens it on Orders, the player stands still while it is up, Esc and Tab close it', async ({ page }) => {
+// ---------------------------------------------------------------------------------------------------------------------
+// SP3: the core loop. Long sim windows run synchronously through __dm.advance (no rendering in between), so they do not
+// depend on headless frame rate. A fixed ?seed keeps the offer stream reproducible.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const TICK_RATE = 30;
+const SEED = '&seed=7';
+
+/** Runs sim ticks until an offer is on the phone (at most `maxSeconds`); returns the sim seconds it took, or -1. */
+const advanceUntilOffer = (page: Page, maxSeconds: number): Promise<number> =>
+  page.evaluate(
+    ([max, rate]) => {
+      for (let i = 0; i < max * rate; i++) {
+        if (window.__dm!.offers().length > 0) return i / rate;
+        window.__dm!.advance(1);
+      }
+      return window.__dm!.offers().length > 0 ? max : -1;
+    },
+    [maxSeconds, TICK_RATE] as const,
+  );
+
+/** Waits for an offer and accepts it with Y; returns the accepted order id. */
+async function acceptWithY(page: Page): Promise<string> {
+  expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
+  const id = await page.evaluate(() => window.__dm!.offers()[0]!.order.id);
+  await page.keyboard.press('KeyY');
+  await page.waitForFunction(() => window.__dm!.active().length === 1);
+  return id;
+}
+
+/** Stands the courier on a POI's ground point (inside its zone), looking diagonally past it. */
+async function standAt(page: Page, poiId: string): Promise<void> {
+  await page.evaluate((id) => {
+    const p = window.__dm!.poiPosition(id);
+    window.__dm!.viewpoint(p, { x: p.x + 6, y: p.y + 1.2, z: p.z + 6 });
+  }, poiId);
+}
+
+test('spawns at a hospital inside its safe zone', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const { hospitals, zone, pos } = await page.evaluate(() => ({
+    hospitals: window.__dm!.hospitals(),
+    zone: window.__dm!.safeZone(),
+    pos: window.__dm!.player().position,
+  }));
+  expect(hospitals.length).toBe(4);
+  const first = hospitals[0]!;
+  expect(zone).toBe(first.id);
+  expect(Math.hypot(pos.x - first.center.x, pos.z - first.center.z)).toBeLessThan(first.safeRadius);
+  await expect(page.locator('.hud-safe')).toBeVisible();
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp3}sp3-hospital-spawn.png` });
+  expect(errors).toEqual([]);
+});
+
+test('an offer appears within 15 s of sim time and Y accepts it', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const took = await advanceUntilOffer(page, 15);
+  console.log(`first offer after ${took.toFixed(2)} s of sim`);
+  expect(took).toBeGreaterThanOrEqual(0);
+  const id = await page.evaluate(() => window.__dm!.offers()[0]!.order.id);
+  await page.keyboard.press('KeyY');
+  await page.waitForFunction(() => window.__dm!.active().length === 1);
+  expect(await page.evaluate(() => window.__dm!.active()[0]!.order.id)).toBe(id);
+  await expect(page.locator('.popup-title', { hasText: 'Offer accepted' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('teleport to the pickup then the dropoff completes the order with points', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await acceptWithY(page);
+  const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
+  await standAt(page, order.pickupPoiId);
+  await page.evaluate(() => window.__dm!.advance(15));
+  expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
+  await standAt(page, order.dropoffPoiId);
+  await page.evaluate(() => window.__dm!.advance(15));
+  const totals = await page.evaluate(() => window.__dm!.totals());
+  console.log(`delivered ${order.kind} ${order.id}: ${totals.points} points, ${totals.coins} coins`);
+  expect(totals.deliveries).toBe(1);
+  expect(totals.points).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__dm!.active().length)).toBe(0);
+  await expect(page.locator('.popup-title', { hasText: 'Delivered!' })).toBeVisible();
+  await waitTicks(page, 4);
+  await page.screenshot({ path: `${sp3}sp3-delivered.png` });
+  expect(errors).toEqual([]);
+});
+
+test('cancelling starts the lockout and no offer appears for 45 s', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const id = await acceptWithY(page);
+  expect(await page.evaluate((o) => window.__dm!.cancel(o), id)).toBe('ok');
+  await expect(page.locator('.popup-title', { hasText: 'Order cancelled' })).toBeVisible();
+  await expect(page.locator('.hud-lockout')).toBeVisible();
+  const r = await page.evaluate(
+    ([rate]) => {
+      const seen = new Set(window.__dm!.offers().map((o) => o.order.id));
+      let fresh = 0;
+      // Just short of 45 s: nothing new may arrive.
+      for (let i = 0; i < 45 * rate - 2; i++) {
+        window.__dm!.advance(1);
+        for (const o of window.__dm!.offers()) if (!seen.has(o.order.id)) fresh++;
+      }
+      // After the lockout, offers resume. The downtown spawn has a single food pickup in range and the cancelled order
+      // used it (reuse rule: 180 s), so resume is checked at the suburbs hospital, whose pickups are all unused.
+      const h = window.__dm!.hospitals().find((x) => x.id === 'suburbs-hospital')!;
+      window.__dm!.viewpoint(h.spawn, { x: h.center.x, y: h.center.y + 1.6, z: h.center.z });
+      let resumedAfter = -1;
+      for (let i = 0; i < 20 * rate; i++) {
+        window.__dm!.advance(1);
+        if (window.__dm!.offers().some((o) => !seen.has(o.order.id))) {
+          resumedAfter = i / rate;
+          break;
+        }
+      }
+      return { fresh, resumedAfter };
+    },
+    [TICK_RATE] as const,
+  );
+  console.log(`lockout: ${r.fresh} new offers during it, offers resumed ${r.resumedAfter.toFixed(2)} s after`);
+  expect(r.fresh).toBe(0);
+  expect(r.resumedAfter).toBeGreaterThanOrEqual(0);
+  await expect(page.locator('.hud-lockout')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('a package offer needs the car preset', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('walk');
+  /** Runs `seconds` of sim, never accepting; counts the distinct offers seen by kind. */
+  const watch = (seconds: number): Promise<{ food: number; package: number; firstPackageAt: number }> =>
+    page.evaluate(
+      ([s, rate]) => {
+        const seen = new Map<string, string>();
+        let firstPackageAt = -1;
+        for (let i = 0; i < s * rate; i++) {
+          window.__dm!.advance(1);
+          for (const o of window.__dm!.offers()) {
+            seen.set(o.order.id, o.order.kind);
+            if (o.order.kind === 'package' && firstPackageAt < 0) firstPackageAt = i / rate;
+          }
+        }
+        const kinds = [...seen.values()];
+        return { food: kinds.filter((k) => k === 'food').length, package: kinds.filter((k) => k === 'package').length, firstPackageAt };
+      },
+      [seconds, TICK_RATE] as const,
+    );
+  const walk = await watch(60);
+  console.log(`walk, 60 s: ${walk.food} food offers, ${walk.package} package offers`);
+  expect(walk.food).toBeGreaterThan(0); // offers did arrive, so "no packages" is not vacuous
+  expect(walk.package).toBe(0);
+  expect(await page.evaluate(() => window.__dm!.setCapacityTier('car'))).toBe(true);
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
+  const car = await watch(60);
+  console.log(`car, 60 s: ${car.food} food offers, ${car.package} package offers, first package at ${car.firstPackageAt.toFixed(2)} s`);
+  expect(car.package).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('dev panel capacity preset switches the tier and reverts when the switch is refused', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await page.keyboard.press('Backquote');
+  const select = page.locator('.dm-dev-panel .lil-controller', { hasText: 'Capacity (dev, until SP4)' }).locator('select');
+  await expect(select).toBeVisible();
+  await expect(select).toHaveValue('walk');
+  await select.selectOption('car');
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
+  // Take a package order (it only fits a motorbike or car), then ask for walking: refused, the select goes back to car.
+  const got = await page.evaluate(
+    ([rate]) => {
+      for (let i = 0; i < 120 * rate; i++) {
+        const pkg = window.__dm!.offers().find((o) => o.order.kind === 'package');
+        if (pkg) return window.__dm!.accept(pkg.order.id);
+        window.__dm!.advance(1);
+      }
+      return 'none';
+    },
+    [TICK_RATE] as const,
+  );
+  expect(got).toBe('ok');
+  await select.selectOption('walk');
+  await expect(page.locator('.popup-warn .popup-title', { hasText: "Can't switch to walking" })).toBeVisible();
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
+  await expect(select).toHaveValue('car');
+  // Reset progress puts the tier back to walking, and the select follows.
+  await page.locator('.dm-dev-panel .lil-controller', { hasText: 'Reset progress' }).locator('button').click();
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('walk');
+  await expect(select).toHaveValue('walk');
+  expect(errors).toEqual([]);
+});
+
+test('phone: Tab opens Orders, Map and Wallet render; Esc closes', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => window.__dm!.phoneOpen());
   await expect(page.locator('.phone')).toBeVisible();
   await expect(page.locator('.phone-title')).toHaveText('Orders');
   await expect(page.locator('.hud')).toBeVisible(); // behind the dimmed backdrop
+  await expect(page.locator('.phone-offer').first()).toBeVisible();
+  // The player stands still while the phone is up.
   const { start, tick0 } = await page.evaluate(() => ({ start: window.__dm!.player().position, tick0: window.__dm!.tick }));
   await page.keyboard.down('KeyW');
   await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 15, tick0);
   await page.keyboard.up('KeyW');
   const end = await page.evaluate(() => window.__dm!.player().position);
   expect(Math.hypot(end.x - start.x, end.z - start.z)).toBeLessThan(0.05);
+  await page.screenshot({ path: `${sp3}sp3-phone-orders.png` });
+  // Accept from the phone: the order moves to Active and the Map shows its target.
+  await page.locator('.phone-offer').first().locator('.phone-accept').click();
+  await expect(page.locator('.phone-active-order')).toHaveCount(1);
+  await page.locator('.phone-nav-btn[data-app="map"]').click();
+  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await expect(page.locator('.phone-map-canvas')).toBeVisible();
+  await waitTicks(page, 6);
+  await page.screenshot({ path: `${sp3}sp3-phone-map.png` });
   await page.locator('.phone-nav-btn[data-app="wallet"]').click();
   await expect(page.locator('.phone-title')).toHaveText('Wallet');
   await expect(page.locator('.phone-note')).toHaveText('GAME rewards arrive with the reward program (spec §9)');
-  await page.screenshot({ path: `${artifacts}sp3-phone-wallet.png` });
+  await page.screenshot({ path: `${sp3}sp3-phone-wallet.png` });
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !window.__dm!.phoneOpen());
   await expect(page.locator('.phone')).toBeHidden();
@@ -341,11 +553,53 @@ test('phone: Tab opens it on Orders, the player stands still while it is up, Esc
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => window.__dm!.phoneOpen());
   await expect(page.locator('.phone-title')).toHaveText('Orders');
-  await page.screenshot({ path: `${artifacts}sp3-phone-orders.png` });
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => !window.__dm!.phoneOpen());
   const t1 = await page.evaluate(() => window.__dm!.tick);
   await page.waitForFunction((t) => window.__dm!.tick - t >= 10, t1);
   expect(await page.evaluate(() => window.__dm!.phoneOpen())).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('HUD screenshot with an active order', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await acceptWithY(page);
+  // Picked up, so the HUD shows the order's timer and the beam leads to the dropoff.
+  const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
+  await standAt(page, order.pickupPoiId);
+  await page.evaluate(() => window.__dm!.advance(15));
+  expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
+  // A few metres on from the pickup toward the dropoff, looking at it, so the pickup's marker is behind the camera.
+  await page.evaluate((id) => {
+    const me = window.__dm!.player().position;
+    const t = window.__dm!.poiPosition(id);
+    const d = Math.hypot(t.x - me.x, t.z - me.z);
+    const feet = { x: me.x + ((t.x - me.x) / d) * 6, y: me.y, z: me.z + ((t.z - me.z) / d) * 6 };
+    window.__dm!.viewpoint(feet, { x: t.x, y: me.y + 1.6, z: t.z });
+  }, order.dropoffPoiId);
+  expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
+  await expect(page.locator('.hud-active')).not.toBeEmpty();
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp3}sp3-hud.png` });
+  expect(errors).toEqual([]);
+});
+
+test('no parkour: speed never exceeds 12 m/s on foot over a 10 s sprint', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // Open ground east of the map centre, facing east (as the third-person test).
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.keyboard.down('KeyW');
+  await page.keyboard.press('ShiftLeft');
+  // Every tick of the 10 s is sampled: one synchronous run, nothing steps in between.
+  const speeds = await page.evaluate(([rate]) => window.__dm!.advance(10 * rate), [TICK_RATE] as const);
+  await page.keyboard.up('KeyW');
+  const max = Math.max(...speeds);
+  console.log(`10 s sprint: ${speeds.length} ticks, max horizontal speed ${max.toFixed(3)} m/s`);
+  expect(speeds.length).toBe(10 * TICK_RATE);
+  expect(max).toBeGreaterThan(7); // it did run
+  expect(max).toBeLessThanOrEqual(12 + 1e-6);
   expect(errors).toEqual([]);
 });
