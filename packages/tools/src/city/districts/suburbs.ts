@@ -17,7 +17,7 @@ import {
 import { slopedSlab } from '../kits';
 import { box, gridLines, intersectRect, r2, v2, type GridLine } from '../layout';
 import { fillLot, type FillerParams } from '../lots';
-import { GraphBuilder } from '../streets';
+import { GraphBuilder, splitAtChunks } from '../streets';
 
 /** A horizontal axis direction. */
 type Dir = '+x' | '-x' | '+z' | '-z';
@@ -74,7 +74,7 @@ interface SuburbsParams {
     funboxes: { at: UV; axis: 'x' | 'z' }[];
     /**
      * Ground rails: the first point above `at`, then `points` as [along `dir`, across (+z or +x), up] m from it;
-     * each point stands rails.height (+ up) above the ground.
+     * each point stands rails.height (+ up) above the park floor.
      */
     rails: { at: UV; dir: Dir; points: [number, number, number][] }[];
     /** Gap kept between the footprints of the park's pieces (with their run-ups), m. */
@@ -187,7 +187,11 @@ function rectIn(f: Frame, a0: number, a1: number, c0: number, c1: number): Rect 
   return { minX: Math.min(ps[0]!.x, ps[1]!.x), maxX: Math.max(ps[0]!.x, ps[1]!.x), minZ: Math.min(ps[0]!.z, ps[1]!.z), maxZ: Math.max(ps[0]!.z, ps[1]!.z) };
 }
 
-/** A local street block: the stretch of line `line` (x = at for `axis` 'z', z = at for 'x') between two crossings. */
+/**
+ * A local street block: the street on line x = `at` running along z (`axis` 'z') or z = `at` along x, from `from`
+ * to `to` between two consecutive grid lines; `crossings` when both are streets (not land edges), so both ends are
+ * junctions.
+ */
 interface Block { axis: 'x' | 'z'; at: number; from: number; to: number; crossings: boolean }
 
 /** Where everything stands so far, while the district is being built. */
@@ -198,6 +202,8 @@ interface Build {
   report: Pick<DistrictReport, 'rails' | 'ramps' | 'skatepark' | 'quay'> & { bowl?: BowlReport };
   /** The arterial cell given to the skatepark (between the arterials' centre lines). */
   cell: Rect;
+  /** The top of the park's paving (every piece stands on it), y. */
+  floor: number;
   /** Footprints (with run-ups) of the park's pieces placed so far. */
   footprints: { id: string; rect: Rect }[];
   houses: number;
@@ -220,6 +226,7 @@ export function buildSuburbs(ctx: DistrictContext): DistrictOutput {
     out: emptyOutput({ nodes: [], edges: [] }),
     report: { rails: [], ramps: [], skatepark: parkRect(ctx, p, cell), quay: { quays, checkpoints: [] } },
     cell,
+    floor: ctx.city.streets.roadTop,
     footprints: [],
     houses: 0,
   };
@@ -315,10 +322,14 @@ function buildHouses(b: Build, lot: GridLot, quays: QuayEdge[]): void {
   }
 }
 
-/** The skatepark's pieces, each kept inside the park and clear of the others (with their run-ups). */
+/**
+ * The skatepark: asphalt paving over the whole plaza (road slabs at road height, split at chunk borders), and its
+ * pieces on it, each kept inside the park and clear of the others (with their run-ups).
+ */
 function buildSkatepark(b: Build): void {
   const sk = b.p.skatepark;
   const id = `${b.ctx.district}-park`;
+  splitAtChunks(b.report.skatepark, b.ctx.city.chunkSize).forEach((r, k) => b.out.solids.push(box(`${id}-floor-${k}`, 'road', r, -b.floor, b.floor)));
   buildBowl(b, `${id}-bowl`);
   sk.quarters.forEach((q, k) => buildQuarter(b, `${id}-qp-${k}`, q.at, DIRS[q.dir]));
   sk.funboxes.forEach((f, k) => buildFunbox(b, `${id}-fun-${k}`, f.at, f.axis));
@@ -344,14 +355,14 @@ function claim(b: Build, id: string, r: Rect): void {
 }
 
 /**
- * A ramp face climbing along frame `f` from `from` (on the ground) through `sections`, `width` wide: one rotated
+ * A ramp face climbing along frame `f` from `from` (on the park floor) through `sections`, `width` wide: one rotated
  * ramp slab per section, each thick enough to reach the ground under its crest (no gap beneath it, seen from the
- * side) and reaching `embed` on below the face before it. Returns the slabs, the crest (along) and its height.
+ * side) and reaching `embed` on below the face before it. Returns the slabs, the crest (along) and its height (y).
  */
 function climb(b: Build, id: string, f: Frame, from: number, width: number, sections: readonly Section[]): { solids: Solid[]; crest: number; height: number } {
   const embed = b.p.skatepark.embed;
   const solids: Solid[] = [];
-  let [a, y] = [from, 0];
+  let [a, y] = [from, b.floor];
   sections.forEach((s, k) => {
     const rad = s.deg / DEG;
     const run = s.rise / Math.tan(rad);
@@ -381,7 +392,7 @@ function buildQuarter(b: Build, id: string, at: UV, d: { x: number; z: number })
   claim(b, id, rectIn(f, -sk.runUp, run + q.deck + q.runOut, -q.width / 2, q.width / 2));
   const { solids, crest, height } = climb(b, id, f, 0, q.width, sk.transition);
   const deck = box(`${id}-deck`, 'ramp', rectIn(f, crest, crest + q.deck, -q.width / 2, q.width / 2), 0, height);
-  addRamp(b, { id, kind: 'quarter', solids: [], foot: point(f, 0, 0, 0), top: point(f, crest, 0, height), facing: { ...d } }, solids);
+  addRamp(b, { id, kind: 'quarter', solids: [], foot: point(f, 0, 0, b.floor), top: point(f, crest, 0, height), facing: { ...d } }, solids);
   b.out.solids.push(deck);
 }
 
@@ -398,17 +409,18 @@ function buildFunbox(b: Build, id: string, at: UV, axis: 'x' | 'z'): void {
   for (const [end, d] of [['a', f.d], ['b', { x: -f.d.x, z: -f.d.z }]] as const) {
     const g = frame(o, d);
     const { solids, crest, height } = climb(b, `${id}-${end}`, g, -half - run, fb.width, section);
-    addRamp(b, { id: `${id}-${end}`, kind: 'funbox', solids: [], foot: point(g, -half - run, 0, 0), top: point(g, crest, 0, height), facing: { ...d } }, solids);
+    addRamp(b, { id: `${id}-${end}`, kind: 'funbox', solids: [], foot: point(g, -half - run, 0, b.floor), top: point(g, crest, 0, height), facing: { ...d } }, solids);
   }
-  b.out.solids.push(box(`${id}-deck`, 'ramp', rectIn(f, -half, half, -fb.width / 2, fb.width / 2), 0, fb.height));
-  const y = fb.height + p.rails.height;
+  const deck = b.floor + fb.height;
+  b.out.solids.push(box(`${id}-deck`, 'ramp', rectIn(f, -half, half, -fb.width / 2, fb.width / 2), 0, deck));
+  const y = deck + p.rails.height;
   const rail: Rail = { id: `${id}-rail`, points: [point(f, -half + fb.rail.inset, fb.rail.offset, y), point(f, half - fb.rail.endGap, fb.rail.offset, y)] };
   // The approach starts on the deck, a capsule's width in from its edge
-  addRail(b, rail, 'skatepark', point(f, -half + 2 * ctx.move.capsule.radius, fb.rail.offset, fb.height));
+  addRail(b, rail, 'skatepark', point(f, -half + 2 * ctx.move.capsule.radius, fb.rail.offset, deck));
 }
 
 /**
- * The bowl centred at bowl.at: the floor at ground level, a wall (the transition) climbing outward from each floor
+ * The bowl centred at bowl.at: the floor on the park paving, a wall (the transition) climbing outward from each floor
  * edge (each spanning the corners, so neighbouring walls meet in a crease), a rim deck around them, and an outer ramp
  * up onto the rim in the middle of each side.
  */
@@ -430,12 +442,12 @@ function buildBowl(b: Build, id: string): void {
     const f = frame(c, d);
     const wall = climb(b, `${id}-wall-${side}`, f, f2, 2 * i2, sk.transition);
     height = wall.height;
-    addRamp(b, { id: `${id}-wall-${side}`, kind: 'bowl-wall', solids: [], foot: point(f, f2, 0, 0), top: point(f, wall.crest, 0, wall.height), facing: { ...d } }, wall.solids);
+    addRamp(b, { id: `${id}-wall-${side}`, kind: 'bowl-wall', solids: [], foot: point(f, f2, 0, b.floor), top: point(f, wall.crest, 0, wall.height), facing: { ...d } }, wall.solids);
     walls.push(`${id}-wall-${side}`);
     const inward = frame(c, { x: -d.x, z: -d.z });
     const ramp = climb(b, `${id}-outer-${side}`, inward, -out2, bw.outerWidth, outer);
     const facing = { x: -d.x + 0, z: -d.z + 0 };
-    addRamp(b, { id: `${id}-outer-${side}`, kind: 'bowl-outer', solids: [], foot: point(inward, -out2, 0, 0), top: point(inward, ramp.crest, 0, ramp.height), facing }, ramp.solids);
+    addRamp(b, { id: `${id}-outer-${side}`, kind: 'bowl-outer', solids: [], foot: point(inward, -out2, 0, b.floor), top: point(inward, ramp.crest, 0, ramp.height), facing }, ramp.solids);
     outerRamps.push(`${id}-outer-${side}`);
   }
   // The rim deck: north and south strips across the whole bowl, west and east strips between them
@@ -449,7 +461,7 @@ function buildBowl(b: Build, id: string): void {
   b.report.bowl = { id, floor: square(f2), rim: square(o2), height, walls, outerRamps };
 }
 
-/** A rail on the park's ground: its points (along `dir`, across, up) from `at`, rails.height above the ground. */
+/** A rail on the park's floor: its points (along `dir`, across, up) from `at`, rails.height above the floor. */
 function buildGroundRail(b: Build, id: string, r: SuburbsParams['skatepark']['rails'][number]): void {
   const { p } = b;
   const f = frame(parkPoint(b, r.at), DIRS[r.dir]);
@@ -457,8 +469,8 @@ function buildGroundRail(b: Build, id: string, r: SuburbsParams['skatepark']['ra
   const across = r.points.map((q) => q[1]);
   const pad = p.skatepark.spacing;
   claim(b, id, rectIn(f, -p.rails.runUp, Math.max(...along) + p.rails.runUp, Math.min(...across) - pad, Math.max(...across) + pad));
-  const rail: Rail = { id, points: r.points.map(([a, c, up]) => point(f, a, c, p.rails.height + up)) };
-  addRail(b, rail, 'skatepark', point(f, -p.rails.runUp, 0, 0));
+  const rail: Rail = { id, points: r.points.map(([a, c, up]) => point(f, a, c, b.floor + p.rails.height + up)) };
+  addRail(b, rail, 'skatepark', point(f, -p.rails.runUp, 0, b.floor));
 }
 
 function addRail(b: Build, rail: Rail, kind: 'street' | 'skatepark', approach: Vec3): void {

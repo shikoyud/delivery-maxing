@@ -751,6 +751,17 @@ test('sp2 Hillside screenshot (at the foot of a chute, looking up it to the top 
   expect(errors).toEqual([]);
 });
 
+test('sp2 Suburbs screenshot (high over the skatepark)', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // High over the skatepark's north-east part (its paving fills x −186…−14, z 214…386), looking south-west across
+  // it: a funbox with its deck rail in front, the bowl on the right, the rail garden beyond, quarter pipes at the edges.
+  await airShot(page, { x: -40, y: 28, z: 230 }, { x: -130, y: 0, z: 300 }, 'sp2-suburbs-skatepark.png');
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`sp2 suburbs skatepark: ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(errors).toEqual([]);
+});
+
 test('the default (no ?map) still loads the SP1 greybox', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);

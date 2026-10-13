@@ -122,9 +122,13 @@ describe('suburbs: layout', () => {
     const c = city.hub.center;
     const gap = Math.hypot(Math.max(0, sk.minX - c.x, c.x - sk.maxX), Math.max(0, sk.minZ - c.z, c.z - sk.maxZ));
     expect(gap).toBeGreaterThan(src.hub.clearRadius);
-    // Nothing but the park's own pieces stands in it: no streets, no buildings
-    const inside = city.solids.filter((s) => overlaps(solidRect(s), sk) && s.kind !== 'ground');
-    expect(inside.filter((s) => s.kind !== 'ramp').map((s) => s.id).slice(0, 5)).toEqual([]);
+    // Nothing but the park's own pieces stands in it (no streets, no buildings): ramps, decks and its paving
+    const inside = city.solids.filter((s) => overlaps(solidRect(s), sk) && !s.id.startsWith('ground-'));
+    expect(inside.filter((s) => !s.id.startsWith('suburbs-park-')).map((s) => s.id).slice(0, 5)).toEqual([]);
+    const paving = inside.filter((s) => s.kind === 'road');
+    expect(paving.every((s) => s.id.startsWith('suburbs-park-floor-') && top(s) === src.streets.roadTop && !s.rotationDeg)).toBe(true);
+    expect(paving.reduce((n, s) => n + s.size.x * s.size.z, 0)).toBeCloseTo((sk.maxX - sk.minX) * (sk.maxZ - sk.minZ), 0);
+    expect(inside.filter((s) => s.kind !== 'road').every((s) => s.kind === 'ramp')).toBe(true);
     expect(city.props.filter((p) => inRect(p.position, sk)).map((p) => p.id)).toEqual([]);
     expect(city.streets.nodes.filter((n) => inRect(n.p, sk, -EPS)).map((n) => n.id)).toEqual([]);
 
