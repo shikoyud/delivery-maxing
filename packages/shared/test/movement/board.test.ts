@@ -212,22 +212,22 @@ describe('skateboard', () => {
     expect(speed(h.sim.state)).toBeGreaterThan(before);
   });
 
-  it('boost raises board top speed to 16.8 m/s', async () => {
+  it('boost raises board top speed, capped at the 12 m/s global cap', async () => {
     const h = await makeSim();
     boardOn(h);
     h.sim.state.boostLeft = 100;
     for (let i = 0; i < seconds(4); i++) {
       h.tick(FWD);
-      expect(speed(h.sim.state)).toBeLessThanOrEqual(16.8 + 1e-6);
+      expect(speed(h.sim.state)).toBeLessThanOrEqual(cfg.speedCap + 1e-6);
     }
     expect(cfg.board.topSpeed * cfg.boostOrb.speedMultiplier).toBeCloseTo(16.8, 9);
-    expect(speed(h.sim.state)).toBeCloseTo(16.8, 6);
+    expect(speed(h.sim.state)).toBeCloseTo(cfg.speedCap, 6);
 
     // speedMul scales the board top speed too; boost and speedMul together are still capped at speedCap.
     const m = await makeSim();
     boardOn(m);
     m.run(seconds(4), FWD, { ...NO_MODS, speedMul: 1.1 });
-    expect(speed(m.sim.state)).toBeCloseTo(cfg.board.topSpeed * 1.1, 6);
+    expect(speed(m.sim.state)).toBeCloseTo(Math.min(cfg.board.topSpeed * 1.1, cfg.speedCap), 6);
     m.sim.state.boostLeft = 100;
     m.run(seconds(4), FWD, { ...NO_MODS, speedMul: 1.2 });
     expect(speed(m.sim.state)).toBeCloseTo(cfg.speedCap, 6);

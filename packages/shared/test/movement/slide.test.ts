@@ -44,6 +44,18 @@ describe('crouch-slide', () => {
     expect(h.sim.state.position.y).toBeCloseTo(0, 1);
   });
 
+  it('a boosted slide from sprint never exceeds the 12 m/s on-foot cap', async () => {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    expect(h.sim.state.mode).toBe('slide');
+    for (let i = 0; i < 45; i++) {
+      expect(speed(h.sim.state)).toBeLessThanOrEqual(12 + 1e-9);
+      h.tick(SLIDE);
+    }
+    expect(speed(h.sim.state)).toBeLessThanOrEqual(12 + 1e-9);
+  });
+
   it('crouch at 5.5 m/s (below minEntrySpeed 6) crouch-walks at ≤ 3 m/s instead', async () => {
     const h = await makeSim();
     h.run(30, { forward: 1 });
@@ -67,6 +79,7 @@ describe('crouch-slide', () => {
     expect(h.sim.state.grounded).toBe(true);
     h.run(15, SPRINT);
     expect(h.sim.state.grounded).toBe(true);
+    h.sim.state.slideBoostCooldown = 10; // no burst: the gain must come from the slope (a burst would sit at the 12 m/s cap)
     h.tick(SLIDE, ['crouch']);
     expect(h.sim.state.mode).toBe('slide');
     const entry = speed(h.sim.state);
@@ -341,14 +354,15 @@ describe('slide boost', () => {
     expect(started(early)[0]?.boosted).toBe(false);
     const { h, events, before } = await secondSlide(62);
     expect(started(events)).toEqual([{ kind: 'slideStarted', boosted: true }]);
-    expect(speed(h.sim.state)).toBeGreaterThan(before + 3);
+    expect(speed(h.sim.state)).toBeGreaterThan(before);
+    expect(speed(h.sim.state)).toBeGreaterThan(cfg.speedCap - 0.05); // 8 + 4 = the 12 m/s cap
     expect(h.sim.state.slideBoostCooldown).toBeCloseTo(cfg.slide.boostCooldown, 6);
   });
 
-  it('the burst never passes speedCap: entering at 16 m/s gives 18', async () => {
+  it('the burst never passes speedCap: entering at 10 m/s gives 12', async () => {
     const h = await makeSim();
     h.run(30, SPRINT);
-    h.sim.state.velocity = vec3(0, 0, -16); // injected on the tick before the crouch press: still grounded and sprinting
+    h.sim.state.velocity = vec3(0, 0, -10); // injected on the tick before the crouch press: still grounded and sprinting
     h.tick(SPRINT);
     expect(h.sim.state.grounded).toBe(true);
     expect(h.sim.state.sprinting).toBe(true);

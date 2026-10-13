@@ -80,7 +80,7 @@ describe('zip line', () => {
       expect(v).toBeLessThanOrEqual(cfg.zipLine.maxSpeed + 1e-9);
     }
     expect(speeds[5] ?? 0).toBeGreaterThan(speeds[0] ?? Infinity);
-    expect(Math.max(...speeds)).toBeCloseTo(cfg.zipLine.maxSpeed, 5);
+    expect(Math.max(...speeds)).toBeCloseTo(Math.min(cfg.zipLine.maxSpeed, cfg.speedCap), 5);
   });
 
   it('jumping off keeps the ride velocity (horizontal ≥ 95 % of ride speed) and adds upward speed', async () => {
@@ -130,8 +130,8 @@ describe('zip line', () => {
       h.tick();
       if (h.sim.state.zip) top = Math.max(top, h.sim.state.zip.speed);
     }
-    expect(top).toBeGreaterThan(first + 3);
-    expect(top).toBeCloseTo(cfg.zipLine.maxSpeed, 5);
+    expect(top).toBeGreaterThan(first + 1.5);
+    expect(top).toBeCloseTo(Math.min(cfg.zipLine.maxSpeed, cfg.speedCap), 5);
   });
 
   it('a nearly level line rides in the facing direction, uphill or down', async () => {
@@ -301,7 +301,7 @@ describe('zip line', () => {
     expect(jumped(b.tick({}, ['jump']))).toBe(false);
   });
 
-  it('speedMul 1.4 lifts the ride cap above 16 m/s but never past the 18 m/s global cap', async () => {
+  it('speedMul 1.4 never lifts the ride past the 12 m/s global cap', async () => {
     const mods = { speedMul: 1.4, jumpHeightMul: 1 };
     const h = await rideSim(line('z', [0, 10, 0], [0, 2, -30]));
     h.tick({}, ['interact'], mods);
@@ -311,7 +311,6 @@ describe('zip line', () => {
       h.tick({}, [], mods);
       if (h.sim.state.zip) top = Math.max(top, h.sim.state.zip.speed);
     }
-    expect(top).toBeGreaterThan(cfg.zipLine.maxSpeed);
     expect(top).toBeLessThanOrEqual(cfg.speedCap + 1e-9);
     expect(top).toBeCloseTo(cfg.speedCap, 5);
   });

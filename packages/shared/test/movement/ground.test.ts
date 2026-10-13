@@ -51,16 +51,16 @@ describe('ground movement', () => {
     h.tick();
     expect(speed(h.sim.state)).toBeLessThanOrEqual(cfg.speedCap + 1e-9);
     h.tick(SPRINT);
-    expect(speed(h.sim.state)).toBeLessThanOrEqual(18 + 1e-9);
+    expect(speed(h.sim.state)).toBeLessThanOrEqual(12 + 1e-9);
   });
 
   it('above sprint speed the ground only decays at overspeedDecay (momentum rule)', async () => {
     const h = await makeSim();
     h.run(30, SPRINT);
     expect(h.sim.state.grounded).toBe(true);
-    // Grounded and sprinting forward (-Z); inject 14 m/s along the same direction.
-    h.sim.state.velocity = vec3(0, 0, -14);
-    h.run(30, SPRINT); // 1 s at overspeedDecay 4 m/s² -> 10 m/s
+    // Grounded and sprinting forward (-Z); inject 12 m/s (the on-foot cap) along the same direction.
+    h.sim.state.velocity = vec3(0, 0, -12);
+    h.run(15, SPRINT); // 0.5 s at overspeedDecay 4 m/s² -> 10 m/s
     expect(h.sim.state.grounded).toBe(true);
     expect(speed(h.sim.state)).toBeGreaterThanOrEqual(9.8);
     expect(speed(h.sim.state)).toBeLessThanOrEqual(10.2);

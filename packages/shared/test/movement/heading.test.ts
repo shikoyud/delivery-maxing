@@ -38,17 +38,17 @@ describe('courier heading', () => {
     expect(h.sim.state.heading).toBeCloseTo(1, 9);
   });
 
-  it('strafing right into a 1.5 m ledge mantles it (Review Focus 2)', async () => {
+  it('strafing right into a 1.2 m ledge mantles it (Review Focus 2)', async () => {
     const FACE_X = 3;
     const DEPTH = 10;
-    const ledge = box('ledge', vec3(FACE_X + DEPTH / 2, 0.75, 0), vec3(DEPTH, 1.5, 8));
+    const ledge = box('ledge', vec3(FACE_X + DEPTH / 2, 0.6, 0), vec3(DEPTH, 1.2, 8));
     const h = await makeSim({ solids: [ledge] });
     h.runUntil((s) => s.mode === 'mantle', 60, RIGHT_SPRINT);
     h.runUntil((s) => s.mode !== 'mantle', seconds(cfg.mantle.duration + 0.2), RIGHT_SPRINT);
     const s = h.sim.state;
     expect(s.mode).toBe('ground');
-    expect(s.position.y).toBeGreaterThanOrEqual(1.45);
-    expect(s.position.y).toBeLessThanOrEqual(1.55);
+    expect(s.position.y).toBeGreaterThanOrEqual(1.15);
+    expect(s.position.y).toBeLessThanOrEqual(1.25);
     expect(s.position.x).toBeGreaterThan(FACE_X);
   });
 
