@@ -103,7 +103,7 @@ export function installDebugHooks(game: Game): void {
     },
     loadedChunks: () => [...(game.pager?.loadedChunks() ?? [])],
     cityBoundsOk() {
-      if (!game.city) throw new Error('cityBoundsOk needs ?map=city');
+      if (!game.city) throw new Error('cityBoundsOk needs the city map (not ?map=greybox)');
       return game.city.boundsOk();
     },
     cityStats: () => game.city?.stats() ?? null,

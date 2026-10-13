@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import clientJson from '../../../config/client.json' with { type: 'json' };
+import ordersJson from '../../../config/orders.json' with { type: 'json' };
+import poiTableJson from '../../../map/city.poi.json' with { type: 'json' };
 import type {} from '../src/game/debugHooks';
 
 const artifacts = fileURLToPath(new URL('../e2e-artifacts/', import.meta.url));
@@ -36,8 +38,13 @@ const measureFps = (page: Page, ms: number): Promise<number> =>
     ms,
   );
 
+// ---- SP1: the greybox (?map=greybox; the city is the default map since SP2 Task 15) ----
+
+/** The SP1 tests run on the greybox: they use its playground, crouch tunnel, zip lines, orbs and POIs. */
+const GREYBOX = '&map=greybox';
+
 test('loads, renders the greybox and reports ready', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await expect(page.locator('canvas.game-canvas')).toBeVisible();
   // Let the player settle onto the plaza and a few frames draw.
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 10);
@@ -52,7 +59,7 @@ test('loads, renders the greybox and reports ready', async ({ page }) => {
 test('W then a Shift tap runs at ~8 m/s', async ({ page }) => {
   // Timed in simulation ticks, not wall time: headless Chromium renders on the CPU and can drop below
   // 30 / maxStepsPerFrame fps, where the fixed stepper drops time by design.
-  await boot(page);
+  await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const { start, tick0 } = await page.evaluate(() => ({ start: window.__dm!.player().position, tick0: window.__dm!.tick }));
   await page.keyboard.down('KeyW');
@@ -69,7 +76,7 @@ test('W then a Shift tap runs at ~8 m/s', async ({ page }) => {
 });
 
 test('draw calls stay under the budget', async ({ page }) => {
-  await boot(page);
+  await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
   const info = await page.evaluate(() => window.__dm!.renderInfo());
   console.log(`render: ${info.calls} draw calls, ${info.triangles} triangles`);
@@ -78,7 +85,7 @@ test('draw calls stay under the budget', async ({ page }) => {
 });
 
 test('a collected orb disappears', async ({ page }) => {
-  await boot(page);
+  await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
   expect(await page.evaluate(() => window.__dm!.orbVisible('hub-orb-01'))).toBe(true);
   // Feet 1 m below the orb centre, so the capsule centre is on it.
@@ -90,7 +97,7 @@ test('a collected orb disappears', async ({ page }) => {
 });
 
 test('feature screenshot', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
   // Stand at the plaza's east edge looking down the playground line: orbs, mantle blocks, wall-run alley.
   await page.evaluate(() => window.__dm!.viewpoint({ x: 22, y: 0, z: 5 }, { x: 70, y: 2, z: -1 }));
@@ -123,7 +130,7 @@ async function waitCameraSettled(page: Page, eps = 1e-3, n = 3): Promise<void> {
 }
 
 test('third-person view shows the courier', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   // East edge of the plaza facing down the playground line, then a short sprint so the shot has motion.
   await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
@@ -152,7 +159,7 @@ test('third-person view shows the courier', async ({ page }) => {
 });
 
 test('camera stays outside geometry in the crouch tunnel and against a wall', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const deg = Math.PI / 180;
   const { pitchMinDeg, pitchMaxDeg } = clientJson.camera.chase;
@@ -225,7 +232,7 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
 });
 
 test('wall-run: the courier stays in view at look offsets from the wall, hidden only when the camera is that close (R12, R10)', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const deg = Math.PI / 180;
   const { minDistance } = clientJson.camera.chase;
@@ -266,7 +273,7 @@ test('wall-run: the courier stays in view at look offsets from the wall, hidden 
 });
 
 test('camera stays outside geometry on a zip line beside a building', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   // downtown-zip-03 runs from (43.8, 23, −92) down to (50, 2.8, −160) and passes about 1.1 m from the east face
   // (x = 44) of building b-0--3-3 a fifth of the way along. Hang under the top end facing down the line and press E.
@@ -310,7 +317,7 @@ test('camera stays outside geometry on a zip line beside a building', async ({ p
 });
 
 test('courier model loads and animates (mixer time advances)', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const c0 = await page.evaluate(() => window.__dm!.courier());
   expect(c0.loaded).toBe(true);
@@ -340,7 +347,7 @@ test('courier model loads and animates (mixer time advances)', async ({ page }) 
 });
 
 test('courier poses: wall-run, zip line and board', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const deg = Math.PI / 180;
 
@@ -404,7 +411,7 @@ test('a missing model falls back to the capsule without console errors (Review F
   });
   // A wrong Pages base path: the .glb request 404s. Chromium itself logs the failed fetch; any other error fails.
   await page.route('**/*.glb', (r) => r.fulfill({ status: 404, body: 'not found' }));
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   const ours = errors.filter((e) => !/^Failed to load resource: .*404/.test(e));
   expect(ours).toEqual([]);
   expect(await page.evaluate(() => window.__dm!.courier().loaded)).toBe(false);
@@ -422,7 +429,7 @@ test('a corrupt model file falls back to the capsule with one warning and no err
     if (m.type() === 'warning') warnings.push(m.text());
   });
   await page.route('**/*.glb', (r) => r.fulfill({ status: 200, contentType: 'model/gltf-binary', body: 'this is not a glb' }));
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
   expect(await page.evaluate(() => window.__dm!.courier().loaded)).toBe(false);
   expect(warnings.filter((w) => w.startsWith('Courier model unavailable'))).toHaveLength(1);
@@ -441,7 +448,7 @@ async function airShot(page: Page, feet: { x: number; y: number; z: number }, ta
 }
 
 test('city overview screenshot', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
   await airShot(page, { x: 0, y: 120, z: 200 }, { x: 0, y: 0, z: 0 }, 'sp1-city-overview.png');
   const info = await page.evaluate(() => window.__dm!.renderInfo());
@@ -451,7 +458,7 @@ test('city overview screenshot', async ({ page }) => {
 });
 
 test('playground screenshot', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
   // Above the plaza's south-east corner, looking along the playground line toward the tower.
   await airShot(page, { x: 40, y: 18, z: 42 }, { x: 92, y: 2, z: -2 }, 'sp1-playground.png');
@@ -459,11 +466,12 @@ test('playground screenshot', async ({ page }) => {
 });
 
 /**
- * Board seed for the delivery tests. With the Task 18 city (21 POIs) its first board's first Drop-off is an Express
- * drop-off to harbor-poi-05, a street door. Tests assert a Drop-off is present, so a map or generator change
- * fails here deterministically instead of flaking.
+ * Greybox and board seed for the SP1 delivery tests. With the greybox (21 POIs) and the SP2 board rules (Task 15:
+ * spread, district weights, Chain weight 4) its first board's first Drop-off is an Express drop-off to harbor-poi-05,
+ * a street door. Tests assert a Drop-off is present, so a map or generator change fails here deterministically
+ * instead of flaking.
  */
-const SEED = '&seed=3';
+const SEED = `${GREYBOX}&seed=35`;
 
 /** Waits for the player to settle, then returns the first Drop-off on the board. */
 async function firstDropoff(page: Page): Promise<{ id: string; poiId: string }> {
@@ -580,7 +588,7 @@ test('HUD shows the active order with distance', async ({ page }) => {
 });
 
 test('dev panel: backtick opens it, a sprintSpeed edit applies live, typing does not move the player', async ({ page }) => {
-  const errors = await boot(page);
+  const errors = await boot(page, GREYBOX);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const panel = page.locator('.dm-dev-panel');
   await expect(panel).toBeHidden();
@@ -613,7 +621,7 @@ test('dev panel: backtick opens it, a sprintSpeed edit applies live, typing does
 });
 
 test('dev panel screenshot', async ({ page }) => {
-  await boot(page);
+  await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 10);
   await page.keyboard.press('Backquote');
   await page.locator('.dm-dev-panel .lil-title', { hasText: /^run$/ }).click();
@@ -621,7 +629,7 @@ test('dev panel screenshot', async ({ page }) => {
   await page.screenshot({ path: `${artifacts}sp1-devpanel.png` });
 });
 
-// ---- SP2: the generated city behind ?map=city (the greybox stays the default until Task 15) ----
+// ---- SP2: the generated city (the default map; ?map=city names it explicitly) ----
 
 const CITY = '&map=city';
 
@@ -784,13 +792,78 @@ test('sp2 POI screenshots (a balcony kit, a roof pad-and-zip kit, a street stall
   expect(errors).toEqual([]);
 });
 
-test('the default (no ?map) still loads the SP1 greybox', async ({ page }) => {
+test('the default (no ?map) loads the city; ?map=greybox loads the SP1 greybox', async ({ page }) => {
   const errors = await boot(page);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  expect(await page.evaluate(() => window.__dm!.cityStats())).not.toBeNull();
+  expect(await page.evaluate(() => window.__dm!.loadedChunks())).toContain('0,0');
+  expect(errors).toEqual([]);
+
+  const greyErrors = await boot(page, GREYBOX);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
   expect(await page.evaluate(() => window.__dm!.cityStats())).toBeNull();
   expect(await page.evaluate(() => window.__dm!.loadedChunks())).toEqual([]);
   // A greybox-only feature: the city has no boost orbs yet.
   expect(await page.evaluate(() => window.__dm!.featurePosition('hub-orb-01'))).toBeTruthy();
+  expect(greyErrors).toEqual([]);
+});
+
+/**
+ * City board seed: its first board's first Drop-off goes to poi-suburbs-01, a street-level door 1,008 m from the HUB
+ * by navmesh path (Medium on the city bands). Tests assert a Drop-off is present, so a map or generator change fails
+ * here deterministically instead of flaking.
+ */
+const CITY_SEED = '&seed=2';
+
+test('city: accept a drop-off at the kiosk and deliver it (navmesh distances, city bands)', async ({ page }) => {
+  const errors = await boot(page, CITY_SEED); // no ?map: the city is the default
+  const board = await page.evaluate(() => window.__dm!.orders.board());
+  // Every card is priced from the navmesh POI table and banded on the city limits (500 / 1,200 m).
+  const rows = new Map(poiTableJson.pois.map((r) => [r.id, r]));
+  const ids = poiTableJson.pois.map((r) => r.id);
+  const between = (a: string, b: string): number => poiTableJson.between[ids.indexOf(a)]![ids.indexOf(b)]!;
+  const { shortMax, mediumMax } = ordersJson.bands.city;
+  expect(board.length).toBe(ordersJson.board.size);
+  for (const o of board) {
+    const [a, b] = o!.steps.flatMap((s) => (s.kind === 'poi' ? [s.poiId] : []));
+    const ra = rows.get(a!)!;
+    const route =
+      o!.type === 'dropoff' ? ra.fromHub : o!.type === 'pickup' ? ra.fromHub + ra.toHub : ra.fromHub + between(a!, b!) + rows.get(b!)!.toHub;
+    expect(o!.routeDistance, `${o!.type} ${a}`).toBeCloseTo(route, 6);
+    if (o!.type !== 'chain') {
+      expect(o!.band).toBe(ra.fromHub < shortMax ? 'short' : ra.fromHub <= mediumMax ? 'medium' : 'long');
+    }
+  }
+  const drop = await firstDropoff(page);
+  expect(drop.poiId).toBe('poi-suburbs-01');
+
+  // The HUB kiosk (0, 0, −8): stand at it and press E.
+  const kiosk = await page.evaluate(() => window.__dm!.kiosk());
+  expect(kiosk).toEqual({ x: 0, y: 0, z: -8 });
+  await page.evaluate((k) => window.__dm!.viewpoint({ x: k.x, y: k.y, z: k.z + 2 }, { x: k.x, y: 1.5, z: k.z }), kiosk);
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.keyboard.press('KeyE');
+  await expect(page.locator('.board-overlay')).toBeVisible();
+  const card = page.locator(`.board-card[data-order-id="${drop.id}"]`);
+  await expect(card.locator('.board-facts')).toContainText('Medium');
+  await expect(card.locator('.board-facts')).toContainText(`${Math.round(rows.get(drop.poiId)!.fromHub)} m route`);
+  await page.screenshot({ path: `${artifacts}sp2-city-order-board.png` });
+  await card.locator('.accept').click();
+  await expect(page.locator('.board-active-row')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.board-overlay')).toBeHidden();
+  expect((await page.evaluate(() => window.__dm!.orders.active())).map((a) => a.order.id)).toEqual([drop.id]);
+
+  // Teleport onto the POI (the pager loads its colliders first) and deliver.
+  await goToPoi(page, drop.poiId);
+  const popup = page.locator('.popup').filter({ hasText: /Delivered!\s+\+\d+ pts?\b/ });
+  await expect(popup).toBeVisible({ timeout: 10_000 });
+  await expect(popup).toHaveCSS('opacity', '1');
+  const totals = await page.evaluate(() => window.__dm!.orders.totals());
+  expect(totals.deliveries).toBe(1);
+  expect(await page.evaluate(() => window.__dm!.orders.active())).toEqual([]);
+  expect((await page.evaluate(() => window.__dm!.player())).position.y).toBeGreaterThan(-0.05); // stood on the street
+  await page.screenshot({ path: `${artifacts}sp2-city-delivered.png` });
   expect(errors).toEqual([]);
 });
 
@@ -806,7 +879,7 @@ test('sp2 side view: the 700 m LOD cutoff is fogged out at the screen sides', as
 test('?perf=1 completes a short run (seconds=5) and reports a result', async ({ page, context }) => {
   test.setTimeout(90_000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const errors = await boot(page, '&perf=1&perfSeconds=5'); // ?perf=1 implies the city map
+  const errors = await boot(page, '&perf=1&perfSeconds=5'); // the city: the default map
   await expect(page.locator('.perf-overlay')).toContainText('Running');
   await page.waitForFunction(() => window.__dm?.perf() != null, undefined, { timeout: 60_000 });
   const r = await page.evaluate(() => window.__dm!.perf()!);
