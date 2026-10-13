@@ -8,13 +8,19 @@ import {
   parsePieceCatalog,
   rotatedHalfExtents,
   solidRect,
+  StreetGraph,
+  ThiefSystem,
+  mulberry32,
+  thievesConfig,
   type CityMap,
   type Rect,
   type Solid,
 } from '@dm/shared';
 import { generateCity } from '../../src/city/generate';
+import { arterialLines, landRect } from '../../src/city/layout';
 import { parseCitySource } from '../../src/city/source';
 import { stableStringify } from '../../src/city/stableJson';
+import { arterialGraph } from '../../src/city/streets';
 import type { AssetsConfig } from '../../src/assets/pipeline';
 
 // Runs the generator on the real committed inputs.
@@ -303,5 +309,73 @@ describe('generateCity on map/city.source.json', () => {
     const names = src.districts.map((d) => d.district);
     for (const p of city.props) expect(names.some((n) => p.id.startsWith(`${n}-`)), p.id).toBe(true);
     expect(city.districts.map((d) => d.district).sort()).toEqual(['downtown', 'harbor', 'hillside', 'suburbs']);
+  });
+
+  it('arterial edges whose midpoint lies more than longMinHubDistance from the hub are long; no other edge is', () => {
+    const land = landRect(src);
+    const hub = city.hub;
+    const art = arterialGraph(land, arterialLines(src, land), hub, src.hub.clearRadius, src.arterials.longMinHubDistance);
+    const pos = new Map(art.nodes.map((n) => [n.id, n.p]));
+    const wrong = art.edges.filter((e) => {
+      const [a, b] = [pos.get(e.a)!, pos.get(e.b)!];
+      const far = Math.hypot((a.x + b.x) / 2 - hub.center.x, (a.z + b.z) / 2 - hub.center.z) > src.arterials.longMinHubDistance;
+      return e.long !== far;
+    });
+    expect(wrong).toEqual([]);
+    expect(art.edges.filter((e) => e.long).length).toBeGreaterThan(10);
+    // The merged city keeps them (split where local streets join), and only on arterial lines
+    const { xs, zs } = arterialLines(src, land);
+    const cityPos = new Map(city.streets.nodes.map((n) => [n.id, n.p]));
+    const long = city.streets.edges.filter((e) => e.long);
+    expect(long.length).toBeGreaterThanOrEqual(art.edges.filter((e) => e.long).length);
+    for (const e of long) {
+      const [a, b] = [cityPos.get(e.a)!, cityPos.get(e.b)!];
+      const onLine = (a.x === b.x && xs.includes(a.x)) || (a.z === b.z && zs.includes(a.z));
+      expect(onLine, `${e.a}-${e.b}`).toBe(true);
+    }
+  });
+
+  it('thief spawns: perDistrict in each quadrant, then longStreetExtra on long streets; distinct thief nodes', () => {
+    const graph = new StreetGraph(city.streets, city.hub, thievesConfig.plazaMargin);
+    const longNodes = new Set(city.streets.edges.filter((e) => e.long).flatMap((e) => [e.a, e.b]));
+    const per = thievesConfig.perDistrict;
+    const total = Object.values(per).reduce((a, b) => a + b, 0) + thievesConfig.longStreetExtra;
+    expect(city.thiefSpawns).toHaveLength(total);
+    expect(new Set(city.thiefSpawns.map((t) => t.node)).size).toBe(total);
+    for (const d of city.districts) {
+      const own = city.thiefSpawns.filter((t) => t.id.startsWith(`thief-${d.district}-`));
+      expect(own, d.district).toHaveLength(per[d.district as keyof typeof per]);
+    }
+    const extra = city.thiefSpawns.filter((t) => t.id.startsWith('thief-long-'));
+    expect(extra).toHaveLength(thievesConfig.longStreetExtra);
+    for (const t of extra) expect(longNodes.has(t.node), t.id).toBe(true);
+    for (const t of city.thiefSpawns) {
+      expect(graph.isThiefNode(t.node), t.id).toBe(true);
+      expect(graph.neighbours(t.node).length, t.id).toBeGreaterThan(0);
+      const p = graph.position(t.node);
+      const home = city.districts.find((d) => p.x >= d.rect.minX && p.x <= d.rect.maxX && p.z >= d.rect.minZ && p.z <= d.rect.maxZ);
+      expect(t.district, t.id).toBe(home?.district);
+    }
+  });
+
+  it('thieves stay on the street strips and out of the plaza over two minutes of patrol and chases', () => {
+    const graph = new StreetGraph(city.streets, city.hub, thievesConfig.plazaMargin);
+    const sys = new ThiefSystem(city, thievesConfig, mulberry32(5));
+    const exclusion = city.hub.plazaRadius + thievesConfig.plazaMargin;
+    const bad: string[] = [];
+    let chases = 0;
+    for (let i = 1; i <= 120 * 30; i++) {
+      // A carrying courier stands beside a different thief every 10 s
+      const near = sys.thieves[Math.floor(i / 300) % sys.thieves.length]!.position;
+      const courier = { position: { x: near.x + 8, y: near.y, z: near.z + 3 }, carrying: 1, inPlaza: false };
+      chases += sys.step(1 / 30, i / 30, courier, () => true).filter((e) => e.kind === 'chaseStarted').length;
+      for (const t of sys.thieves) {
+        const q = graph.project(t.position).p;
+        if (Math.hypot(q.x - t.position.x, q.z - t.position.z) > 1e-6) bad.push(`${t.id} off the streets at tick ${i}`);
+        if (Math.hypot(t.position.x - city.hub.center.x, t.position.z - city.hub.center.z) < exclusion - 1e-6) bad.push(`${t.id} in the plaza`);
+      }
+    }
+    expect(bad.slice(0, 5)).toEqual([]);
+    expect(chases).toBeGreaterThan(5);
   });
 });

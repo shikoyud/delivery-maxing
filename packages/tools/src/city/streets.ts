@@ -37,10 +37,10 @@ export class GraphBuilder {
     this.edges.push({ a, b, halfWidth, long });
   }
 
-  /** A street through `points` in order: one edge between each consecutive pair. */
-  street(points: Vec3[], halfWidth: number): void {
+  /** A street through `points` in order: one edge between each consecutive pair; `isLong` marks long-distance edges. */
+  street(points: Vec3[], halfWidth: number, isLong: (a: Vec3, b: Vec3) => boolean = () => false): void {
     const ids = points.map((p) => this.node(p));
-    for (let i = 1; i < ids.length; i++) this.edge(ids[i - 1]!, ids[i]!, halfWidth);
+    for (let i = 1; i < ids.length; i++) this.edge(ids[i - 1]!, ids[i]!, halfWidth, isLong(points[i - 1]!, points[i]!));
   }
 
   graph(): StreetGraph {
@@ -50,11 +50,19 @@ export class GraphBuilder {
 
 /**
  * The arterial grid across the land. Arterials through the hub stop at the plaza edge (nodes flagged `plaza`), and a
- * `hub` node at the plaza centre joins those ends so the graph stays connected through the plaza.
+ * `hub` node at the plaza centre joins those ends so the graph stays connected through the plaza. Edges whose midpoint
+ * lies more than `longMinHubDistance` from the hub (horizontally) are `long`: long-distance streets get extra thieves.
  */
-export function arterialGraph(land: Rect, arterials: ArterialLines, hub: Hub, clearRadius: number): StreetGraph {
+export function arterialGraph(
+  land: Rect,
+  arterials: ArterialLines,
+  hub: Hub,
+  clearRadius: number,
+  longMinHubDistance: number,
+): StreetGraph {
   const g = new GraphBuilder('art-');
   const c = hub.center;
+  const isLong = (a: Vec3, b: Vec3): boolean => Math.hypot((a.x + b.x) / 2 - c.x, (a.z + b.z) / 2 - c.z) > longMinHubDistance;
   const hubId = g.node(c, true, 'hub');
   const lines: { fixed: number; along: number[]; vertical: boolean }[] = [
     ...arterials.xs.map((x) => ({ fixed: x, along: [land.minZ, ...arterials.zs, land.maxZ], vertical: true })),
@@ -66,15 +74,15 @@ export function arterialGraph(land: Rect, arterials: ArterialLines, hub: Hub, cl
     const at = (s: number): Vec3 => (vertical ? { x: fixed, y: 0, z: s } : { x: s, y: 0, z: fixed });
     if (Math.abs(off) > EPS) {
       if (Math.abs(off) < clearRadius) throw new Error(`arterial at ${fixed} grazes the plaza; it must pass through its centre or clear it`);
-      g.street(along.map(at), arterials.halfWidth);
+      g.street(along.map(at), arterials.halfWidth, isLong);
       continue;
     }
     // Through the plaza: two halves ending on the plaza edge, each joined to the hub node
     const r = hub.plazaRadius;
     const before = [...along.filter((s) => s < mid - r), mid - r].map(at);
     const after = [mid + r, ...along.filter((s) => s > mid + r)].map(at);
-    g.street(before, arterials.halfWidth);
-    g.street(after, arterials.halfWidth);
+    g.street(before, arterials.halfWidth, isLong);
+    g.street(after, arterials.halfWidth, isLong);
     for (const end of [at(mid - r), at(mid + r)]) g.edge(hubId, g.node(end, true), arterials.halfWidth);
   }
   return g.graph();

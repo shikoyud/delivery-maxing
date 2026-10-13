@@ -13,7 +13,7 @@
     "kioskSize": { "x": 2.3, "y": 1.05, "z": 1.1 },
     "clearRadius": 45
   },
-  "arterials": { "pitch": 200, "halfWidth": 10 },
+  "arterials": { "pitch": 200, "halfWidth": 10, "longMinHubDistance": 600 },
   "streets": { "roadTop": 0.02, "sidewalkTop": 0.15, "sidewalkWidth": 3 },
   "districts": [
     {

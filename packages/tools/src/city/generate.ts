@@ -2,6 +2,7 @@ import {
   movementConfig,
   mulberry32,
   ordersConfig,
+  thievesConfig,
   worldConfig,
   type Checkpoint,
   type CityMap,
@@ -20,6 +21,7 @@ import { arterialLines, landRect } from './layout';
 import { placePois, type PoiContext } from './pois';
 import type { CitySource, QuadrantDistrict, Template } from './source';
 import { arterialGraph, mergeStreetGraphs, streetSolids } from './streets';
+import { placeThiefSpawns } from './thiefSpawns';
 
 export {
   buildFiller,
@@ -75,8 +77,8 @@ function keepClearOf(reports: readonly Partial<DistrictReport>[], city: CityMap)
 
 /**
  * Expands the city source into the placement file: ground, cliffs and quays, the hub, arterials with a checkpoint at
- * every crossing, then each district's builder output, merged in source order, and last the POI pass (POIs, their
- * access kits and street furniture). Deterministic for a given source.
+ * every crossing, then each district's builder output, merged in source order, the POI pass (POIs, their access kits
+ * and street furniture), and last the thief spawns. Deterministic for a given source.
  */
 export function generateCity(src: CitySource, pieces: PieceCatalog): CityMap {
   return generateCityWithReport(src, pieces).city;
@@ -113,7 +115,10 @@ export function generateCityWithReport(src: CitySource, pieces: PieceCatalog): {
   const all = <K extends Exclude<keyof DistrictOutput, 'report'>>(k: K): DistrictOutput[K] =>
     outputs.flatMap((o) => o[k] as unknown[]) as DistrictOutput[K];
 
-  const streets = mergeStreetGraphs([arterialGraph(land, arterials, hub.hub, src.hub.clearRadius), ...outputs.map((o) => o.streets)]);
+  const streets = mergeStreetGraphs([
+    arterialGraph(land, arterials, hub.hub, src.hub.clearRadius, src.arterials.longMinHubDistance),
+    ...outputs.map((o) => o.streets),
+  ]);
 
   const c = hub.hub.center;
   const crossings: Checkpoint[] = [];
@@ -175,5 +180,6 @@ export function generateCityWithReport(src: CitySource, pieces: PieceCatalog): {
   city.zipLines.push(...(extras.zipLines ?? []));
   city.navLinks.push(...(extras.navLinks ?? []));
   report.poiKits = extras.report?.poiKits ?? [];
+  city.thiefSpawns = placeThiefSpawns(city, thievesConfig, mulberry32(districtSeed(src.seed, 'thieves')));
   return { city, report };
 }

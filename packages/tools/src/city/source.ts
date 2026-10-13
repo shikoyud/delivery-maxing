@@ -22,7 +22,8 @@ export interface CitySource {
   size: number;
   /** The SP1 hub values, plus the kiosk box size and the radius kept free of lots. */
   hub: Hub & { kioskSize: Vec3; clearRadius: number };
-  arterials: { pitch: number; halfWidth: number };
+  /** The arterial grid; arterial edges whose midpoint lies farther than `longMinHubDistance` from the hub are long streets (more thieves). */
+  arterials: { pitch: number; halfWidth: number; longMinHubDistance: number };
   streets: StreetStyle;
   districts: DistrictSource[];
   boundary: {
@@ -139,7 +140,7 @@ export function parseCitySource(json: unknown): CitySource {
   if (!isNum(hub.spawnYaw)) fail('hub.spawnYaw must be a number');
   if ((hub.clearRadius as number) < (hub.plazaRadius as number)) fail('hub.clearRadius must be at least plazaRadius');
 
-  pos(obj(root.arterials, 'arterials'), ['pitch', 'halfWidth'], 'arterials');
+  pos(obj(root.arterials, 'arterials'), ['pitch', 'halfWidth', 'longMinHubDistance'], 'arterials');
   const streets = obj(root.streets, 'streets');
   pos(streets, ['roadTop', 'sidewalkTop', 'sidewalkWidth'], 'streets');
 
