@@ -1,7 +1,7 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) is waiting for the owner's review:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). Sections marked **Pending** need the owner's input before they are built.
+- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) approved by the owner on 2026-10-14:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). Sections marked **Pending** need the owner's input before they are built.
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
@@ -46,7 +46,7 @@ Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel
 | **Vehicle purchases (rev. 2)** | Paid in GAME at fixed USD prices: 80% burned, 20% sent to the reward pool. |
 | **Spender advantage (rev. 2)** | Intentional: better vehicles earn more. The legal risk this adds is in §16. |
 | Thieves | Street NPCs chase couriers on foot carrying orders; a catch fails the carried orders. Kept from SP2, adapted to vehicles (§7.3). |
-| Art (rev. 2) | The owner's Megatropolis and Tropical City `.glb` packs for the city; the CC0 Quaternius courier; code-built placeholders for anything missing. Licence **Pending** (§16). |
+| Art (rev. 2) | The owner's Megatropolis and Tropical City `.glb` packs for the city; the CC0 Quaternius courier; code-built placeholders for anything missing. Licensed Unity Asset Store packs, kept out of git (§16, `assets/CREDITS.md`). |
 | Map build | A seeded generator writes the committed layout and generated files; `pnpm map:check` regenerates and byte-compares them in CI (kept from SP2). |
 
 ## 3. Core loop
@@ -369,7 +369,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 | # | Sub-project | Status / done when |
 |---|---|---|
 | 1 | Movement + delivery loop | Done (PR #2) |
-| 2 | City map + POI system (2 × 2 km, Quaternius) | Built (PR #3). Its map is replaced by revision 2; the streaming, LOD, navmesh, generator and perf tooling carry over. |
+| 2 | City map + POI system (2 × 2 km, Quaternius) | Built on branch `sp2/city-map-poi`; PR #3 was closed unmerged on 2026-10-14 because revision 2 replaces its map. Its streaming, LOD, navmesh, generator and perf tooling are reused from that branch in SP5. |
 | 3 | **Core loop rework** | HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
 | 4 | **Vehicles** | Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
 | 5 | **City v2** | The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs, 60 fps re-proved. |
@@ -382,7 +382,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 **Risks and legal:**
 - **Real-value rewards:** paying rewards funded by token trading fees may be regulated as securities, gambling or another category depending on the country. Get legal advice before launch; this spec is not legal advice.
 - **Spending for advantage:** revision 2 deliberately lets spending (vehicles bought with GAME) increase earnings. Combined with real-value payouts, this strengthens the case that the game is an investment product or gambling in some jurisdictions. Include it in the legal review. (The v1 spec had rejected spend-for-advantage designs as too pay-to-win.)
-- **Asset licence:** the Megatropolis and Tropical City packs appear to be Unity Asset Store packs, which normally allow use inside a game but not redistribution of the source files. The repository is public, so the packs are kept out of git until the owner confirms the source and licence. The project rule "CC0 assets only" must be updated to cover them.
+- **Asset licence:** the Megatropolis and Tropical City packs are the owner's Unity Asset Store purchase (Low Poly Asset Bundle, Standard EULA, Single Entity). They may ship inside the game but not be redistributed, so they are git-ignored and fetched privately in CI (`assets/CREDITS.md`). The project rule "CC0 assets only" must be updated to cover them.
 - **Custody:** the program holds the reward pool, which makes it a high-value target. The audit must cover it.
 - **Branding:** no Amazon or real delivery-app names, logos or trade dress (Grab, ShopeeFood, Uber Eats, DoorDash…). Business names in the city are fictional.
 
@@ -391,7 +391,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 **Open items (owner):**
 - The reward payout design (§9) and lock-to-boost (§6.4).
 - USD prices of vehicles, Shoes, skins and the lockout skip.
-- Source and licence of the asset packs; models for the skateboard, bicycle, motorbike, post office, warehouse, school, containers and cranes.
+- Models for the skateboard, bicycle, motorbike, post office, warehouse, school, containers and cranes.
 - Confirm the creator fee percentage at launch (Pump.fun allows 0.05%–1%).
 
 **Not in v1 (later ideas):** mobile touch controls, NPC traffic and pedestrians, Rush Hour events, private rooms.

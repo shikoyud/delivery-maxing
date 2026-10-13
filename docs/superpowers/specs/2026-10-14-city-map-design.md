@@ -1,7 +1,7 @@
 # Delivery Maxing — City Map Design (v1)
 
 - **Date:** 2026-10-14
-- **Status:** Draft for review (sections 1–4 were approved in conversation on 2026-10-13/14; this document is waiting for the owner's review)
+- **Status:** Approved by the owner on 2026-10-14
 - **Parent spec:** `2026-10-12-delivery-maxing-design.md` (revised 2026-10-14 for the redesign: no HUB, point-to-point orders, vehicles, phone, no parkour)
 - **Map image:** `img/city-map-topdown.png`
 - **Machine-readable catalog:** `map/catalog.json`
@@ -341,7 +341,7 @@ Any catalog entry without a model on disk — missing types, or the whole city w
 
 ### 7.4 Where the packs live
 
-The `.glb` packs are **not** committed to the public repository (§9, licence). For local development they go in a git-ignored `assets/packs/` folder with the original folder names. How CI and GitHub Pages get them is decided with the licence answer: a private assets repository fetched in CI, or making this repository private.
+The packs are the owner's purchase of the Unity Asset Store **Low Poly Asset Bundle** (https://assetstore.unity.com/packages/3d/environments/low-poly-asset-bundle-196214), Standard EULA, Single Entity seat. That licence allows shipping the models inside the game but not redistributing the source files, so the `.glb` files are **never committed** to this public repository: they live in a git-ignored `assets/packs/` folder with the original folder names (`assets/CREDITS.md`). CI and GitHub Pages fetch them from a private store at build time (a private GitHub repository or release read with a deploy token stored as a CI secret); the deployed bundle may contain them. Contractors would need their own seat.
 
 ### 7.5 `pnpm assets:check <folder>`
 
@@ -375,7 +375,7 @@ Run by hand on `C:\Users\nnduy\Downloads\assets` (931 `.glb`, 168 MB, already co
 
 ## 9. Open items
 
-1. **Asset licence and storage.** The packs look like Unity Asset Store packs, which normally allow shipping inside a game but not publishing the source files. The repository is public. Owner to confirm the source and licence; until then the packs stay out of git and `assets/CREDITS.md` gets an entry once the licence is known. The project rule "CC0 assets only" needs updating if these packs are used.
+1. **Asset storage in CI.** Licence settled (§7.4): the packs stay out of git. Set up the private store and the CI secret in the city sub-project. The project rule "CC0 assets only" should be updated to "CC0, or the owner's licensed packs listed in `assets/CREDITS.md`".
 2. **Courier vehicle and missing building models** (§5.5): owner to source; placeholders until then.
 3. **Player car model:** choose from `mega/Car_01–37` / `trop/Car_01–19` in the vehicles sub-project.
 4. **Front axis per building** (§7.2): set during import.
