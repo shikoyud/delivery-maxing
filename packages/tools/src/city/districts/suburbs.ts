@@ -1,5 +1,6 @@
 import type { PieceEntry, Rail, Rect, Solid, Vec3 } from '@dm/shared';
 import {
+  arterialCellLines,
   districtGrid,
   districtQuays,
   emptyOutput,
@@ -15,7 +16,7 @@ import {
   type RampReport,
 } from '../district';
 import { slopedSlab } from '../kits';
-import { box, gridLines, intersectRect, r2, v2, type GridLine } from '../layout';
+import { box, DEG, r2, v2, type GridLine } from '../layout';
 import { fillLot, type FillerParams } from '../lots';
 import { GraphBuilder, splitAtChunks } from '../streets';
 
@@ -86,7 +87,6 @@ interface SuburbsParams {
 
 /** Spec minimums. */
 const SPEC = { parkSize: 120, parkRails: 8, railStreets: 2 } as const;
-const DEG = 180 / Math.PI;
 const DIRS: Record<Dir, { x: number; z: number }> = { '+x': { x: 1, z: 0 }, '-x': { x: -1, z: 0 }, '+z': { x: 0, z: 1 }, '-z': { x: 0, z: -1 } };
 const isDir = (v: unknown): v is Dir => typeof v === 'string' && v in DIRS;
 const isUV = (v: unknown): v is UV => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'number' && Number.isFinite(x));
@@ -158,15 +158,17 @@ function checkRules(ctx: DistrictContext, s: SuburbsParams, fail: (why: string) 
   // the surface under it
   if (!Number.isInteger(sr.count) || sr.count < SPEC.railStreets) fail(`streetRails.count must be an integer ≥ ${SPEC.railStreets}`);
   if (sr.inset + move.capsule.radius > ctx.city.streets.sidewalkWidth) fail('streetRails.inset must keep a grinding courier over the sidewalk');
-  if (sk.rails.length + 2 * sk.funboxes.length < SPEC.parkRails) fail(`the skatepark needs at least ${SPEC.parkRails} rails`);
+  // Each funbox carries one deck rail
+  if (sk.rails.length + sk.funboxes.length < SPEC.parkRails) fail(`the skatepark needs at least ${SPEC.parkRails} rails`);
   for (const [k, r] of sk.rails.entries()) {
     if (rails.height + r.points[0]![2] > move.jump.height) fail(`skatepark.rails[${k}] starts higher than a jump`);
     if (r.points.some((q) => rails.height + q[2] < rails.minClearance)) fail(`skatepark.rails[${k}] dips under rails.minClearance`);
     // It is approached along `dir`: it starts above `at`, and its first segment runs along `dir`
     const [p0, p1] = [r.points[0]!, r.points[1]!];
     if (p0[0] !== 0 || p0[1] !== 0 || p1[1] !== 0 || !(p1[0] > 0)) fail(`skatepark.rails[${k}] must start above its at spot, its first segment along dir`);
-    // Both end segments level: leaving a rail down a sloped end segment, the courier's feet (lifted above the rail)
-    // are closest to a point just short of the end, so the rail catches them again at once (PlayerSim tryStartGrind)
+    // Both end segments level (Ruling R19; relax once shared rail.ts is fixed): leaving a rail down a sloped end
+    // segment, the courier's feet (lifted above the rail) are closest to a point just short of the end, so the rail
+    // catches them again at once and every tick after (PlayerSim tryStartGrind)
     const [q1, q0] = [r.points[r.points.length - 1]!, r.points[r.points.length - 2]!];
     if (p1[2] !== p0[2] || q1[2] !== q0[2]) fail(`skatepark.rails[${k}] must start and end with a level segment`);
   }
@@ -241,15 +243,9 @@ export function buildSuburbs(ctx: DistrictContext): DistrictOutput {
 
 /** The arterial cell (between arterial centre lines) holding skatepark.cellAt; it must have arterials on all sides. */
 function parkCell(ctx: DistrictContext, p: SuburbsParams): Rect {
-  const area = intersectRect(ctx.rect, ctx.city.land);
   const { x, z } = p.skatepark.cellAt;
   const span = (axis: 'x' | 'z', v: number): [GridLine, GridLine] => {
-    // No local streets: the lines are the arterials and the land edges (an infinite pitch splits no span)
-    const lines = gridLines(axis === 'x' ? area.minX : area.minZ, axis === 'x' ? area.maxX : area.maxZ, ctx.city.arterials, axis, {
-      pitch: Infinity,
-      halfWidth: 0,
-      edgeMargin: 0,
-    });
+    const lines = arterialCellLines(ctx, axis, 0);
     const k = lines.findIndex((l, i) => i + 1 < lines.length && l.at < v && v < lines[i + 1]!.at);
     if (k < 0) throw new Error(`district ${ctx.district}: skatepark.cellAt lies outside the district`);
     const pair: [GridLine, GridLine] = [lines[k]!, lines[k + 1]!];

@@ -1,6 +1,9 @@
 import type { Rect, Solid, SolidKind, Vec3 } from '@dm/shared';
 import type { CitySource, Edge } from './source';
 
+/** Degrees per radian. */
+export const DEG = 180 / Math.PI;
+
 /** Rounds to 0.01 (the precision of every coordinate in city.json); `+ 0` turns −0 into 0. */
 export const r2 = (v: number): number => Math.round(v * 100) / 100 + 0;
 export const v2 = (v: Vec3): Vec3 => ({ x: r2(v.x), y: r2(v.y), z: r2(v.z) });

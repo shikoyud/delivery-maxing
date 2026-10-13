@@ -1,5 +1,6 @@
 import { ordersConfig, solidRect, type PieceEntry, type Rect, type Solid, type Vec3 } from '@dm/shared';
 import {
+  arterialCellLines,
   emptyOutput,
   paramChecks,
   type DistrictContext,
@@ -8,7 +9,7 @@ import {
   type StreetRamp,
 } from '../district';
 import { navLinkFor, obstacleOf, padFlightClear, padLaunchFor, slopedSlab } from '../kits';
-import { box, gridLines, intersectRect, r2, v2, type GridLine } from '../layout';
+import { box, DEG, r2, v2 } from '../layout';
 import { fillLot, type FillerParams, type Lot } from '../lots';
 import { GraphBuilder, splitAtChunks } from '../streets';
 
@@ -52,7 +53,6 @@ interface HillsideParams {
 
 /** Spec ranges the hillside params must stay within. */
 const SPEC = { topHeight: [35, 40], rampDeg: [15, 25], chuteLength: [100, 300], minChutes: 3 } as const;
-const DEG = 180 / Math.PI;
 /** A stair run's reported standing points are this far off its ends (in front of the lowest step, past the top), m. */
 const STAND_OFF = 1.5;
 
@@ -193,16 +193,8 @@ export function buildHillside(ctx: DistrictContext): DistrictOutput {
  * rise within bandRiseMax.
  */
 function planCells(ctx: DistrictContext, p: HillsideParams): Cell[] {
-  const area = intersectRect(ctx.rect, ctx.city.land);
-  // No local streets: the lines are the arterials and the land edges (an infinite pitch splits no span)
-  const lines = (axis: 'x' | 'z'): GridLine[] =>
-    gridLines(axis === 'x' ? area.minX : area.minZ, axis === 'x' ? area.maxX : area.maxZ, ctx.city.arterials, axis, {
-      pitch: Infinity,
-      halfWidth: 0,
-      edgeMargin: p.edgeMargin,
-    });
-  const xs = lines('x');
-  const zs = lines('z');
+  const xs = arterialCellLines(ctx, 'x', p.edgeMargin);
+  const zs = arterialCellLines(ctx, 'z', p.edgeMargin);
   const [nx, nz] = [xs.length - 1, zs.length - 1];
   const far = nx - 1 + (nz - 1);
   const rise = p.stairs.rise;

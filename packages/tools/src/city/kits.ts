@@ -11,7 +11,7 @@ import {
   type Vec3,
   type ZipLine,
 } from '@dm/shared';
-import { top, v2 } from './layout';
+import { DEG, top, v2 } from './layout';
 import { yawPoint } from './lots';
 
 /** Depth of one crate step along the climb, m. */
@@ -73,8 +73,6 @@ export function mantleStepRises(climb: number, rise: number): number[] {
   const tops = [0, ...mantleSteps({ x: 0, y: 0, z: 0 }, { x: 0, y: climb, z: 0 }, 0, rise).map(top), climb];
   return tops.slice(1).map((t, k) => t - tops[k]!);
 }
-
-const DEG = 180 / Math.PI;
 
 /**
  * A slab whose top face runs from `hi` (its upper end) straight down to `lo`, reaching `embed` m on past `lo` along

@@ -217,7 +217,7 @@ describe('suburbs: layout', () => {
     }
   });
 
-  it('the south edge is a quay: checkpoints every ≤ 150 m along it, on open ground, and no land beyond it', () => {
+  it('south quay checkpoints exist every ≤ 150 m (on open ground, no land beyond the quay line)', () => {
     const south = sub.quay.quays.find((q) => q.edge === 'south')!;
     expect(south).toBeDefined();
     expect(south.line).toBe(1000 - src.boundary.quayInset);
@@ -273,6 +273,9 @@ function grind(rail: Rail, approach: Vec3, board: boolean, minSpeed: number): vo
     h.tick(hold);
   }
   expect(h.sim.state.grind, `${label}: on this rail, going toward its last point`).toMatchObject({ id: rail.id, segment: 0, dir: 1 });
+  // rail.ts clamps a grind's speed to at least railMinSpeed (board) / minSpeedFoot, so the speed assertion below cannot
+  // fail; what this covers is the layout: the run-up and jump reach the rail and snap onto this one (not a neighbour),
+  // the grind visits every segment in order to the far end (nothing ends it early), and it detaches into a clean landing
   let segment = 0;
   for (let i = 0; h.sim.state.mode === 'grind'; i++) {
     const g = h.sim.state.grind!;
@@ -353,7 +356,7 @@ describe('suburbs: skatepark ramps', () => {
 });
 
 describe('suburbs: water', () => {
-  it('running off the south quay into the water respawns at a suburbs quay checkpoint within 150 m', () => {
+  it('running off the south quay into the water respawns at the checkpoint nearest the last grounded spot: a suburbs quay checkpoint within 150 m', () => {
     const south = sub.quay.quays.find((q) => q.edge === 'south')!;
     let falls = 0;
     for (let a = south.from + 40; a < south.to; a += 120) {
@@ -364,9 +367,14 @@ describe('suburbs: water', () => {
       h.spawnAt(start, yaw);
       expect(h.sim.state.grounded, `${label}: standing on the quay`).toBe(true);
       let respawn: string | null = null;
+      let lastGrounded = h.sim.state.lastGrounded;
       for (let i = 0; i < 4 * cfg.tickRate && !respawn; i++) {
+        lastGrounded = h.sim.state.lastGrounded;
         for (const e of h.tick({ forward: 1, yaw })) if (e.kind === 'respawned') respawn = e.checkpointId;
       }
+      // Spec §5.1: the respawn is at the checkpoint nearest where the courier last stood
+      const nearest = city.checkpoints.reduce((a, c) => (distance(c.position, lastGrounded) < distance(a.position, lastGrounded) ? c : a));
+      expect(respawn, `${label}: at the nearest checkpoint`).toBe(nearest.id);
       expect(sub.quay.checkpoints, `${label}: at a suburbs quay checkpoint`).toContain(respawn);
       const cp = checkpoints.get(respawn!)!;
       expect(Math.hypot(cp.position.x - start.x, cp.position.z - start.z), label).toBeLessThanOrEqual(150);

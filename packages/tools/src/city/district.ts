@@ -200,6 +200,16 @@ export function districtGrid(ctx: DistrictContext, local: { pitch: number; halfW
   return { xs, zs, lots, streets: g.graph() };
 }
 
+/**
+ * The lines of the district's arterial cells along one axis: the arterials inside it and its land edges (with
+ * `edgeMargin`), no local streets (an infinite pitch splits no span).
+ */
+export function arterialCellLines(ctx: DistrictContext, axis: 'x' | 'z', edgeMargin: number): GridLine[] {
+  const area = intersectRect(ctx.rect, ctx.city.land);
+  const [min, max] = axis === 'x' ? [area.minX, area.maxX] : [area.minZ, area.maxZ];
+  return gridLines(min, max, ctx.city.arterials, axis, { pitch: Infinity, halfWidth: 0, edgeMargin });
+}
+
 /** An output with nothing in it but `streets`, for builders to fill. */
 export function emptyOutput(streets: StreetGraph): DistrictOutput {
   return {
