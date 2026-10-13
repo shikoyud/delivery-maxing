@@ -28,7 +28,7 @@ export const palette = {
 } as const;
 
 /**
- * One colour per active-order slot (backpack holds up to 5): waypoint beams and the HUD swatches share them.
+ * One colour per active-order slot (the car, the largest carrier, holds 5): waypoint beams and the HUD swatches share them.
  * Ordered so the first slots read best against the sky and the sand.
  */
 export const slotColors = [0xf27166, 0x8a6cf0, 0x16b3a4, 0xe25c9e, 0x3d7fe0] as const;

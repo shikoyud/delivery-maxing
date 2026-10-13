@@ -1,22 +1,38 @@
 import type * as THREE from 'three';
 import {
-  NO_MODS,
+  OrderSystem,
+  emptyInput,
+  mulberry32,
   ordersConfig,
   playerZones,
+  streetDistance,
+  vehiclesConfig,
+  type AcceptResult,
+  type ActiveOrder,
+  type Bonus,
+  type CancelResult,
   type InputFrame,
   type MapData,
   type MoveMode,
+  type OrderEvent,
   type PlayerZones,
+  type Rng,
   type SimEvent,
   type StatModifiers,
+  type Totals,
   type Vec3,
+  type VehicleTier,
 } from '@dm/shared';
 import type { ClientConfig } from '../clientConfig';
 import type { ActionState } from '../input/actionState';
 import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
-import { Hud } from '../ui/hud';
-import { hudModel } from '../ui/hudModel';
-import type { Progress, ProgressStore } from './progress';
+import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoints';
+import { keyLabel } from '../ui/dom';
+import { Hud, type HudView } from '../ui/hud';
+import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { Popups, type PopupSink } from '../ui/popups';
+import { SlotColorAssigner } from '../ui/slotColors';
+import type { ProgressStore } from './progress';
 
 export interface DeliveryDeps {
   host: HTMLElement;
@@ -27,69 +43,246 @@ export interface DeliveryDeps {
   progress: ProgressStore;
   /** Offer RNG seed (?seed=N, else Date.now()). */
   seed: number;
-  /** Sim time (s) and the player's sim state, read when the UI acts between ticks. */
+  /** Sim time (s) of the tick about to run, and the player's sim state. */
   now(): number;
   player(): { position: Vec3; mode: MoveMode };
+  /** The carrier capacity tier the player has (saved progress). */
+  capacityTier: VehicleTier;
+  /** HUD and popups; default to the DOM ones on `host` (tests pass recorders). */
+  ui?: { hud: HudView; popups: PopupSink };
 }
 
+const BONUS_LINE: Record<Bonus, string> = { hot: 'Still hot', par: 'Within par', express: 'Express on time', fragile: 'Fragile intact' };
+
+export const TIER_LABEL: Record<VehicleTier, string> = {
+  walk: 'walking',
+  skateboard: 'skateboard',
+  bicycle: 'bicycle',
+  motorbike: 'motorbike',
+  car: 'car',
+};
+
+const ACCEPT_REFUSED: Partial<Record<AcceptResult, string>> = {
+  expired: 'Offer expired',
+  no_slots: 'No free slot',
+  too_heavy: 'Too heavy for your ride',
+};
+
+const ZERO: Totals = { points: 0, coins: 0, deliveries: 0 };
+
 /**
- * The delivery loop on the client. Transitional (SP3 Task 4): the old order loop is gone and the new one arrives in
- * Task 9, so this only draws the POI markers, tracks the hospital safe zone and shows the totals. Game calls
- * beforeStep → sim.step → afterStep each tick, and draw each frame.
+ * The delivery loop on the client (spec §3, §8): owns the OrderSystem, the capacity tier and saved progress, POI
+ * markers, waypoint beams, the HUD and popups. Game calls beforeStep → sim.step → afterStep each tick with the same
+ * sim time (`now()`), and draw each frame.
  */
 export class DeliveryLoop {
   readonly poiMeshes: PoiMeshes;
-  private readonly hud: Hud;
-  private readonly progress: Progress;
+  readonly waypoints: Waypoints;
+  /**
+   * While true (the phone is up, Task 10) the sim gets only the look; Y still accepts the top offer.
+   * Whoever opens the phone sets it and releases held keys (`actions.releaseAll()`).
+   */
+  phoneOpen = false;
+  private sys: OrderSystem;
+  private tier: VehicleTier;
+  private readonly rng: Rng;
+  private readonly hud: HudView;
+  private readonly popups: PopupSink;
   private zones: PlayerZones;
   private nextHudAt = 0;
+  private readonly colors = new SlotColorAssigner();
+  private readonly colorIndex = (id: string): number => this.colors.indexOf(id);
 
   constructor(private readonly d: DeliveryDeps) {
+    this.rng = mulberry32(d.seed);
+    this.tier = d.capacityTier;
+    this.sys = this.makeSystem(d.progress.load().totals);
     this.poiMeshes = buildPoiMeshes(d.map, ordersConfig.zones.poiRadius);
-    d.scene.add(this.poiMeshes.group);
-    this.hud = new Hud(d.host);
-    this.progress = d.progress.load();
+    this.waypoints = buildWaypoints(MAX_WAYPOINTS, d.cfg.ui.waypointPulseHz);
+    d.scene.add(this.poiMeshes.group, this.waypoints.mesh);
+    this.hud = d.ui?.hud ?? new Hud(d.host, d.cfg.ui, keyLabel(d.cfg.input.bindings.accept[0] ?? ''));
+    this.popups = d.ui?.popups ?? new Popups(d.host, d.cfg.ui.popupSeconds, d.cfg.ui.maxPopups);
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
   }
 
-  /** Id of the hospital whose safe zone the player is in, or null. */
+  private makeSystem(totals: Totals): OrderSystem {
+    return new OrderSystem(
+      {
+        pois: this.d.map.pois,
+        distance: streetDistance,
+        rules: this.d.map.orderRules,
+        cfg: ordersConfig,
+        rng: this.rng,
+        capacity: vehiclesConfig[this.tier],
+        totals,
+      },
+      this.d.now(),
+    );
+  }
+
+  /** The player's order state (rebuilt by resetProgress). */
+  get orders(): OrderSystem {
+    return this.sys;
+  }
+
+  get capacityTier(): VehicleTier {
+    return this.tier;
+  }
+
+  /** Id of the hospital whose safe zone the player is in (as of the last tick), or null. */
   get safeZone(): string | null {
     return this.zones.safeZone;
   }
 
-  /** Packages the courier is carrying now. */
+  /** Packages the courier is carrying now (picked up, not yet delivered or cancelled). */
   carriedCount(): number {
-    return 0;
+    return this.sys.active.filter((a) => this.sys.isCarried(a)).length;
   }
 
   statModifiers(): StatModifiers {
-    return NO_MODS;
+    return this.sys.statModifiers();
   }
 
-  /** The input the sim sees this tick. */
+  /**
+   * The input the sim sees this tick. Y accepts the top offer here, before afterStep's update, so an accept on an
+   * offer's expiry tick reports 'expired' (Review Focus 1). While the phone is open only the look passes.
+   */
   beforeStep(frame: InputFrame): InputFrame {
-    return frame;
+    if (frame.accept.pressed) {
+      const top = this.sys.offers[0];
+      if (top) this.accept(top.order.id);
+    }
+    if (!this.phoneOpen) return frame;
+    const idle = emptyInput();
+    idle.look = frame.look;
+    return idle;
   }
 
-  /** After sim.step: refreshes the player's zones (sim events and time feed the order loop again in Task 9). */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  /** After sim.step: Fragile damage first, then zones and the order update (same tick), then popups. */
   afterStep(simEvents: SimEvent[], position: Vec3, now: number): void {
+    const events = this.sys.onSimEvents(simEvents);
+    const before = [...this.sys.active];
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);
+    events.push(...this.sys.update(now, position, this.zones));
+    for (const e of events) this.announce(e, before);
   }
 
-  /** Zeroes Points, Coins and deliveries in storage and in the running totals (dev panel). */
-  resetProgress(): void {
-    this.progress.totals = { points: 0, coins: 0, deliveries: 0 };
-    this.d.progress.save(this.progress);
+  accept(offerId: string): AcceptResult {
+    const offer = this.sys.offers.find((o) => o.order.id === offerId);
+    const result = this.sys.accept(offerId, this.d.now());
+    if (result === 'ok') {
+      const a = this.sys.active.find((x) => x.order.id === offerId);
+      this.popups.show('Offer accepted', a ? [stageText(a, poiIndex(this.d.map))] : [], 'info');
+    } else if (offer) {
+      const text = ACCEPT_REFUSED[result];
+      if (text) this.popups.show(text, [], 'warn');
+    }
+    this.nextHudAt = 0;
+    return result;
+  }
+
+  cancel(orderId: string): CancelResult {
+    const result = this.sys.cancel(orderId, this.d.now());
+    if (result === 'ok') {
+      this.popups.show(`Order cancelled · no new offers for ${ordersConfig.lockout.seconds} s`, [], 'warn');
+      this.nextHudAt = 0;
+    }
+    return result;
+  }
+
+  /** Dev / GAME-burn stub (price Pending): end the offer lockout now. */
+  skipLockout(): void {
+    this.sys.skipLockout();
     this.nextHudAt = 0;
   }
 
-  /** Per frame: the HUD (throttled). */
-  draw(clockSeconds: number): void {
-    if (clockSeconds < this.nextHudAt) return;
-    this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
+  /** Switches the carrier capacity; refused (false, with a warning) while the active orders would not fit. */
+  setCapacityTier(t: VehicleTier): boolean {
+    const cap = vehiclesConfig[t];
+    if (!this.sys.canSwitchCapacity(cap)) {
+      const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
+      this.popups.show(`Can't switch to ${TIER_LABEL[t]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
+      return false;
+    }
+    this.sys.setCapacity(cap);
+    this.tier = t;
+    this.save();
+    this.nextHudAt = 0;
+    return true;
+  }
+
+  /**
+   * Dev panel: back to a fresh start — zero totals, capacity tier 'walk', no offers or orders (the OrderSystem is
+   * rebuilt) — and saved.
+   */
+  resetProgress(): void {
+    this.tier = 'walk';
+    this.sys = this.makeSystem(ZERO);
+    this.save();
+    this.nextHudAt = 0;
+  }
+
+  model(now: number): HudModel {
     const safe = this.zones.safeZone;
     const name = safe === null ? null : (this.d.map.hospitals.find((h) => h.id === safe)?.name ?? safe);
-    this.hud.update(hudModel(this.progress.totals, name));
+    return hudModel(this.sys, this.d.map, this.d.player().position, now, name);
+  }
+
+  /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */
+  draw(clockSeconds: number): void {
+    const pois = poiIndex(this.d.map);
+    const targets: Vec3[] = [];
+    const targetIds = new Set<string>();
+    const colorIndices: number[] = [];
+    this.colors.sync(this.sys.active.map((a) => a.order.id));
+    for (const a of this.sys.active) {
+      const id = this.sys.currentTarget(a);
+      targets.push(pois.target(id));
+      targetIds.add(id);
+      colorIndices.push(this.colors.indexOf(a.order.id));
+    }
+    this.waypoints.update(targets, colorIndices, clockSeconds);
+    this.poiMeshes.setTargets(targetIds);
+    this.poiMeshes.setHighlight(this.sys.offers[0]?.order.pickupPoiId ?? null);
+
+    if (clockSeconds < this.nextHudAt) return;
+    this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
+    this.hud.update(this.model(this.d.now()), this.colorIndex);
+  }
+
+  private save(): void {
+    this.d.progress.save({ totals: { ...this.sys.totals }, capacityTier: this.tier });
+  }
+
+  /** `before`: the active orders before this tick's update, so a completed order's details are still known. */
+  private announce(e: OrderEvent, before: readonly ActiveOrder[]): void {
+    const pois = poiIndex(this.d.map);
+    switch (e.kind) {
+      case 'pickedUp': {
+        const a = this.sys.active.find((x) => x.order.id === e.orderId);
+        if (a) this.popups.show(`Picked up ${a.order.item}`, [stageText(a, pois)], 'info');
+        this.nextHudAt = 0;
+        break;
+      }
+      case 'completed': {
+        this.save();
+        const done = before.find((a) => a.order.id === e.orderId);
+        const lines = e.bonuses.map((b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[b])} · +${ordersConfig.coins[b]} coins`);
+        if (!e.inTime) lines.push(done?.order.kind === 'food' ? 'Cold · no hot bonus' : 'Over par · no bonus');
+        if (e.expressOnTime === false) lines.push('Express late · no bonus');
+        if (done?.order.modifier === 'fragile' && !done.fragileIntact) lines.push('Fragile damaged · no bonus');
+        this.popups.show(`Delivered! +${pointsText(e.points)} · +${e.coins} coins`, lines);
+        this.nextHudAt = 0;
+        break;
+      }
+      case 'fragileBroken':
+        this.popups.show('Fragile package damaged', ['Bonus lost · the order still counts'], 'warn');
+        break;
+      case 'offered':
+      case 'offerExpired':
+      case 'lockoutEnded':
+        this.nextHudAt = 0; // toasts and the lockout chip update at once
+        break;
+    }
   }
 }

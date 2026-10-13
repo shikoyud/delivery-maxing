@@ -46,8 +46,8 @@ export interface ClientConfig {
     hudUpdateHz: number;
     /** Waypoint beam pulse rate (Hz). */
     waypointPulseHz: number;
-    /** Below this many seconds left, an Express timer turns to its urgent colour. */
-    expressUrgentSeconds: number;
+    /** Below this many seconds left, an order timer (hot, par, Express) turns to its urgent colour. */
+    timerUrgentSeconds: number;
   };
 }
 

@@ -126,6 +126,7 @@ export class Game {
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
       player: () => this.sim.state,
+      capacityTier: this.progress.load().capacityTier,
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {

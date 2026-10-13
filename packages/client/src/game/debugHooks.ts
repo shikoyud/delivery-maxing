@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Hospital, MoveMode, Vec3 } from '@dm/shared';
+import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, Totals, Vec3 } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { Game } from './Game';
 
@@ -20,6 +20,15 @@ export interface DebugApi {
   hospitals(): Hospital[];
   /** Id of the hospital whose safe zone the player is in (as of the last tick), or null. */
   safeZone(): string | null;
+  /** Copies of the offers on the phone, in arrival order (the first is the one Y accepts). */
+  offers(): Offer[];
+  /** Copies of the accepted orders. */
+  active(): ActiveOrder[];
+  /** Accepts an offer at the current sim time (before the next tick's update). */
+  accept(offerId: string): AcceptResult;
+  cancel(orderId: string): CancelResult;
+  /** Delivery Points, Coins and deliveries so far. */
+  totals(): Totals;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
   /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
@@ -75,6 +84,11 @@ export function installDebugHooks(game: Game): void {
     },
     hospitals: () => structuredClone(game.map.hospitals),
     safeZone: () => game.delivery.safeZone,
+    offers: () => structuredClone([...game.delivery.orders.offers]),
+    active: () => structuredClone([...game.delivery.orders.active]),
+    accept: (id) => game.delivery.accept(id),
+    cancel: (id) => game.delivery.cancel(id),
+    totals: () => ({ ...game.delivery.orders.totals }),
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),

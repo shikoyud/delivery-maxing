@@ -20,7 +20,7 @@ describe('keyLabel', () => {
 
 describe('ui tuning', () => {
   it('is in config', () => {
-    expect(clientConfig.ui.expressUrgentSeconds).toBeGreaterThan(0);
+    expect(clientConfig.ui.timerUrgentSeconds).toBeGreaterThan(0);
     expect(clientConfig.ui.maxPopups).toBeGreaterThanOrEqual(1);
   });
 });

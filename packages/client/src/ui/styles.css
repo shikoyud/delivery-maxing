@@ -77,22 +77,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.chip {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--dm-ink);
-}
-
-.chip-express { background: #7a5ae0; }
-.chip-fragile { background: #d4497f; }
-.chip-heavy { background: #4a5a63; }
-
 kbd {
   display: inline-block;
   min-width: 1.4em;
@@ -114,7 +98,8 @@ kbd {
   pointer-events: none;
 }
 
-.hud-orders {
+/* Active orders, top left. */
+.hud-active {
   position: absolute;
   left: 16px;
   top: 16px;
@@ -125,7 +110,7 @@ kbd {
 }
 
 .hud-order,
-.hud-empty {
+.hud-offer {
   padding: 9px 12px 10px;
   border-radius: 10px;
   background: rgba(22, 50, 58, 0.82);
@@ -137,18 +122,9 @@ kbd {
   border-left: 6px solid var(--slot, var(--dm-teal));
 }
 
-.hud-empty {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.hud-empty span {
-  font-weight: 400;
-  opacity: 0.75;
-  font-size: 13px;
-}
-
-.hud-order-top {
+.hud-order-top,
+.hud-offer-top,
+.hud-offer-bottom {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -184,15 +160,15 @@ kbd {
   font-weight: 700;
 }
 
-.hud-timer { color: #c9b8ff; }
+.hud-timer { color: #9fe7dc; }
 .hud-timer.urgent { color: #ffd166; }
+/* Past the limit: the order still completes, only the bonus is gone. */
 .hud-timer.late,
 .hud-fragile.broken { color: #ff9a8f; }
-.hud-par { color: #9fe7dc; }
-/* Past par: dimmed, not red; the order still completes. */
-.hud-par.late { color: #fff; opacity: 0.55; }
+.hud-kg { color: #c9b8ff; }
 .hud-fragile { color: #9fe7dc; }
 
+/* Totals and load, top right. */
 .hud-totals {
   position: absolute;
   right: 16px;
@@ -223,7 +199,8 @@ kbd {
 .hud-coins .hud-stat-value { color: var(--dm-coral); }
 .hud-points .hud-stat-value { color: var(--dm-teal); }
 
-.hud-stat-label {
+.hud-stat-label,
+.hud-load-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -231,65 +208,94 @@ kbd {
   opacity: 0.7;
 }
 
-.hud-slots {
+.hud-load {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 8px;
   padding-top: 6px;
   border-top: 1px solid rgba(22, 50, 58, 0.15);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
 }
 
-.hud-slots span {
-  margin-right: 4px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-.hud-slots i {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  border: 2px solid var(--dm-teal);
-}
-
-.hud-slots i.full { background: var(--dm-teal); }
-.hud-slots b { margin-left: 4px; }
-
-.hud-prompt {
-  position: absolute;
-  left: 50%;
-  bottom: 22%;
-  transform: translateX(-50%);
-  padding: 8px 14px;
-  border-radius: 10px;
-  background: rgba(22, 50, 58, 0.85);
-  color: var(--dm-paper);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.hud-prompt[hidden] { display: none; }
-
-.hud-safe {
+/* Safe-zone and lockout chips, top centre. */
+.hud-chips {
   position: absolute;
   left: 50%;
   top: 16px;
   transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+.hud-chip {
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(31, 158, 147, 0.9);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
-.hud-safe[hidden] { display: none; }
+.hud-chip[hidden] { display: none; }
+.hud-safe { background: rgba(31, 158, 147, 0.9); }
+.hud-lockout { background: rgba(242, 113, 102, 0.92); }
+
+/* Offer toasts, bottom right; the top one takes the accept key. */
+.hud-offers {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 320px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+}
+
+.hud-offer {
+  border-left: 6px solid #8d9aa1;
+  opacity: 0.85;
+}
+
+.hud-offer.top { opacity: 1; }
+.hud-offer-food { border-left-color: #f2913d; }
+.hud-offer-package { border-left-color: #8a6cf0; }
+
+.hud-kind {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.hud-offer-time {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.hud-offer-text {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.hud-offer-bottom { margin-top: 6px; }
+
+.hud-reward {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+.hud-offer-accept {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+}
 
 /* ---------- Popups ---------- */
 

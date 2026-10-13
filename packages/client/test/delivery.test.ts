@@ -1,0 +1,188 @@
+import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
+import { emptyInput, expandGreybox, ordersConfig, vehiclesConfig, type GreyboxSource, type Offer, type Vec3, type VehicleTier } from '@dm/shared';
+import greybox from '../../../map/greybox.json';
+import { clientConfig } from '../src/clientConfig';
+import { DeliveryLoop } from '../src/game/delivery';
+import { createProgressStore, type Progress } from '../src/game/progress';
+import { ActionState } from '../src/input/actionState';
+import type { HudModel } from '../src/ui/hudModel';
+
+const map = expandGreybox(greybox as GreyboxSource);
+const TICK = 0.25;
+
+interface Popup {
+  text: string;
+  lines: string[];
+  tone: string;
+}
+
+/** A DeliveryLoop with recording HUD and popups (no DOM), in-memory storage and a movable player. */
+function setup(capacityTier: VehicleTier = 'car', saved?: Progress) {
+  const data = new Map<string, string>();
+  const progress = createProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) });
+  if (saved) progress.save(saved);
+  const popups: Popup[] = [];
+  const huds: HudModel[] = [];
+  const env = { now: 0, position: { ...map.hospitals[0]!.spawn } as Vec3 };
+  const loop = new DeliveryLoop({
+    host: {} as HTMLElement,
+    scene: new THREE.Scene(),
+    map,
+    cfg: clientConfig,
+    actions: new ActionState(clientConfig.input, -1, 1),
+    progress,
+    seed: 11,
+    now: () => env.now,
+    player: () => ({ position: env.position, mode: 'ground' }),
+    capacityTier,
+    ui: {
+      hud: { update: (m) => void huds.push(m) },
+      popups: { show: (text, lines = [], tone = 'good') => void popups.push({ text, lines, tone }) },
+    },
+  });
+  /** One tick as Game runs it: beforeStep, (sim), afterStep, all at the same sim time. */
+  const tick = (accept = false): void => {
+    const frame = emptyInput();
+    if (accept) frame.accept = { held: true, pressed: true };
+    loop.beforeStep(frame);
+    loop.afterStep([], env.position, env.now);
+    env.now += TICK;
+  };
+  const waitForOffer = (want: (o: Offer) => boolean = () => true): Offer => {
+    for (let i = 0; i < 20000; i++) {
+      const offer = loop.orders.offers.find(want);
+      if (offer) return offer;
+      tick();
+    }
+    throw new Error('no matching offer');
+  };
+  /** Ticks with the player standing in a POI zone. */
+  const goTo = (poiId: string): void => {
+    env.position = { ...map.pois.find((p) => p.id === poiId)!.position };
+    tick();
+  };
+  const stored = (): Progress => progress.load();
+  return { loop, env, popups, huds, tick, waitForOffer, goTo, stored };
+}
+
+describe('DeliveryLoop', () => {
+  it('Y (accept.pressed) in beforeStep accepts the first offer', () => {
+    const s = setup('car');
+    s.waitForOffer();
+    const first = s.loop.orders.offers[0]!.order.id;
+    s.tick(true);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([first]);
+    expect(s.loop.orders.offers.some((o) => o.order.id === first)).toBe(false);
+    expect(s.popups.at(-1)!.text).toBe('Offer accepted');
+  });
+
+  it('Y with no offers does nothing', () => {
+    const s = setup('car');
+    s.tick(true);
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.popups).toHaveLength(0);
+  });
+
+  it('an accept on the expiry tick runs before the update and reports expired (Review Focus 1)', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer();
+    s.env.now = offer.expiresAt;
+    s.tick(true);
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.loop.orders.offers.some((o) => o.order.id === offer.order.id)).toBe(false);
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Offer expired', tone: 'warn' });
+    expect(s.loop.accept(offer.order.id)).toBe('gone');
+  });
+
+  it('while the phone is open only the look passes to the sim', () => {
+    const s = setup();
+    s.loop.phoneOpen = true;
+    const frame = emptyInput();
+    frame.move = { x: 1, y: 0 };
+    frame.look = { yaw: 1.5, pitch: 0.2 };
+    frame.jump = { held: true, pressed: true };
+    const out = s.loop.beforeStep(frame);
+    expect(out.move).toEqual({ x: 0, y: 0 });
+    expect(out.jump.pressed).toBe(false);
+    expect(out.look).toEqual({ yaw: 1.5, pitch: 0.2 });
+  });
+
+  it('pickup then dropoff completes the order, adds totals, saves progress and announces it', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.kind === 'food');
+    expect(s.loop.accept(offer.order.id)).toBe('ok');
+    expect(s.loop.carriedCount()).toBe(0);
+    s.goTo(offer.order.pickupPoiId);
+    expect(s.loop.carriedCount()).toBe(1);
+    expect(s.popups.at(-1)!.text).toBe(`Picked up ${offer.order.item}`);
+    s.goTo(offer.order.dropoffPoiId);
+    expect(s.loop.carriedCount()).toBe(0);
+    const totals = s.loop.orders.totals;
+    expect(totals.deliveries).toBe(1);
+    expect(totals.points).toBeGreaterThan(0);
+    expect(s.stored().totals).toEqual(totals);
+    const done = s.popups.at(-1)!;
+    expect(done.text).toBe(`Delivered! +${totals.points} pts · +${totals.coins} coins`);
+    expect(done.lines.some((l) => l.startsWith('Still hot'))).toBe(true);
+  });
+
+  it('carriedCount drops after cancelling a picked-up order (Review Focus 3)', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.kind === 'food');
+    s.loop.accept(offer.order.id);
+    s.goTo(offer.order.pickupPoiId);
+    expect(s.loop.carriedCount()).toBe(1);
+    expect(s.loop.cancel(offer.order.id)).toBe('ok');
+    expect(s.loop.carriedCount()).toBe(0);
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.popups.at(-1)).toMatchObject({ text: `Order cancelled · no new offers for ${ordersConfig.lockout.seconds} s`, tone: 'warn' });
+    expect(s.loop.cancel(offer.order.id)).toBe('unknown');
+  });
+
+  it("setCapacityTier('walk') is refused while carrying a package; a fitting tier is applied and saved", () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.kind === 'package');
+    expect(s.loop.accept(offer.order.id)).toBe('ok');
+    s.goTo(offer.order.pickupPoiId);
+    expect(s.loop.carriedCount()).toBe(1);
+    const before = s.popups.length;
+    expect(s.loop.setCapacityTier('walk')).toBe(false);
+    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.car);
+    expect(s.popups.length).toBe(before + 1);
+    expect(s.popups.at(-1)!.tone).toBe('warn');
+    expect(s.stored().capacityTier).toBe('walk'); // nothing saved by the refusal (storage still holds the default)
+
+    const fresh = setup('walk');
+    expect(fresh.loop.setCapacityTier('motorbike')).toBe(true);
+    expect(fresh.loop.orders.capacity).toEqual(vehiclesConfig.motorbike);
+    expect(fresh.stored().capacityTier).toBe('motorbike');
+  });
+
+  it('starts from the saved totals and the given capacity tier', () => {
+    const s = setup('bicycle', { totals: { points: 5, coins: 50, deliveries: 3 }, capacityTier: 'bicycle' });
+    expect(s.loop.orders.totals).toEqual({ points: 5, coins: 50, deliveries: 3 });
+    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
+  });
+
+  it('resetProgress zeroes the totals, drops to walk and saves', () => {
+    const s = setup('car', { totals: { points: 5, coins: 50, deliveries: 3 }, capacityTier: 'car' });
+    const offer = s.waitForOffer();
+    s.loop.accept(offer.order.id);
+    s.loop.resetProgress();
+    expect(s.loop.orders.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
+    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.walk);
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.stored()).toEqual({ totals: { points: 0, coins: 0, deliveries: 0 }, capacityTier: 'walk' });
+  });
+
+  it('draw feeds the HUD model at hudUpdateHz', () => {
+    const s = setup('car');
+    s.loop.draw(0);
+    s.loop.draw(0.01);
+    expect(s.huds).toHaveLength(1);
+    s.loop.draw(1 / clientConfig.ui.hudUpdateHz + 0.001);
+    expect(s.huds).toHaveLength(2);
+    expect(s.huds[0]!.load.slots).toBe(vehiclesConfig.car.slots);
+  });
+});

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { vec3 } from '@dm/shared';
-import { buildWaypoints, slotColor } from '../src/render/waypoints';
+import { vec3, vehiclesConfig } from '@dm/shared';
+import { MAX_WAYPOINTS, buildWaypoints, slotColor } from '../src/render/waypoints';
+import { slotColors } from '../src/render/palette';
 
 describe('buildWaypoints', () => {
   it('shows one beam per target, capped at the slot count', () => {
@@ -21,5 +22,11 @@ describe('buildWaypoints', () => {
     expect(c.getHex()).toBe(new THREE.Color(slotColor(2)).getHex());
     w.mesh.getColorAt(1, c);
     expect(c.getHex()).toBe(new THREE.Color(slotColor(0)).getHex());
+  });
+
+  it('has a beam and a distinct colour for every slot of the largest carrier', () => {
+    expect(MAX_WAYPOINTS).toBe(vehiclesConfig.car.slots);
+    expect(slotColors.length).toBeGreaterThanOrEqual(MAX_WAYPOINTS);
+    expect(buildWaypoints(MAX_WAYPOINTS, 1).mesh.instanceMatrix.count).toBe(MAX_WAYPOINTS);
   });
 });
