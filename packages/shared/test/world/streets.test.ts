@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { closestOnSegment, vec3, type Vec3 } from '../../src/math/vec3';
 import { mulberry32 } from '../../src/util/rng';
 import { StreetGraph } from '../../src/world/streets';
-import { thiefCity } from './fixtures';
+import { levelsCity, thiefCity } from './fixtures';
 
 const MARGIN = 6;
 const city = thiefCity();
 const graph = (): StreetGraph => new StreetGraph(city.streets, city.hub, MARGIN);
 const nodeP = new Map(city.streets.nodes.map((n) => [n.id, n.p]));
 const flat = (v: Vec3): Vec3 => vec3(v.x, 0, v.z);
+const expectAt = (p: Vec3 | undefined, x: number, y: number, z: number): void => {
+  expect(p).toBeDefined();
+  expect([p!.x, p!.y, p!.z].map((v) => Math.round(v * 1e6) / 1e6 + 0)).toEqual([x, y, z]);
+};
 
 /** Whether p lies on edge `i`'s strip (horizontally within halfWidth of its centre line). */
 function onStrip(p: Vec3, i: number): boolean {
@@ -78,5 +82,24 @@ describe('StreetGraph', () => {
     const g = graph();
     expect(g.nearestNode(vec3(25, 0, 0))).toBe('n0');
     expect(g.nearestNode(vec3(250, 0, -70))).toBe('c1');
+  });
+
+  it('maxSlope is the steepest edge (rise over horizontal run)', () => {
+    expect(graph().maxSlope).toBeCloseTo(5 / 60, 9);
+  });
+
+  it('projectOnLevel stays on the given level: never up onto a street beside or over, never down off a ledge', () => {
+    const lv = levelsCity();
+    const g = new StreetGraph(lv.streets, lv.hub, MARGIN);
+    // Just past the lower street's side, inside the upper street's strip: plain project jumps up, projectOnLevel does not
+    expect(g.project(vec3(150, 0, 7.2)).p.y).toBe(6);
+    expectAt(g.projectOnLevel(vec3(150, 0, 7.2), 0, 0.1)?.p, 150, 0, 6);
+    // Just past the upper street's side, over the lower street: stays up
+    expectAt(g.projectOnLevel(vec3(150, 6, 5.8), 6, 0.1)?.p, 150, 6, 6.1);
+    // Under the bridge on the lower street, and on the bridge over it
+    expectAt(g.projectOnLevel(vec3(200, 0, 1), 0, 0.1)?.p, 200, 0, 1);
+    expectAt(g.projectOnLevel(vec3(200, 6, 1), 6, 0.1)?.p, 200, 6, 1);
+    // No street on that level at all
+    expect(g.projectOnLevel(vec3(150, 3, 0), 3, 0.1)).toBeNull();
   });
 });

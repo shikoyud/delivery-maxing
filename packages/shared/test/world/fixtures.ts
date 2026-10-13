@@ -79,3 +79,19 @@ export const thiefCity = (spawns: CityMap['thiefSpawns'] = []): CityMap => {
     thiefSpawns: spawns,
   };
 };
+
+/**
+ * Streets on two levels (no plaza nodes; the hub plaza at the origin is far away): a lower street at y 0 along x
+ * (L0 x 100 → L2 x 300, half-width 6, strip z −6…6); an upper street at y 6 beside it (U0 x 100 → U1 x 180 at
+ * z 12.1, strip z 6.1…18.1: a 0.1 m gap, less than a chase step); and a bridge at y 6 crossing over the lower street at x 200 (B0 z −40 → B1 z 40, half-width 4).
+ */
+export const levelsCity = (spawns: CityMap['thiefSpawns'] = []): CityMap => {
+  const city = thiefCity(spawns);
+  const node = (id: string, x: number, y: number, z: number) => ({ id, p: vec3(x, y, z), plaza: false });
+  const edge = (a: string, b: string, halfWidth = 6) => ({ a, b, halfWidth, long: false });
+  city.streets = {
+    nodes: [node('L0', 100, 0, 0), node('L1', 200, 0, 0), node('L2', 300, 0, 0), node('U0', 100, 6, 12.1), node('U1', 180, 6, 12.1), node('B0', 200, 6, -40), node('B1', 200, 6, 40)],
+    edges: [edge('L0', 'L1'), edge('L1', 'L2'), edge('U0', 'U1'), edge('B0', 'B1', 4)],
+  };
+  return city;
+};

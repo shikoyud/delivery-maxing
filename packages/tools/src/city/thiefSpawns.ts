@@ -33,7 +33,8 @@ export function placeThiefSpawns(city: CityMap, cfg: ThievesConfig, rng: Rng): T
   };
 
   for (const area of city.districts) {
-    const n = cfg.perDistrict[area.district as keyof ThievesConfig['perDistrict']] ?? 0;
+    if (!Object.hasOwn(cfg.perDistrict, area.district)) throw new Error(`thief spawns: perDistrict has no count for ${area.district}`);
+    const n = cfg.perDistrict[area.district as keyof ThievesConfig['perDistrict']];
     const pool = usable.filter((s) => districtOf(s.p, city.districts) === area).map((s) => s.id);
     pick(pool, n, rng, area.district).forEach((node, i) => add(node, `thief-${area.district}-${i}`));
   }

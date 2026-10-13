@@ -7,6 +7,8 @@ import type { CourierInfo, LineOfSight, ThiefEvent, ThiefState } from './types';
 
 /** Accumulated timers within this of a limit count as reaching it (30 ticks of 1/30 s sum to 0.9999…). */
 const TIME_EPS = 1e-9;
+/** Height slack when keeping a thief on its street level, m (city.json heights are rounded to 0.01). */
+const LEVEL_EPS = 0.01;
 /** Most nodes a thief may pass in one tick (a guard against zero-length hops). */
 const MAX_HOPS = 8;
 /** The line-of-sight target on the courier: the middle of the standing capsule above the feet. */
@@ -106,7 +108,11 @@ function chaseStep({ graph, cfg }: Ctx, t: ThiefState, dt: number, courier: Cour
   const dz = c.z - t.position.z;
   const h = Math.hypot(dx, dz);
   const k = h > 0 ? Math.min(1, (cfg.chaseSpeed * dt) / h) : 0;
-  t.position = graph.project(vec3(t.position.x + dx * k, t.position.y, t.position.z + dz * k)).p;
+  // Stay on the thief's own street level: a step moves it at most twice its length along a street (the projection can
+  // add up to one step), so its height changes by at most maxSlope times that. Streets beside, over or under are out.
+  const maxDy = 2 * graph.maxSlope * cfg.chaseSpeed * dt + LEVEL_EPS;
+  const next = graph.projectOnLevel(vec3(t.position.x + dx * k, t.position.y, t.position.z + dz * k), t.position.y, maxDy);
+  if (next) t.position = next.p;
   t.heading = yawOf(dx, dz, t.heading);
 
   const dy = c.y - t.position.y;
@@ -120,17 +126,17 @@ function chaseStep({ graph, cfg }: Ctx, t: ThiefState, dt: number, courier: Cour
 }
 
 /**
- * After a chase: back onto the graph at the nearer usable end of the edge the thief stands on (a straight line inside
- * that edge's strip), then the A* route to the node nearest to it, at return speed.
+ * After a chase: back onto the graph at the nearer usable end of the edge the thief stands on (on its own level), in a
+ * straight line inside that edge's strip at return speed; from that node it patrols on. (Not on to the nearest node by
+ * distance: on the hillside that can be a street on another level, a long detour.)
  */
 function enterReturn({ graph, cfg }: Ctx, t: ThiefState): void {
-  const { edge } = graph.project(t.position);
+  const { edge } = graph.projectOnLevel(t.position, t.position.y, LEVEL_EPS) ?? graph.project(t.position);
   const ends = graph.edgeEnds(edge).filter((n) => graph.isThiefNode(n));
   const entry = ends.reduce((a, b) => (dist3(graph.position(b), t.position) < dist3(graph.position(a), t.position) ? b : a));
-  const path = graph.route(entry, graph.nearestNode(t.position));
   Object.assign(t, {
     mode: 'return',
-    route: path.length > 0 ? path : [entry],
+    route: [entry],
     prevNode: null,
     chaseTime: 0,
     aboveTime: 0,

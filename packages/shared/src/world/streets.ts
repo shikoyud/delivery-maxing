@@ -9,6 +9,8 @@ const CELL = 25;
 const TIE = 1e-9;
 
 interface Edge { a: number; b: number; ax: number; ay: number; az: number; bx: number; by: number; bz: number; hw: number; len2: number }
+/** Accept only strip points whose height is within `maxDy` of `y` (one street level). */
+interface Level { y: number; maxDy: number }
 /** A point of a strip: `out` is how far (horizontally) the query lies outside it, `dy` the height difference. */
 interface Hit { x: number; y: number; z: number; edge: number; out: number; dy: number; centre: number }
 
@@ -27,6 +29,8 @@ export class StreetGraph {
   private readonly edges: (Edge | null)[];
   private readonly centre: Vec3;
   private readonly exclusion: number;
+  /** The steepest thief street: rise over horizontal run. */
+  readonly maxSlope: number;
   private readonly grid: Map<number, number[]> = new Map();
   private readonly gx0: number;
   private readonly gz0: number;
@@ -59,6 +63,7 @@ export class StreetGraph {
       return { a, b, ax: pa.x, ay: pa.y, az: pa.z, bx: pb.x, by: pb.y, bz: pb.z, hw: e.halfWidth, len2 };
     });
     this.stamp = this.edges.map(() => 0);
+    this.maxSlope = Math.max(0, ...this.edges.map((e) => (e ? Math.abs(e.by - e.ay) / Math.sqrt(e.len2) : 0)));
 
     const live = this.edges.filter((e): e is Edge => e !== null);
     const minX = Math.min(...live.map((e) => Math.min(e.ax, e.bx) - e.hw));
@@ -111,17 +116,18 @@ export class StreetGraph {
    * (a point there is pushed out radially onto a strip). Among strips that hold the point, the one nearest in height wins.
    */
   project(p: Vec3): { p: Vec3; edge: number } {
-    const hit = this.nearestOnStrips(p);
-    if (!this.inExclusion(hit.x, hit.z)) return { p: vec3(hit.x, hit.y, hit.z), edge: hit.edge };
-    const dx = hit.x - this.centre.x;
-    const dz = hit.z - this.centre.z;
-    const d = Math.hypot(dx, dz);
-    if (d > 0) {
-      const k = this.exclusion / d;
-      const out = this.nearestOnStrips(vec3(this.centre.x + dx * k, p.y, this.centre.z + dz * k));
-      if (out.out <= TIE) return { p: vec3(out.x, out.y, out.z), edge: out.edge };
-    }
-    return this.nearestCentreOutside(p);
+    const out = this.projectWithin(p, null);
+    if (!out) throw new Error('street graph has no thief streets');
+    return out;
+  }
+
+  /**
+   * project, restricted to one street level: only strip points whose height is within `maxDy` of `y` count, so a
+   * thief moving a step never lands on a street beside or over its own (a terrace, a bridge), nor drops off a ledge
+   * onto one below. Null when no street of that level exists.
+   */
+  projectOnLevel(p: Vec3, y: number, maxDy: number): { p: Vec3; edge: number } | null {
+    return this.projectWithin(p, { y, maxDy });
   }
 
   /** A random thief-street neighbour of `from`, other than `prev` unless it is the only one (`from` when isolated). */
@@ -199,8 +205,26 @@ export class StreetGraph {
     return Math.min(this.gh - 1, Math.max(0, Math.floor((z - this.gz0) / CELL)));
   }
 
-  /** The nearest strip point, by rings of grid cells around p until no farther ring can hold a nearer one. */
-  private nearestOnStrips(p: Vec3): Hit {
+  private projectWithin(p: Vec3, level: Level | null): { p: Vec3; edge: number } | null {
+    const hit = this.nearestOnStrips(p, level);
+    if (!hit) return null;
+    if (!this.inExclusion(hit.x, hit.z)) return { p: vec3(hit.x, hit.y, hit.z), edge: hit.edge };
+    const dx = hit.x - this.centre.x;
+    const dz = hit.z - this.centre.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 0) {
+      const k = this.exclusion / d;
+      const out = this.nearestOnStrips(vec3(this.centre.x + dx * k, p.y, this.centre.z + dz * k), level);
+      if (out && out.out <= TIE) return { p: vec3(out.x, out.y, out.z), edge: out.edge };
+    }
+    return this.nearestCentreOutside(p, level);
+  }
+
+  /**
+   * The nearest strip point (on `level`, if given), by rings of grid cells around p until no farther ring can hold a
+   * nearer one.
+   */
+  private nearestOnStrips(p: Vec3, level: Level | null): Hit | null {
     this.query++;
     const ci = this.cellX(p.x);
     const cj = this.cellZ(p.z);
@@ -216,6 +240,7 @@ export class StreetGraph {
             if (this.stamp[k] === this.query) continue;
             this.stamp[k] = this.query;
             const hit = stripPoint(this.edges[k]!, k, p);
+            if (level && Math.abs(hit.y - level.y) > level.maxDy) continue;
             if (!best || better(hit, best)) best = hit;
           }
         }
@@ -223,12 +248,11 @@ export class StreetGraph {
       // Cells of ring r + 1 lie at least r cells away from p (p outside the grid lies farther still)
       if (best && best.out <= r * CELL) return best;
     }
-    if (!best) throw new Error('street graph has no thief streets');
     return best;
   }
 
-  /** Fallback: the nearest point to p on any edge's centre line outside the exclusion. */
-  private nearestCentreOutside(p: Vec3): { p: Vec3; edge: number } {
+  /** Fallback: the nearest point to p on any edge's centre line outside the exclusion (on `level`, if given). */
+  private nearestCentreOutside(p: Vec3, level: Level | null): { p: Vec3; edge: number } | null {
     let best = null as { p: Vec3; edge: number } | null;
     let bestD = Infinity;
     this.edges.forEach((e, k) => {
@@ -255,14 +279,14 @@ export class StreetGraph {
         if (u < 0 || u > 1) continue;
         const x = e.ax + ex * u;
         const z = e.az + ez * u;
+        const y = e.ay + (e.by - e.ay) * u;
         const d = Math.hypot(x - p.x, z - p.z);
-        if (d < bestD) {
+        if (d < bestD && (!level || Math.abs(y - level.y) <= level.maxDy)) {
           bestD = d;
-          best = { p: vec3(x, e.ay + (e.by - e.ay) * u, z), edge: k };
+          best = { p: vec3(x, y, z), edge: k };
         }
       }
     });
-    if (!best) throw new Error('street graph has no thief street outside the HUB exclusion');
     return best;
   }
 }

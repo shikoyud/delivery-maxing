@@ -4,7 +4,8 @@ import { closestOnSegment, vec3, type Vec3 } from '../../src/math/vec3';
 import { ThiefSystem } from '../../src/thieves/ThiefSystem';
 import type { CourierInfo, ThiefEvent, ThiefState } from '../../src/thieves/types';
 import { mulberry32 } from '../../src/util/rng';
-import { thiefCity } from '../world/fixtures';
+import { StreetGraph } from '../../src/world/streets';
+import { levelsCity, thiefCity } from '../world/fixtures';
 
 const DT = 1 / movementConfig.tickRate;
 const cfg = thievesConfig;
@@ -186,6 +187,9 @@ describe('ThiefSystem', () => {
     const flat = (v: Vec3): Vec3 => vec3(v.x, 0, v.z);
     const onStreets = (p: Vec3): boolean => strips.some((s) => closestOnSegment(flat(p), flat(s.a), flat(s.b)).dist <= s.hw + 1e-6);
     const exclusion = city.hub.plazaRadius + cfg.plazaMargin;
+    // A thief's height changes only along its street: per tick at most the steepest slope times the fastest step
+    const maxDy = new StreetGraph(city.streets, city.hub, cfg.plazaMargin).maxSlope * cfg.chaseSpeed * DT + 1e-6;
+    let lastY = sys.thieves.map((th) => th.position.y);
 
     // The courier runs short legs, on and off the streets, sometimes up on a roof, sometimes with nothing to carry; half
     // of the legs start next to a thief (the courier appears there), so chases and their endings keep happening
@@ -216,12 +220,81 @@ describe('ThiefSystem', () => {
         if (!onStreets(th.position)) bad.push(`${th.id} off the streets at tick ${i}: ${JSON.stringify(th.position)}`);
         if (Math.hypot(th.position.x, th.position.z) < exclusion - 1e-6) bad.push(`${th.id} in the plaza at tick ${i}`);
       }
+      sys.thieves.forEach((th, k) => {
+        if (Math.abs(th.position.y - lastY[k]!) > maxDy) bad.push(`${th.id} changed height by ${th.position.y - lastY[k]!} at tick ${i}`);
+      });
+      lastY = sys.thieves.map((th) => th.position.y);
       if (sys.thieves.filter((th) => th.mode === 'chase').length > 1) bad.push(`two chasers at tick ${i}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
     expect(counts.chaseStarted ?? 0).toBeGreaterThanOrEqual(20);
     expect(counts.caught ?? 0).toBeGreaterThan(0);
     expect(Object.keys(counts).filter((k) => k.startsWith('ended:')).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('a thief chasing a courier who steps up onto a street beside it stays on its own street level', () => {
+    const sys = new ThiefSystem(levelsCity([{ id: 'low', node: 'L0', district: 'downtown' }]), cfg, mulberry32(1));
+    // Seen on the lower street, then up on the upper street beside it (z 12.1, y 6), walking along it
+    const step = (p: Vec3, t: number): Vec3 => (t > 1.5 * DT ? vec3(p.x + 3 * DT, 6, 12.1) : p);
+    const ys = new Set<number>();
+    const events: ThiefEvent[] = [];
+    let p = vec3(104, ROAD, 5);
+    for (let i = 1; i <= 90; i++) {
+      p = step(p, i * DT);
+      events.push(...sys.step(DT, i * DT, courierAt(p), always));
+      ys.add(thief(sys).position.y);
+    }
+    expect(kinds(events.map((e) => ({ e })))).toEqual(['chaseStarted', 'ended:above']);
+    expect([...ys]).toEqual([0]);
+  });
+
+  it('a thief on an upper street chasing a courier below never drops off it, and never catches', () => {
+    const sys = new ThiefSystem(levelsCity([{ id: 'high', node: 'U0', district: 'downtown' }]), cfg, mulberry32(1));
+    const ys = new Set<number>();
+    const events: ThiefEvent[] = [];
+    for (let i = 1; i <= 15 * 30; i++) {
+      // On the lower street, 2 m to the side of and below the thief
+      const th = thief(sys).position;
+      events.push(...sys.step(DT, i * DT, courierAt(vec3(Math.min(th.x + 2, 170), ROAD, 0)), always));
+      ys.add(thief(sys).position.y);
+    }
+    expect(kinds(events.map((e) => ({ e })))).toEqual(['chaseStarted', 'ended:timeout']);
+    expect([...ys]).toEqual([6]);
+  });
+
+  it('a thief running along the lower street under a bridge stays under it', () => {
+    const sys = new ThiefSystem(levelsCity([{ id: 'low', node: 'L1', district: 'downtown' }]), cfg, mulberry32(1));
+    const ys = new Set<number>();
+    const xs: number[] = [];
+    // The courier runs beside the street (z 8), so the thief keeps to the strip's side (z 6) right under the bridge
+    let p = vec3(186, ROAD, 8);
+    for (let i = 1; i <= 6 * 30; i++) {
+      p = vec3(p.x + 7.5 * DT, ROAD, 8);
+      sys.step(DT, i * DT, courierAt(p), always);
+      ys.add(thief(sys).position.y);
+      xs.push(thief(sys).position.x);
+    }
+    expect(Math.min(...xs)).toBeLessThan(199);
+    expect(Math.max(...xs)).toBeGreaterThan(210);
+    expect([...ys]).toEqual([0]);
+  });
+
+  it('after a catch the thief returns at returnSpeed to the near end of its street, then patrols at patrolSpeed', () => {
+    const sys = systemAt('n2');
+    run(sys, vec3(185, ROAD, 0), still, 5, { until: (e) => e.kind === 'caught' });
+    expect(thief(sys)).toMatchObject({ mode: 'return', route: ['n2'], speed: cfg.returnSpeed });
+    const steps: { mode: string; d: number }[] = [];
+    for (let i = 0; i < 90; i++) {
+      const before = { ...thief(sys).position };
+      sys.step(DT, 100 + i * DT, courierAt(vec3(0, 0, 0), 0), always);
+      steps.push({ mode: thief(sys).mode, d: Math.hypot(thief(sys).position.x - before.x, thief(sys).position.z - before.z) });
+    }
+    const back = steps.filter((s) => s.mode === 'return');
+    const patrol = steps.slice(back.length + 1);
+    expect(back.length).toBeGreaterThan(20);
+    for (const s of back) expect(s.d).toBeCloseTo(cfg.returnSpeed * DT, 6);
+    expect(patrol.length).toBeGreaterThan(20);
+    for (const s of patrol) expect(s.d).toBeCloseTo(cfg.patrolSpeed * DT, 6);
   });
 
   it('is deterministic for a seed', () => {

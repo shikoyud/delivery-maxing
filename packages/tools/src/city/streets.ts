@@ -90,7 +90,8 @@ export function arterialGraph(
 
 /**
  * Merges street graphs: nodes at the same position become one (the first graph's id wins), and an edge with another
- * node lying on it is split there, so a local street ending on an arterial joins it.
+ * node lying on it is split there, so a local street ending on an arterial joins it. Split pieces keep their parent
+ * edge's `halfWidth` and `long`: a long arterial edge stays long along its whole length, whatever each piece's midpoint.
  */
 export function mergeStreetGraphs(graphs: StreetGraph[]): StreetGraph {
   const g = new GraphBuilder('');

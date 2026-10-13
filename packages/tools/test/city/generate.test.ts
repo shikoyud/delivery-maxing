@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   chunksOverlapping,
+  movementConfig,
   parseCityMap,
   parsePieceCatalog,
   rotatedHalfExtents,
@@ -21,6 +22,7 @@ import { arterialLines, landRect } from '../../src/city/layout';
 import { parseCitySource } from '../../src/city/source';
 import { stableStringify } from '../../src/city/stableJson';
 import { arterialGraph } from '../../src/city/streets';
+import { placeThiefSpawns } from '../../src/city/thiefSpawns';
 import type { AssetsConfig } from '../../src/assets/pipeline';
 
 // Runs the generator on the real committed inputs.
@@ -32,6 +34,8 @@ const pieces = parsePieceCatalog(readJson('map/pieces.json'));
 const assetsCfg = JSON.parse(readFileSync(join(here, '../../assets.config.json'), 'utf8')) as AssetsConfig;
 
 const EPS = 1e-6;
+/** One sim tick, s. */
+const DT = 1 / movementConfig.tickRate;
 const overlaps = (a: Rect, b: Rect): boolean =>
   a.minX < b.maxX - EPS && a.maxX > b.minX + EPS && a.minZ < b.maxZ - EPS && a.maxZ > b.minZ + EPS;
 /** Shortest horizontal distance between two rects (0 when they touch or overlap). */
@@ -335,6 +339,13 @@ describe('generateCity on map/city.source.json', () => {
     }
   });
 
+  it('thief spawns fail fast when perDistrict has no count for a district', () => {
+    const perDistrict: Partial<typeof thievesConfig.perDistrict> = { ...thievesConfig.perDistrict };
+    delete perDistrict.suburbs;
+    const cfg = { ...thievesConfig, perDistrict: perDistrict as typeof thievesConfig.perDistrict };
+    expect(() => placeThiefSpawns(city, cfg, mulberry32(1))).toThrow(/perDistrict has no count for suburbs/);
+  });
+
   it('thief spawns: perDistrict in each quadrant, then longStreetExtra on long streets; distinct thief nodes', () => {
     const graph = new StreetGraph(city.streets, city.hub, thievesConfig.plazaMargin);
     const longNodes = new Set(city.streets.edges.filter((e) => e.long).flatMap((e) => [e.a, e.b]));
@@ -362,6 +373,9 @@ describe('generateCity on map/city.source.json', () => {
     const graph = new StreetGraph(city.streets, city.hub, thievesConfig.plazaMargin);
     const sys = new ThiefSystem(city, thievesConfig, mulberry32(5));
     const exclusion = city.hub.plazaRadius + thievesConfig.plazaMargin;
+    // Height changes only along a street: per tick at most the steepest slope times the fastest step
+    const maxDy = graph.maxSlope * thievesConfig.chaseSpeed * DT + 1e-6;
+    let lastY = sys.thieves.map((t) => t.position.y);
     const bad: string[] = [];
     let chases = 0;
     for (let i = 1; i <= 120 * 30; i++) {
@@ -374,8 +388,51 @@ describe('generateCity on map/city.source.json', () => {
         if (Math.hypot(q.x - t.position.x, q.z - t.position.z) > 1e-6) bad.push(`${t.id} off the streets at tick ${i}`);
         if (Math.hypot(t.position.x - city.hub.center.x, t.position.z - city.hub.center.z) < exclusion - 1e-6) bad.push(`${t.id} in the plaza`);
       }
+      sys.thieves.forEach((t, k) => {
+        if (Math.abs(t.position.y - lastY[k]!) > maxDy) bad.push(`${t.id} changed height by ${t.position.y - lastY[k]!} at tick ${i}`);
+      });
+      lastY = sys.thieves.map((t) => t.position.y);
     }
     expect(bad.slice(0, 5)).toEqual([]);
     expect(chases).toBeGreaterThan(5);
+  });
+
+  it('a thief chasing past the side of any arterial strip keeps its street level (terraces and bridges beside it)', () => {
+    const graph = new StreetGraph(city.streets, city.hub, thievesConfig.plazaMargin);
+    const sys = new ThiefSystem({ ...city, thiefSpawns: city.thiefSpawns.slice(0, 1) }, thievesConfig, mulberry32(5));
+    const thief = sys.thieves[0]!;
+    const maxDy = graph.maxSlope * thievesConfig.chaseSpeed * DT + 1e-6;
+    const { xs, zs } = arterialLines(src, landRect(src));
+    const pos = new Map(city.streets.nodes.map((n) => [n.id, n]));
+    const bad: string[] = [];
+    let sites = 0;
+    let ledges = 0;
+    for (const e of city.streets.edges) {
+      const [a, b] = [pos.get(e.a)!, pos.get(e.b)!];
+      if (a.plaza || b.plaza) continue;
+      const alongX = a.p.z === b.p.z && zs.includes(a.p.z);
+      if (!alongX && !(a.p.x === b.p.x && xs.includes(a.p.x))) continue;
+      const len = Math.hypot(b.p.x - a.p.x, b.p.z - a.p.z);
+      // Every 5 m along the edge, on both sides: the thief on the strip's side, a courier 5 m beyond it at its height
+      for (let s = 2.5; s < len; s += 5) {
+        const f = s / len;
+        const c = { x: a.p.x + (b.p.x - a.p.x) * f, y: a.p.y + (b.p.y - a.p.y) * f, z: a.p.z + (b.p.z - a.p.z) * f };
+        for (const side of [-1, 1]) {
+          const n = alongX ? { x: 0, z: side } : { x: side, z: 0 };
+          const at = { x: c.x + n.x * e.halfWidth, y: c.y, z: c.z + n.z * e.halfWidth };
+          const courier = { x: c.x + n.x * (e.halfWidth + 5), y: c.y, z: c.z + n.z * (e.halfWidth + 5) };
+          const step = thievesConfig.chaseSpeed * DT;
+          if (Math.abs(graph.project({ x: at.x + n.x * step, y: at.y, z: at.z + n.z * step }).p.y - at.y) > 1) ledges++;
+          Object.assign(thief, { mode: 'chase', position: at, chaseTime: 0, aboveTime: 0, route: [] });
+          sys.step(DT, 1000, { position: courier, carrying: 1, inPlaza: false }, () => true);
+          sites++;
+          if (Math.abs(thief.position.y - at.y) > maxDy) bad.push(`${e.a}-${e.b} at ${s.toFixed(1)} m: y ${at.y} → ${thief.position.y}`);
+        }
+      }
+    }
+    expect(bad.slice(0, 5)).toEqual([]);
+    expect(sites).toBeGreaterThan(5000);
+    // The probe does pass terraces and bridges an unrestricted projection would jump onto
+    expect(ledges).toBeGreaterThan(50);
   });
 });

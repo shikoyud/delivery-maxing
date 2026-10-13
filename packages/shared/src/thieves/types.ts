@@ -5,7 +5,7 @@ export type ThiefMode = 'patrol' | 'chase' | 'return';
 
 /**
  * One street thief. `position` is its feet on the street. `heading` is a yaw (see movement facing()). `route` is the
- * nodes still to walk to (patrol: the next node; return: the A* path back), `prevNode` the last node reached.
+ * nodes still to walk to (patrol: the next node; return: the near end of its street), `prevNode` the last node reached.
  */
 export interface ThiefState {
   id: string;
