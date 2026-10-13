@@ -37,8 +37,9 @@ export function computePoiTable(city: CityMap, navMesh: NavMesh, tol = worldConf
 /**
  * What the build requires of the table (spec §5.3, plan Task 14), one message per failure: the table lists the city's
  * POIs in order; every POI is reachable; at least `minReachable` are; elevated POIs are at least `minElevatedShare` of
- * the reachable ones; every distance band (`bands.city`, by `fromHub`) has `minPerBand`; no drop link falls further
- * than the Fragile limit.
+ * the reachable ones; every distance band (`bands.city`, by `fromHub`) has `minPerBand`; every pair of reachable POIs has
+ * a path both ways (a Chain between them is priced with it, and a −1 would throw in the game loop); no drop link falls
+ * further than the Fragile limit.
  */
 export function validatePoiTable(table: PoiTableFile, city: CityMap, orders: OrdersConfig): string[] {
   const errors: string[] = [];
@@ -57,6 +58,8 @@ export function validatePoiTable(table: PoiTableFile, city: CityMap, orders: Ord
     if (n < rules.minPerBand) errors.push(`only ${n} POIs in the ${band} band (need ${rules.minPerBand})`);
   }
 
+  errors.push(...missingPairs(table));
+
   const maxFall = orders.fragile.maxFallMeters;
   for (const l of city.navLinks) {
     const fall = l.from.y - l.to.y;
@@ -65,4 +68,23 @@ export function validatePoiTable(table: PoiTableFile, city: CityMap, orders: Ord
     }
   }
   return errors;
+}
+
+/** At most this many "no path" pairs are listed one by one; the rest are counted in one line. */
+const MAX_PAIR_MESSAGES = 10;
+
+/** One message per ordered pair of distinct reachable POIs with no path (−1) between them, capped at MAX_PAIR_MESSAGES. */
+function missingPairs(table: PoiTableFile): string[] {
+  const missing: string[] = [];
+  let count = 0;
+  table.pois.forEach((a, i) => {
+    if (!a.reachable) return;
+    table.pois.forEach((b, j) => {
+      if (i === j || !b.reachable || (table.between[i]?.[j] ?? -1) >= 0) return;
+      count++;
+      if (missing.length < MAX_PAIR_MESSAGES) missing.push(`no path from ${a.id} to ${b.id}`);
+    });
+  });
+  if (count > missing.length) missing.push(`… and ${count - missing.length} more reachable POI pairs with no path`);
+  return missing;
 }

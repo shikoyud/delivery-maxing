@@ -160,6 +160,35 @@ describe('navmesh POI table', () => {
     const flat = { ...table, pois: table.pois.map((p) => ({ ...p, elevated: false })) };
     expect(validatePoiTable(flat, city, ordersConfig)).toContain(`elevated share 0.00 of reachable POIs is below ${rules.minElevatedShare}`);
   });
+
+  it('validatePoiTable rejects a reachable POI pair with no path between them (the board would throw pricing a Chain)', () => {
+    const city = fixture(6, [pad(6), drop(6)]);
+    const table = computePoiTable(city, buildCityNavMesh(city, movementConfig));
+    expect(validatePoiTable(table, city, ordersConfig).filter((e) => e.startsWith('no path'))).toEqual([]);
+    const cut = { ...table, between: table.between.map((row) => [...row]) };
+    cut.between[0]![1] = -1; // roof → street missing; street → roof still measured
+    expect(validatePoiTable(cut, city, ordersConfig).filter((e) => e.startsWith('no path'))).toEqual(['no path from poi-roof to poi-street']);
+  });
+
+  it('validatePoiTable skips pairs with an unreachable POI and caps the no-path messages', () => {
+    const n = 14;
+    const ids = Array.from({ length: n }, (_, i) => `poi-${i}`);
+    const city = { ...fixture(6, []), pois: ids.map((id, i): Poi => ({ id, position: v(i, 0, 0), district: 'downtown', kind: 'door' })) };
+    const table = {
+      version: 1 as const,
+      // poi-13 is unreachable: its own row says so (and the unreachable list), so its −1 pairs are not reported again
+      pois: ids.map((id, i) => ({ id, district: 'downtown' as const, elevated: false, fromHub: 10, toHub: 10, reachable: i < n - 1 })),
+      // every pair missing in both directions
+      between: ids.map((_, i) => ids.map((__, j) => (i === j ? 0 : -1))),
+      unreachable: [{ id: 'poi-13', reason: 'no path from the HUB' }],
+    };
+    const noPath = validatePoiTable(table, city, ordersConfig).filter((e) => e.startsWith('no path') || e.startsWith('…'));
+    const pairs = (n - 1) * (n - 2); // 13 reachable POIs, both directions
+    expect(noPath).toHaveLength(11);
+    expect(noPath.slice(0, 3)).toEqual(['no path from poi-0 to poi-1', 'no path from poi-0 to poi-2', 'no path from poi-0 to poi-3']);
+    expect(noPath.some((e) => e.includes('poi-13'))).toBe(false);
+    expect(noPath[10]).toBe(`… and ${pairs - 10} more reachable POI pairs with no path`);
+  });
 });
 
 describe('the committed POI table (map/city.poi.json)', () => {
