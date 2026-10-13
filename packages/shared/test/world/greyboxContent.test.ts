@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import greyboxJson from '../../../../map/greybox.json';
 import { movementConfig as cfg } from '../../src/config';
 import { vec3, type Vec3 } from '../../src/math/vec3';
+import { streetDistance } from '../../src/world/distance';
 import { expandGreybox } from '../../src/world/greybox';
 import type { District, GreyboxSource, MapData, Rect, Solid } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier, type PhysicsWorld, type Rapier } from '../../src/world/physicsWorld';
@@ -108,8 +109,17 @@ describe('greybox city: hospitals', () => {
     expect(map.orderRules).toEqual({
       bands: { shortMax: 150, mediumMax: 350 },
       foodDropoff: { min: 80, max: 400 },
-      maxPickupDistance: 250,
+      maxPickupDistance: 400,
     });
+  });
+
+  it('has at least 2 food pickups within maxPickupDistance of every hospital spawn (one used pickup never starves it)', () => {
+    for (const h of map.hospitals) {
+      const near = map.pois.filter(
+        (p) => p.roles.includes('foodPickup') && streetDistance(h.spawn, p.position) <= map.orderRules.maxPickupDistance,
+      );
+      expect(near.length, h.id).toBeGreaterThanOrEqual(2);
+    }
   });
 });
 

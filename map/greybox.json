@@ -23,7 +23,7 @@
     {"id": "hillside-hospital", "name": "Hillside Medical", "center": {"x": -150, "y": 0, "z": -150}, "safeRadius": 18, "spawn": {"x": -150, "y": 0, "z": -142}, "spawnYaw": 0},
     {"id": "suburbs-hospital", "name": "Suburbs Hospital", "center": {"x": -120, "y": 0, "z": 75}, "safeRadius": 18, "spawn": {"x": -120, "y": 0, "z": 83}, "spawnYaw": 0}
   ],
-  "orderRules": {"bands": {"shortMax": 150, "mediumMax": 350}, "foodDropoff": {"min": 80, "max": 400}, "maxPickupDistance": 250},
+  "orderRules": {"bands": {"shortMax": 150, "mediumMax": 350}, "foodDropoff": {"min": 80, "max": 400}, "maxPickupDistance": 400},
   "pois": [
     {"id": "downtown-poi-01", "position": {"x": 35.5, "y": 0, "z": -54.5}, "district": "downtown", "kind": "door", "name": "Central Freight Dock", "roles": ["packagePickup"], "items": ["appliance crate", "flat-pack furniture", "engine block"], "weightKg": [10, 150]},
     {"id": "downtown-poi-02", "position": {"x": 48, "y": 0, "z": -85.5}, "district": "downtown", "kind": "door", "name": "Skyline Lofts 12C", "roles": ["dropoffFood", "dropoffPackage"]},

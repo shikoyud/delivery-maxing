@@ -340,6 +340,12 @@ const advanceUntilOffer = (page: Page, maxSeconds: number): Promise<number> =>
     [maxSeconds, TICK_RATE] as const,
   );
 
+/** Hides the ?debug overlay (F3) so the SP3 playtest shots don't show headless fps. */
+async function hideOverlay(page: Page): Promise<void> {
+  await page.keyboard.press('F3');
+  await expect(page.locator('.debug-overlay')).toBeHidden();
+}
+
 /** Waits for an offer and accepts it with Y; returns the accepted order id. */
 async function acceptWithY(page: Page): Promise<string> {
   expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
@@ -360,6 +366,7 @@ async function standAt(page: Page, poiId: string): Promise<void> {
 test('spawns at a hospital inside its safe zone', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
   const { hospitals, zone, pos } = await page.evaluate(() => ({
     hospitals: window.__dm!.hospitals(),
     zone: window.__dm!.safeZone(),
@@ -392,20 +399,48 @@ test('an offer appears within 15 s of sim time and Y accepts it', async ({ page 
 test('teleport to the pickup then the dropoff completes the order with points', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
   await acceptWithY(page);
   const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
   await standAt(page, order.pickupPoiId);
   await page.evaluate(() => window.__dm!.advance(15));
   expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
-  await standAt(page, order.dropoffPoiId);
-  await page.evaluate(() => window.__dm!.advance(15));
+  // Let the "accepted" and "picked up" popups expire (wall-clock, 3.5 s) so the delivery popup stands alone in the shot.
+  await expect(page.locator('.popup')).toHaveCount(0, { timeout: 10_000 });
+  // Teleport 7 m short of the dropoff (on the pickup's side), facing it, then walk in: the chase camera frames the
+  // courier in front of the marker rather than inside it.
+  await page.evaluate(([drop, pick]) => {
+    const t = window.__dm!.poiPosition(drop);
+    const p = window.__dm!.poiPosition(pick);
+    const d = Math.hypot(p.x - t.x, p.z - t.z);
+    const feet = { x: t.x + ((p.x - t.x) / d) * 7, y: t.y, z: t.z + ((p.z - t.z) / d) * 7 };
+    window.__dm!.viewpoint(feet, { x: t.x, y: t.y + 1.2, z: t.z });
+  }, [order.dropoffPoiId, order.pickupPoiId] as const);
+  await page.keyboard.down('KeyW');
+  const walked = await page.evaluate(
+    ([rate]) => {
+      for (let i = 0; i < 5 * rate; i++) {
+        window.__dm!.advance(1);
+        if (window.__dm!.totals().deliveries > 0) return i / rate;
+      }
+      return -1;
+    },
+    [TICK_RATE] as const,
+  );
+  await page.keyboard.up('KeyW');
+  console.log(`walked into the dropoff zone in ${walked.toFixed(2)} s`);
+  expect(walked).toBeGreaterThanOrEqual(0);
   const totals = await page.evaluate(() => window.__dm!.totals());
   console.log(`delivered ${order.kind} ${order.id}: ${totals.points} points, ${totals.coins} coins`);
   expect(totals.deliveries).toBe(1);
   expect(totals.points).toBeGreaterThan(0);
   expect(await page.evaluate(() => window.__dm!.active().length)).toBe(0);
-  await expect(page.locator('.popup-title', { hasText: 'Delivered!' })).toBeVisible();
+  const delivered = page.locator('.popup', { hasText: 'Delivered!' });
+  await expect(delivered).toBeVisible();
+  await expect(page.locator('.popup')).toHaveCount(1);
   await waitTicks(page, 4);
+  // Fully faded in (the popup animation's first 8 %).
+  await expect.poll(() => delivered.evaluate((e) => getComputedStyle(e).opacity), { timeout: 3_000 }).toBe('1');
   await page.screenshot({ path: `${sp3}sp3-delivered.png` });
   expect(errors).toEqual([]);
 });
@@ -414,22 +449,28 @@ test('cancelling starts the lockout and no offer appears for 45 s', async ({ pag
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const id = await acceptWithY(page);
-  expect(await page.evaluate((o) => window.__dm!.cancel(o), id)).toBe('ok');
+  // The lockout runs from the sim time of the cancel; the render loop keeps ticking between evaluate calls, so the
+  // window below is anchored to the cancel's tick, not to when the check starts.
+  const cancel = await page.evaluate(
+    (o) => ({ result: window.__dm!.cancel(o), tick: window.__dm!.tick, offers: window.__dm!.offers().map((x) => x.order.id) }),
+    id,
+  );
+  expect(cancel.result).toBe('ok');
   await expect(page.locator('.popup-title', { hasText: 'Order cancelled' })).toBeVisible();
   await expect(page.locator('.hud-lockout')).toBeVisible();
   const r = await page.evaluate(
-    ([rate]) => {
-      const seen = new Set(window.__dm!.offers().map((o) => o.order.id));
-      let fresh = 0;
-      // Just short of 45 s: nothing new may arrive.
-      for (let i = 0; i < 45 * rate - 2; i++) {
+    ([rate, t0, before]) => {
+      // Offers already on the phone at the cancel may stay until they expire; anything else is new.
+      const seen = new Set(before);
+      const fresh = new Set<string>(window.__dm!.offers().filter((o) => !seen.has(o.order.id)).map((o) => o.order.id));
+      // The rest of the 45 s lockout, tick by tick (offers live 20 s, so one that came while the render loop ran the
+      // first ticks would still be on the phone above).
+      while (window.__dm!.tick < t0 + 45 * rate) {
         window.__dm!.advance(1);
-        for (const o of window.__dm!.offers()) if (!seen.has(o.order.id)) fresh++;
+        for (const o of window.__dm!.offers()) if (!seen.has(o.order.id)) fresh.add(o.order.id);
       }
-      // After the lockout, offers resume. The downtown spawn has a single food pickup in range and the cancelled order
-      // used it (reuse rule: 180 s), so resume is checked at the suburbs hospital, whose pickups are all unused.
-      const h = window.__dm!.hospitals().find((x) => x.id === 'suburbs-hospital')!;
-      window.__dm!.viewpoint(h.spawn, { x: h.center.x, y: h.center.y + 1.6, z: h.center.z });
+      const lockedTicks = window.__dm!.tick - t0;
+      // Not vacuous: at the same spot offers do arrive once the lockout is over (within one arrival interval).
       let resumedAfter = -1;
       for (let i = 0; i < 20 * rate; i++) {
         window.__dm!.advance(1);
@@ -438,11 +479,12 @@ test('cancelling starts the lockout and no offer appears for 45 s', async ({ pag
           break;
         }
       }
-      return { fresh, resumedAfter };
+      return { fresh: fresh.size, lockedTicks, resumedAfter };
     },
-    [TICK_RATE] as const,
+    [TICK_RATE, cancel.tick, cancel.offers] as const,
   );
-  console.log(`lockout: ${r.fresh} new offers during it, offers resumed ${r.resumedAfter.toFixed(2)} s after`);
+  console.log(`lockout: ${r.fresh} new offers in its ${r.lockedTicks} ticks, offers resumed ${r.resumedAfter.toFixed(2)} s after`);
+  expect(r.lockedTicks).toBe(45 * TICK_RATE);
   expect(r.fresh).toBe(0);
   expect(r.resumedAfter).toBeGreaterThanOrEqual(0);
   await expect(page.locator('.hud-lockout')).toBeHidden();
@@ -519,6 +561,7 @@ test('dev panel capacity preset switches the tier and reverts when the switch is
 test('phone: Tab opens Orders, Map and Wallet render; Esc closes', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
   expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => window.__dm!.phoneOpen());
@@ -564,6 +607,7 @@ test('phone: Tab opens Orders, Map and Wallet render; Esc closes', async ({ page
 test('HUD screenshot with an active order', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
   await acceptWithY(page);
   // Picked up, so the HUD shows the order's timer and the beam leads to the dropoff.
   const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
