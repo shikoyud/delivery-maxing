@@ -46,5 +46,6 @@ describe('config pins spec values', () => {
     expect(thievesConfig.chaseSpeed).toBeLessThan(movementConfig.run.sprintSpeed);
     expect(thievesConfig.perDistrict).toEqual({ downtown: 4, harbor: 3, hillside: 3, suburbs: 3 });
     expect(thievesConfig.longStreetExtra).toBe(4);
+    expect(thievesConfig.pinnedShare).toBe(0.5);
   });
 });

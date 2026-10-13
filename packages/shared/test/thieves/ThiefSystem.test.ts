@@ -232,19 +232,20 @@ describe('ThiefSystem', () => {
     expect(Object.keys(counts).filter((k) => k.startsWith('ended:')).length).toBeGreaterThanOrEqual(4);
   });
 
-  it('a thief chasing a courier who steps up onto a street beside it stays on its own street level', () => {
+  it('a thief chasing a courier who steps up onto a street beside it (not joined to its own) stays on its own level', () => {
     const sys = new ThiefSystem(levelsCity([{ id: 'low', node: 'L0', district: 'downtown' }]), cfg, mulberry32(1));
-    // Seen on the lower street, then up on the upper street beside it (z 12.1, y 6), walking along it
+    // Seen on the lower street, then up on the upper street beside it (z 12.1, y 6), walking along it: at street level
+    // there (R27), so the chase goes on, but no street joins the two, so the thief keeps to its own until the timeout
     const step = (p: Vec3, t: number): Vec3 => (t > 1.5 * DT ? vec3(p.x + 3 * DT, 6, 12.1) : p);
     const ys = new Set<number>();
     const events: ThiefEvent[] = [];
     let p = vec3(104, ROAD, 5);
-    for (let i = 1; i <= 90; i++) {
+    for (let i = 1; i <= 12 * 30; i++) {
       p = step(p, i * DT);
       events.push(...sys.step(DT, i * DT, courierAt(p), always));
       ys.add(thief(sys).position.y);
     }
-    expect(kinds(events.map((e) => ({ e })))).toEqual(['chaseStarted', 'ended:above']);
+    expect(kinds(events.map((e) => ({ e })))).toEqual(['chaseStarted', 'ended:timeout']);
     expect([...ys]).toEqual([0]);
   });
 
@@ -344,6 +345,38 @@ describe('ThiefSystem', () => {
       }
       expect(thief(sys).mode).toBe('chase');
       expect(thief(sys).position.x).toBeGreaterThan(156 + 3);
+    });
+  });
+
+  describe('above street level is measured against the street under the courier (R27)', () => {
+    const one = (node: string) => [{ id: 'th', node, district: 'downtown' as const }];
+
+    it('a courier running up a 0.4 hillside ramp ahead of the thief is still chased (no above end, no R26 suppression)', () => {
+      const sys = new ThiefSystem(slopesCity(one('G0')), cfg, mulberry32(1));
+      Object.assign(thief(sys), { position: vec3(146, 0, 120), route: ['G1'] });
+      // 9 m ahead, 2 m up the ramp: more than catchHeight above the thief, but on the street
+      const up = (x: number): Vec3 => vec3(x, 0.4 * (x - 150), 120);
+      expect(up(155).y - thief(sys).position.y).toBeGreaterThan(cfg.catchHeight);
+      const { events } = run(sys, up(155), (p) => up(p.x + movementConfig.run.runSpeed * DT), 12, { until: (e) => e.kind !== 'chaseStarted' });
+      expect(kinds(events)).toEqual(['chaseStarted', 'caught']);
+    });
+
+    it("a courier on a terrace street above the thief's street is chased via the streets", () => {
+      const sys = new ThiefSystem(slopesCity(one('T0')), cfg, mulberry32(1));
+      Object.assign(thief(sys), { position: vec3(180, 0, 198), route: ['T1'] });
+      const maxDy = new StreetGraph(slopesCity().streets, slopesCity().hub, cfg.plazaMargin).maxSlope * cfg.chaseSpeed * DT + 1e-6;
+      let lastY = 0;
+      let maxX = 0;
+      // On the terrace street, 4 m above and 14 m across from the thief, standing still
+      const { events } = run(sys, vec3(180, 4, 212), (p) => {
+        expect(Math.abs(thief(sys).position.y - lastY)).toBeLessThanOrEqual(maxDy);
+        lastY = thief(sys).position.y;
+        maxX = Math.max(maxX, thief(sys).position.x);
+        return p;
+      }, 12, { until: (e) => e.kind !== 'chaseStarted' });
+      expect(kinds(events)).toEqual(['chaseStarted', 'caught']);
+      // Round by T1 and up the ramp to T2
+      expect(maxX).toBeGreaterThan(199);
     });
   });
 

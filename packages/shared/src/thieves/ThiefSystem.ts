@@ -11,11 +11,6 @@ const TIME_EPS = 1e-9;
 const LEVEL_EPS = 0.01;
 /** Most nodes a thief may pass in one tick (a guard against zero-length hops). */
 const MAX_HOPS = 8;
-/**
- * A chase step that gets the thief less than this share of the way it tried (it is held at the side of its street, the
- * courier being on another street it cannot reach in a straight line) sends it round by the streets instead.
- */
-const PINNED_SHARE = 0.5;
 /** The line-of-sight target on the courier: the middle of the standing capsule above the feet. */
 const CHEST_HEIGHT = movementConfig.capsule.height / 2;
 
@@ -24,6 +19,11 @@ type ChaseOutcome = ChaseEnd | 'caught' | null;
 
 /** Shared by the step functions: the streets, tuning and random stream. */
 interface Ctx { graph: StreetGraph; cfg: ThievesConfig; rng: Rng }
+/**
+ * Where the courier is relative to the streets, once per step: `edge`, the street under (nearest to) it on the level
+ * nearest its feet; `above`, more than catchHeight above that street's surface (a roof, ledge or zip line; R27).
+ */
+interface CourierStreet { edge: number; above: boolean }
 
 const dist3 = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 /** The facing() yaw of a horizontal direction (yaw 0 faces −z). */
@@ -58,12 +58,14 @@ export class ThiefSystem {
 
   step(dt: number, now: number, courier: CourierInfo, lineOfSight: LineOfSight): ThiefEvent[] {
     const events: ThiefEvent[] = [];
+    const under = this.ctx.graph.project(courier.position);
+    const street: CourierStreet = { edge: under.edge, above: courier.position.y - under.p.y > this.ctx.cfg.catchHeight };
     for (const t of this.thieves) {
       if (t.mode !== 'chase') {
         walkRoute(this.ctx, t, dt);
         continue;
       }
-      const outcome = chaseStep(this.ctx, t, dt, courier);
+      const outcome = chaseStep(this.ctx, t, dt, courier, street);
       if (outcome === null) continue;
       if (outcome === 'caught') {
         events.push({ kind: 'caught', thiefId: t.id });
@@ -72,7 +74,7 @@ export class ThiefSystem {
       enterReturn(this.ctx, t);
     }
     if (!this.thieves.some((t) => t.mode === 'chase') && now >= this.ignoreUntil) {
-      const chaser = triggerChase(this.ctx, this.thieves, courier, lineOfSight);
+      const chaser = triggerChase(this.ctx, this.thieves, courier, street, lineOfSight);
       if (chaser) events.push({ kind: 'chaseStarted', thiefId: chaser.id });
     }
     return events;
@@ -81,16 +83,23 @@ export class ThiefSystem {
 
 /**
  * The nearest patrolling thief within the trigger radius (3D) that sees the courier (eye to chest) starts a chase,
- * if the courier carries a package, is not in the plaza, and is not above street level relative to that thief (more
- * than catchHeight up, ruling R26: a courier on a ledge or roof is left alone rather than chased and given up on).
+ * if the courier carries a package, is not in the plaza, and is not above street level (R26, measured against the
+ * street under the courier, R27: a courier on a ledge or roof is left alone rather than chased and given up on; one on
+ * a steep street or a terrace street above the thief is at street level and chased).
  */
-function triggerChase({ cfg }: Ctx, thieves: ThiefState[], courier: CourierInfo, lineOfSight: LineOfSight): ThiefState | null {
-  if (courier.carrying < 1 || courier.inPlaza) return null;
+function triggerChase(
+  { cfg }: Ctx,
+  thieves: ThiefState[],
+  courier: CourierInfo,
+  street: CourierStreet,
+  lineOfSight: LineOfSight,
+): ThiefState | null {
+  if (courier.carrying < 1 || courier.inPlaza || street.above) return null;
   const c = courier.position;
   const chest = vec3(c.x, c.y + CHEST_HEIGHT, c.z);
   const near = thieves
     .map((t) => ({ t, d: dist3(t.position, c) }))
-    .filter(({ t, d }) => t.mode === 'patrol' && d <= cfg.triggerRadius && c.y - t.position.y <= cfg.catchHeight)
+    .filter(({ t, d }) => t.mode === 'patrol' && d <= cfg.triggerRadius)
     .sort((a, b) => a.d - b.d);
   for (const { t } of near) {
     const p = t.position;
@@ -106,17 +115,17 @@ function triggerChase({ cfg }: Ctx, thieves: ThiefState[], courier: CourierInfo,
  * `route` holds a detour); then catch and give-up checks. A courier in the plaza or carrying nothing (R25) ends the
  * chase before the thief moves, so an empty courier is never caught.
  */
-function chaseStep(ctx: Ctx, t: ThiefState, dt: number, courier: CourierInfo): ChaseOutcome {
+function chaseStep(ctx: Ctx, t: ThiefState, dt: number, courier: CourierInfo, street: CourierStreet): ChaseOutcome {
   const { cfg } = ctx;
   if (courier.inPlaza) return 'plaza';
   if (courier.carrying < 1) return 'empty';
   const c = courier.position;
   if (t.route.length > 0) followRoute(ctx.graph, t, cfg.chaseSpeed * dt);
-  else stepToward(ctx, t, c, dt);
+  else stepToward(ctx, t, c, street.edge, dt);
 
   const dy = c.y - t.position.y;
   if (Math.hypot(c.x - t.position.x, c.z - t.position.z) <= cfg.catchRadius && Math.abs(dy) <= cfg.catchHeight) return 'caught';
-  t.aboveTime = dy > cfg.catchHeight ? t.aboveTime + dt : 0;
+  t.aboveTime = street.above ? t.aboveTime + dt : 0;
   if (t.aboveTime >= cfg.aboveGiveUpSeconds - TIME_EPS) return 'above';
   t.chaseTime += dt;
   if (t.chaseTime >= cfg.maxChaseSeconds - TIME_EPS) return 'timeout';
@@ -131,18 +140,17 @@ function chaseStep(ctx: Ctx, t: ThiefState, dt: number, courier: CourierInfo): C
  * preferred. Held at the side of its street (the courier on another street it cannot reach straight), the thief
  * takes the streets round to the courier's instead, from the next tick.
  */
-function stepToward({ graph, cfg }: Ctx, t: ThiefState, c: Vec3, dt: number): void {
+function stepToward({ graph, cfg }: Ctx, t: ThiefState, c: Vec3, there: number, dt: number): void {
   const dx = c.x - t.position.x;
   const dz = c.z - t.position.z;
   const h = Math.hypot(dx, dz);
   const step = Math.min(h, cfg.chaseSpeed * dt);
   const k = h > 0 ? step / h : 0;
   t.heading = yawOf(dx, dz, t.heading);
-  const there = graph.project(c).edge;
   const maxDy = 2 * graph.maxSlope * cfg.chaseSpeed * dt + LEVEL_EPS;
   const next = graph.projectOnLevel(vec3(t.position.x + dx * k, t.position.y, t.position.z + dz * k), t.position.y, maxDy, there);
   const moved = next ? Math.hypot(next.p.x - t.position.x, next.p.z - t.position.z) : 0;
-  if (moved < PINNED_SHARE * step) {
+  if (moved < cfg.pinnedShare * step) {
     const here = graph.projectOnLevel(t.position, t.position.y, LEVEL_EPS)?.edge;
     if (here !== undefined && here !== there) t.route = graph.routeToward(t.position, here, c, there);
   }

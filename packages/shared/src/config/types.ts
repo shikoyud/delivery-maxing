@@ -165,7 +165,10 @@ export interface ThievesConfig {
   /** A catch: horizontal distance at most catchRadius and |dy| at most catchHeight. */
   catchRadius: number;
   catchHeight: number;
-  /** A courier more than catchHeight above the thief this long ends the chase. */
+  /**
+   * A courier more than catchHeight above the street under it (on a roof, ledge or zip line; ruling R27) this long
+   * ends the chase; such a courier is not chased at all.
+   */
   aboveGiveUpSeconds: number;
   /** A chase ends when the courier gets farther than this (3D). */
   loseDistance: number;
@@ -173,6 +176,11 @@ export interface ThievesConfig {
   plazaMargin: number;
   /** Line-of-sight checks start this far above the thief's feet. */
   eyeHeight: number;
+  /**
+   * A chase step that gets the thief less than this share of the way it tried (held at the side of its street, the
+   * courier on another street it cannot reach in a straight line) sends it round by the streets instead.
+   */
+  pinnedShare: number;
   /** Delivery Points a robbed courier loses in the current epoch (Task 17). */
   penaltyPoints: number;
   /** Thief spawns per district, plus longStreetExtra on long-distance streets. */

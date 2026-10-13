@@ -1,4 +1,4 @@
 { "triggerRadius": 15, "chaseSpeed": 7, "patrolSpeed": 2.2, "returnSpeed": 3.5, "maxChaseSeconds": 10,
   "robbedCooldownSeconds": 20, "catchRadius": 0.9, "catchHeight": 1.6, "aboveGiveUpSeconds": 1.0,
-  "loseDistance": 35, "plazaMargin": 6, "eyeHeight": 1.6, "penaltyPoints": 1,
+  "loseDistance": 35, "plazaMargin": 6, "eyeHeight": 1.6, "penaltyPoints": 1, "pinnedShare": 0.5,
   "perDistrict": { "downtown": 4, "harbor": 3, "hillside": 3, "suburbs": 3 }, "longStreetExtra": 4 }

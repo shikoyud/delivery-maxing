@@ -99,15 +99,28 @@ export const levelsCity = (spawns: CityMap['thiefSpawns'] = []): CityMap => {
 /**
  * Sloped streets beyond junctions (no plaza nodes): a straight uniform 1-in-5 slope split in two at M (S0 x 100, y 0 →
  * M x 200, y 20 → S1 x 300, y 40, along z 0); and a flat street running on straight into a 0.3 ramp and on flat at its
- * top, as the hillside's steep streets do (F0 x 100 → F1 x 150 at y 0 → F2 x 200 at y 15 → F3 x 250, along z 60).
+ * top, as the hillside's steep streets do (F0 x 100 → F1 x 150 at y 0 → F2 x 200 at y 15 → F3 x 250, along z 60);
+ * the same with a hillside-steep 0.4 ramp (G0 x 100 → G1 x 150 at y 0 → G2 x 200 at y 20 → G3 x 250, along z 120);
+ * and a terrace: a lower street (T0 x 100 → T1 x 200 at y 0, z 200), a 0.4 ramp north from T1 up to T2 (x 200, y 4,
+ * z 210), and the terrace street back west above the lower one (T2 → T3 x 140, z 210; its strip overlaps the lower's).
  */
 export const slopesCity = (spawns: CityMap['thiefSpawns'] = []): CityMap => {
   const city = thiefCity(spawns);
   const node = (id: string, x: number, y: number, z: number) => ({ id, p: vec3(x, y, z), plaza: false });
   const edge = (a: string, b: string) => ({ a, b, halfWidth: 6, long: false });
   city.streets = {
-    nodes: [node('S0', 100, 0, 0), node('M', 200, 20, 0), node('S1', 300, 40, 0), node('F0', 100, 0, 60), node('F1', 150, 0, 60), node('F2', 200, 15, 60), node('F3', 250, 15, 60)],
-    edges: [edge('S0', 'M'), edge('M', 'S1'), edge('F0', 'F1'), edge('F1', 'F2'), edge('F2', 'F3')],
+    nodes: [
+      node('S0', 100, 0, 0), node('M', 200, 20, 0), node('S1', 300, 40, 0),
+      node('F0', 100, 0, 60), node('F1', 150, 0, 60), node('F2', 200, 15, 60), node('F3', 250, 15, 60),
+      node('G0', 100, 0, 120), node('G1', 150, 0, 120), node('G2', 200, 20, 120), node('G3', 250, 20, 120),
+      node('T0', 100, 0, 200), node('T1', 200, 0, 200), node('T2', 200, 4, 210), node('T3', 140, 4, 210),
+    ],
+    edges: [
+      edge('S0', 'M'), edge('M', 'S1'),
+      edge('F0', 'F1'), edge('F1', 'F2'), edge('F2', 'F3'),
+      edge('G0', 'G1'), edge('G1', 'G2'), edge('G2', 'G3'),
+      edge('T0', 'T1'), edge('T1', 'T2'), edge('T2', 'T3'),
+    ],
   };
   return city;
 };
