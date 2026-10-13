@@ -19,7 +19,7 @@ import type {
   Vec3,
   ZipLine,
 } from '@dm/shared';
-import { type ArterialLines, gridLines, intersectRect, r2, v2, type GridLine } from './layout';
+import { type ArterialLines, gridLines, intersectRect, r2, top, v2, type GridLine } from './layout';
 import { type FillerParams, fillLot, type Lot } from './lots';
 import type { Edge, StreetStyle } from './source';
 import { GraphBuilder, type StreetGraph } from './streets';
@@ -111,6 +111,16 @@ export interface RampReport {
  */
 export interface BowlReport { id: string; floor: Rect; rim: Rect; height: number; walls: string[]; outerRamps: string[] }
 
+/**
+ * A POI access kit (Task 13): what takes a courier up to an elevated POI on `ledge` (top at `top`) and back down.
+ * `mantle`: crate steps (`steps`, lowest first) climbed from `approach` facing along `facing`, the `climb` mantle link
+ * and the `drop` link down. `pad-zip`: the `pad` launching onto `target` and the zip line `zip` riding down from the
+ * roof (end a) to street level (end b).
+ */
+export type PoiKit =
+  | { poi: string; kind: 'mantle'; ledge: Rect; top: number; steps: string[]; approach: Vec3; facing: { x: number; z: number }; climb: string; drop: string }
+  | { poi: string; kind: 'pad-zip'; ledge: Rect; top: number; pad: string; target: Vec3; zip: string };
+
 /** Test metadata about what a district built, for its content tests (map:build never writes it). */
 export interface DistrictReport {
   rooftopGaps: RooftopGap[];
@@ -129,6 +139,8 @@ export interface DistrictReport {
   bowl: BowlReport;
   /** The skatepark's plaza. */
   skatepark: Rect;
+  /** The POI pass's access kits (the city-wide POI pass, not a district). */
+  poiKits: PoiKit[];
 }
 
 export interface DistrictOutput {
@@ -226,6 +238,11 @@ export function emptyOutput(streets: StreetGraph): DistrictOutput {
   };
 }
 
+/** An elevated slot in the middle of a solid's top (a roof or a stack top), reached as `access` says. */
+export function roofSlot(district: District, s: Solid, access: PoiSlot['access']): PoiSlot {
+  return { position: v2({ x: s.center.x, y: top(s), z: s.center.z }), kind: 'door', elevated: true, district, access };
+}
+
 /** Checks for a district's `params` (each failure names the district, the template and the field). */
 export interface ParamChecks {
   fail: (why: string) => never;
@@ -238,8 +255,13 @@ export interface ParamChecks {
 }
 
 export function paramChecks(district: District, template: string): ParamChecks {
+  return namedChecks(`district ${district}: ${template} params`);
+}
+
+/** ParamChecks whose failures start with `label`. */
+export function namedChecks(label: string): ParamChecks {
   const fail = (why: string): never => {
-    throw new Error(`district ${district}: ${template} params: ${why}`);
+    throw new Error(`${label}: ${why}`);
   };
   const nums = (o: Record<string, unknown>, keys: readonly string[], prefix: string): void => {
     for (const k of keys) {

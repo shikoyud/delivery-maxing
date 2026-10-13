@@ -6,7 +6,7 @@ import { vec3 } from '../../src/math/vec3';
 import { bandFor, streetDistance, type PoiInfo } from '../../src/world/distance';
 
 const hub = vec3(0, 0, 0);
-const bands = ordersConfig.bands;
+const bands = ordersConfig.bands.greybox;
 // 20 POIs along +x: 7 short, 7 medium, 6 long.
 const pois: PoiInfo[] = Array.from({ length: 20 }, (_, i) => {
   const d = 40 + i * 25;

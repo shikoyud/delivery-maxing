@@ -234,7 +234,7 @@ describe('harbor: container yards', () => {
 function fragileDropoff(): { orders: OrderSystem; order: Order } {
   const position = { x: 500, y: 0, z: 500 };
   const d = streetDistance(city.hub.center, position);
-  const pois = [{ poi: { id: 'harbor-test-poi', position, district: 'harbor' as const, kind: 'door' as const }, hubDistance: d, band: bandFor(d, ordersConfig.bands) }];
+  const pois = [{ poi: { id: 'harbor-test-poi', position, district: 'harbor' as const, kind: 'door' as const }, hubDistance: d, band: bandFor(d, ordersConfig.bands.greybox) }];
   for (let seed = 1; seed < 1000; seed++) {
     const orders = new OrderSystem(
       {

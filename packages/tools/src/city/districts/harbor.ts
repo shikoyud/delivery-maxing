@@ -6,12 +6,12 @@ import {
   paramChecks,
   quayCheckpoints,
   quayPoint,
+  roofSlot,
   type DistrictContext,
   type DistrictGrid,
   type DistrictOutput,
   type DistrictReport,
   type GridLot,
-  type PoiSlot,
   type QuayEdge,
 } from '../district';
 import {
@@ -24,6 +24,7 @@ import {
   padFlightClear,
   padLaunchFor,
   zipBetween,
+  GridIndex,
   type Obstacle,
 } from '../kits';
 import { box, distToRect, r2, top, v2 } from '../layout';
@@ -174,33 +175,6 @@ const rectOf = (axis: Axis, u0: number, u1: number, v0: number, v1: number): Rec
 /** The yaw that faces +v (`sign` 1) or −v along the v axis of `axis`. */
 const faceV = (axis: Axis, sign: 1 | -1): RotY => (axis === 'x' ? (sign > 0 ? 0 : 180) : sign > 0 ? 90 : 270);
 
-/** Solids bucketed on a coarse grid, for clearance checks along cables and pad flights. */
-class ObstacleIndex {
-  private readonly cells = new Map<string, Obstacle[]>();
-  constructor(private readonly cell: number) {}
-  add(o: Obstacle): void {
-    for (const k of this.keys(o.rect)) {
-      const list = this.cells.get(k);
-      if (list) list.push(o);
-      else this.cells.set(k, [o]);
-    }
-  }
-  near(r: Rect, pad: number): Obstacle[] {
-    const out = new Set<Obstacle>();
-    for (const k of this.keys({ minX: r.minX - pad, minZ: r.minZ - pad, maxX: r.maxX + pad, maxZ: r.maxZ + pad })) {
-      for (const o of this.cells.get(k) ?? []) out.add(o);
-    }
-    return [...out];
-  }
-  private keys(r: Rect): string[] {
-    const out: string[] = [];
-    for (let i = Math.floor(r.minX / this.cell); i <= Math.floor(r.maxX / this.cell); i++) {
-      for (let j = Math.floor(r.minZ / this.cell); j <= Math.floor(r.maxZ / this.cell); j++) out.push(`${i},${j}`);
-    }
-    return out;
-  }
-}
-
 /** A tower crane as planned: its mast on quay `quay`, the jib running inland along `inward`. */
 interface CranePlan { id: string; quay: QuayEdge; lot: GridLot; mast: { x: number; z: number }; inward: { x: number; z: number }; height: number }
 
@@ -210,7 +184,7 @@ interface Build {
   p: HarborParams;
   out: DistrictOutput;
   report: Pick<DistrictReport, 'padTargets' | 'zipLines' | 'containerStacks' | 'cranes' | 'quay'>;
-  obstacles: ObstacleIndex;
+  obstacles: GridIndex<Obstacle>;
   /** Street corridors crossing each quay (along-quay centre lines and half-widths). */
   corridors: Map<QuayEdge, { at: number; halfWidth: number }[]>;
   /** Zip line ends taken so far ("x,z"): a candidate end serves one zip only. */
@@ -236,7 +210,7 @@ export function buildHarbor(ctx: DistrictContext): DistrictOutput {
     p,
     out: emptyOutput(grid.streets),
     report: { padTargets: [], zipLines: [], containerStacks: [], cranes: [], quay: { quays, checkpoints: [] } },
-    obstacles: new ObstacleIndex(ctx.city.chunkSize / 2),
+    obstacles: new GridIndex<Obstacle>(ctx.city.chunkSize / 2),
     corridors: new Map(quays.map((q) => [q, streetCorridors(grid, q)])),
     zipEnds: new Set(),
     warehouses: 0,
@@ -334,11 +308,6 @@ function buildWarehouses(b: Build, lot: GridLot): void {
     const roof = wh.solids.reduce((a, c) => (top(c) > top(a) ? c : a));
     if (!roof.rotationDeg) b.out.poiSlots.push(roofSlot(ctx.district, roof, 'kit'));
   }
-}
-
-/** An elevated slot in the middle of a solid's top. */
-function roofSlot(district: PoiSlot['district'], s: Solid, access: PoiSlot['access']): PoiSlot {
-  return { position: v2({ x: s.center.x, y: top(s), z: s.center.z }), kind: 'door', elevated: true, district, access };
 }
 
 /**

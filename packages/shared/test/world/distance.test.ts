@@ -4,7 +4,7 @@ import { ordersConfig } from '../../src/config';
 import { vec3 } from '../../src/math/vec3';
 import { emptyMap } from './fixtures';
 
-const b = ordersConfig.bands;
+const b = ordersConfig.bands.greybox;
 
 describe('distance', () => {
   it('streetDistance is Manhattan on x/z and ignores y', () => {

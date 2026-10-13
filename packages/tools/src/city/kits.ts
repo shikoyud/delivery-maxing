@@ -188,3 +188,31 @@ export function padFlightClear(
   }
   return true;
 }
+
+/** Items with a footprint (`rect`) bucketed on a square grid of side `cell`, for nearby-item queries. */
+export class GridIndex<T extends { rect: Rect }> {
+  private readonly cells = new Map<string, T[]>();
+  constructor(private readonly cell: number) {}
+  add(o: T): void {
+    for (const k of this.keys(o.rect)) {
+      const list = this.cells.get(k);
+      if (list) list.push(o);
+      else this.cells.set(k, [o]);
+    }
+  }
+  /** Every item in a cell that `r` grown by `pad` reaches (each once): a superset of the items near it. */
+  near(r: Rect, pad: number): T[] {
+    const out = new Set<T>();
+    for (const k of this.keys({ minX: r.minX - pad, minZ: r.minZ - pad, maxX: r.maxX + pad, maxZ: r.maxZ + pad })) {
+      for (const o of this.cells.get(k) ?? []) out.add(o);
+    }
+    return [...out];
+  }
+  private keys(r: Rect): string[] {
+    const out: string[] = [];
+    for (let i = Math.floor(r.minX / this.cell); i <= Math.floor(r.maxX / this.cell); i++) {
+      for (let j = Math.floor(r.minZ / this.cell); j <= Math.floor(r.maxZ / this.cell); j++) out.push(`${i},${j}`);
+    }
+    return out;
+  }
+}

@@ -3,13 +3,14 @@ import {
   arterialCellLines,
   emptyOutput,
   paramChecks,
+  roofSlot,
   type DistrictContext,
   type DistrictOutput,
   type DistrictReport,
   type StreetRamp,
 } from '../district';
 import { navLinkFor, obstacleOf, padFlightClear, padLaunchFor, slopedSlab } from '../kits';
-import { box, DEG, r2, v2 } from '../layout';
+import { box, DEG, r2, top, v2 } from '../layout';
 import { fillLot, type FillerParams, type Lot } from '../lots';
 import { GraphBuilder, splitAtChunks } from '../streets';
 
@@ -351,6 +352,9 @@ function addHouses(b: Build, lot: Lot, level: number): void {
     b.out.props.push(house.prop);
     addSolids(b, house.solids);
     b.out.poiSlots.push({ position: v2({ ...house.door, y: level }), kind: 'door', elevated: false, district: ctx.district, access: 'street' });
+    // A flat roof is an elevated slot reached by an access kit (Task 13)
+    const roof = house.solids.reduce((a, c) => (top(c) > top(a) ? c : a));
+    if (!roof.rotationDeg) b.out.poiSlots.push(roofSlot(ctx.district, roof, 'kit'));
   }
 }
 

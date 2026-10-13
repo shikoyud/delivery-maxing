@@ -1,4 +1,4 @@
-import type { District, Hub, Rect, Vec3 } from '@dm/shared';
+import type { District, Hub, PoiKind, Rect, Vec3 } from '@dm/shared';
 
 export type Template = 'downtown' | 'harbor' | 'hillside' | 'suburbs';
 export type Edge = 'north' | 'south' | 'east' | 'west';
@@ -41,14 +41,63 @@ export interface CitySource {
   buildingPalettes: string[];
   /** Hand-placed landmarks, filled by the district tasks. */
   landmarks: unknown[];
-  pois: {
-    total: number;
-    elevatedTarget: number;
-    minSpacing: number;
-    perDistrict: Partial<Record<District, number>>;
-    perBandMin: number;
-  };
+  pois: PoiSource;
   checkpoints: { spacing: number };
+}
+
+/**
+ * The POI pass (Task 13): `total` POIs, `perDistrict` of them in each district, at least `elevatedTarget` of them
+ * elevated, `minSpacing` m apart (horizontally), at least `perBandMin` in each distance band. The POI pass validates the
+ * rest (kits, balconies, street furniture).
+ */
+export interface PoiSource {
+  total: number;
+  elevatedTarget: number;
+  minSpacing: number;
+  perDistrict: Partial<Record<District, number>>;
+  perBandMin: number;
+  /** A band is estimated from the straight-line distance from the hub centre × this (the navmesh confirms in Task 14). */
+  bandEstimateFactor: number;
+  /** A POI is elevated when it stands at least this high above the street-level ground there (plan assumption 6), m. */
+  elevatedMin: number;
+  /**
+   * Candidates are tried in a seeded shuffle weighted by how they are reached: a slot of weight w comes up about w times
+   * as early as one of weight 1 (route slots need nothing built, so they keep the city lean).
+   */
+  accessWeights: { street: number; route: number; kit: number };
+  /** At least this many POIs of each listed kind. */
+  kindMin: Partial<Record<PoiKind, number>>;
+  /** Kits and street furniture keep this far from movement features and their run-ups, m. */
+  featureClearance: number;
+  /**
+   * Access kits. Mantle kits: crate steps rising at most `stepRise` (Ruling R17), a clear `runUp` m behind the lowest
+   * crate, `alongStep` m between the spots tried along a roof face; the climb starts `standOff` m out from the lowest
+   * crate, and a drop link lands `standOff` m out from its face, its landing kept clear for the fall at run speed plus
+   * `dropMargin` m. Pad kits: a pad `pad.distances` m out from a roof face. Zip kits: a cable `endHeight` above each end,
+   * `endInset` in from the roof edge, no steeper than `maxSlope`, its low end searched in `directions` directions at
+   * `runSteps` runs `runStep` m apart from the shortest the slope allows.
+   */
+  kits: {
+    stepRise: number;
+    runUp: number;
+    alongStep: number;
+    standOff: number;
+    dropMargin: number;
+    pad: { radius: number; apexAbove: number; clearance: number; distances: number[] };
+    zip: { endHeight: number; endInset: number; maxSlope: number; directions: number; runStep: number; runSteps: number };
+  };
+  /** Balcony ledges: `width` × `depth` slabs `thickness` thick, their top `floorHeight` up a facade with `headroom` above. */
+  balcony: { width: number; depth: number; thickness: number; floorHeight: number; headroom: number };
+  /**
+   * Street furniture every `step` m along each flat street edge (none within `endClearance` of its ends), mailboxes and
+   * stalls in turn: a mailbox on the sidewalk `inset` in from its outer edge, a stall (counter) `gap` beyond it.
+   */
+  furniture: {
+    step: number;
+    endClearance: number;
+    mailbox: { width: number; depth: number; height: number; inset: number };
+    stall: { width: number; depth: number; height: number; gap: number };
+  };
 }
 
 const TEMPLATES: readonly string[] = ['downtown', 'harbor', 'hillside', 'suburbs'];

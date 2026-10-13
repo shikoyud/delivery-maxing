@@ -141,7 +141,23 @@
     "elevatedTarget": 0.45,
     "minSpacing": 25,
     "perDistrict": { "downtown": 45, "harbor": 35, "hillside": 35, "suburbs": 35 },
-    "perBandMin": 20
+    "perBandMin": 20,
+    "bandEstimateFactor": 1.25,
+    "elevatedMin": 2.5,
+    "accessWeights": { "street": 1, "route": 4, "kit": 1 },
+    "kindMin": { "mailbox": 8, "counter": 8, "balcony": 8 },
+    "featureClearance": 3,
+    "kits": {
+      "stepRise": 1.4, "runUp": 1.5, "alongStep": 2, "standOff": 1, "dropMargin": 1.5,
+      "pad": { "radius": 1.2, "apexAbove": 2.5, "clearance": 0.5, "distances": [4, 6, 8, 10] },
+      "zip": { "endHeight": 3.2, "endInset": 1.2, "maxSlope": 0.6, "directions": 16, "runStep": 5, "runSteps": 8 }
+    },
+    "balcony": { "width": 3, "depth": 1.5, "thickness": 0.5, "floorHeight": 3.5, "headroom": 2 },
+    "furniture": {
+      "step": 100, "endClearance": 12,
+      "mailbox": { "width": 0.5, "depth": 0.5, "height": 1.1, "inset": 0.25 },
+      "stall": { "width": 2.4, "depth": 1.2, "height": 1.1, "gap": 0.3 }
+    }
   },
   "checkpoints": { "spacing": 150 }
 }

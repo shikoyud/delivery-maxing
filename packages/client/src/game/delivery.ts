@@ -75,7 +75,7 @@ export class DeliveryLoop {
   constructor(private readonly d: DeliveryDeps) {
     this.orders = new OrderSystem(
       {
-        pois: buildPoiTable(d.map, streetDistance, ordersConfig.bands),
+        pois: buildPoiTable(d.map, streetDistance, ordersConfig.bands.greybox),
         distance: streetDistance,
         hub: d.map.hub.center,
         cfg: ordersConfig,

@@ -6,6 +6,7 @@ import {
   emptyOutput,
   paramChecks,
   quayCheckpoints,
+  roofSlot,
   type DistrictContext,
   type DistrictGrid,
   type DistrictOutput,
@@ -16,7 +17,7 @@ import {
   type RampReport,
 } from '../district';
 import { slopedSlab } from '../kits';
-import { box, DEG, r2, v2, type GridLine } from '../layout';
+import { box, DEG, r2, top, v2, type GridLine } from '../layout';
 import { fillLot, type FillerParams } from '../lots';
 import { GraphBuilder, splitAtChunks } from '../streets';
 
@@ -310,6 +311,9 @@ function buildHouses(b: Build, lot: GridLot, quays: QuayEdge[]): void {
     b.out.props.push(house.prop);
     b.out.solids.push(...house.solids);
     b.out.poiSlots.push({ position: house.door, kind: 'door', elevated: false, district: ctx.district, access: 'street' });
+    // A flat roof is an elevated slot reached by an access kit (Task 13)
+    const roof = house.solids.reduce((a, c) => (top(c) > top(a) ? c : a));
+    if (!roof.rotationDeg) b.out.poiSlots.push(roofSlot(ctx.district, roof, 'kit'));
   }
 }
 

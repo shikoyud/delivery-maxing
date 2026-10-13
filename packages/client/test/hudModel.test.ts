@@ -25,7 +25,7 @@ const [poiA, poiB] = map.pois as [MapData['pois'][number], MapData['pois'][numbe
 function system(capacity = 3): OrderSystem {
   return new OrderSystem(
     {
-      pois: buildPoiTable(map, streetDistance, ordersConfig.bands),
+      pois: buildPoiTable(map, streetDistance, ordersConfig.bands.greybox),
       distance: streetDistance,
       hub: map.hub.center,
       cfg: ordersConfig,

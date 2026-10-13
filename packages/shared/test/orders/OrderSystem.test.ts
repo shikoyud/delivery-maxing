@@ -13,7 +13,7 @@ const pois: PoiInfo[] = Array.from({ length: 20 }, (_, i) => {
   return {
     poi: { id: `p${i}`, position: vec3(d, 0, 0), district: 'downtown', kind: 'door' },
     hubDistance: d,
-    band: bandFor(d, cfg.bands),
+    band: bandFor(d, cfg.bands.greybox),
   };
 });
 

@@ -100,7 +100,7 @@ describe('greybox city: POIs', () => {
   });
 
   it('has ≥ 5 POIs in each band by street distance from the HUB', () => {
-    const table = buildPoiTable(map, streetDistance, ordersConfig.bands);
+    const table = buildPoiTable(map, streetDistance, ordersConfig.bands.greybox);
     for (const band of ['short', 'medium', 'long'] as const) {
       expect(table.filter((t) => t.band === band).length, band).toBeGreaterThanOrEqual(5);
     }

@@ -70,10 +70,14 @@ export interface MovementConfig {
   fall: { outOfBoundsY: number; boundsMargin: number };
 }
 
+/** A map's distance bands: Short below shortMax, Medium up to mediumMax, Long beyond, m. */
+export interface BandLimits { shortMax: number; mediumMax: number }
+
 export interface OrdersConfig {
   board: { size: number; refreshSeconds: number; cancelCooldownSeconds: number };
   backpack: { baseSlots: number; maxSlots: number };
-  bands: { shortMax: number; mediumMax: number };
+  /** Distance bands per map (Ruling R3): the 2 km city and the SP1 greybox. */
+  bands: { city: BandLimits; greybox: BandLimits };
   points: {
     short: number;
     medium: number;
