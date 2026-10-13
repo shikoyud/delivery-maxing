@@ -11,6 +11,7 @@ import {
   movementConfig,
   vec3,
   worldConfig,
+  type CityMap,
   type MapData,
   type PagedPhysicsWorld,
   type PoiTableFile,
@@ -45,7 +46,7 @@ import {
   type DevSettingsStore,
 } from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
-import { ballInSolid, physicsSphereCast, physicsWallProbe } from './cameraQueries';
+import { ballInSolid, physicsLineOfSight, physicsSphereCast, physicsWallProbe } from './cameraQueries';
 import { interpolationStart } from './interpolation';
 import type { PerfResult } from './perf';
 
@@ -117,6 +118,8 @@ export class Game {
     readonly city: CityView | null,
     /** The city's navmesh POI table (null on the greybox): the board's route distances. */
     poiTable: PoiTableFile | null,
+    /** The city placement file (null on the greybox): its streets carry the thieves. */
+    cityMap: CityMap | null,
   ) {
     this.prevPosition = { ...sim.state.position };
     const chase = this.cfg.camera.chase;
@@ -147,6 +150,9 @@ export class Game {
       scene: this.renderer.scene,
       map,
       poiTable,
+      city: cityMap,
+      // Thieves see the courier unless a solid is in the way (its own capsule excluded); colliders are paged around it.
+      lineOfSight: physicsLineOfSight(sim.physics, sim.body.collider),
       cfg: this.cfg,
       actions: this.actions,
       progress: this.progress,
@@ -213,7 +219,7 @@ export class Game {
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
     const sim = new PlayerSim(physics, map, settings.movement, map.hub.spawn, map.hub.spawnYaw);
-    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model, pager, view, poiTable);
+    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model, pager, view, poiTable, city);
     if (opts.debug) installDebugHooks(game);
     return game;
   }

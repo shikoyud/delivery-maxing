@@ -2,15 +2,20 @@ import type { ClientConfig } from '../clientConfig';
 import { cssHex } from '../render/palette';
 import { slotColor } from '../render/waypoints';
 import { clock, el, esc, setHtml, setText } from './dom';
-import { MODIFIER_LABEL, type HudModel } from './hudModel';
+import { MODIFIER_LABEL, chaseBannerText, type HudModel } from './hudModel';
 
-/** The in-game HUD (spec §11): active orders with distances and timers, Coins, Points and backpack slots. */
+/**
+ * The in-game HUD (spec §11): active orders with distances and timers, Coins, Points, current-epoch points, backpack
+ * slots, and the warning banner while a thief is chasing.
+ */
 export class Hud {
   private readonly orders: HTMLElement;
   private readonly coins: HTMLElement;
   private readonly points: HTMLElement;
   private readonly deliveries: HTMLElement;
+  private readonly epoch: HTMLElement;
   private readonly slots: HTMLElement;
+  private readonly chase: HTMLElement;
   private readonly prompt: HTMLElement;
 
   constructor(
@@ -29,7 +34,11 @@ export class Hud {
     this.coins = stat('coins', 'hud-coins');
     this.points = stat('pts', 'hud-points');
     this.deliveries = stat('delivered', 'hud-deliveries');
+    this.epoch = stat('epoch', 'hud-epoch');
     this.slots = el('div', 'hud-slots', totals);
+    this.chase = el('div', 'hud-chase', root);
+    this.chase.setAttribute('role', 'alert');
+    this.chase.hidden = true;
     this.prompt = el('div', 'hud-prompt', root);
     this.prompt.hidden = true;
   }
@@ -39,6 +48,9 @@ export class Hud {
     setText(this.coins, String(m.totals.coins));
     setText(this.points, String(m.totals.points));
     setText(this.deliveries, String(m.totals.deliveries));
+    setText(this.epoch, String(m.epochPoints));
+    this.chase.hidden = m.chase === null;
+    if (m.chase !== null) setText(this.chase, chaseBannerText(m.chase));
     const pips = Array.from({ length: m.slots.capacity }, (_, i) => `<i class="${i < m.slots.used ? 'full' : ''}"></i>`).join('');
     setHtml(this.slots, `<span>Backpack</span>${pips}<b>${m.slots.used}/${m.slots.capacity}</b>`);
 

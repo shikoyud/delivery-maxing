@@ -17,7 +17,9 @@ export type OrderEvent =
   | { kind: 'boardRefreshed' }
   | { kind: 'stepReached'; orderId: string; stepIndex: number; step: Step }
   | { kind: 'fragileBroken'; orderId: string; reason: 'fall' | 'respawn' }
-  | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; onTime: boolean | null; withinPar: boolean };
+  | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; onTime: boolean | null; withinPar: boolean }
+  /** A thief caught the courier (spec §7.3): these carried orders failed. */
+  | { kind: 'robbed'; lostOrderIds: string[] };
 export interface Totals { points: number; coins: number; deliveries: number }
 
 export interface OrderSystemOptions {
@@ -164,6 +166,16 @@ export class OrderSystem {
       });
     }
     return events;
+  }
+
+  /**
+   * A thief's catch (spec §7.3): every carried package is stolen and its order fails, with no points or Coins. Pick-up
+   * and Chain orders not yet collected (step 0) are kept. The totals are untouched; the epoch penalty is the caller's.
+   */
+  rob(): Extract<OrderEvent, { kind: 'robbed' }> {
+    const lostOrderIds = this.active.filter((a) => this.isCarried(a)).map((a) => a.order.id);
+    this.active = this.active.filter((a) => !this.isCarried(a));
+    return { kind: 'robbed', lostOrderIds };
   }
 
   isCarried(a: ActiveOrder): boolean {

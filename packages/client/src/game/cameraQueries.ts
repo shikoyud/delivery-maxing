@@ -1,4 +1,4 @@
-import { WALL_MAX_NY, type PhysicsWorld, type PlayerSim, type Vec3 } from '@dm/shared';
+import { WALL_MAX_NY, type LineOfSight, type PhysicsWorld, type PlayerSim, type Vec3 } from '@dm/shared';
 import type { RayCast, WallProbe } from '../render/chaseCamera';
 
 /** A Rapier collider (the client has no direct Rapier dependency). */
@@ -80,5 +80,26 @@ export function physicsWallProbe(physics: PhysicsWorld, exclude?: Collider): Wal
       exclude,
     );
     return best;
+  };
+}
+
+/**
+ * Line of sight for the thieves (spec §7.3): a ray from `from` (a thief's eye) to `to` (the courier's chest) against the
+ * map's solids; blocked when it hits one before reaching `to`. `exclude` is the courier's own collider, so its capsule
+ * never hides it; sensors never block. On the city the colliders are paged around the courier, which covers the thieves'
+ * trigger radius.
+ */
+export function physicsLineOfSight(physics: PhysicsWorld, exclude?: Collider): LineOfSight {
+  const { rapier, world } = physics;
+  const ray = new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
+  return (from, to) => {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dz = to.z - from.z;
+    const d = Math.hypot(dx, dy, dz);
+    if (d < 1e-6) return true;
+    ray.origin = { x: from.x, y: from.y, z: from.z };
+    ray.dir = { x: dx / d, y: dy / d, z: dz / d };
+    return world.castRay(ray, d, true, rapier.QueryFilterFlags.EXCLUDE_SENSORS, undefined, exclude) === null;
   };
 }

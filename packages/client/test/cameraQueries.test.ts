@@ -9,7 +9,7 @@ import {
   type PhysicsWorld,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
-import { ballInSolid, physicsSphereCast, physicsWallProbe } from '../src/game/cameraQueries';
+import { ballInSolid, physicsLineOfSight, physicsSphereCast, physicsWallProbe } from '../src/game/cameraQueries';
 
 const map = expandGreybox(greybox as GreyboxSource);
 let physics: PhysicsWorld;
@@ -64,5 +64,18 @@ describe('camera physics queries (greybox crouch tunnel: roof underside y 1.4, x
     expect(probe({ x: 98, y: 0.8, z: 1.6 }, 0.3)).toBeNull();
     // Roof underside 0.2 m above, floor 1.2 m below, walls 2 m away, the courier's capsule right here: nothing.
     expect(probe({ x: 98, y: 1.2, z: 0 }, 0.6)).toBeNull();
+  });
+
+  it("line of sight (thieves): walls and roofs block it; the courier's own capsule does not", () => {
+    const los = physicsLineOfSight(physics, sim.body.collider);
+    // Along the tunnel, straight through the courier's capsule at x 98.
+    expect(los({ x: 93, y: 0.9, z: 0 }, { x: 103, y: 0.9, z: 0 })).toBe(true);
+    // From inside the tunnel up through its roof (underside y 1.4), and out through a side wall (inner face z 2).
+    expect(los({ x: 98, y: 0.8, z: 0.5 }, { x: 98, y: 6, z: 0.5 })).toBe(false);
+    expect(los({ x: 98, y: 0.8, z: 0.5 }, { x: 98, y: 0.8, z: 8 })).toBe(false);
+    // Without the exclusion the courier's capsule blocks the view through it.
+    expect(physicsLineOfSight(physics)({ x: 93, y: 0.9, z: 0 }, { x: 103, y: 0.9, z: 0 })).toBe(false);
+    // Coincident ends see each other.
+    expect(los({ x: 93, y: 0.9, z: 0 }, { x: 93, y: 0.9, z: 0 })).toBe(true);
   });
 });

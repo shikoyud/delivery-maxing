@@ -1,49 +1,90 @@
-import type { Totals } from '@dm/shared';
+import { addEpochPoints, epochIdAt, ordersConfig, type EpochPoints, type Totals } from '@dm/shared';
 
-/** localStorage key for the player's points, coins and delivery count (spec assumption 10). */
-export const PROGRESS_KEY = 'dm.progress.v1';
+/** localStorage key for the player's lifetime totals and current-epoch points (SP2 Task 17). */
+export const PROGRESS_KEY = 'dm.progress.v2';
+/** SP1's key (totals only, spec assumption 10): read once to migrate when no v2 entry exists. */
+export const PROGRESS_KEY_V1 = 'dm.progress.v1';
+
+/** Lifetime Points, Coins and deliveries, and the points earned in the current reward epoch (plan assumption 12). */
+export interface Progress { totals: Totals; epoch: EpochPoints }
 
 export interface ProgressStore {
-  load(): Totals;
-  save(t: Totals): void;
+  /** The stored progress as of `utcMs` (wall clock): epoch points from an earlier window load as 0 in the current one. */
+  load(utcMs: number): Progress;
+  save(p: Progress): void;
 }
 
-const zero = (): Totals => ({ points: 0, coins: 0, deliveries: 0 });
+const zeroTotals = (): Totals => ({ points: 0, coins: 0, deliveries: 0 });
 
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
-function parseTotals(raw: string | null): Totals {
-  if (raw === null) return zero();
-  let v: unknown;
+function parseJson(raw: string): unknown {
   try {
-    v = JSON.parse(raw);
+    return JSON.parse(raw);
   } catch {
-    return zero();
+    return null;
   }
-  if (typeof v !== 'object' || v === null || Array.isArray(v)) return zero();
-  const o = v as Record<string, unknown>;
-  if (!isCount(o.points) || !isCount(o.coins) || !isCount(o.deliveries)) return zero();
-  return { points: o.points, coins: o.coins, deliveries: o.deliveries };
+}
+
+function asTotals(v: unknown): Totals | null {
+  if (!isObj(v) || !isCount(v.points) || !isCount(v.coins) || !isCount(v.deliveries)) return null;
+  return { points: v.points, coins: v.coins, deliveries: v.deliveries };
+}
+
+function asEpoch(v: unknown): EpochPoints | null {
+  if (!isObj(v) || !Number.isSafeInteger(v.id) || !isCount(v.points)) return null;
+  return { id: v.id as number, points: v.points };
 }
 
 /**
- * Local progress (SP1). Never throws: blocked storage (private windows, disabled site data), quota errors
- * and malformed data all give zero progress (Review Focus 5).
+ * The stored progress, or null when nothing valid is stored. A v2 entry wins; without one a v1 entry migrates (its
+ * totals kept, no epoch points). Malformed data gives null (zero progress), never a throw.
+ */
+function parseStored(v2: string | null, v1: string | null): { totals: Totals; epoch: EpochPoints | null } | null {
+  if (v2 !== null) {
+    const o = parseJson(v2);
+    if (!isObj(o)) return null;
+    const totals = asTotals(o.totals);
+    const epoch = asEpoch(o.epoch);
+    return totals && epoch ? { totals, epoch } : null;
+  }
+  if (v1 !== null) {
+    const totals = asTotals(parseJson(v1));
+    return totals ? { totals, epoch: null } : null;
+  }
+  return null;
+}
+
+/**
+ * Local progress. Never throws: blocked storage (private windows, disabled site data), quota errors and malformed data
+ * all give zero progress (SP1 Review Focus 5).
  */
 export function createProgressStore(storage: Pick<Storage, 'getItem' | 'setItem'> | null): ProgressStore {
+  const seconds = ordersConfig.epoch.seconds;
   return {
-    load() {
-      if (!storage) return zero();
-      try {
-        return parseTotals(storage.getItem(PROGRESS_KEY));
-      } catch {
-        return zero();
+    load(utcMs) {
+      let stored: ReturnType<typeof parseStored> = null;
+      if (storage) {
+        try {
+          stored = parseStored(storage.getItem(PROGRESS_KEY), storage.getItem(PROGRESS_KEY_V1));
+        } catch {
+          stored = null;
+        }
       }
+      const fresh: EpochPoints = { id: epochIdAt(utcMs, seconds), points: 0 };
+      return {
+        totals: stored?.totals ?? zeroTotals(),
+        // Rolls a stored epoch from another window over to the current one with 0 points.
+        epoch: stored?.epoch ? addEpochPoints(stored.epoch, utcMs, seconds, 0) : fresh,
+      };
     },
-    save(t) {
+    save(p) {
       if (!storage) return;
+      const { totals: t, epoch: e } = p;
+      const data: Progress = { totals: { points: t.points, coins: t.coins, deliveries: t.deliveries }, epoch: { id: e.id, points: e.points } };
       try {
-        storage.setItem(PROGRESS_KEY, JSON.stringify({ points: t.points, coins: t.coins, deliveries: t.deliveries }));
+        storage.setItem(PROGRESS_KEY, JSON.stringify(data));
       } catch {
         // Storage full or blocked: progress for this session stays in memory only.
       }

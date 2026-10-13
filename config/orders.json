@@ -11,5 +11,6 @@
   "mix": { "typeWeights": { "dropoff": 5, "pickup": 4, "chain": 4 }, "modifierWeights": { "none": 5, "express": 2, "fragile": 2, "heavy": 2 } },
   "selection": { "spreadMeters": 40, "reuseSeconds": 180, "districtWindow": 6 },
   "zones": { "poiRadius": 3, "poiHeight": 4 },
-  "poiChecks": { "minReachable": 140, "minElevatedShare": 0.4, "minPerBand": 20 }
+  "poiChecks": { "minReachable": 140, "minElevatedShare": 0.4, "minPerBand": 20 },
+  "epoch": { "seconds": 600 }
 }

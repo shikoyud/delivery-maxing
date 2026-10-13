@@ -27,5 +27,6 @@ export * from './orders/board';
 export * from './orders/distanceTable';
 export * from './orders/selection';
 export * from './orders/OrderSystem';
+export * from './orders/epoch';
 export * from './thieves/types';
 export * from './thieves/ThiefSystem';

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ordersConfig } from '../../src/config';
 import { OrderSystem } from '../../src/orders/OrderSystem';
-import type { Order } from '../../src/orders/types';
+import { orderSteps } from '../../src/orders/rules';
+import type { Modifier, Order, OrderType } from '../../src/orders/types';
+import { NO_MODS } from '../../src/movement/types';
 import { mulberry32 } from '../../src/util/rng';
 import { vec3 } from '../../src/math/vec3';
 import { bandFor, type PoiInfo } from '../../src/world/distance';
@@ -399,5 +401,57 @@ describe('OrderSystem', () => {
     sys.refreshBoard(10 + cfg.selection.reuseSeconds);
     expect(sys.board.length).toBeGreaterThan(0);
     expect(() => sys.update(1000, OUT)).not.toThrow();
+  });
+
+  describe('rob() (spec §7.3 Catch; Review Focus 4: a Heavy drop-off, a collected Chain, an uncollected Pick-up)', () => {
+    const order = (id: string, type: OrderType, poiIds: string[], modifier: Modifier | null, slots: number): Order => ({
+      id, type, modifier, steps: orderSteps(type, poiIds), band: type === 'chain' ? null : 'short',
+      hubDistance: 100, routeDistance: 200, slots, expressLimit: null, parLimit: 60,
+    });
+    /** Capacity 4: the Heavy drop-off (2 slots, carried from accept), the Chain collected at A (step 1), the Pick-up not yet. */
+    function mixed() {
+      const sys = make(1, 4, 0, { points: 9, coins: 90, deliveries: 3 });
+      const heavy = order('heavy', 'dropoff', ['p0'], 'heavy', cfg.heavy.slots);
+      const chain = order('chain', 'chain', ['p2', 'p4'], null, 1);
+      const pick = order('pick', 'pickup', ['p6'], null, 1);
+      for (const o of [heavy, chain, pick]) {
+        sys.board = [o];
+        expect(sys.accept(o.id, 0, true)).toBe('ok');
+      }
+      expect(sys.update(1, zones({ pois: ['p2'] })).map((e) => e.kind)).toEqual(['stepReached']);
+      expect(sys.active.map((a) => [a.order.id, a.stepIndex, sys.isCarried(a)])).toEqual([
+        ['heavy', 0, true],
+        ['chain', 1, true],
+        ['pick', 0, false],
+      ]);
+      return sys;
+    }
+
+    it('rob() removes the Heavy drop-off and the Chain, keeps the Pick-up', () => {
+      const sys = mixed();
+      expect(sys.rob()).toEqual({ kind: 'robbed', lostOrderIds: ['heavy', 'chain'] });
+      expect(sys.active.map((a) => a.order.id)).toEqual(['pick']);
+      expect(sys.active[0]?.stepIndex).toBe(0); // its waypoint still leads to the pick-up POI
+      expect(sys.usedSlots()).toBe(1);
+      // A second catch with nothing carried steals nothing.
+      expect(sys.rob()).toEqual({ kind: 'robbed', lostOrderIds: [] });
+      expect(sys.active.map((a) => a.order.id)).toEqual(['pick']);
+    });
+
+    it('statModifiers returns NO_MODS after the Heavy one is stolen', () => {
+      const sys = mixed();
+      expect(sys.statModifiers().jumpHeightMul).toBe(cfg.heavy.jumpHeightMultiplier);
+      sys.rob();
+      expect(sys.statModifiers()).toEqual(NO_MODS);
+    });
+
+    it('totals are unchanged by rob()', () => {
+      const sys = mixed();
+      sys.rob();
+      expect(sys.totals).toEqual({ points: 9, coins: 90, deliveries: 3 });
+      // The stolen orders never complete: reaching their targets later does nothing.
+      expect(sys.update(2, zones({ pois: ['p0', 'p4'], drop: true, plaza: true }))).toEqual([]);
+      expect(sys.totals).toEqual({ points: 9, coins: 90, deliveries: 3 });
+    });
   });
 });

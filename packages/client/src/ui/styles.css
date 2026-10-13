@@ -199,7 +199,7 @@ kbd {
   right: 16px;
   top: 16px;
   display: grid;
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(4, auto);
   gap: 6px;
   padding: 10px 12px;
   border-radius: 12px;
@@ -223,6 +223,7 @@ kbd {
 
 .hud-coins .hud-stat-value { color: var(--dm-coral); }
 .hud-points .hud-stat-value { color: var(--dm-teal); }
+.hud-epoch .hud-stat-value { color: #7a5ae0; }
 
 .hud-stat-label {
   font-size: 11px;
@@ -275,6 +276,24 @@ kbd {
 }
 
 .hud-prompt[hidden] { display: none; }
+
+/* A thief is chasing (spec §11): top centre, above the popups. */
+.hud-chase {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: var(--dm-coral);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.3);
+}
+
+.hud-chase[hidden] { display: none; }
 
 /* ---------- Popups ---------- */
 

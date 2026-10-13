@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AcceptResult, ActiveOrder, MoveMode, Order, Totals, Vec3 } from '@dm/shared';
+import type { AcceptResult, ActiveOrder, MoveMode, Order, ThiefState, Totals, Vec3 } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { Game } from './Game';
 import type { PerfResult } from './perf';
@@ -32,8 +32,14 @@ export interface DebugApi {
     board(): (Order | null)[];
     active(): ActiveOrder[];
     totals(): Totals;
+    /** Points earned in the current reward epoch (local; as of the wall clock now). */
+    epochPoints(): number;
     accept(id: string): AcceptResult;
   };
+  /** Copies of the street thieves' states (empty on the greybox, which has none). */
+  thieves(): ThiefState[];
+  /** Moves a thief to the street point nearest `p` (kept on the streets by projection); returns its new state. City only. */
+  placeThief(id: string, p: Vec3): ThiefState;
   /** Whether the Order Board is open. */
   boardOpen(): boolean;
   /** Ground point of a POI zone, by id. */
@@ -112,8 +118,11 @@ export function installDebugHooks(game: Game): void {
       board: () => structuredClone([...game.delivery.orders.board]),
       active: () => structuredClone([...game.delivery.orders.active]),
       totals: () => ({ ...game.delivery.orders.totals }),
+      epochPoints: () => game.delivery.epochPoints(),
       accept: (id) => game.delivery.accept(id),
     },
+    thieves: () => structuredClone(game.delivery.thieves?.thieves ?? []),
+    placeThief: (id, p) => structuredClone(game.delivery.placeThief(id, p)),
     boardOpen: () => game.delivery.modalOpen,
     poiPosition(id) {
       const p = game.map.pois.find((x) => x.id === id);

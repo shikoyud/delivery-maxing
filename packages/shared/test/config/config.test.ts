@@ -31,6 +31,8 @@ describe('config pins spec values', () => {
     expect(ordersConfig.mix.typeWeights).toEqual({ dropoff: 5, pickup: 4, chain: 4 });
     expect(ordersConfig.heavy).toEqual({ slots: 2, jumpHeightMultiplier: 0.9 });
     expect(ordersConfig.backpack.baseSlots).toBe(1);
+    // Spec §9.4 step 1: epochs are the 10-minute wall-clock (UTC) windows
+    expect(ordersConfig.epoch).toEqual({ seconds: 600 });
   });
   it('world', () => {
     expect(worldConfig.chunkSize).toBe(100);

@@ -115,6 +115,8 @@ export interface OrdersConfig {
   zones: { poiRadius: number; poiHeight: number };
   /** What the build-time POI table must show (spec §5.3): reachable POIs, elevated share of them, POIs per band. */
   poiChecks: { minReachable: number; minElevatedShare: number; minPerBand: number };
+  /** Reward epochs: wall-clock UTC windows of this many seconds (spec §9.4 step 1); local epoch points reset at each. */
+  epoch: { seconds: number };
 }
 
 export interface WorldConfig {

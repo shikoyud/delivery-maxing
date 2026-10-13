@@ -16,11 +16,24 @@ export interface HudOrder {
 
 export interface HudModel {
   totals: Totals;
+  /** Points earned in the current reward epoch (local; spec §11, plan assumption 12). */
+  epochPoints: number;
+  /** A thief is chasing the courier: whole seconds until it gives up (spec §11 warning); null when no chase. */
+  chase: { secondsLeft: number } | null;
   slots: { used: number; capacity: number };
   refreshIn: number;
   cooldownLeft: number;
   orders: HudOrder[];
 }
+
+/** What the HUD shows besides the order system: local epoch points and the chase timer (null: no chase). */
+export interface HudLocal {
+  epochPoints: number;
+  chaseSecondsLeft: number | null;
+}
+
+/** Timers summed from 1/30 s ticks within this of a whole second count as that second (no extra second shown). */
+const SECONDS_EPS = 1e-9;
 
 const KIND_LABEL: Record<Poi['kind'], string> = { door: 'Door', mailbox: 'Mailbox', counter: 'Counter', balcony: 'Balcony' };
 const DISTRICT_LABEL: Record<Poi['district'], string> = {
@@ -86,10 +99,28 @@ export function stageText(a: ActiveOrder, pois: PoiIndex): string {
   return stepTexts(a.order, pois)[a.stepIndex] ?? 'Return to HUB';
 }
 
-export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: number): HudModel {
+/** The chase warning (spec §7.3, §11): "Thief! Sprint, climb or reach the HUB · 7s". */
+export function chaseBannerText(chase: { secondsLeft: number }): string {
+  return `Thief! Sprint, climb or reach the HUB · ${chase.secondsLeft}s`;
+}
+
+/**
+ * The robbed popup: `stolen` packages taken; `penalty` the epoch points a catch costs and `epochBefore` the epoch points
+ * before it (floored at 0, so at most `epochBefore` are lost).
+ */
+export function robbedText(stolen: number, penalty: number, epochBefore: number): string {
+  const lost = Math.min(penalty, epochBefore);
+  const loss = lost > 0 ? `−${lost} epoch ${lost === 1 ? 'point' : 'points'}` : 'epoch points already 0';
+  return `Robbed! ${stolen} ${stolen === 1 ? 'package' : 'packages'} stolen · ${loss}`;
+}
+
+export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: number, local: HudLocal): HudModel {
   const pois = poiIndex(map);
+  const left = local.chaseSecondsLeft;
   return {
     totals: { ...orders.totals },
+    epochPoints: local.epochPoints,
+    chase: left === null ? null : { secondsLeft: Math.max(0, Math.ceil(left - SECONDS_EPS)) },
     slots: { used: orders.usedSlots(), capacity: orders.backpackCapacity },
     refreshIn: Math.max(0, orders.nextRefreshAt - now),
     cooldownLeft: Math.max(0, orders.cancelCooldownUntil - now),
