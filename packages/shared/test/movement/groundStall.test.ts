@@ -13,7 +13,7 @@ import { box, makeSim } from '../helpers/simHarness';
 
 /**
  * Playtest blocker: on the real map's 600 m ground slab, sprinting across open ground stalled for seconds at a time
- * (9.8 m in 5 s from the plaza instead of ~39 m) and the feet sank 2–5 cm into the slab.
+ * (9.8 m in 5 s from the origin instead of ~39 m) and the feet sank 2–5 cm into the slab.
  */
 const map: MapData = expandGreybox(greyboxJson as unknown as GreyboxSource);
 const SPRINT_TICKS = 5 * movementConfig.tickRate;
@@ -27,16 +27,16 @@ beforeAll(async () => {
   rapier = await initRapier();
 });
 
-const hub = map.hospitals[0]!.spawn;
+const spawn = map.hospitals[0]!.spawn;
 const RUNS: { label: string; x: number; z: number; yaw: number }[] = [
-  { label: '(-30, 8) facing +X', x: -30, z: 8, yaw: -Math.PI / 2 },
-  { label: 'hospital spawn facing +Z', x: hub.x, z: hub.z, yaw: Math.PI },
-  { label: 'hospital spawn facing -Z', x: hub.x, z: hub.z, yaw: 0 },
+  { label: '(-30, 2) facing +X', x: -30, z: 2, yaw: -Math.PI / 2 },
+  { label: 'hospital spawn facing +Z', x: spawn.x, z: spawn.z, yaw: Math.PI },
+  { label: 'hospital spawn facing -Z', x: spawn.x, z: spawn.z, yaw: 0 },
   { label: 'street (-150, 50) facing +X', x: -150, z: 50, yaw: -Math.PI / 2 },
   { label: 'street (-150, 50) facing -Z', x: -150, z: 50, yaw: 0 },
   { label: '(0, 0) diagonal', x: 0, z: 0, yaw: Math.PI / 4 },
-  { label: '(12, -40) facing +X', x: 12, z: -40, yaw: -Math.PI / 2 },
-  { label: '(80, 80) facing -Z', x: 80, z: 80, yaw: 0 },
+  { label: '(12, -50) facing +X', x: 12, z: -50, yaw: -Math.PI / 2 },
+  { label: '(100, 80) facing -Z', x: 100, z: 80, yaw: 0 },
   { label: '(-200, -120) facing -Z', x: -200, z: -120, yaw: 0 },
 ];
 
@@ -80,10 +80,10 @@ describe('sprinting across the real map ground', () => {
     expect(sim.state.mode).toBe('ground');
   });
 
-  it('sprint-jumping across the plaza lands on the slab without sinking into it', () => {
+  it('sprint-jumping across open ground lands on the slab without sinking into it', () => {
     const physics = createPhysicsWorld(rapier, map);
     const yaw = -Math.PI / 2;
-    const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x: -30, y: 0, z: 8 }, yaw);
+    const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x: -30, y: 0, z: 2 }, yaw);
     let minFeetY = Infinity;
     let landings = 0;
     for (let t = 0; t < SPRINT_TICKS; t++) {

@@ -184,7 +184,7 @@ describe('greybox city: schema v2', () => {
   it('keeps hand-placed solid ids unique and prefixed with their area', () => {
     const ids = handPlaced.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) expect(id).toMatch(/^(hub|downtown|harbor|hillside|suburbs)-/);
+    for (const id of ids) expect(id).toMatch(/^(downtown|harbor|hillside|suburbs)-/);
   });
 
   it('keeps every hand-placed solid inside the island', () => {

@@ -9,8 +9,6 @@
     {"district": "suburbs", "rect": {"minX": -300, "minZ": 0, "maxX": 0, "maxZ": 300}, "heightMin": 4, "heightMax": 8, "fillChance": 0.5}
   ],
   "reserved": [
-    {"minX": -40, "minZ": -40, "maxX": 40, "maxZ": 40},
-    {"minX": 40, "minZ": -40, "maxX": 150, "maxZ": 40},
     {"minX": -300, "minZ": -300, "maxX": -150, "maxZ": -150},
     {"minX": -150, "minZ": 50, "maxX": -50, "maxZ": 100},
     {"minX": 100, "minZ": 150, "maxX": 150, "maxZ": 200},
@@ -50,20 +48,6 @@
     {"id": "suburbs-poi-05", "position": {"x": -214.5, "y": 0, "z": 204.5}, "district": "suburbs", "kind": "door", "name": "Cul-de-sac House 9", "roles": ["dropoffFood", "dropoffPackage"]}
   ],
   "solids": [
-    {"id": "hub-mantle-01", "kind": "prop", "center": {"x": 47.5, "y": 0.5, "z": 0}, "size": {"x": 3, "y": 1, "z": 6}},
-    {"id": "hub-mantle-02", "kind": "prop", "center": {"x": 54.5, "y": 0.75, "z": 0}, "size": {"x": 3, "y": 1.5, "z": 6}},
-    {"id": "hub-mantle-03", "kind": "prop", "center": {"x": 61.5, "y": 0.9, "z": 0}, "size": {"x": 3, "y": 1.8, "z": 6}},
-    {"id": "hub-wall-01", "kind": "prop", "center": {"x": 78, "y": 3, "z": -2.5}, "size": {"x": 20, "y": 6, "z": 1}},
-    {"id": "hub-wall-02", "kind": "prop", "center": {"x": 78, "y": 3, "z": 2.5}, "size": {"x": 20, "y": 6, "z": 1}},
-    {"id": "hub-tunnel-wall-01", "kind": "prop", "center": {"x": 98, "y": 0.7, "z": -2.25}, "size": {"x": 12, "y": 1.4, "z": 0.5}},
-    {"id": "hub-tunnel-wall-02", "kind": "prop", "center": {"x": 98, "y": 0.7, "z": 2.25}, "size": {"x": 12, "y": 1.4, "z": 0.5}},
-    {"id": "hub-tunnel-roof", "kind": "prop", "center": {"x": 98, "y": 1.65, "z": 0}, "size": {"x": 12, "y": 0.5, "z": 5}},
-    {"id": "hub-roof-01", "kind": "building", "center": {"x": 122, "y": 5, "z": 0}, "size": {"x": 12, "y": 10, "z": 12}},
-    {"id": "hub-crate-01", "kind": "prop", "center": {"x": 126, "y": 10.5, "z": 0}, "size": {"x": 4, "y": 1, "z": 4}},
-    {"id": "hub-tower-01", "kind": "prop", "center": {"x": 130, "y": 6, "z": 0}, "size": {"x": 4, "y": 12, "z": 4}},
-    {"id": "hub-ramp-01", "kind": "ramp", "center": {"x": 62.037, "y": 0.553, "z": 25}, "size": {"x": 8.139, "y": 0.4, "z": 6}, "rotationDeg": {"x": 0, "y": 0, "z": 10.62}},
-    {"id": "hub-funbox-01", "kind": "prop", "center": {"x": 70, "y": 0.75, "z": 25}, "size": {"x": 8, "y": 1.5, "z": 6}},
-    {"id": "hub-ramp-02", "kind": "ramp", "center": {"x": 77.963, "y": 0.553, "z": 25}, "size": {"x": 8.139, "y": 0.4, "z": 6}, "rotationDeg": {"x": 0, "y": 0, "z": -10.62}},
     {"id": "harbor-crane-01", "kind": "prop", "center": {"x": 288, "y": 10.5, "z": 100}, "size": {"x": 6, "y": 21, "z": 6}},
     {"id": "harbor-crane-01-deck", "kind": "prop", "center": {"x": 288, "y": 21.5, "z": 100}, "size": {"x": 12, "y": 1, "z": 10}},
     {"id": "harbor-crane-01-jib", "kind": "prop", "center": {"x": 280, "y": 30.5, "z": 100}, "size": {"x": 36, "y": 1, "z": 2}},
