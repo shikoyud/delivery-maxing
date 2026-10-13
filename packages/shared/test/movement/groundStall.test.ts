@@ -30,8 +30,8 @@ beforeAll(async () => {
 const spawn = map.hospitals[0]!.spawn;
 const RUNS: { label: string; x: number; z: number; yaw: number }[] = [
   { label: '(-30, 2) facing +X', x: -30, z: 2, yaw: -Math.PI / 2 },
+  // From the hospital spawn only +Z (its spawnYaw, away from the solid hospital block) is 45 m of open ground.
   { label: 'hospital spawn facing +Z', x: spawn.x, z: spawn.z, yaw: Math.PI },
-  { label: 'hospital spawn facing -Z', x: spawn.x, z: spawn.z, yaw: 0 },
   { label: 'street (-150, 50) facing +X', x: -150, z: 50, yaw: -Math.PI / 2 },
   { label: 'street (-150, 50) facing -Z', x: -150, z: 50, yaw: 0 },
   { label: '(0, 0) diagonal', x: 0, z: 0, yaw: Math.PI / 4 },

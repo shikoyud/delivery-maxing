@@ -1,5 +1,5 @@
 import type { Vec3 } from '@dm/shared';
-import { el } from '../dom';
+import { el, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
 import { buildComingSoon, buildStubApp, type StubAppName } from './stubApp';
@@ -73,6 +73,8 @@ export class Phone implements PhoneView {
     this.title = el('div', 'phone-title', device);
     this.screen = el('div', 'phone-screen', device);
     const nav = el('nav', 'phone-nav', device);
+    const footer = el('div', 'phone-footer', device);
+    footer.textContent = `${closeCodes.map((c) => (c === 'Escape' ? 'Esc' : keyLabel(c))).join(' or ')} to close`;
 
     for (const app of PHONE_APPS) {
       const b = el('button', 'phone-nav-btn', nav);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { expandGreybox, type GreyboxSource } from '@dm/shared';
+import { expandGreybox, hospitalBlockId, type GreyboxSource } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { buildHospitalMeshes } from '../src/render/hospitalMeshes';
 
@@ -31,5 +31,20 @@ describe('buildHospitalMeshes', () => {
     // Red cross and white block share one mesh (vertex colours): two draw calls for every hospital together.
     expect(g.children).toHaveLength(2);
     expect(() => buildHospitalMeshes({ ...map, hospitals: [] })).not.toThrow();
+  });
+
+  it('draws the white block to the size of the hospital solid (render and physics agree)', () => {
+    const blocks = buildHospitalMeshes(map).getObjectByName('hospital-blocks') as THREE.InstancedMesh;
+    const solid = map.solids.find((s) => s.id === hospitalBlockId(map.hospitals[0]!))!;
+    expect(solid.size).toEqual((greybox as GreyboxSource).hospitalBlock);
+    blocks.geometry.computeBoundingBox();
+    const box = blocks.geometry.boundingBox!;
+    // The red crosses sit just proud of the block faces (by less than 0.1 m).
+    expect(box.min.y).toBeCloseTo(0, 6);
+    expect(box.max.y - solid.size.y).toBeGreaterThanOrEqual(0);
+    expect(box.max.y - solid.size.y).toBeLessThan(0.1);
+    expect(box.max.x - solid.size.x / 2).toBeGreaterThanOrEqual(0);
+    expect(box.max.x - solid.size.x / 2).toBeLessThan(0.1);
+    expect(box.max.z - solid.size.z / 2).toBeLessThan(0.1);
   });
 });

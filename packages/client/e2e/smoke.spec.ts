@@ -377,6 +377,8 @@ test('spawns at a hospital inside its safe zone', async ({ page }) => {
   expect(zone).toBe(first.id);
   expect(Math.hypot(pos.x - first.center.x, pos.z - first.center.z)).toBeLessThan(first.safeRadius);
   await expect(page.locator('.hud-safe')).toBeVisible();
+  // The courier spawns facing the street (spawnYaw); turn the camera back so the shot shows the hospital block.
+  await page.evaluate(([c, p]) => window.__dm!.setLook(Math.atan2(-(c.x - p.x), -(c.z - p.z)), 0), [first.center, pos] as const);
   await waitCameraSettled(page);
   await page.screenshot({ path: `${sp3}sp3-hospital-spawn.png` });
   expect(errors).toEqual([]);

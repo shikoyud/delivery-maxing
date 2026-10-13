@@ -32,4 +32,5 @@ export const greyboxFixture = (): GreyboxSource => ({
   grid: { pitch: 50, roadWidth: 12, alleyWidth: 4 },
   districts: [{ district: 'downtown', rect: { minX: -200, minZ: -200, maxX: 200, maxZ: 200 }, heightMin: 10, heightMax: 40, fillChance: 0.8 }],
   reserved: [{ minX: -40, minZ: -40, maxX: 40, maxZ: 40 }],
+  hospitalBlock: vec3(4, 3, 4),
 });

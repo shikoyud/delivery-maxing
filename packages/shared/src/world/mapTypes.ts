@@ -1,6 +1,7 @@
 import type { Vec3 } from '../math/vec3';
 
-export type SolidKind = 'ground' | 'building' | 'prop' | 'ramp';
+/** `hospital`: the solid block at a hospital's centre (generated from `GreyboxSource.hospitalBlock`). */
+export type SolidKind = 'ground' | 'building' | 'prop' | 'ramp' | 'hospital';
 export interface Solid {
   id: string;
   kind: SolidKind;
@@ -61,4 +62,6 @@ export interface GreyboxSource extends MapData {
   grid: { pitch: number; roadWidth: number; alleyWidth: number };
   districts: GreyboxDistrict[];
   reserved: Rect[];
+  /** Size of the solid block placed on every hospital's centre (the client draws its art to this size). */
+  hospitalBlock: Vec3;
 }

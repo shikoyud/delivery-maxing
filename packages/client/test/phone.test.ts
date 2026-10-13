@@ -28,6 +28,10 @@ describe('Phone', () => {
   });
   afterEach(() => dom.restore());
 
+  it('shows a close hint naming the close keys', () => {
+    expect(dom.host.byClass('phone-footer')[0]!.textContent).toBe('Esc or Tab to close');
+  });
+
   it('starts closed and hidden', () => {
     expect(phone.isOpen).toBe(false);
     expect(dom.host.byClass('phone')[0]!.hidden).toBe(true);

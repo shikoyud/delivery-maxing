@@ -41,6 +41,7 @@ export const kindColor: Record<SolidKind, number> = {
   building: 0xe8e1d3,
   prop: 0x8fb8b3,
   ramp: 0x6fc2b8,
+  hospital: 0xf7f6f2,
 };
 
 /** Facade tints mixed into buildings (cream, pale teal, pale coral, sand, stone). */

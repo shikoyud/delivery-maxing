@@ -34,14 +34,26 @@ function shuffle<T>(items: T[], rng: Rng): T[] {
 
 const pickOne = <T>(items: T[], rng: Rng): T => items[Math.floor(rng() * items.length)] as T;
 
-/** Generate one offer near the player, or null when no pickup/dropoff pair qualifies. */
+/**
+ * Generate one offer near the player. The kind is rolled from the mix weights; when the rolled kind has no qualifying
+ * pickup/dropoff pair, the other kind is tried (if its weight and the carrier allow it). Null when neither has a pair.
+ */
 export function generateOffer(ctx: OfferContext): Order | null {
-  const { pois, rules, cfg, rng, capacity } = ctx;
+  const { cfg, rng, capacity } = ctx;
   const remainingKg = capacity.maxPackageKg - ctx.carriedKg;
   const packageOk = remainingKg > 0 && ctx.freeSlots > 0;
   const kindWeights = { food: cfg.mix.kindWeights.food, package: packageOk ? cfg.mix.kindWeights.package : 0 };
   if (kindWeights.food <= 0 && kindWeights.package <= 0) return null;
   const kind: OrderKind = pickWeighted(rng, kindWeights);
+  const first = offerOfKind(ctx, kind, remainingKg);
+  if (first) return first;
+  const other: OrderKind = kind === 'food' ? 'package' : 'food';
+  return kindWeights[other] > 0 ? offerOfKind(ctx, other, remainingKg) : null;
+}
+
+/** One offer of `kind`, or null when no pickup/dropoff pair of that kind qualifies. */
+function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): Order | null {
+  const { pois, rules, cfg, rng } = ctx;
   const pickupRole: PoiRole = kind === 'food' ? 'foodPickup' : 'packagePickup';
   const dropoffRole: PoiRole = kind === 'food' ? 'dropoffFood' : 'dropoffPackage';
   const spacing = cfg.spacing.doorMeters;

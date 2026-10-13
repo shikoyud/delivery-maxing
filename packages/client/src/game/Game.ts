@@ -83,6 +83,8 @@ export class Game {
   private lastFrameMs: number | null = null;
   private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
+  /** Called after the phone opened or closed (main.ts refreshes the play hint from it). */
+  onPhoneChanged: ((open: boolean) => void) | null = null;
 
   private constructor(
     readonly host: HTMLElement,
@@ -166,6 +168,7 @@ export class Game {
     } else if (!this.opts.debug && !this.input.locked) {
       void Promise.resolve(canvas.requestPointerLock()).catch(() => undefined);
     }
+    this.onPhoneChanged?.(open);
   }
 
   /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
@@ -279,7 +282,9 @@ export class Game {
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
     if (events.some((e) => e.kind === 'respawned')) {
-      // A teleport: no camera sweep, and no turn or animation blend across it.
+      // A teleport: no camera sweep, and no turn or animation blend across it. The camera looks the way the
+      // respawned courier faces (the hospital's spawnYaw).
+      this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
       this.chase.snap();
       this.courier.snap();
     }

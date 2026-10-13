@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import greyboxJson from '../../../../map/greybox.json';
 import { movementConfig as cfg } from '../../src/config';
 import { vec3, type Vec3 } from '../../src/math/vec3';
+import { facing } from '../../src/movement/ground';
 import { streetDistance } from '../../src/world/distance';
 import { expandGreybox } from '../../src/world/greybox';
 import type { District, GreyboxSource, MapData, Rect, Solid } from '../../src/world/mapTypes';
@@ -11,7 +12,8 @@ const src = greyboxJson as unknown as GreyboxSource;
 const map: MapData = expandGreybox(src);
 const half = map.size / 2;
 const generated = map.solids.filter((s) => s.kind === 'building' && /^b-/.test(s.id));
-const handPlaced = map.solids.filter((s) => s.id !== 'ground' && !generated.includes(s));
+const hospitalBlocks = map.solids.filter((s) => s.kind === 'hospital');
+const handPlaced = map.solids.filter((s) => s.id !== 'ground' && !generated.includes(s) && !hospitalBlocks.includes(s));
 const DISTRICTS: District[] = ['downtown', 'harbor', 'hillside', 'suburbs'];
 
 let rapier: Rapier;
@@ -89,13 +91,46 @@ describe('greybox city: hospitals', () => {
     for (const h of map.hospitals) {
       expect(h.safeRadius, h.id).toBe(18);
       expect(Math.hypot(h.spawn.x - h.center.x, h.spawn.z - h.center.z), h.id).toBeCloseTo(8, 6);
-      for (const p of [h.center, h.spawn]) {
+      for (const p of [h.spawn]) {
         expect(solidAt(vec3(p.x, p.y + 0.05, p.z))?.id, `${h.id} inside a solid`).toBeUndefined();
         expect(solidAt(vec3(p.x, p.y + 1.7, p.z))?.id, `${h.id} headroom`).toBeUndefined();
         const drop = dropTo(vec3(p.x, p.y + 0.25, p.z), 10);
         expect(drop, `${h.id} has ground below`).not.toBeNull();
         expect(drop! - 0.25, `${h.id} ground gap`).toBeLessThanOrEqual(0.5);
       }
+    }
+  });
+
+  it('has a solid hospital block at each hospital centre that a ray from the spawn hits at the block face', () => {
+    expect(hospitalBlocks).toHaveLength(map.hospitals.length);
+    for (const h of map.hospitals) {
+      expect(solidAt(vec3(h.center.x, h.center.y + 1, h.center.z))?.kind, `${h.id} block`).toBe('hospital');
+      const from = { x: h.spawn.x, y: h.spawn.y + 1, z: h.spawn.z };
+      const dx = h.center.x - h.spawn.x;
+      const dz = h.center.z - h.spawn.z;
+      const len = Math.hypot(dx, dz);
+      const hit = physics.world.castRay(new rapier.Ray(from, { x: dx / len, y: 0, z: dz / len }), len, true);
+      expect(hit, `${h.id} ray hits the block`).not.toBeNull();
+      expect(hit!.timeOfImpact, h.id).toBeCloseTo(len - src.hospitalBlock.z / 2, 4);
+    }
+  });
+
+  it('each hospital spawn faces away from its block, with 20 m of open street ahead', () => {
+    for (const h of map.hospitals) {
+      const f = facing(h.spawnYaw);
+      const out = { x: h.spawn.x - h.center.x, z: h.spawn.z - h.center.z };
+      expect(f.x * out.x + f.z * out.z, `${h.id} faces outward`).toBeCloseTo(Math.hypot(out.x, out.z), 6);
+      for (const y of [0.05, 0.5, 1.7]) {
+        const hit = physics.world.castRay(new rapier.Ray({ x: h.spawn.x, y, z: h.spawn.z }, f), 20, true);
+        expect(hit, `${h.id} open ahead at ${y} m`).toBeNull();
+      }
+    }
+  });
+
+  it('keeps hospital blocks clear of generated buildings, hand-placed solids and POIs', () => {
+    for (const b of hospitalBlocks) {
+      for (const s of [...generated, ...handPlaced]) expect(overlaps(rectOf(b), rectOf(s)), `${b.id} vs ${s.id}`).toBe(false);
+      for (const p of map.pois) expect(insideSolid(vec3(p.position.x, 0.5, p.position.z), b, -1), `${p.id} near ${b.id}`).toBe(false);
     }
   });
 

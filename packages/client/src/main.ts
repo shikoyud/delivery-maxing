@@ -1,5 +1,6 @@
 import './ui/styles.css';
 import { Game } from './game/Game';
+import { playHintHidden } from './ui/playHint';
 
 const host = document.getElementById('app');
 const hint = document.getElementById('play-hint');
@@ -16,9 +17,10 @@ Game.create(host, { debug, seed })
     game.start();
     if (hint && !debug) {
       const update = (): void => {
-        hint.hidden = game.input.locked;
+        hint.hidden = playHintHidden({ locked: game.input.locked, phoneOpen: game.delivery.phoneOpen });
       };
       document.addEventListener('pointerlockchange', update);
+      game.onPhoneChanged = update;
       update();
     }
   })

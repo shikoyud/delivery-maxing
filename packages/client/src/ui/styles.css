@@ -297,6 +297,13 @@ kbd {
   font-weight: 700;
 }
 
+.hud-offer-blocked {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f6b9ae;
+}
+
 /* ---------- Popups ---------- */
 
 .popups {
@@ -580,3 +587,11 @@ kbd {
 }
 
 .phone-map-canvas { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; }
+
+.phone-footer {
+  padding: 0 12px 8px;
+  background: #e9e2d3;
+  text-align: center;
+  font-size: 12px;
+  color: #557078;
+}

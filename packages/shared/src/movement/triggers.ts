@@ -29,7 +29,10 @@ export function applyTriggers(state: PlayerState, body: PlayerBody, map: MapData
   return [];
 }
 
-/** Teleports to the spawn of the hospital nearest the last grounded position. */
+/**
+ * Teleports to the spawn of the hospital nearest the last grounded position, facing its spawnYaw (courier heading,
+ * board heading and look yaw; the client turns its camera to match on the `respawned` event).
+ */
 function respawn(state: PlayerState, body: PlayerBody, map: MapData, cfg: MovementConfig): SimEvent {
   const hospital = nearestHospital(map, state.lastGrounded);
   body.setFeet(hospital.spawn);
@@ -37,5 +40,6 @@ function respawn(state: PlayerState, body: PlayerBody, map: MapData, cfg: Moveme
   state.velocity = vec3(0, 0, 0);
   enterAir(state, cfg);
   state.jumpPressAge = null;
+  state.heading = state.boardHeading = state.yaw = hospital.spawnYaw;
   return { kind: 'respawned', hospitalId: hospital.id };
 }

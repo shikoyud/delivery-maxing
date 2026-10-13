@@ -2,6 +2,7 @@ import type { ClientConfig } from '../clientConfig';
 import { cssHex } from '../render/palette';
 import { slotColor } from '../render/waypoints';
 import { clock, el, esc, setHtml, setText } from './dom';
+import { acceptBlockedReason } from './phone/ordersApp';
 import { BAND_LABEL, KIND_LABEL, loadText, pointsText, type HudModel, type HudOrder, type HudTimer } from './hudModel';
 
 /** What DeliveryLoop needs from the HUD (tests pass a recorder). */
@@ -12,7 +13,7 @@ export interface HudView {
 
 /**
  * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals and load top
- * right; offer toasts bottom right with the accept key on the top one; safe-zone and lockout chips top centre.
+ * right; offer toasts bottom right with the accept key (or the refusal) on the top one; safe-zone and lockout chips top centre.
  */
 export class Hud implements HudView {
   private readonly orders: HTMLElement;
@@ -71,7 +72,14 @@ export class Hud implements HudView {
       m.offers
         .map((o, i) => {
           const kg = o.weightKg !== null ? ` · ${o.weightKg} kg` : '';
-          const key = i === 0 ? `<div class="hud-offer-accept"><kbd>${esc(this.acceptKey)}</kbd>Accept</div>` : '';
+          // The top offer shows the accept key, or why an accept would be refused (the phone's copy).
+          const blocked = acceptBlockedReason(o.acceptStatus);
+          const key =
+            i !== 0
+              ? ''
+              : blocked
+                ? `<div class="hud-offer-blocked">${esc(blocked)}</div>`
+                : `<div class="hud-offer-accept"><kbd>${esc(this.acceptKey)}</kbd>Accept</div>`;
           return (
             `<div class="hud-offer hud-offer-${o.kind}${i === 0 ? ' top' : ''}" data-offer-id="${esc(o.id)}">` +
             `<div class="hud-offer-top"><span class="hud-kind">${KIND_LABEL[o.kind]} · ${BAND_LABEL[o.band]}${kg}</span>` +

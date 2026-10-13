@@ -37,7 +37,15 @@ To test the build exactly as it is served on GitHub Pages, also set
 
 ## Playtest
 
-Play the latest build at <https://shikoyud.github.io/delivery-maxing/>.
+The GitHub Pages build at <https://shikoyud.github.io/delivery-maxing/> is
+deployed only from `main` and `sp1/movement-delivery-loop`, so it does not
+have SP3 yet. Until SP3 (branch `sp3/core-loop-rework`) is merged into `main`,
+play it locally:
+
+```bash
+git checkout sp3/core-loop-rework
+pnpm install && pnpm dev   # then open the URL Vite prints
+```
 
 | Input | Action |
 | --- | --- |

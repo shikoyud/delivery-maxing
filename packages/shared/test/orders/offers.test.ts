@@ -98,9 +98,39 @@ describe('generateOffer', () => {
     expect(generateOffer(ctx({ blockedDoors: blocked }))).toBeNull();
   });
 
+  it('falls back to the other kind when the rolled kind has no qualifying pair', () => {
+    // Every package sender's minimum exceeds the 3 kg left, so a package roll must fall back to food.
+    const kinds = new Set<string>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const o = generateOffer(ctx({ rng: mulberry32(seed), carriedKg: 47 }));
+      expect(o, `seed ${seed}`).not.toBeNull();
+      expect(o!.kind).toBe('food');
+    }
+    // No food pickup in range (fp-near used), so a food roll must fall back to a package.
+    for (let seed = 1; seed <= 40; seed++) {
+      const o = generateOffer(ctx({ rng: mulberry32(seed), recentlyUsed: new Set(['fp-near']) }));
+      expect(o, `seed ${seed}`).not.toBeNull();
+      kinds.add(o!.kind);
+    }
+    expect([...kinds]).toEqual(['package']);
+  });
+
+  it('returns null when neither kind has a qualifying pair', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      expect(generateOffer(ctx({ rng: mulberry32(seed), carriedKg: 47, recentlyUsed: new Set(['fp-near']) }))).toBeNull();
+    }
+  });
+
+  it('never falls back to a kind that is not allowed (weight 0 or no capacity)', () => {
+    expect(generateOffer(ctx({ cfg: onlyKind('food'), recentlyUsed: new Set(['fp-near']) }))).toBeNull();
+    expect(generateOffer(ctx({ recentlyUsed: new Set(['fp-near']), capacity: { slots: 1, maxPackageKg: 0 }, freeSlots: 1 }))).toBeNull();
+  });
+
   it('same rng seed gives the same offer', () => {
     for (let seed = 1; seed <= 10; seed++) {
       expect(generateOffer(ctx({ rng: mulberry32(seed) }))).toEqual(generateOffer(ctx({ rng: mulberry32(seed) })));
+      const fb = { carriedKg: 47 }; // through the fallback path too
+      expect(generateOffer(ctx({ rng: mulberry32(seed), ...fb }))).toEqual(generateOffer(ctx({ rng: mulberry32(seed), ...fb })));
     }
   });
 });

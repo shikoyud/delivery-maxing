@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expandGreybox } from '../../src/world/greybox';
+import { expandGreybox, hospitalBlockId } from '../../src/world/greybox';
 import greyboxJson from '../../../../map/greybox.json';
 import type { GreyboxSource } from '../../src/world/mapTypes';
 import { greyboxFixture } from './fixtures';
@@ -62,6 +62,19 @@ describe('expandGreybox', () => {
     expect(out.hospitals).toEqual(src.hospitals);
     expect(out.orderRules).toEqual(src.orderRules);
     expect(out.size).toBe(src.size);
+  });
+
+  it('adds one solid hospital block per hospital, standing on the ground at its centre, sized by hospitalBlock', () => {
+    const src = greyboxFixture();
+    const blocks = expandGreybox(src).solids.filter((s) => s.kind === 'hospital');
+    expect(blocks).toHaveLength(src.hospitals.length);
+    src.hospitals.forEach((h, i) => {
+      const b = blocks[i]!;
+      expect(b.id).toBe(hospitalBlockId(h));
+      expect(b.size).toEqual(src.hospitalBlock);
+      expect([b.center.x, b.center.z]).toEqual([h.center.x, h.center.z]);
+      expect(b.center.y - b.size.y / 2).toBe(h.center.y);
+    });
   });
 
   it('has unique ids', () => {

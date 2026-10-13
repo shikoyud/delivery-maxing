@@ -35,6 +35,19 @@ describe('out-of-bounds respawn', () => {
     expect(h.sim.state.position.z).toBeCloseTo(8, 5);
   });
 
+  it("respawn faces the hospital's spawnYaw (heading, look yaw and board heading)", async () => {
+    const hosp = { id: 'h', name: 'H', center: vec3(0, 0, 0), safeRadius: 18, spawn: vec3(0, 0, 8), spawnYaw: 1.25 };
+    const h = await makeSim({ spawn: vec3(0, 0, 8), hospitals: [hosp] });
+    h.sim.state.heading = -2;
+    h.sim.state.yaw = -2;
+    h.sim.state.boardHeading = -2;
+    h.sim.teleport(vec3(0, -10, 0));
+    expect(h.tick().some((e) => e.kind === 'respawned')).toBe(true);
+    expect(h.sim.state.heading).toBe(1.25);
+    expect(h.sim.state.yaw).toBe(1.25);
+    expect(h.sim.state.boardHeading).toBe(1.25);
+  });
+
   it('leaving the island edge (beyond size/2 + boundsMargin) also respawns', async () => {
     const h = await makeSim({ spawn: vec3(5, 0, 0) });
     h.sim.teleport(vec3(h.map.size / 2 + cfg.fall.boundsMargin + 1, 3, 0));
