@@ -39,7 +39,7 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium 
 | Ranks | Kept. They unlock Express and Chain orders and cosmetics. No shortcut doors. |
 | Catch-up | Upgrades hit their ceiling fast. No rookie boost. |
 | Boost orbs | Shared within a room: first to touch takes it. |
-| Art | The owner's own low-poly asset library, exported from Unity to `.glb` with glTFast and supplied later. Until then, code-built placeholders stand in. CC0 assets (Kenney, Quaternius) may fill gaps. Gameplay objects are built in code. |
+| Art | Free CC0 low-poly packs (Kenney, Quaternius). Gameplay objects are built in code. |
 | Camera | Third-person chase camera behind a visible courier (changed from first-person after the SP1 playtest). |
 | City size | 2 × 2 km, crossed in about 4 minutes (changed from 600 m after the SP1 playtest). Needs streaming and LOD to hold 60 fps. |
 | Thieves | Street-only NPCs chase couriers carrying packages; a catch steals the packages and costs 1 Delivery Point from the current epoch. |
@@ -143,10 +143,7 @@ Falling into water or out of bounds respawns the player at the nearest checkpoin
 
 ### 5.2 How the map is built
 
-- **Asset library:** the owner supplies `.glb` files exported from Unity with glTFast. **File names describe their use** (for example `Hospital_01` is a hospital, `Bakery_01` a bakery), and the map design places each asset where that use makes sense.
-- **Asset manifest** (`assets/manifest.json`): one entry per asset name with its category (shop, residential, office, industrial, landmark, prop, road, terrain), footprint, height, which surfaces are climbable or wall-runnable, and the `.glb` path once it exists.
-- **Placeholders:** until the real `.glb` files arrive, each manifest entry renders as a code-built low-poly stand-in (a box or simple shape at the asset's footprint and height, colored by category, with its name on a sign). Adding the `.glb` replaces the stand-in with no map changes. Footprints in the manifest are corrected from the real files when they arrive.
-- **Placement file** (`map/city.json`): lists assets by manifest name and their transforms, plus gameplay objects (zip lines, jump pads, orbs, slides, rails, checkpoints) and about **150 POI candidates**. Each POI candidate has an id, position, district, kind (door, mailbox, counter, balcony) and the asset it belongs to. POIs sit on buildings that would plausibly send or receive packages, and order text matches the building (for example "Pick up a bread order from the bakery").
+- **Placement file** (`map/city.json`): lists the asset-pack pieces and their transforms, plus gameplay objects (zip lines, jump pads, orbs, slides, rails, checkpoints) and about **150 POI candidates**. Each POI candidate has an id, position, district and kind (door, mailbox, counter, balcony).
 - **Navmesh:** generated at build time with `recast-navigation`. Jump pads, zip lines and mantle-able ledges are added as off-mesh links, so the navmesh represents the base movement kit with no upgrades.
 - **Generated POI table:** the build computes each candidate's path distance from the HUB and checks it is reachable. Unreachable candidates fail the build.
 - **Debug view:** an in-game overlay shows POIs, their distances and band colors, and any unreachable spots.
@@ -374,7 +371,7 @@ delivery-maxing/
     rewards/   Anchor program
   config/      tuning JSON (movement, orders, prices, combat, economy)
   map/         city.json placement file, generated POI table and navmesh
-  assets/      manifest.json, owner-supplied .glb files, CC0 fill-ins
+  assets/      CC0 models and textures
 ```
 
 - **Package manager:** pnpm workspaces.
@@ -416,7 +413,7 @@ Each sub-project gets its own implementation plan.
 | # | Sub-project | Done when |
 |---|---|---|
 | 1 | **Movement + delivery loop** | Single-player greybox city. Full movement kit on the shared fixed-step sim, seen through the third-person chase camera with an animated courier. Two-way zip lines. HUB, Order Board, all order types and modifiers, and par times, with about 20 POIs. Points and Coins tracked locally. Playtest confirms movement is fun. |
-| 2 | **City map + POI system** | 2 × 2 km city with five districts built from the asset manifest (placeholders until the owner's `.glb` files arrive), chunk streaming and LOD, about 150 POIs (at least 40% elevated), new distance bands, navmesh build step, POI selection rules, single-player thieves (§7.3), debug view, 60 fps target met. |
+| 2 | **City map + POI system** | 2 × 2 km city with five districts built from CC0 packs, chunk streaming and LOD, about 150 POIs (at least 40% elevated), new distance bands, navmesh build step, POI selection rules, single-player thieves (§7.3), debug view, 60 fps target met. |
 | 3 | **Upgrades, shop, ranks** | Ranks, Coin shop, Gloves, GPS Watch, cosmetics, token upgrades, premium skins and Lock panel, all wired to a mock on-chain source. |
 | 4 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation, shared boost orbs, server-authoritative thieves, wallet sign-in, Postgres persistence, combat, anti-cheat layer, reconnects. |
 | 5 | **Reward program + launch** | Harvest spike, Anchor program (pool, upgrades, locks), price keeper, epoch settler with lock bonus, claim UI, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
