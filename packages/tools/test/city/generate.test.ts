@@ -294,7 +294,6 @@ describe('generateCity on map/city.source.json', () => {
       // 5 ground rails + 2 funboxes (one deck rail each) = 7 < 8
       ['suburbs', (p) => (p.skatepark as { rails: unknown[] }).rails.splice(5), /the skatepark needs at least 8 rails/],
       ['suburbs', (p) => ((p.skatepark as { transition: { deg: number }[] }).transition[1]!.deg = 52), /skatepark ramps must be under 50°/],
-      ['suburbs', (p) => ((p.skatepark as { rails: { points: number[][] }[] }).rails[0]!.points.push([20, 0, -0.3])), /must start and end with a level segment/],
       ['suburbs', (p) => ((p.skatepark as Record<string, { x: number; z: number }>).cellAt = { x: -900, z: 300 }), /arterials on all sides/],
     ];
     for (const [district, patch, why] of cases) expect(() => generateCity(withParams(district, patch), pieces), String(why)).toThrow(why);

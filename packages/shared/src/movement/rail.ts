@@ -33,18 +33,32 @@ export function railMinSpeed(state: PlayerState, cfg: MovementConfig): number {
   return state.onBoard ? cfg.board.railMinSpeed : cfg.rail.minSpeedFoot;
 }
 
+/** Distance from `p` to the nearest point of `rail`. */
+const distanceToRail = (p: Vec3, rail: Rail): number => {
+  let best = Infinity;
+  for (let i = 0; i < segmentCount(rail); i++) best = Math.min(best, closestOnSegment(p, segmentStart(rail, i), segmentEnd(rail, i)).dist);
+  return best;
+};
+
 /**
  * Snaps onto the nearest rail when the player is airborne and not rising, the feet are within rail.snapDistance of
  * a segment's closest point and no lower than SNAP_BELOW under it. The direction is the sign of velocity · segment
- * direction; the speed is max(|horizontal velocity along it|, railMinSpeed). A rail's two end points never snap
- * (so a player who just left a rail end is not caught again). Returns whether the player started grinding.
+ * direction; the speed is max(|horizontal velocity along it|, railMinSpeed). A rail's two end points never snap,
+ * and the rail just left at an end (state.railRelease) does not snap until the feet are more than snapDistance from
+ * it: the feet ride lifted above the rail, so off a sloped end segment their closest point lies just short of the
+ * end and would catch them again every tick (Ruling R19). Returns whether the player started grinding.
  */
 export function tryStartGrind(state: PlayerState, rails: Rail[], cfg: MovementConfig): boolean {
-  if (state.mode !== 'air' || state.grounded || state.velocity.y > 0) return false;
   const feet = state.position;
+  if (state.railRelease !== null) {
+    const left = rails.find((r) => r.id === state.railRelease);
+    if (!left || distanceToRail(feet, left) > cfg.rail.snapDistance) state.railRelease = null;
+  }
+  if (state.mode !== 'air' || state.grounded || state.velocity.y > 0) return false;
 
   let best: { rail: Rail; segment: number; s: number; dist: number } | null = null;
   for (const rail of rails) {
+    if (rail.id === state.railRelease) continue;
     const n = segmentCount(rail);
     for (let i = 0; i < n; i++) {
       const hit = closestOnSegment(feet, segmentStart(rail, i), segmentEnd(rail, i));
@@ -118,7 +132,9 @@ export function updateGrind(
   const jump = !atEnd && input.jump.pressed;
   if (!atEnd && !jump) return 'grinding';
   if (jump) state.velocity = vec3(state.velocity.x, state.velocity.y + jumpVelocity(cfg, mods), state.velocity.z);
+  const left = state.grind!.id;
   enterAir(state, cfg); // clears grind, mode air, closes the coyote window, sets airApexY to the feet y
   state.jumpPressAge = null;
+  if (atEnd) state.railRelease = left;
   return 'detached';
 }

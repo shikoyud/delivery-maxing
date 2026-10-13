@@ -151,6 +151,57 @@ describe('grind rails', () => {
     expect(h.sim.state.grind!.speed).toBe(6);
   });
 
+  it('a rail whose last segment slopes down releases the courier at its end (no re-catch; the courier lands beyond or below the end within 1 s)', async () => {
+    const r = rail('down', [0, 3, 0], [0, 3, -10], [0, 2, -14]);
+    const end = r.points[2]!;
+    const h = await dropOnto(r, 10);
+    h.tick();
+    expect(h.sim.state.mode).toBe('grind');
+    h.runUntil((s) => s.mode !== 'grind', 200);
+    // For a second after the end: never back on the rail, and the feet leave the end (past it or below it)
+    let landed = false;
+    for (let i = 0; i < cfg.tickRate; i++) {
+      const events = h.tick();
+      expect(h.sim.state.mode, `tick ${i}`).not.toBe('grind');
+      landed ||= events.some((e) => e.kind === 'landed');
+    }
+    const p = h.sim.state.position;
+    expect(p.z < end.z - 1 || p.y < end.y - 1, `feet left the end (at ${JSON.stringify(p)})`).toBe(true);
+    expect(landed, 'landed on the floor beyond the end').toBe(true);
+    expect(h.sim.state.grounded).toBe(true);
+  });
+
+  it('the same rail can be grinded again after leaving its end, and other rails catch at once', async () => {
+    const r = rail('down', [0, 3, 0], [0, 3, -10], [0, 2, -14]);
+    const other = rail('other', [0, 1.6, -14.5], [0, 1.6, -40]);
+    const h = await makeSim({ rails: [r, other] });
+    h.sim.teleport(vec3(0, 3.3, -2), vec3(0, -1, -10));
+    h.tick();
+    h.runUntil((s) => s.mode !== 'grind', 200);
+    // Off the end of the first rail straight onto the second one, just below and ahead
+    h.runUntil((s) => s.mode === 'grind', 30);
+    expect(h.sim.state.grind!.id).toBe('other');
+    h.runUntil((s) => s.mode !== 'grind', 200);
+    h.runUntil((s) => s.grounded, 60);
+    // Back onto the first rail later: it catches again
+    h.sim.teleport(vec3(0, 3.3, -2), vec3(0, -1, -10));
+    h.tick();
+    expect(h.sim.state.grind).toMatchObject({ id: 'down', segment: 0, dir: 1 });
+  });
+
+  it('a jump pressed just before a downhill rail end still jumps off (SP1 jump-off unchanged)', async () => {
+    const r = rail('down', [0, 3, 0], [0, 3, -10], [0, 2, -14]);
+    const h = await dropOnto(r, 10);
+    h.tick();
+    h.runUntil((s) => s.grind?.segment === 1 && s.grind.s > 2, 200);
+    h.tick({}, ['jump']);
+    const s = h.sim.state;
+    expect(s.mode).toBe('air');
+    expect(s.velocity.y).toBeGreaterThan(jumpVelocity(cfg, { speedMul: 1, jumpHeightMul: 1 }) - 3);
+    h.run(10);
+    expect(h.sim.state.mode).not.toBe('grind');
+  });
+
   it('starting a grind clears wall-run state', async () => {
     const h = await dropOnto(straight, 10);
     h.sim.state.wallRun = { time: 0.4, normal: vec3(1, 0, 0), lastNormal: vec3(1, 0, 0) };

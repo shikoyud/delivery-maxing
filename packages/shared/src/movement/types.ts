@@ -61,6 +61,11 @@ export interface PlayerState {
   zip: { id: string; s: number; dir: 1 | -1; speed: number } | null;
   /** The grind in progress (mode 'grind'): rail id, segment index, metres from that segment's start, direction (+1 toward the last point), speed. */
   grind: { id: string; segment: number; s: number; dir: 1 | -1; speed: number } | null;
+  /**
+   * The rail the player last left at one of its ends, which cannot catch them again until their feet are more than
+   * rail.snapDistance from it (Ruling R19); null when none.
+   */
+  railRelease: string | null;
   /** Seconds of boost-orb speed boost left (0 when none). */
   boostLeft: number;
   /** Seconds until a slide start gets its speed burst again (0 when ready); counted from the start of the last boosted slide. */

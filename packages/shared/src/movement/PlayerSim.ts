@@ -61,6 +61,7 @@ export class PlayerSim {
       wallChainStartY: null,
       zip: null,
       grind: null,
+      railRelease: null,
       boostLeft: 0,
       slideBoostCooldown: 0,
       padCooldown: {},

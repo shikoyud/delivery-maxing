@@ -166,11 +166,6 @@ function checkRules(ctx: DistrictContext, s: SuburbsParams, fail: (why: string) 
     // It is approached along `dir`: it starts above `at`, and its first segment runs along `dir`
     const [p0, p1] = [r.points[0]!, r.points[1]!];
     if (p0[0] !== 0 || p0[1] !== 0 || p1[1] !== 0 || !(p1[0] > 0)) fail(`skatepark.rails[${k}] must start above its at spot, its first segment along dir`);
-    // Both end segments level (Ruling R19; relax once shared rail.ts is fixed): leaving a rail down a sloped end
-    // segment, the courier's feet (lifted above the rail) are closest to a point just short of the end, so the rail
-    // catches them again at once and every tick after (PlayerSim tryStartGrind)
-    const [q1, q0] = [r.points[r.points.length - 1]!, r.points[r.points.length - 2]!];
-    if (p1[2] !== p0[2] || q1[2] !== q0[2]) fail(`skatepark.rails[${k}] must start and end with a level segment`);
   }
   if (rails.height > move.jump.height) fail('rails.height must be within a jump');
   const fr = sk.funbox.rail;
