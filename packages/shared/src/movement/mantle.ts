@@ -6,8 +6,11 @@ import type { MantleState, PlayerState } from './types';
 
 export type { MantleState };
 
-/** Height above the feet of the forward (wall) probe. */
-const WALL_PROBE_HEIGHT = 1.0;
+/**
+ * Height above the feet of the forward (wall) probe. A ledge whose face ends lower is not seen by a running courier,
+ * so a climbable kit step must rise at least this much (Ruling R17).
+ */
+export const MANTLE_WALL_PROBE_HEIGHT = 1.0;
 /** Extra distance past the capsule radius at which the top is probed (and the player ends up). */
 const TOP_PROBE_INSET = 0.1;
 /** The down probe starts this far above the highest mantle-able top, and reaches this far below the lowest. */
@@ -37,7 +40,7 @@ export function findLedge(body: PlayerBody, state: PlayerState, cfg: MovementCon
   const feet = state.position;
   const fwd = facing(state.heading);
 
-  const wall = body.castRay(vec3(feet.x, feet.y + WALL_PROBE_HEIGHT, feet.z), fwd, radius + reach);
+  const wall = body.castRay(vec3(feet.x, feet.y + MANTLE_WALL_PROBE_HEIGHT, feet.z), fwd, radius + reach);
   if (!wall || Math.abs(wall.normal.y) >= WALL_MAX_NY) return null;
 
   const inset = radius + TOP_PROBE_INSET;

@@ -18,6 +18,7 @@ export * from './movement/ground';
 export * from './movement/jump';
 export * from './movement/PlayerSim';
 export { createWorldFeatureState } from './movement/triggers';
+export { MANTLE_WALL_PROBE_HEIGHT } from './movement/mantle';
 export * from './orders/types';
 export * from './orders/rules';
 export * from './orders/board';

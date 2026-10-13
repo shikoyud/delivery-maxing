@@ -1,4 +1,4 @@
-import { ordersConfig, rotatedHalfExtents, solidRect, type PieceEntry, type Rect, type Solid, type SolidKind, type Vec3 } from '@dm/shared';
+import { ordersConfig, solidRect, type PieceEntry, type Rect, type Solid, type SolidKind, type Vec3 } from '@dm/shared';
 import {
   emptyOutput,
   paramChecks,
@@ -7,7 +7,7 @@ import {
   type DistrictReport,
   type StreetRamp,
 } from '../district';
-import { navLinkFor, padFlightClear, padLaunchFor, type Obstacle } from '../kits';
+import { navLinkFor, obstacleOf, padFlightClear, padLaunchFor } from '../kits';
 import { box, gridLines, intersectRect, r2, v2, type GridLine } from '../layout';
 import { fillLot, type FillerParams, type Lot } from '../lots';
 import { GraphBuilder, splitAtChunks } from '../streets';
@@ -57,21 +57,18 @@ const DEG = 180 / Math.PI;
 const STAND_OFF = 1.5;
 
 function hillsideParams(ctx: DistrictContext): HillsideParams {
-  const { fail, obj, nums } = paramChecks(ctx.district, 'hillside');
+  const { fail, obj, nums, positive } = paramChecks(ctx.district, 'hillside');
   const p = ctx.params;
-  const positive = (o: Record<string, unknown>, keys: readonly string[], prefix: string): void => {
-    nums(o, keys, prefix);
-    for (const k of keys) if ((o[k] as number) <= 0) fail(`${prefix}${k} must be positive`);
-  };
-  nums(p, ['edgeMargin', 'rampEmbed', 'footRunup', 'backMargin', 'sideMargin', 'featureWidth'], '');
-  positive(p, ['streetHalfWidth', 'topHeight', 'bandRiseMax', 'rampDeg', 'rampThickness', 'rampFlat'], '');
+  // Offsets and margins may be 0; sizes and loop steps must be positive
+  nums(p, ['edgeMargin', 'rampEmbed', 'backMargin', 'sideMargin'], '');
+  positive(p, ['streetHalfWidth', 'topHeight', 'bandRiseMax', 'rampDeg', 'rampThickness', 'rampFlat', 'footRunup', 'featureWidth'], '');
   positive(obj(p.stairs, 'stairs'), ['rise', 'depth', 'width'], 'stairs.');
   const pad = obj(p.pad, 'pad');
-  nums(pad, ['apexAbove', 'inset', 'back', 'landInset', 'clearance'], 'pad.');
-  positive(pad, ['radius'], 'pad.');
+  nums(pad, ['inset', 'back', 'landInset', 'clearance'], 'pad.');
+  positive(pad, ['radius', 'apexAbove'], 'pad.');
   const chute = obj(p.chute, 'chute');
-  nums(chute, ['minTop', 'laneWidth', 'runout', 'embed', 'overlap'], 'chute.');
-  positive(chute, ['width', 'thickness', 'maxSegment'], 'chute.');
+  nums(chute, ['minTop', 'runout', 'embed', 'overlap'], 'chute.');
+  positive(chute, ['width', 'laneWidth', 'thickness', 'maxSegment'], 'chute.');
   const houses = obj(p.houses, 'houses');
   nums(houses, ['scaleMax', 'fillChance', 'setback', 'gapMin', 'gapMax', 'doorOffset'], 'houses.');
   positive(houses, ['scaleMin'], 'houses.');
@@ -217,6 +214,12 @@ function planCells(ctx: DistrictContext, p: HillsideParams): Cell[] {
       const top = far > 0 ? toRise((p.topHeight * (nx - 1 - i + (nz - 1 - j))) / far, rise) : toRise(p.topHeight, rise);
       const m = top > 0 ? Math.ceil(top / p.bandRiseMax - 1e-9) : 0;
       const levels = Array.from({ length: m }, (_, k) => toRise((top * (k + 1)) / m, rise));
+      // Rounding to whole stair rises must not push a terrace step past bandRiseMax
+      levels.forEach((l, k) => {
+        if (l - (k === 0 ? 0 : levels[k - 1]!) > p.bandRiseMax + 1e-6) {
+          throw new Error(`district ${ctx.district}: cell ${i},${j}: terrace ${k + 1} rises more than bandRiseMax after rounding`);
+        }
+      });
       cells.push({
         id: `${ctx.district}-c${i}-${j}`,
         rect,
@@ -446,12 +449,6 @@ function buildStairs(b: Build, lay: CellLayout, k: number): void {
     // Onto the sidewalk of the street along the terrace's front edge
     to: v2({ x, y: hi.level + ctx.city.streets.sidewalkTop, z: wall - STAND_OFF }),
   });
-}
-
-/** The obstacle a solid makes: its footprint and the top of its (rotated) box. */
-function obstacleOf(s: Solid): Obstacle {
-  const h = rotatedHalfExtents({ x: s.size.x / 2, y: s.size.y / 2, z: s.size.z / 2 }, s.rotationDeg);
-  return { rect: solidRect(s), top: s.center.y + h.y };
 }
 
 /**

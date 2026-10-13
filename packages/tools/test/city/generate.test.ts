@@ -177,6 +177,7 @@ describe('generateCity on map/city.source.json', () => {
     const levels = new Set(city.streets.nodes.map((n) => n.p.y));
     // Sloped road slabs are Hillside's steep-street ramps (its content test checks them)
     const sloped = streets.filter((s) => s.rotationDeg);
+    expect(sloped.length).toBeGreaterThan(0);
     expect(sloped.every((s) => s.kind === 'road' && s.id.startsWith('hillside-'))).toBe(true);
     const flat = streets.filter((s) => !s.rotationDeg);
     expect(flat.length).toBeGreaterThan(500);
@@ -271,6 +272,26 @@ describe('generateCity on map/city.source.json', () => {
       if (!(front <= best + 0.01)) bad.push(`${p.id} rotY ${p.rotY}: front ${front.toFixed(2)} > nearest ${best.toFixed(2)}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
+  });
+
+  it('district params fail fast on zero sizes or loop steps and on kit rises below the R17 floor', () => {
+    const withParams = (district: string, patch: (p: Record<string, unknown>) => void): typeof src => {
+      const copy = structuredClone(src);
+      patch(copy.districts.find((d) => d.district === district)!.params);
+      return copy;
+    };
+    const cases: [string, (p: Record<string, unknown>) => void, RegExp][] = [
+      ['harbor', (p) => ((p.zip as Record<string, number>).apronStep = 0), /zip\.apronStep must be positive/],
+      ['harbor', (p) => ((p.container as Record<string, number>).width = 0), /container\.width must be positive/],
+      ['harbor', (p) => (p.stepRise = 0.8), /stepRise must be within/],
+      ['harbor', (p) => (p.stepRise = 1.2), /1-tier stack's mantle steps rise 0.86 m/],
+      ['downtown', (p) => (p.skipMin = 0), /skipMin must be positive/],
+      ['downtown', (p) => (p.pitch = 0), /pitch must be positive/],
+      ['hillside', (p) => ((p.stairs as Record<string, number>).rise = 0), /stairs\.rise must be positive/],
+      ['hillside', (p) => ((p.chute as Record<string, number>).maxSegment = 0), /chute\.maxSegment must be positive/],
+      ['hillside', (p) => (p.featureWidth = 0), /featureWidth must be positive/],
+    ];
+    for (const [district, patch, why] of cases) expect(() => generateCity(withParams(district, patch), pieces), String(why)).toThrow(why);
   });
 
   it('ids are prefixed by their district, and the city lists the four quadrants', () => {

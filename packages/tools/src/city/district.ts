@@ -195,20 +195,27 @@ export interface ParamChecks {
   obj: (v: unknown, name: string) => Record<string, unknown>;
   /** Each of `keys` of `o` is a non-negative finite number (failures name `prefix` + key). */
   nums: (o: Record<string, unknown>, keys: readonly string[], prefix: string) => void;
+  /** Each of `keys` of `o` is a positive finite number: sizes and loop steps (a zero step would never end a loop). */
+  positive: (o: Record<string, unknown>, keys: readonly string[], prefix: string) => void;
 }
 
 export function paramChecks(district: District, template: string): ParamChecks {
   const fail = (why: string): never => {
     throw new Error(`district ${district}: ${template} params: ${why}`);
   };
+  const nums = (o: Record<string, unknown>, keys: readonly string[], prefix: string): void => {
+    for (const k of keys) {
+      const v = o[k];
+      if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) fail(`${prefix}${k} must be a non-negative number`);
+    }
+  };
   return {
     fail,
     obj: (v, name) => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : fail(`${name} must be an object`)),
-    nums: (o, keys, prefix) => {
-      for (const k of keys) {
-        const v = o[k];
-        if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) fail(`${prefix}${k} must be a non-negative number`);
-      }
+    nums,
+    positive: (o, keys, prefix) => {
+      nums(o, keys, prefix);
+      for (const k of keys) if ((o[k] as number) <= 0) fail(`${prefix}${k} must be positive`);
     },
   };
 }

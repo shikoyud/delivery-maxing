@@ -9,7 +9,7 @@ import {
   type GridLot,
   type PoiSlot,
 } from '../district';
-import { cableClear, navLinkFor, padFlightClear, padLaunchFor, zipBetween, type Obstacle } from '../kits';
+import { cableClear, navLinkFor, obstacleOf, padFlightClear, padLaunchFor, zipBetween, type Obstacle } from '../kits';
 import { distToRect, r2, top, union, v2, type GridLine } from '../layout';
 import { propSolids } from '../lots';
 
@@ -61,16 +61,20 @@ interface DowntownParams {
 }
 
 function downtownParams(ctx: DistrictContext): DowntownParams {
-  const { fail, obj, nums } = paramChecks(ctx.district, 'downtown');
+  const { fail, obj, nums, positive } = paramChecks(ctx.district, 'downtown');
   const p = ctx.params;
   nums(p, [
-    'pitch', 'streetHalfWidth', 'edgeMargin', 'setback', 'rowEndMargin', 'doorOffset', 'bakeScale', 'artScaleMin', 'artScaleMax',
-    'roofGapMin', 'roofGapMax', 'roofGapMaxUp', 'stepUpMax', 'stepDownMax', 'minRoofLength', 'landingMargin', 'fillChance', 'orbHeight',
-    'orbBackInset', 'skipMin', 'skipMax', 'eastwardChance', 'gapLandingInset',
+    'edgeMargin', 'setback', 'rowEndMargin', 'doorOffset', 'roofGapMin', 'roofGapMax', 'roofGapMaxUp', 'stepUpMax', 'stepDownMax',
+    'minRoofLength', 'landingMargin', 'fillChance', 'orbHeight', 'orbBackInset', 'skipMax', 'eastwardChance', 'gapLandingInset',
   ], '');
-  nums(obj(p.alley, 'alley'), ['width', 'artScale', 'minLength', 'minHeight', 'chance', 'min'], 'alley.');
+  // Sizes and loop steps (an empty slot skips at least skipMin, so a row always moves on)
+  positive(p, ['pitch', 'streetHalfWidth', 'bakeScale', 'artScaleMin', 'artScaleMax', 'skipMin'], '');
+  const alley = obj(p.alley, 'alley');
+  nums(alley, ['minLength', 'minHeight', 'chance', 'min'], 'alley.');
+  positive(alley, ['width', 'artScale'], 'alley.');
   const pad = obj(p.pad, 'pad');
-  nums(pad, ['radius', 'apexAbove', 'inset', 'clearance'], 'pad.');
+  nums(pad, ['apexAbove', 'inset', 'clearance'], 'pad.');
+  positive(pad, ['radius'], 'pad.');
   for (const k of ['retryInsets', 'retryApex']) {
     const v = pad[k];
     if (!Array.isArray(v) || v.length === 0 || !v.every((x) => typeof x === 'number' && Number.isFinite(x) && x >= 0)) {
@@ -379,7 +383,7 @@ export function buildDowntown(ctx: DistrictContext): DistrictOutput {
   }
 
   // ---- Features -----------------------------------------------------------------------------------------------
-  const obstacles: Obstacle[] = allBuildings.flatMap((b) => b.solids.map((s) => ({ rect: solidRect(s), top: top(s) })));
+  const obstacles: Obstacle[] = allBuildings.flatMap((b) => b.solids.map(obstacleOf));
   const roofSlots = new Set<Building>();
   const markedRows = new Set<Row>();
   const rowsWithZipDown = new Set<Row>();

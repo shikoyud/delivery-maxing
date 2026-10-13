@@ -1,5 +1,16 @@
-import type { JumpPad, NavLink, Rect, RotY, Solid, Vec3, ZipLine } from '@dm/shared';
-import { v2 } from './layout';
+import {
+  MANTLE_WALL_PROBE_HEIGHT,
+  rotatedHalfExtents,
+  solidRect,
+  type JumpPad,
+  type NavLink,
+  type Rect,
+  type RotY,
+  type Solid,
+  type Vec3,
+  type ZipLine,
+} from '@dm/shared';
+import { top, v2 } from './layout';
 import { yawPoint } from './lots';
 
 /** Depth of one crate step along the climb, m. */
@@ -50,6 +61,18 @@ export function mantleSteps(base: Vec3, top: Vec3, dir: RotY, rise: number, id =
   return out;
 }
 
+/**
+ * The least rise of a mantle step a running courier can climb (Ruling R17): the mantle's wall probe sits this high
+ * above the feet, so a lower face is never seen as a ledge. Kit rises lie in [this, mantle.maxHeight].
+ */
+export const MANTLE_STEP_MIN_RISE = MANTLE_WALL_PROBE_HEIGHT;
+
+/** The rises (lowest first, the last one onto the ledge) of the mantleSteps kit climbing `climb` with `rise`. */
+export function mantleStepRises(climb: number, rise: number): number[] {
+  const tops = [0, ...mantleSteps({ x: 0, y: 0, z: 0 }, { x: 0, y: climb, z: 0 }, 0, rise).map(top), climb];
+  return tops.slice(1).map((t, k) => t - tops[k]!);
+}
+
 /** A zip line between two cable points (rounded to 0.01 m). */
 export function zipBetween(a: Vec3, b: Vec3, id: string): ZipLine {
   return { id, a: v2(a), b: v2(b) };
@@ -75,6 +98,12 @@ export function navLinkFor(feature: ZipLine | PadLink | StepLink): NavLink {
 
 /** A box to keep features clear of: a solid's footprint and top. */
 export interface Obstacle { rect: Rect; top: number }
+
+/** The obstacle a solid makes: its footprint and the top of its (rotated) box. */
+export function obstacleOf(s: Solid): Obstacle {
+  const h = rotatedHalfExtents({ x: s.size.x / 2, y: s.size.y / 2, z: s.size.z / 2 }, s.rotationDeg);
+  return { rect: solidRect(s), top: s.center.y + h.y };
+}
 
 const inRect = (x: number, z: number, r: Rect, pad: number): boolean =>
   x >= r.minX - pad && x <= r.maxX + pad && z >= r.minZ - pad && z <= r.maxZ + pad;

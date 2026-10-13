@@ -1,4 +1,4 @@
-import { ordersConfig, solidRect, type PieceEntry, type Rect, type RotY, type Solid, type Vec3 } from '@dm/shared';
+import { ordersConfig, type PieceEntry, type Rect, type RotY, type Solid, type Vec3 } from '@dm/shared';
 import {
   districtGrid,
   districtQuays,
@@ -14,7 +14,18 @@ import {
   type PoiSlot,
   type QuayEdge,
 } from '../district';
-import { cableClear, mantleSteps, navLinkFor, padFlightClear, padLaunchFor, zipBetween, type Obstacle } from '../kits';
+import {
+  cableClear,
+  MANTLE_STEP_MIN_RISE,
+  mantleStepRises,
+  mantleSteps,
+  navLinkFor,
+  obstacleOf,
+  padFlightClear,
+  padLaunchFor,
+  zipBetween,
+  type Obstacle,
+} from '../kits';
 import { box, distToRect, r2, top, v2 } from '../layout';
 import { fillLot, type FillerParams } from '../lots';
 
@@ -75,26 +86,29 @@ interface HarborParams {
 const SPEC = { tiers: [1, 3], craneHeight: [30, 40], zipLength: [120, 300], minCranes: 3 } as const;
 
 function harborParams(ctx: DistrictContext): HarborParams {
-  const { fail, obj, nums } = paramChecks(ctx.district, 'harbor');
+  const { fail, obj, nums, positive } = paramChecks(ctx.district, 'harbor');
   const p = ctx.params;
-  nums(p, ['pitch', 'streetHalfWidth', 'edgeMargin', 'apronWidth', 'yardChance', 'stepRise', 'runUp'], '');
+  nums(p, ['edgeMargin', 'apronWidth', 'yardChance', 'runUp'], '');
+  positive(p, ['pitch', 'streetHalfWidth', 'stepRise'], '');
   nums(obj(p.warehouses, 'warehouses'), ['scaleMin', 'scaleMax', 'fillChance', 'setback', 'gapMin', 'gapMax', 'doorOffset'], 'warehouses.');
-  nums(obj(p.container, 'container'), ['length', 'width', 'height'], 'container.');
-  nums(obj(p.yard, 'yard'), [
-    'margin', 'aisle', 'colsMin', 'colsMax', 'tiersMin', 'tiersMax', 'gapMin', 'gapMax', 'fillChance', 'rowsAlongXChance', 'stepsForwardChance',
-  ], 'yard.');
+  positive(obj(p.container, 'container'), ['length', 'width', 'height'], 'container.');
+  const yard = obj(p.yard, 'yard');
+  nums(yard, ['margin', 'gapMin', 'gapMax', 'fillChance', 'rowsAlongXChance', 'stepsForwardChance'], 'yard.');
+  positive(yard, ['aisle', 'colsMin', 'colsMax', 'tiersMin', 'tiersMax'], 'yard.');
   const crane = obj(p.crane, 'crane');
-  nums(crane, [
-    'count', 'heightMin', 'heightMax', 'setback', 'clear', 'mastSize', 'jibLength', 'counterJibLength', 'jibWidth', 'jibThickness',
-  ], 'crane.');
-  nums(obj(crane.cab, 'crane.cab'), ['length', 'height'], 'crane.cab.');
-  nums(obj(crane.counterweight, 'crane.counterweight'), ['length', 'height'], 'crane.counterweight.');
+  nums(crane, ['setback', 'clear', 'counterJibLength'], 'crane.');
+  positive(crane, ['count', 'heightMin', 'heightMax', 'mastSize', 'jibLength', 'jibWidth', 'jibThickness'], 'crane.');
+  positive(obj(crane.cab, 'crane.cab'), ['length', 'height'], 'crane.cab.');
+  positive(obj(crane.counterweight, 'crane.counterweight'), ['length', 'height'], 'crane.counterweight.');
   const pad = obj(p.pad, 'pad');
-  nums(pad, ['radius', 'apexAbove', 'targetAlong', 'clearance'], 'pad.');
+  nums(pad, ['apexAbove', 'targetAlong', 'clearance'], 'pad.');
+  positive(pad, ['radius'], 'pad.');
   if (!Array.isArray(pad.offsets) || pad.offsets.length === 0 || !pad.offsets.every((x) => typeof x === 'number' && x > 0)) {
     fail('pad.offsets must list positive numbers');
   }
-  nums(obj(p.zip, 'zip'), ['endHeight', 'endInset', 'minLength', 'maxLength', 'maxSlope', 'apronStep'], 'zip.');
+  const zip = obj(p.zip, 'zip');
+  nums(zip, ['endHeight', 'endInset'], 'zip.');
+  positive(zip, ['minLength', 'maxLength', 'maxSlope', 'apronStep'], 'zip.');
   nums(obj(p.checkpoint, 'checkpoint'), ['inset', 'streetClearance'], 'checkpoint.');
 
   const h = p as unknown as HarborParams;
@@ -113,7 +127,18 @@ function harborParams(ctx: DistrictContext): HarborParams {
   if (y.colsMin < 1 || y.colsMax < y.colsMin) fail('need 1 ≤ yard.colsMin ≤ yard.colsMax');
   if (y.tiersMin < SPEC.tiers[0] || y.tiersMax < y.tiersMin || y.tiersMax > SPEC.tiers[1]) fail('need 1 ≤ yard.tiersMin ≤ yard.tiersMax ≤ 3');
   if (y.gapMax < y.gapMin) fail('need yard.gapMin ≤ yard.gapMax');
-  if (h.stepRise <= move.mantle.minHeight || h.stepRise > move.mantle.maxHeight) fail('stepRise must be within the mantle height window');
+  // Ruling R17: a kit step a running courier can mantle rises at least MANTLE_STEP_MIN_RISE (the wall probe height)
+  if (h.stepRise < MANTLE_STEP_MIN_RISE || h.stepRise > move.mantle.maxHeight) {
+    fail(`stepRise must be within [${MANTLE_STEP_MIN_RISE}, mantle.maxHeight ${move.mantle.maxHeight}] (R17)`);
+  }
+  // …and so does every rise the steps of a 1…tiersMax stack really make (the climb split evenly: tiers·height/(n + 1))
+  for (let t = y.tiersMin; t <= y.tiersMax; t++) {
+    for (const r of mantleStepRises(t * h.container.height, h.stepRise)) {
+      if (r < MANTLE_STEP_MIN_RISE - 1e-6 || r > Math.min(h.stepRise, move.mantle.maxHeight) + 1e-6) {
+        fail(`a ${t}-tier stack's mantle steps rise ${r.toFixed(2)} m, outside [${MANTLE_STEP_MIN_RISE}, stepRise] (R17)`);
+      }
+    }
+  }
   if (h.warehouses.scaleMin <= 0 || h.warehouses.scaleMax < h.warehouses.scaleMin) fail('need 0 < warehouses.scaleMin ≤ scaleMax');
   if (h.warehouses.gapMax < h.warehouses.gapMin) fail('need warehouses.gapMin ≤ gapMax');
   if (c.count < SPEC.minCranes) fail(`crane.count must be at least ${SPEC.minCranes}`);
@@ -289,7 +314,7 @@ function planCranes(b: Build, terminals: Map<GridLot, QuayEdge[]>): CranePlan[] 
 function addSolids(b: Build, solids: Solid[]): void {
   for (const s of solids) {
     b.out.solids.push(s);
-    b.obstacles.add({ rect: solidRect(s), top: top(s) });
+    b.obstacles.add(obstacleOf(s));
   }
 }
 

@@ -21,6 +21,7 @@ import {
 import type { DistrictReport, QuayEdge } from '../../src/city/district';
 import { generateCityWithReport } from '../../src/city/generate';
 import { parseCitySource } from '../../src/city/source';
+import { MANTLE_STEP_MIN_RISE } from '../../src/city/kits';
 import { cityHarness, rideZip, untilLanded, yawToward, type CityHarness } from '../helpers/citySim';
 
 // Runs PlayerSim on the generated city (real committed inputs).
@@ -121,10 +122,10 @@ describe('harbor: layout', () => {
       expect(st.steps.length, st.id).toBeGreaterThan(0);
       const crates = st.steps.map((id) => solids.get(id)!);
       expect(crates.every((c) => c !== undefined && c.kind === 'prop'), st.id).toBe(true);
-      // Each rise is within the mantle window and at most stepRise
+      // Each rise is within the R17 window (wall probe height … mantle max) and at most stepRise
       const rises = [...crates.map(top), st.top].map((t, k, all) => t - (k === 0 ? 0 : all[k - 1]!));
       for (const r of rises) {
-        expect(r, st.id).toBeGreaterThan(cfg.mantle.minHeight);
+        expect(r, st.id).toBeGreaterThanOrEqual(MANTLE_STEP_MIN_RISE - EPS);
         expect(r, st.id).toBeLessThanOrEqual(Math.min(params.stepRise, cfg.mantle.maxHeight) + EPS);
       }
     }

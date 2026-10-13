@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { movementConfig as cfg, type JumpPad, type Vec3, type ZipLine } from '@dm/shared';
-import { mantleSteps, navLinkFor, padLaunchFor, zipBetween } from '../../src/city/kits';
+import { MANTLE_STEP_MIN_RISE, mantleStepRises, mantleSteps, navLinkFor, obstacleOf, padLaunchFor, zipBetween } from '../../src/city/kits';
 
 const g = cfg.gravity;
 
@@ -95,5 +95,37 @@ describe('zipBetween and navLinkFor', () => {
     expect(navLinkFor(drop)).toEqual({ id: 'd1', kind: 'drop', from: drop.from, to: drop.to, bidirectional: false });
     const mantle = { kind: 'mantle' as const, id: 'm1', from: { x: 0, y: 0, z: 0 }, to: { x: 0, y: 4, z: -2 } };
     expect(navLinkFor(mantle)).toEqual({ id: 'm1', kind: 'mantle', from: mantle.from, to: mantle.to, bidirectional: true });
+  });
+});
+
+describe('mantle step rises (Ruling R17)', () => {
+  it('the rise floor is the mantle wall-probe height, inside the mantle window', () => {
+    expect(MANTLE_STEP_MIN_RISE).toBe(1);
+    expect(MANTLE_STEP_MIN_RISE).toBeGreaterThan(cfg.mantle.minHeight);
+    expect(MANTLE_STEP_MIN_RISE).toBeLessThan(cfg.mantle.maxHeight);
+  });
+
+  it('mantleStepRises lists the rises of the kit, adding up to the climb', () => {
+    for (const tiers of [1, 2, 3]) {
+      const rises = mantleStepRises(tiers * 2.6, 1.4);
+      expect(rises.length).toBe(mantleSteps({ x: 0, y: 0, z: 0 }, { x: 0, y: tiers * 2.6, z: 0 }, 0, 1.4).length + 1);
+      expect(rises.reduce((a, b) => a + b, 0)).toBeCloseTo(tiers * 2.6, 6);
+      for (const r of rises) {
+        expect(r).toBeGreaterThanOrEqual(MANTLE_STEP_MIN_RISE);
+        expect(r).toBeLessThanOrEqual(1.4);
+      }
+    }
+    // A 1.2 m cap on a 2.6 m climb needs three rises under 1 m: below the R17 floor
+    expect(Math.min(...mantleStepRises(2.6, 1.2))).toBeLessThan(MANTLE_STEP_MIN_RISE);
+  });
+});
+
+describe('obstacleOf', () => {
+  it('a box gives its footprint and top; a rotated box the top of its turned box', () => {
+    const flat = { id: 'a', kind: 'prop' as const, center: { x: 1, y: 2, z: 3 }, size: { x: 2, y: 4, z: 6 } };
+    expect(obstacleOf(flat)).toEqual({ rect: { minX: 0, minZ: 0, maxX: 2, maxZ: 6 }, top: 4 });
+    const tilted = { ...flat, size: { x: 2, y: 1, z: 10 }, rotationDeg: { x: 30, y: 0, z: 0 } };
+    // Half extents turned 30° about x: y = 0.5·cos 30° + 5·sin 30°
+    expect(obstacleOf(tilted).top).toBeCloseTo(2 + 0.5 * Math.cos(Math.PI / 6) + 5 * Math.sin(Math.PI / 6), 6);
   });
 });
