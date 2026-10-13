@@ -1001,6 +1001,7 @@ test('city: accept a drop-off at the kiosk and deliver it (navmesh distances, ci
   expect(ticks, 'not delivered within a second of sim time').toBeGreaterThan(0);
   expect(title).toMatch(/^Delivered!\s+\+\d+ pts?\b/);
   expect(opacity).toBe('1');
+  await page.screenshot({ path: `${artifacts}sp2-city-delivered.png` }); // while the popup is up (wall-clock life)
   const totals = await page.evaluate(() => window.__dm!.orders.totals());
   expect(totals.deliveries).toBe(1);
   // The delivered order's points (as the popup announced them) count toward the current epoch too (spec §9.4 step 1).
@@ -1011,7 +1012,6 @@ test('city: accept a drop-off at the kiosk and deliver it (navmesh distances, ci
   await expect(page.locator('.hud-epoch .hud-stat-value')).toHaveText(String(points), FRAME_UI);
   expect(await page.evaluate(() => window.__dm!.orders.active())).toEqual([]);
   expect((await page.evaluate(() => window.__dm!.player())).position.y).toBeGreaterThan(-0.05); // stood on the street
-  await page.screenshot({ path: `${artifacts}sp2-city-delivered.png` });
   expect(errors).toEqual([]);
 });
 
