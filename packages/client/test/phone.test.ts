@@ -39,7 +39,7 @@ describe('Phone', () => {
     expect(phone.app).toBe('orders');
     expect(dom.host.byClass('phone')[0]!.hidden).toBe(false);
     expect(nav('orders').classList.contains('active')).toBe(true);
-    expect(view('orders').visible).toBe(true);
+    expect(view('orders').hidden).toBe(false);
   });
 
   it('has a nav button and a view for every app', () => {
@@ -55,7 +55,7 @@ describe('Phone', () => {
     expect(phone.app).toBe('wallet');
     expect(nav('wallet').classList.contains('active')).toBe(true);
     expect(nav('orders').classList.contains('active')).toBe(false);
-    expect(view('wallet').visible).toBe(true);
+    expect(view('wallet').hidden).toBe(false);
     expect(view('orders').hidden).toBe(true);
   });
 
@@ -104,6 +104,26 @@ describe('Phone', () => {
     const tab = fakeEvent('keydown', { code: 'Tab' });
     dom.doc.dispatchEvent(tab);
     expect(tab.propagationStopped).toBe(false);
+  });
+
+  it('a held close key (auto-repeat) does not close the phone it just opened', () => {
+    phone.open();
+    const rep = fakeEvent('keydown', { code: 'Tab', repeat: true });
+    dom.doc.dispatchEvent(rep);
+    expect(phone.isOpen).toBe(true);
+    expect(rep.defaultPrevented).toBe(true);
+    expect(rep.propagationStopped).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('reopening does not draw the model from the previous open (no stale offers)', () => {
+    phone.open();
+    phone.render(model({ offers: [offer('old')] }));
+    phone.close();
+    phone.open();
+    expect(view('orders').byClass('phone-offer').filter((c) => c.visible)).toHaveLength(0);
+    phone.render(model({ offers: [offer('new')] }));
+    expect(view('orders').byClass('phone-offer').map((c) => c.dataset.id)).toEqual(['new']);
   });
 
   it('render draws the Orders app and its buttons reach the callbacks', () => {

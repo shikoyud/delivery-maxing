@@ -392,6 +392,8 @@ kbd {
   padding: 10px 12px;
 }
 
+.phone-screen[hidden] { display: block; visibility: hidden; } /* blank until a fresh model, keeps the layout */
+
 .phone-app[hidden],
 .phone-lockout[hidden],
 .phone-empty[hidden] { display: none; }

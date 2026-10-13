@@ -9,6 +9,7 @@ type Listener = (e: FakeEvent) => void;
 export interface FakeEvent {
   type: string;
   code?: string;
+  repeat?: boolean;
   target?: FakeElement;
   defaultPrevented?: boolean;
   propagationStopped?: boolean;

@@ -89,7 +89,8 @@ export class Phone implements PhoneView {
         if (!this.open_ || !this.closeCodes.includes(e.code)) return;
         e.preventDefault();
         e.stopPropagation();
-        this.close();
+        // A held Tab auto-repeats: only a fresh press closes, or holding the key would close the phone it just opened.
+        if (!e.repeat) this.close();
       },
       true,
     );
@@ -108,6 +109,9 @@ export class Phone implements PhoneView {
   open(app: PhoneApp = 'orders'): void {
     this.open_ = true;
     this.root.hidden = false;
+    // The apps still hold the last open's content (offers that may have expired since): keep the screen blank
+    // until the first fresh model arrives (DeliveryLoop draws one on the next frame).
+    this.screen.hidden = this.last === null;
     this.show(app);
   }
 
@@ -115,6 +119,7 @@ export class Phone implements PhoneView {
     if (!this.open_) return;
     this.open_ = false;
     this.root.hidden = true;
+    this.last = null;
     this.callbacks.closed();
   }
 
@@ -135,6 +140,7 @@ export class Phone implements PhoneView {
    */
   render(model: HudModel): void {
     this.last = model;
+    this.screen.hidden = false;
     if (this.open_) this.views.get(this.current)!.render(model);
   }
 
