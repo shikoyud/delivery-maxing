@@ -2,9 +2,8 @@ import { movementConfig } from '../../src/config';
 import { emptyInput, type InputFrame } from '../../src/input/inputFrame';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import { PlayerSim } from '../../src/movement/PlayerSim';
-import { createWorldFeatureState } from '../../src/movement/triggers';
-import { NO_MODS, type PlayerState, type SimEvent, type StatModifiers, type WorldFeatureState } from '../../src/movement/types';
-import type { BoostOrb, Checkpoint, JumpPad, MapData, Rail, Solid, ZipLine } from '../../src/world/mapTypes';
+import { NO_MODS, type PlayerState, type SimEvent, type StatModifiers } from '../../src/movement/types';
+import type { MapData, Solid } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier } from '../../src/world/physicsWorld';
 
 export interface Hold {
@@ -22,7 +21,6 @@ export type Press = 'jump' | 'crouch' | 'interact' | 'board';
 
 export interface Harness {
   sim: PlayerSim;
-  world: WorldFeatureState;
   map: MapData;
   /** Simulation time in seconds, advanced by sim.dt per tick. */
   time: number;
@@ -35,11 +33,6 @@ export interface Harness {
 export interface SimOptions {
   floor?: boolean;
   solids?: Solid[];
-  zipLines?: ZipLine[];
-  jumpPads?: JumpPad[];
-  boostOrbs?: BoostOrb[];
-  rails?: Rail[];
-  checkpoints?: Checkpoint[];
   spawn?: Vec3;
   yaw?: number;
 }
@@ -81,15 +74,16 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   const yaw = opts.yaw ?? 0;
   const map: MapData = {
     size: 200,
+    spawn,
     solids: [
       ...(opts.floor === false ? [] : [box('floor', vec3(0, -0.5, 0), vec3(200, 1, 200), { kind: 'ground' })]),
       ...(opts.solids ?? []),
     ],
-    zipLines: opts.zipLines ?? [],
-    jumpPads: opts.jumpPads ?? [],
-    boostOrbs: opts.boostOrbs ?? [],
-    rails: opts.rails ?? [],
-    checkpoints: opts.checkpoints ?? [],
+    zipLines: [],
+    jumpPads: [],
+    boostOrbs: [],
+    rails: [],
+    checkpoints: [],
     pois: [],
     hub: {
       center: vec3(0, 0, 0), plazaRadius: 30, dropZoneRadius: 6, zoneHeight: 6,
@@ -98,15 +92,12 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   };
   const physics = createPhysicsWorld(rapier, map);
   const sim = new PlayerSim(physics, map, movementConfig, spawn, yaw);
-  const world = createWorldFeatureState(map);
-
   const h: Harness = {
     sim,
-    world,
     map,
     time: 0,
     tick(hold = {}, press = [], mods = NO_MODS) {
-      const events = sim.step(makeInput(hold, press, yaw, sim.state), mods, world, h.time);
+      const events = sim.step(makeInput(hold, press, yaw, sim.state), mods, h.time);
       h.time += sim.dt;
       return events;
     },

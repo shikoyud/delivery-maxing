@@ -24,39 +24,6 @@ export interface MovementConfig {
   jump: { height: number; coyoteTime: number; bufferTime: number };
   mantle: { minHeight: number; maxHeight: number; reach: number; duration: number };
   slide: { minEntrySpeed: number; friction: number; endSpeed: number; slopeGravityScale: number; boostSpeed: number; boostCooldown: number };
-  chute: { friction: number; steerAccel: number };
-  wallRun: {
-    maxTime: number;
-    minSpeed: number;
-    checkDistance: number;
-    gravityScale: number;
-    maxApproachAngleDeg: number;
-    wallJumpPush: number;
-    sameWallDot: number;
-    /** Speed (m/s) at which a wall-runner is pulled toward the wall so contact holds. */
-    stickSpeed: number;
-    /** Fastest fall (m/s) kept when a wall-run starts: vy = max(vy, -maxEntryFallSpeed) (R24). */
-    maxEntryFallSpeed: number;
-    /** Highest a wall-run may start (m) above the first wall-run start of the current chain (R25). */
-    maxChainRise: number;
-  };
-  zipLine: {
-    attachDistance: number;
-    hangDrop: number;
-    baseSpeed: number;
-    maxSpeed: number;
-    /** How far below the cable end (m) the end-of-ride dismount looks for a standing surface. */
-    dismountReach: number;
-    /** Attaching is refused when less line than this (m) remains in the ride direction. */
-    minRideLength: number;
-    /** |cos| between the facing and the line (horizontally) below which the facing does not pick the ride end. */
-    facingTie: number;
-    /** Horizontal speed along the line (m/s) below which the velocity does not pick the ride end either. */
-    velocityTie: number;
-  };
-  jumpPad: { retriggerCooldown: number };
-  boostOrb: { radius: number; speedMultiplier: number; duration: number; respawnTime: number };
-  rail: { snapDistance: number; friction: number; minSpeedFoot: number };
   board: {
     topSpeed: number;
     accel: number;
@@ -65,7 +32,6 @@ export interface MovementConfig {
     brakeMinSpeed: number;
     friction: number;
     turnRate: number;
-    railMinSpeed: number;
   };
   fall: { outOfBoundsY: number; boundsMargin: number };
 }

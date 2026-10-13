@@ -22,7 +22,7 @@ export interface RayHit {
   distance: number;
 }
 
-/** Faces with |n.y| below this count as walls (wall contacts, mantle and wall-run probes). */
+/** Faces with |n.y| below this count as walls (wall contacts and mantle probes). */
 export const WALL_MAX_NY = 0.3;
 
 const DEG = Math.PI / 180;

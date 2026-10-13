@@ -274,19 +274,19 @@ describe('OrderSystem', () => {
   it('fragile: respawn while carried breaks it', () => {
     const d = dropoff('fragile');
     d.sys.accept(d.order.id, 0, true);
-    expect(d.sys.onSimEvents([{ kind: 'respawned', checkpointId: 'c1' }])).toEqual([
+    expect(d.sys.onSimEvents([{ kind: 'respawned', hospitalId: 'c1' }])).toEqual([
       { kind: 'fragileBroken', orderId: d.order.id, reason: 'respawn' },
     ]);
     const p = pickup('fragile');
     p.sys.accept(p.order.id, 0, true);
-    expect(p.sys.onSimEvents([{ kind: 'respawned', checkpointId: 'c1' }])).toEqual([]);
+    expect(p.sys.onSimEvents([{ kind: 'respawned', hospitalId: 'c1' }])).toEqual([]);
     expect(p.sys.active[0]?.fragileIntact).toBe(true);
   });
 
   it('non-fragile orders ignore falls and respawns', () => {
     const d = dropoff();
     d.sys.accept(d.order.id, 0, true);
-    expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: 50 }, { kind: 'respawned', checkpointId: 'c' }])).toEqual([]);
+    expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: 50 }, { kind: 'respawned', hospitalId: 'c' }])).toEqual([]);
   });
 
   it('heavy: statModifiers().jumpHeightMul is 0.9 only while a Heavy package is carried', () => {

@@ -3,7 +3,7 @@ import { movementConfig as cfg } from '../../src/config';
 import { horizontalLength, vec3 } from '../../src/math/vec3';
 import { facing } from '../../src/movement/ground';
 import { NO_MODS, type PlayerState } from '../../src/movement/types';
-import type { Rail, Solid, ZipLine } from '../../src/world/mapTypes';
+import type { Solid } from '../../src/world/mapTypes';
 import { box, makeSim, type Harness, type Hold } from '../helpers/simHarness';
 
 const speed = (s: PlayerState) => horizontalLength(s.velocity);
@@ -113,36 +113,6 @@ describe('skateboard', () => {
     expect(h.sim.state.velocity.x).toBeLessThan(0);
   });
 
-  it('cannot wall-run on the board', async () => {
-    // The Task 7 wall: a 40 m wall along Z whose face (x = -1) points toward +X; the player starts 0.5 m from it.
-    const wallSolid = box('wall', vec3(-1.5, 6, -18), vec3(1, 12, 40));
-    const spawnX = -1 + cfg.capsule.radius + 0.5;
-    const attempt = async (onBoard: boolean) => {
-      const h = await makeSim({ solids: [wallSolid], spawn: vec3(spawnX, 0, 0) });
-      if (onBoard) boardOn(h);
-      h.run(seconds(onBoard ? 1.5 : 0.5), SPRINT);
-      expect(speed(h.sim.state)).toBeGreaterThanOrEqual(cfg.run.sprintSpeed - 0.01);
-      h.tick(SPRINT, ['jump']);
-      let ran = false;
-      for (let i = 0; i < 20; i++) {
-        h.tick(SPRINT);
-        if (h.sim.state.mode === 'wallrun') ran = true;
-      }
-      return ran;
-    };
-    expect(await attempt(false)).toBe(true); // control: the same approach on foot wall-runs
-    expect(await attempt(true)).toBe(false);
-
-    // Airborne beside the wall on the board (canStartWallRun conditions otherwise met): still no wall-run.
-    const h = await makeSim({ solids: [wallSolid], spawn: vec3(spawnX, 0, 0) });
-    boardOn(h);
-    h.sim.teleport(vec3(spawnX, 6, 0), vec3(0, 0, -cfg.run.sprintSpeed));
-    for (let i = 0; i < 20; i++) {
-      h.tick(SPRINT);
-      expect(h.sim.state.mode).not.toBe('wallrun');
-    }
-  });
-
   it('cannot mantle on the board', async () => {
     const FACE = -3;
     const ledge = box('ledge', vec3(0, 0.5, FACE - 5), vec3(8, 1.0, 10));
@@ -157,43 +127,6 @@ describe('skateboard', () => {
     expect(h.sim.state.position.z).toBeGreaterThan(FACE);
     // The wall stopped the board.
     expect(speed(h.sim.state)).toBeLessThan(0.5);
-  });
-
-  it('board grind speed is at least 10 m/s', async () => {
-    const straight: Rail = { id: 'r', points: [vec3(0, 3, 0), vec3(0, 3, -60)] };
-    const h = await makeSim({ rails: [straight] });
-    boardOn(h);
-    h.sim.teleport(vec3(0, 3.3, -2), vec3(0, -1, -5));
-    h.tick();
-    expect(h.sim.state.mode).toBe('grind');
-    expect(h.sim.state.onBoard).toBe(true);
-    expect(h.sim.state.grind!.speed).toBeGreaterThanOrEqual(cfg.board.railMinSpeed);
-    expect(cfg.board.railMinSpeed).toBe(10);
-    // Friction never takes it below the board minimum.
-    for (let i = 0; i < seconds(2); i++) {
-      h.tick();
-      expect(h.sim.state.grind!.speed).toBeGreaterThanOrEqual(cfg.board.railMinSpeed);
-    }
-
-    // On foot the minimum stays rail.minSpeedFoot.
-    const foot = await makeSim({ rails: [straight] });
-    foot.sim.teleport(vec3(0, 3.3, -2), vec3(0, -1, -1));
-    foot.tick();
-    expect(foot.sim.state.grind!.speed).toBeCloseTo(cfg.rail.minSpeedFoot, 6);
-  });
-
-  it('grabbing a zip line while on the board puts the board away (boardToggled false)', async () => {
-    const zip: ZipLine = { id: 'z', a: vec3(0, 10, 0), b: vec3(0, 4, -30) };
-    const h = await makeSim({ solids: [box('platform', vec3(0, 4, 0), vec3(4, 8, 4))], zipLines: [zip], spawn: vec3(0, 8, 0) });
-    boardOn(h);
-    const events = h.tick({}, ['interact']);
-    expect(h.sim.state.mode).toBe('zipline');
-    expect(events).toContainEqual({ kind: 'boardToggled', onBoard: false });
-    expect(h.sim.state.onBoard).toBe(false);
-    // Attaching on foot emits no board event.
-    const foot = await makeSim({ solids: [box('platform', vec3(0, 4, 0), vec3(4, 8, 4))], zipLines: [zip], spawn: vec3(0, 8, 0) });
-    expect(foot.tick({}, ['interact']).some((e) => e.kind === 'boardToggled')).toBe(false);
-    expect(foot.sim.state.mode).toBe('zipline');
   });
 
   it('crouch on the board does not slide', async () => {
@@ -212,25 +145,27 @@ describe('skateboard', () => {
     expect(speed(h.sim.state)).toBeGreaterThan(before);
   });
 
-  it('boost raises board top speed, capped at the 12 m/s global cap', async () => {
+  it('board top speed is topSpeed × speedMul, never above the global speedCap', async () => {
     const h = await makeSim();
     boardOn(h);
-    h.sim.state.boostLeft = 100;
     for (let i = 0; i < seconds(4); i++) {
       h.tick(FWD);
       expect(speed(h.sim.state)).toBeLessThanOrEqual(cfg.speedCap + 1e-6);
     }
-    expect(cfg.board.topSpeed * cfg.boostOrb.speedMultiplier).toBeCloseTo(16.8, 9);
-    expect(speed(h.sim.state)).toBeCloseTo(cfg.speedCap, 6);
+    expect(speed(h.sim.state)).toBeCloseTo(cfg.board.topSpeed, 6);
 
-    // speedMul scales the board top speed too; boost and speedMul together are still capped at speedCap.
-    const m = await makeSim();
-    boardOn(m);
-    m.run(seconds(4), FWD, { ...NO_MODS, speedMul: 1.1 });
-    expect(speed(m.sim.state)).toBeCloseTo(Math.min(cfg.board.topSpeed * 1.1, cfg.speedCap), 6);
-    m.sim.state.boostLeft = 100;
-    m.run(seconds(4), FWD, { ...NO_MODS, speedMul: 1.2 });
-    expect(speed(m.sim.state)).toBeCloseTo(cfg.speedCap, 6);
+    // A slower courier (speedMul 0.8) tops out at topSpeed × 0.8, well under the cap.
+    const slow = await makeSim();
+    boardOn(slow);
+    slow.run(seconds(6), FWD, { ...NO_MODS, speedMul: 0.8 });
+    expect(speed(slow.sim.state)).toBeCloseTo(cfg.board.topSpeed * 0.8, 6);
+
+    // speedMul above 1 asks for more than speedCap and is clamped to it.
+    const fast = await makeSim();
+    boardOn(fast);
+    fast.run(seconds(4), FWD, { ...NO_MODS, speedMul: 1.2 });
+    expect(cfg.board.topSpeed * 1.2).toBeGreaterThan(cfg.speedCap);
+    expect(speed(fast.sim.state)).toBeCloseTo(cfg.speedCap, 6);
   });
 
   it('on a slope the board rolls downhill on its own (g·sinθ)', async () => {

@@ -1,6 +1,7 @@
 {
   "seed": 1,
   "size": 600,
+  "spawn": { "x": 0, "y": 0, "z": 5 },
   "grid": { "pitch": 50, "roadWidth": 12, "alleyWidth": 4 },
   "districts": [
     { "district": "downtown", "rect": { "minX": 0, "minZ": -300, "maxX": 300, "maxZ": 0 }, "heightMin": 12, "heightMax": 40, "fillChance": 0.85 },

@@ -6,15 +6,12 @@ import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
 import { alignBoardHeading, applyBoardVelocity, toggleBoard } from './board';
 import { applyAirVelocity, applyGroundVelocity, hasMoveInput, targetGroundSpeed, wishDirection, yawOf } from './ground';
-import { ageJumpBuffer, coyoteTicks, jumpBuffered, tryJump } from './jump';
+import { ageJumpBuffer, coyoteTicks, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
 import { updateSprint } from './sprint';
 import { applyTriggers, enterAir } from './triggers';
-import { tryStartGrind, updateGrind } from './rail';
-import { tryAttachZip, updateZip } from './zipLine';
-import type { PlayerState, SimEvent, StatModifiers, WorldFeatureState } from './types';
-import { canStartWallRun, findWall, startWallRun, updateWallRun, wallJump, wallRunGravityScale } from './wallRun';
+import type { PlayerState, SimEvent, StatModifiers } from './types';
 
 /** Minimum blocked distance (m) before a wall or ceiling contact removes velocity. */
 const BLOCK_EPS = 1e-4;
@@ -57,13 +54,7 @@ export class PlayerSim {
       jumpPressAge: null,
       airApexY: spawn.y,
       mantle: null,
-      wallRun: { time: 0, normal: null, lastNormal: null },
-      wallChainStartY: null,
-      zip: null,
-      grind: null,
-      boostLeft: 0,
       slideBoostCooldown: 0,
-      padCooldown: {},
     };
   }
 
@@ -78,14 +69,15 @@ export class PlayerSim {
   }
 
   /**
-   * One tick: movement (all modes), then pads, orbs and out-of-bounds respawn. Horizontal speed leaves every step
-   * within speedCap: the move itself is capped, and so is anything added after it (slide and chute slope gravity).
+   * One tick: movement (all modes), then the out-of-bounds respawn. Horizontal speed leaves every step within
+   * speedCap: the move itself is capped, and so is anything added after it (slide slope gravity).
    */
-  step(input: InputFrame, mods: StatModifiers, world: WorldFeatureState, time: number): SimEvent[] {
-    this.state.boostLeft = Math.max(0, this.state.boostLeft - this.dt);
+  // `time` (sim seconds) is part of the step contract; nothing in the movement sim reads it any more.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  step(input: InputFrame, mods: StatModifiers, time: number): SimEvent[] {
     this.state.slideBoostCooldown = Math.max(0, this.state.slideBoostCooldown - this.dt);
     const events = this.stepMovement(input, mods);
-    events.push(...applyTriggers(this.state, this.body, this.map, world, this.cfg, time));
+    events.push(...applyTriggers(this.state, this.body, this.map, this.cfg));
     this.state.velocity = clampHorizontal(this.state.velocity, this.cfg.speedCap);
     if (this.state.onBoard) this.state.heading = this.state.boardHeading;
     return events;
@@ -97,32 +89,21 @@ export class PlayerSim {
     // 1. Look, courier heading and timers; crouch (stays crouched while standing is blocked; ignored on the board); board toggle (Q);
     //    crouch-slide entry (never on the board).
     const wish = wishDirection(input); // camera-relative; computed once per tick
-    this.updateLookAndTimers(input, wish);
+    this.updateLookAndTimers(input, wish, mods);
     this.updateCrouch(input);
     if (input.board.pressed && toggleBoard(this.state)) events.push({ kind: 'boardToggled', onBoard: this.state.onBoard });
     const slide = startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
     if (slide !== 'none') events.push({ kind: 'slideStarted', boosted: slide === 'boosted' });
 
-    // 2. Special modes run here and return early: mantle (Task 6); zip line (Task 8); grind rail (Task 10).
-    //    Ledge detection runs before the move, so the stored horizontal velocity is the approach velocity
-    //    (a blocking move would already have removed the part into the ledge face).
-    if (this.tryZip(input, mods, events)) return events;
-    if (this.tryGrind(input, mods)) return events;
+    // 2. Mantle runs here and returns early. Ledge detection runs before the move, so the stored horizontal
+    //    velocity is the approach velocity (a blocking move would already have removed the part into the ledge face).
     if (this.tryMantle(input)) return events;
 
-    // 3. Wall-run: a buffered jump wall-jumps off the wall; otherwise the run holds to the wall (or ends).
-    //    Locomotion: ground or air acceleration toward the wish direction. A slide drives itself in step 9 and a
-    //    wall-run drives itself here; a wall-jump tick keeps its launch velocity.
-    if (this.state.mode === 'wallrun' && jumpBuffered(this.state, this.cfg)) {
-      wallJump(this.state, this.cfg, mods);
-      events.push({ kind: 'jumped' });
-    } else {
-      if (this.state.mode === 'wallrun') updateWallRun(this.state, this.body, input, this.cfg, this.dt);
-      if (this.state.mode !== 'slide' && this.state.mode !== 'wallrun') this.applyLocomotion(input, wish, mods);
+    // 3. Locomotion: ground or air acceleration toward the wish direction. A slide drives itself in step 9.
+    if (this.state.mode !== 'slide') this.applyLocomotion(input, wish, mods);
 
-      // 4. Jump (buffer + coyote).
-      if (tryJump(this.state, input, this.cfg, mods, this.dt)) events.push({ kind: 'jumped' });
-    }
+    // 4. Jump (buffer + coyote).
+    if (tryJump(this.state, input, this.cfg, mods, this.dt)) events.push({ kind: 'jumped' });
 
     // 5–7. Gravity, speed cap, collide-and-slide move.
     const move = this.integrateAndMove();
@@ -130,9 +111,8 @@ export class PlayerSim {
     // 8. Landing, air timers and apex tracking.
     this.resolveContacts(move, events);
 
-    // 9. Post-move checks: slide physics and end (Task 5), wall-run start (Task 7); triggers run after this method (step).
-    if (!this.state.onBoard) updateSlide(this.state, move, input, this.cfg, this.dt); // a board rolls itself (chutes too)
-    this.tryStartWallRun(input);
+    // 9. Post-move slide physics and end; triggers run after this method (step).
+    if (!this.state.onBoard) updateSlide(this.state, move, this.cfg, this.dt); // a board rolls itself
 
     return events;
   }
@@ -159,70 +139,22 @@ export class PlayerSim {
   }
 
   /**
-   * Advances a zip line ride, or attaches when interact is pressed near a line (on the board too: attaching puts the
-   * board away and emits boardToggled). While riding the body is placed on the line directly (no collisions). Returns true when this step was a ride step (the rest of the step is
-   * skipped); the tick that detaches is a ride step too.
-   */
-  private tryZip(input: InputFrame, mods: StatModifiers, events: SimEvent[]): boolean {
-    const s = this.state;
-    if (s.mode !== 'zipline') {
-      const canAttach = s.mode === 'ground' || s.mode === 'air' || s.mode === 'slide' || s.mode === 'wallrun';
-      const wasOnBoard = s.onBoard;
-      if (!canAttach || !tryAttachZip(s, input, this.map.zipLines, this.cfg)) return false;
-      if (wasOnBoard) events.push({ kind: 'boardToggled', onBoard: false }); // attaching put the board away
-    }
-    const line = this.map.zipLines.find((l) => l.id === s.zip?.id);
-    if (line) {
-      // A jump pressed on the dismount tick is honoured from the platform.
-      const dismounted = updateZip(s, line, input, this.cfg, mods, this.dt, this.body) === 'detached' && s.mode === 'ground';
-      if (dismounted && tryJump(s, input, this.cfg, mods, this.dt)) events.push({ kind: 'jumped' });
-    } else enterAir(s, this.cfg);
-    this.body.setFeet(s.position);
-    s.position = this.body.feet;
-    return true;
-  }
-
-  /**
-   * Advances a grind in progress, or starts one when airborne and falling onto a rail. While grinding the body is
-   * placed on the rail directly (no collisions). Returns true when this step was a grind step (the rest of the step
-   * is skipped); the tick that detaches is a grind step too.
-   */
-  private tryGrind(input: InputFrame, mods: StatModifiers): boolean {
-    const s = this.state;
-    if (s.mode !== 'grind' && !tryStartGrind(s, this.map.rails, this.cfg)) return false;
-    const rail = this.map.rails.find((r) => r.id === s.grind?.id);
-    if (rail) updateGrind(s, rail, input, this.cfg, mods, this.dt);
-    else enterAir(s, this.cfg);
-    this.body.setFeet(s.position);
-    s.position = this.body.feet;
-    return true;
-  }
-
-  /** Starts a wall-run when airborne beside a wall that passes canStartWallRun. */
-  private tryStartWallRun(input: InputFrame): void {
-    const s = this.state;
-    if (s.mode !== 'air' || s.grounded || s.onBoard) return;
-    const normal = findWall(this.body, s, this.cfg);
-    if (normal && canStartWallRun(s, normal, input, this.cfg)) startWallRun(s, normal, this.cfg);
-  }
-
-  /**
    * The camera yaw and pitch come from the input. The sprint toggle updates first (updateSprint), so every later
    * step sees this tick's sprint state. Off the board, any movement input turns the courier to face its
    * (camera-relative) wish direction; with no input the heading holds. On the board the heading mirrors boardHeading
    * (set by the board code and at the end of the step).
    */
-  private updateLookAndTimers(input: InputFrame, wish: Vec3): void {
+  private updateLookAndTimers(input: InputFrame, wish: Vec3, mods: StatModifiers): void {
     const s = this.state;
     s.yaw = input.look.yaw;
     s.pitch = input.look.pitch;
-    updateSprint(s, input);
+    updateSprint(s, input, mods);
     if (!s.onBoard && hasMoveInput(input)) s.heading = yawOf(wish);
     ageJumpBuffer(s, input, this.cfg);
   }
 
   /**
-   * The capsule is crouched while crouch is held (a chute slide needs no crouch). Releasing crouch stands up only
+   * The capsule is crouched while crouch is held. Releasing crouch stands up only
    * if a standing capsule fits (Review Focus 4); otherwise the player stays crouched (and a crouch-slide goes on)
    * and tries again every tick, so they stand automatically once clear. On the board crouch is ignored.
    */
@@ -244,12 +176,12 @@ export class PlayerSim {
 
   /**
    * Gravity is integrated exactly for a constant acceleration (dy = vy·dt − ½·g·dt²), so the jump apex
-   * is exact at any tick rate. Snap-to-ground is only enabled while not moving up. A wall-run scales gravity.
+   * is exact at any tick rate. Snap-to-ground is only enabled while not moving up.
    */
   private integrateAndMove(): MoveResult {
     const s = this.state;
     const { dt, cfg } = this;
-    const g = cfg.gravity * wallRunGravityScale(s, cfg);
+    const g = cfg.gravity;
     const vy0 = s.velocity.y;
     const dy = vy0 * dt - 0.5 * g * dt * dt;
     s.velocity = clampHorizontal(vec3(s.velocity.x, vy0 - g * dt, s.velocity.z), cfg.speedCap);
@@ -290,17 +222,14 @@ export class PlayerSim {
       if (!wasGrounded) {
         events.push({ kind: 'landed', fallHeight: Math.max(s.airApexY, s.position.y) - s.position.y });
       }
-      // An air or wall-run landing changes the mode: a slide stays a slide (mantle steps never reach here).
+      // An air landing changes the mode: a slide stays a slide (mantle steps never reach here).
       // Landing on foot still crouched at slide speed (a slide off a ledge, a slide-jump) slides on (R26).
-      if (s.mode === 'air' || s.mode === 'wallrun') {
+      if (s.mode === 'air') {
         const keepsSliding = !wasGrounded && !s.onBoard && s.crouched && horizontalLength(s.velocity) >= this.cfg.slide.endSpeed;
         s.mode = keepsSliding ? 'slide' : 'ground';
       }
       // A board landing points the board along the landing travel (air control may have turned it).
       if (!wasGrounded && s.onBoard) alignBoardHeading(s);
-      // Landing unlocks every wall for wall-running again.
-      s.wallRun = { time: 0, normal: null, lastNormal: null };
-      s.wallChainStartY = null;
       s.velocity = vec3(s.velocity.x, 0, s.velocity.z);
       s.groundNormal = move.groundNormal;
       s.lastGrounded = vec3(s.position.x, s.position.y, s.position.z);
@@ -308,7 +237,7 @@ export class PlayerSim {
       s.airApexY = s.position.y;
     } else {
       s.airTicks = wasGrounded ? 0 : s.airTicks + 1;
-      // Leaving the ground on foot (or mid-slide) goes airborne; a wall-run keeps its own mode until it ends.
+      // Leaving the ground on foot (or mid-slide) goes airborne.
       if (s.mode === 'ground' || s.mode === 'slide') s.mode = 'air';
       s.groundNormal = vec3(0, 1, 0);
       s.airApexY = Math.max(s.airApexY, s.position.y);

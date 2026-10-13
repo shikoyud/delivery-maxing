@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { movementConfig as cfg } from '../../src/config';
 import { emptyInput, type InputFrame } from '../../src/input/inputFrame';
 import { horizontalLength } from '../../src/math/vec3';
+import { NO_MODS } from '../../src/movement/types';
 import { updateSprint } from '../../src/movement/sprint';
 import { makeSim, type Harness } from '../helpers/simHarness';
 
@@ -15,7 +16,7 @@ function frame(opts: { w?: boolean; tap?: boolean; jump?: boolean } = {}): Input
 }
 
 function step(h: Harness, input: InputFrame): void {
-  h.sim.step(input, { speedMul: 1, jumpHeightMul: 1 }, h.world, h.time);
+  h.sim.step(input, NO_MODS, h.time);
   h.time += h.sim.dt;
 }
 
@@ -86,11 +87,11 @@ describe('sprint toggle', () => {
 
   it('updateSprint flips on pressed, then clears when there is no move input', () => {
     const state = { sprinting: false } as Parameters<typeof updateSprint>[0];
-    updateSprint(state, frame({ w: true, tap: true }));
+    updateSprint(state, frame({ w: true, tap: true }), NO_MODS);
     expect(state.sprinting).toBe(true);
-    updateSprint(state, frame({ w: true }));
+    updateSprint(state, frame({ w: true }), NO_MODS);
     expect(state.sprinting).toBe(true);
-    updateSprint(state, frame({ tap: true }));
+    updateSprint(state, frame({ tap: true }), NO_MODS);
     expect(state.sprinting).toBe(false);
   });
 });

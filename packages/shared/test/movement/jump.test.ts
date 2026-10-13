@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { movementConfig as cfg } from '../../src/config';
 import { horizontalLength, vec3 } from '../../src/math/vec3';
-import type { SimEvent } from '../../src/movement/types';
+import { NO_MODS, type SimEvent, type StatModifiers } from '../../src/movement/types';
 import { box, makeSim, type Harness, type Hold } from '../helpers/simHarness';
 
 /*
@@ -16,7 +16,7 @@ const jumped = (ev: SimEvent[]) => ev.some((e) => e.kind === 'jumped');
 const landedEvent = (ev: SimEvent[]) => ev.find((e) => e.kind === 'landed');
 
 /** Jumps from standing and returns the apex height above the take-off feet height. */
-function measureApex(h: Harness, mods = { speedMul: 1, jumpHeightMul: 1 }): number {
+function measureApex(h: Harness, mods: StatModifiers = NO_MODS): number {
   const y0 = h.sim.state.position.y;
   expect(jumped(h.tick({}, ['jump'], mods))).toBe(true);
   let apex = h.sim.state.position.y;
@@ -63,7 +63,7 @@ describe('jump', () => {
 
   it('jumpHeightMul 0.9 (Heavy) gives an apex of 1.08 m (± 0.03)', async () => {
     const h = await makeSim();
-    expect(Math.abs(measureApex(h, { speedMul: 1, jumpHeightMul: 0.9 }) - 1.08)).toBeLessThanOrEqual(0.03);
+    expect(Math.abs(measureApex(h, { ...NO_MODS, jumpHeightMul: 0.9 }) - 1.08)).toBeLessThanOrEqual(0.03);
   });
 
   it('coyote: jump pressed on airTicks 3 (100 ms after leaving a ledge) still jumps', async () => {

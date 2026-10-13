@@ -52,23 +52,6 @@ describe('courier heading', () => {
     expect(s.position.x).toBeGreaterThan(FACE_X);
   });
 
-  it('strafing alongside a wall starts a wall-run', async () => {
-    // A 40 m wall along X whose face (z = -1) points toward +Z: on the courier's left while it runs toward +X.
-    const FACE_Z = -1;
-    const wall = box('wall', vec3(18, 6, FACE_Z - 0.5), vec3(40, 12, 1));
-    const h = await makeSim({ solids: [wall], spawn: vec3(0, 0, FACE_Z + cfg.capsule.radius + 0.5) });
-    h.run(10, RIGHT_SPRINT);
-    expect(h.sim.state.grounded).toBe(true);
-    expect(h.sim.state.velocity.x).toBeCloseTo(cfg.run.sprintSpeed, 3);
-    h.tick(RIGHT_SPRINT, ['jump']);
-    const ticks = h.runUntil((s) => s.mode === 'wallrun', 10, RIGHT_SPRINT);
-    expect(ticks).toBeLessThanOrEqual(10);
-    expect(h.sim.state.wallRun.normal!.z).toBeCloseTo(1, 3);
-    // Holding the strafe keeps the run going.
-    h.run(10, RIGHT_SPRINT);
-    expect(h.sim.state.mode).toBe('wallrun');
-  });
-
   it('board steers toward the wish direction; S brakes without turning', async () => {
     const h = await makeSim();
     boardOn(h);

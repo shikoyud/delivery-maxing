@@ -4,7 +4,6 @@ import { movementConfig } from '../../src/config';
 import { emptyInput } from '../../src/input/inputFrame';
 import { facing } from '../../src/movement/ground';
 import { PlayerSim } from '../../src/movement/PlayerSim';
-import { createWorldFeatureState } from '../../src/movement/triggers';
 import { NO_MODS } from '../../src/movement/types';
 import { expandGreybox } from '../../src/world/greybox';
 import type { GreyboxSource, MapData } from '../../src/world/mapTypes';
@@ -52,7 +51,6 @@ describe('sprinting across the real map ground', () => {
     }
 
     const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x, y: 0, z }, yaw);
-    const world = createWorldFeatureState(map);
     const start = sim.state.position;
     let stalls = 0;
     let minFeetY = Infinity;
@@ -65,7 +63,7 @@ describe('sprinting across the real map ground', () => {
       input.sprint.pressed = !sim.state.sprinting;
       input.sprint.held = true;
       const before = sim.state.position;
-      sim.step(input, NO_MODS, world, t / movementConfig.tickRate);
+      sim.step(input, NO_MODS, t / movementConfig.tickRate);
       const p = sim.state.position;
       if (t > 10 && Math.hypot(p.x - before.x, p.z - before.z) < STALL_STEP) stalls++;
       minFeetY = Math.min(minFeetY, p.y);
@@ -86,7 +84,6 @@ describe('sprinting across the real map ground', () => {
     const physics = createPhysicsWorld(rapier, map);
     const yaw = -Math.PI / 2;
     const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x: -30, y: 0, z: 8 }, yaw);
-    const world = createWorldFeatureState(map);
     let minFeetY = Infinity;
     let landings = 0;
     for (let t = 0; t < SPRINT_TICKS; t++) {
@@ -96,7 +93,7 @@ describe('sprinting across the real map ground', () => {
       input.sprint.pressed = !sim.state.sprinting;
       input.sprint.held = true;
       if (t % 25 === 5) { input.jump.pressed = true; input.jump.held = true; }
-      const events = sim.step(input, NO_MODS, world, t / movementConfig.tickRate);
+      const events = sim.step(input, NO_MODS, t / movementConfig.tickRate);
       landings += events.filter((e) => e.kind === 'landed').length;
       minFeetY = Math.min(minFeetY, sim.state.position.y);
     }

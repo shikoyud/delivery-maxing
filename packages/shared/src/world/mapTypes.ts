@@ -38,6 +38,8 @@ export interface Hub {
 }
 export interface MapData {
   size: number;
+  /** Where the courier starts and respawns (stopgap until the map has hospitals). */
+  spawn: Vec3;
   solids: Solid[];
   zipLines: ZipLine[];
   jumpPads: JumpPad[];

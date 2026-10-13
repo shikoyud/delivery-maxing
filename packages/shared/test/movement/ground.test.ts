@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { movementConfig as cfg } from '../../src/config';
 import { horizontalLength, vec3 } from '../../src/math/vec3';
+import { NO_MODS } from '../../src/movement/types';
 import { box, makeSim } from '../helpers/simHarness';
 
 const speed = (s: { velocity: { x: number; y: number; z: number } }) => horizontalLength(s.velocity);
@@ -30,6 +31,17 @@ describe('ground movement', () => {
     expect(speed(h.sim.state)).toBeCloseTo(5.5, 2);
   });
 
+  it('sprint toggle is ignored while mods.canSprint is false', async () => {
+    const h = await makeSim();
+    const mods = { ...NO_MODS, canSprint: false };
+    h.run(60, SPRINT, mods);
+    expect(h.sim.state.sprinting).toBe(false);
+    expect(speed(h.sim.state)).toBeCloseTo(cfg.run.runSpeed, 2);
+    // Sprint stays unavailable even with a fresh Shift press on later ticks.
+    h.tick(SPRINT, [], mods);
+    expect(h.sim.state.sprinting).toBe(false);
+  });
+
   it('releasing input stops a sprinting player within 0.25 s', async () => {
     const h = await makeSim();
     h.run(30, SPRINT);
@@ -39,7 +51,7 @@ describe('ground movement', () => {
   });
 
   it('speedMul 1.175 raises sprint to 9.4 m/s', async () => {
-    const mods = { speedMul: 1.175, jumpHeightMul: 1 };
+    const mods = { ...NO_MODS, speedMul: 1.175 };
     const h = await makeSim();
     h.run(60, SPRINT, mods);
     expect(speed(h.sim.state)).toBeCloseTo(9.4, 2);

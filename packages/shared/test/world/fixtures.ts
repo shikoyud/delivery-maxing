@@ -3,6 +3,7 @@ import type { GreyboxSource, MapData } from '../../src/world/mapTypes';
 
 export const emptyMap = (): MapData => ({
   size: 200,
+  spawn: vec3(0, 0, 5),
   solids: [{ id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(200, 1, 200) }],
   zipLines: [], jumpPads: [], boostOrbs: [], rails: [], checkpoints: [], pois: [],
   hub: {
