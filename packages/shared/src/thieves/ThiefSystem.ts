@@ -74,7 +74,8 @@ export class ThiefSystem {
 
 /**
  * The nearest patrolling thief within the trigger radius (3D) that sees the courier (eye to chest) starts a chase,
- * if the courier carries a package and is not in the plaza.
+ * if the courier carries a package, is not in the plaza, and is not above street level relative to that thief (more
+ * than catchHeight up, ruling R26: a courier on a ledge or roof is left alone rather than chased and given up on).
  */
 function triggerChase({ cfg }: Ctx, thieves: ThiefState[], courier: CourierInfo, lineOfSight: LineOfSight): ThiefState | null {
   if (courier.carrying < 1 || courier.inPlaza) return null;
@@ -82,7 +83,7 @@ function triggerChase({ cfg }: Ctx, thieves: ThiefState[], courier: CourierInfo,
   const chest = vec3(c.x, c.y + CHEST_HEIGHT, c.z);
   const near = thieves
     .map((t) => ({ t, d: dist3(t.position, c) }))
-    .filter(({ t, d }) => t.mode === 'patrol' && d <= cfg.triggerRadius)
+    .filter(({ t, d }) => t.mode === 'patrol' && d <= cfg.triggerRadius && c.y - t.position.y <= cfg.catchHeight)
     .sort((a, b) => a.d - b.d);
   for (const { t } of near) {
     const p = t.position;
@@ -93,9 +94,13 @@ function triggerChase({ cfg }: Ctx, thieves: ThiefState[], courier: CourierInfo,
   return null;
 }
 
-/** One chase tick: toward the courier at chase speed, kept on the streets; then catch and give-up checks. */
+/**
+ * One chase tick: toward the courier at chase speed, kept on the streets; then catch and give-up checks. A courier in
+ * the plaza or carrying nothing (R25) ends the chase before the thief moves, so an empty courier is never caught.
+ */
 function chaseStep({ graph, cfg }: Ctx, t: ThiefState, dt: number, courier: CourierInfo): ChaseOutcome {
   if (courier.inPlaza) return 'plaza';
+  if (courier.carrying < 1) return 'empty';
   const c = courier.position;
   const dx = c.x - t.position.x;
   const dz = c.z - t.position.z;

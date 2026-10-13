@@ -24,7 +24,8 @@ export interface CourierInfo { position: Vec3; carrying: number; inPlaza: boolea
 
 export type ThiefEvent =
   | { kind: 'chaseStarted'; thiefId: string }
-  | { kind: 'chaseEnded'; thiefId: string; reason: 'timeout' | 'distance' | 'above' | 'plaza' }
+  /** `empty`: the courier no longer carries a package (delivered mid-chase, ruling R25). */
+  | { kind: 'chaseEnded'; thiefId: string; reason: 'timeout' | 'distance' | 'above' | 'plaza' | 'empty' }
   | { kind: 'caught'; thiefId: string };
 
 /** Line of sight between two points (the host raycasts its world). */

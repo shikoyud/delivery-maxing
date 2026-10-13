@@ -28,7 +28,7 @@ function run(
   start: Vec3,
   move: (p: Vec3, t: number) => Vec3,
   seconds: number,
-  opts: { until?: (e: ThiefEvent) => boolean; t0?: number; los?: () => boolean } = {},
+  opts: { until?: (e: ThiefEvent) => boolean; t0?: number; los?: () => boolean; carrying?: (t: number) => number } = {},
 ): { events: { t: number; e: ThiefEvent }[]; courier: Vec3; t: number } {
   const events: { t: number; e: ThiefEvent }[] = [];
   let p = start;
@@ -37,7 +37,7 @@ function run(
   for (let i = 0; i < steps; i++) {
     t += DT;
     p = move(p, t);
-    const out = sys.step(DT, t, courierAt(p), opts.los ?? always);
+    const out = sys.step(DT, t, courierAt(p, opts.carrying?.(t) ?? 1), opts.los ?? always);
     for (const e of out) events.push({ t, e });
     if (out.some((e) => opts.until?.(e))) break;
   }
@@ -122,14 +122,34 @@ describe('ThiefSystem', () => {
     expect(thief(sys).mode).toBe('return');
   });
 
-  it("a courier 3 m above the street can't be caught and the thief gives up after 1 s", () => {
+  it("a courier who climbs 3 m above the street during a chase can't be caught and the thief gives up after 1 s", () => {
     const sys = systemAt('n2');
-    const { events } = run(sys, vec3(186, 3, 0), still, 5, { until: (e) => e.kind === 'chaseEnded' });
+    // Seen on the street on the first tick, up on a ledge from the second
+    const climb = (p: Vec3, t: number): Vec3 => (t > 1.5 * DT ? vec3(186, 3, 0) : p);
+    const { events } = run(sys, vec3(186, ROAD, 0), climb, 5, { until: (e) => e.kind === 'chaseEnded' });
     expect(kinds(events)).toEqual(['chaseStarted', 'ended:above']);
     const [started, ended] = events;
     expect(ended!.t - started!.t).toBeCloseTo(cfg.aboveGiveUpSeconds, 1);
     // It got right under the courier and still did not catch
     expect(hDist(thief(sys).position, vec3(186, 0, 0))).toBeLessThan(cfg.catchRadius);
+  });
+
+  it('a courier standing 3 m above the street within 15 m in sight is not chased (no chaseStarted over 5 s)', () => {
+    const sys = systemAt('n2');
+    // Follows the patrolling thief 6 m ahead, on a ledge 3 m up (R26)
+    const ahead = (): Vec3 => vec3(thief(sys).position.x + 6, 3, thief(sys).position.z);
+    const { events } = run(sys, ahead(), ahead, 5);
+    expect(events).toEqual([]);
+    expect(thief(sys).mode).toBe('patrol');
+  });
+
+  it('a courier who delivers mid-chase (carrying → 0) ends the chase with reason empty and is never caught', () => {
+    const sys = systemAt('n2');
+    // Caught within about a second if still carrying; delivers at 0.5 s
+    const { events } = run(sys, vec3(186, ROAD, 0), still, 5, { carrying: (t) => (t < 0.5 ? 1 : 0) });
+    expect(kinds(events)).toEqual(['chaseStarted', 'ended:empty']);
+    expect(events[1]!.t).toBeCloseTo(0.5, 1);
+    expect(thief(sys).mode).not.toBe('chase');
   });
 
   it('entering the plaza ends the chase (reason plaza)', () => {
@@ -167,11 +187,12 @@ describe('ThiefSystem', () => {
     const onStreets = (p: Vec3): boolean => strips.some((s) => closestOnSegment(flat(p), flat(s.a), flat(s.b)).dist <= s.hw + 1e-6);
     const exclusion = city.hub.plazaRadius + cfg.plazaMargin;
 
-    // The courier runs short legs, on and off the streets, sometimes up on a roof; half of the legs start next to a
-    // thief (the courier appears there), so chases and their every ending keep happening
+    // The courier runs short legs, on and off the streets, sometimes up on a roof, sometimes with nothing to carry; half
+    // of the legs start next to a thief (the courier appears there), so chases and their endings keep happening
     let courier = vec3(100, ROAD, 0);
     let target = courier;
     let speed = 6;
+    let carrying = 1;
     const counts: Record<string, number> = {};
     const bad: string[] = [];
     const around = (c: Vec3, r: number, y: number): Vec3 => vec3(c.x - r + rng() * 2 * r, y, c.z - r + rng() * 2 * r);
@@ -179,13 +200,14 @@ describe('ThiefSystem', () => {
       if (hDist(courier, target) < 1) {
         const y = rng() < 0.2 ? 4 : ROAD;
         if (rng() < 0.5) courier = around(sys.thieves[Math.floor(rng() * sys.thieves.length)]!.position, 16, y);
-        target = around(courier, 40, y);
+        target = around(courier, 25, y);
         speed = 4 + rng() * 5;
+        carrying = rng() < 0.9 ? 1 : 0;
       }
       const d = hDist(courier, target);
       const k = Math.min(1, (speed * DT) / d);
       courier = vec3(courier.x + (target.x - courier.x) * k, target.y, courier.z + (target.z - courier.z) * k);
-      const events = sys.step(DT, i * DT, courierAt(courier, rng() < 0.9 ? 1 : 0), () => rng() < 0.8);
+      const events = sys.step(DT, i * DT, courierAt(courier, carrying), () => rng() < 0.8);
       for (const e of events) {
         const key = e.kind === 'chaseEnded' ? `ended:${e.reason}` : e.kind;
         counts[key] = (counts[key] ?? 0) + 1;
@@ -197,9 +219,9 @@ describe('ThiefSystem', () => {
       if (sys.thieves.filter((th) => th.mode === 'chase').length > 1) bad.push(`two chasers at tick ${i}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
-    expect(counts.chaseStarted ?? 0).toBeGreaterThanOrEqual(15);
+    expect(counts.chaseStarted ?? 0).toBeGreaterThanOrEqual(20);
     expect(counts.caught ?? 0).toBeGreaterThan(0);
-    expect(Object.keys(counts).filter((k) => k.startsWith('ended:')).length).toBeGreaterThanOrEqual(3);
+    expect(Object.keys(counts).filter((k) => k.startsWith('ended:')).length).toBeGreaterThanOrEqual(4);
   });
 
   it('is deterministic for a seed', () => {
