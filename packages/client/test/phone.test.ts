@@ -170,4 +170,15 @@ describe('Phone', () => {
     expect(seen).toEqual([9]);
     expect(view('map')).toBe(el);
   });
+
+  it('forwards the player position and heading to the Map app', () => {
+    const seen: string[] = [];
+    phone.setMapApp({
+      el: dom.doc.createElement('div') as unknown as HTMLElement,
+      render: (_m, p, h) => void seen.push(`${p.x},${p.z},${h}`),
+    });
+    phone.open('map');
+    phone.render(model(), { x: 3, y: 0, z: -4 }, 1.5);
+    expect(seen).toEqual(['3,-4,1.5']);
+  });
 });

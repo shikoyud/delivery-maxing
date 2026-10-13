@@ -1,3 +1,4 @@
+import type { Vec3 } from '@dm/shared';
 import { el } from '../dom';
 import type { HudModel } from '../hudModel';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
@@ -32,13 +33,14 @@ export interface PhoneView {
   close(): void;
   toggle(): void;
   show(app: PhoneApp): void;
-  render(model: HudModel, now: number): void;
+  /** `player`/`heading` feed the Map app. */
+  render(model: HudModel, player: Vec3, heading: number): void;
 }
 
 /** An app view the phone hosts: its element and how it draws a model. */
 export interface PhoneAppView {
   el: HTMLElement;
-  render(model: HudModel): void;
+  render(model: HudModel, player: Vec3, heading: number): void;
 }
 
 /**
@@ -55,6 +57,8 @@ export class Phone implements PhoneView {
   private open_ = false;
   private current: PhoneApp = 'orders';
   private last: HudModel | null = null;
+  private player: Vec3 = { x: 0, y: 0, z: 0 };
+  private heading = 0;
 
   constructor(
     host: HTMLElement,
@@ -131,17 +135,19 @@ export class Phone implements PhoneView {
   show(app: PhoneApp): void {
     this.current = app;
     this.syncNav();
-    if (this.open_ && this.last) this.views.get(app)!.render(this.last);
+    if (this.open_ && this.last) this.views.get(app)!.render(this.last, this.player, this.heading);
   }
 
   /**
-   * Draws the open app (DeliveryLoop calls this at the HUD rate while the phone is open). PhoneView's `now` is not
-   * needed: the apps read everything time-dependent (seconds left, accept status) from the model.
+   * Draws the open app (DeliveryLoop calls this at the HUD rate while the phone is open). The apps read everything
+   * time-dependent (seconds left, accept status) from the model; only the Map also needs the player's pose.
    */
-  render(model: HudModel): void {
+  render(model: HudModel, player: Vec3 = this.player, heading: number = this.heading): void {
     this.last = model;
+    this.player = player;
+    this.heading = heading;
     this.screen.hidden = false;
-    if (this.open_) this.views.get(this.current)!.render(model);
+    if (this.open_) this.views.get(this.current)!.render(model, player, heading);
   }
 
   /** Puts the real Map app (Task 11) in place of the placeholder. */
@@ -152,7 +158,7 @@ export class Phone implements PhoneView {
     this.screen.replaceChild(view.el, old.el);
     this.views.set('map', view);
     this.syncNav();
-    if (this.open_ && this.current === 'map' && this.last) view.render(this.last);
+    if (this.open_ && this.current === 'map' && this.last) view.render(this.last, this.player, this.heading);
   }
 
   private buildApp(app: PhoneApp): PhoneAppView {

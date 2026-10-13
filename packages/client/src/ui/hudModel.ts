@@ -43,6 +43,8 @@ export interface HudOffer {
   id: string;
   kind: OrderKind;
   pickupText: string;
+  /** Where the pickup is (the Map app's hollow dot). */
+  pickup: Vec3;
   dropoffText: string;
   band: Band;
   weightKg: number | null;
@@ -157,6 +159,7 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
         id: order.id,
         kind: order.kind,
         pickupText: text.pickup,
+        pickup: pois.target(order.pickupPoiId),
         dropoffText: text.dropoff,
         band: order.band,
         weightKg: order.weightKg,

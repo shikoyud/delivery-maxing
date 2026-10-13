@@ -5,6 +5,7 @@ export function offer(id: string, over: Partial<HudOffer> = {}): HudOffer {
   return {
     id,
     kind: 'food',
+    pickup: { x: 10, y: 0, z: -20 },
     pickupText: `Pick up ramen from Noodle Bar ${id}`,
     dropoffText: `Deliver to Elm Flats ${id}`,
     band: 'short',

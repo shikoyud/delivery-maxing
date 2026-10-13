@@ -30,6 +30,8 @@ import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoin
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
 import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { createMapApp } from '../ui/phone/mapApp';
+import { MapProjection } from '../ui/phone/mapProjection';
 import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
 import { Popups, type PopupSink } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
@@ -46,7 +48,7 @@ export interface DeliveryDeps {
   seed: number;
   /** Sim time (s) of the tick about to run, and the player's sim state. */
   now(): number;
-  player(): { position: Vec3; mode: MoveMode };
+  player(): { position: Vec3; mode: MoveMode; heading?: number };
   /** The carrier capacity tier the player has (saved progress). */
   capacityTier: VehicleTier;
   /**
@@ -115,7 +117,12 @@ export class DeliveryLoop {
     };
     // Esc and the phone key close it (spec §8; Tab opens it through the `phone` action in beforeStep).
     const closeCodes = ['Escape', ...d.cfg.input.bindings.phone];
-    this.phone = d.ui ? d.ui.phone(phoneCb, closeCodes) : new Phone(d.host, phoneCb, closeCodes);
+    if (d.ui) this.phone = d.ui.phone(phoneCb, closeCodes);
+    else {
+      const phone = new Phone(d.host, phoneCb, closeCodes);
+      phone.setMapApp(createMapApp(d.map, new MapProjection(d.map.size, 512), this.colorIndex));
+      this.phone = phone;
+    }
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
   }
 
@@ -295,7 +302,7 @@ export class DeliveryLoop {
     const now = this.d.now();
     const m = this.model(now);
     this.hud.update(m, this.colorIndex);
-    if (this.phone.isOpen) this.phone.render(m, now);
+    if (this.phone.isOpen) this.phone.render(m, this.d.player().position, this.d.player().heading ?? 0);
   }
 
   private save(): void {
