@@ -33,6 +33,7 @@
         "bones": { "UpperArmL": [0, 0, -110], "UpperArmR": [0, 0, 110], "UpperLegL": [0, 0, -15], "UpperLegR": [0, 0, 15] } },
       "crouch": { "drop": 0, "hipDrop": 0.2, "body": [0, 0, 0],
         "bones": { "Abdomen": [-60.0, 0, 0], "UpperLegL": [80.0, 0, 0], "UpperLegR": [80.0, 0, 0], "LowerLegL": [-125.0, 0, 0], "LowerLegR": [-125.0, 0, 0], "UpperArmL": [125, 0, 0], "UpperArmR": [125, 0, 0] } } } },
+  "thieves": { "renderRadius": 150, "crossFade": 0.15, "runSpeedForFullRun": 7, "idleSpeed": 0.3, "punchSeconds": 0.5 },
   "city": { "lodRadii": [160, 370, 700], "relodDistance": 25, "renderRegion": 250 },
   "perf": {
     "route": [

@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { NodeIO } from '@gltf-transform/core';
+import { getBounds, NodeIO } from '@gltf-transform/core';
 import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions';
 import { MeshoptDecoder } from 'meshoptimizer';
 import { PNG } from 'pngjs';
@@ -61,6 +61,23 @@ describe('committed piece catalog', () => {
     for (const e of entries) {
       expect(triangleCount(await io.read(join(assets, e.lod0))), e.lod0).toBe(e.tris[0]);
       if (e.lod1) expect(triangleCount(await io.read(join(assets, e.lod1))), e.lod1).toBe(e.tris[1]);
+    }
+  });
+
+  it('each c-thief model has exactly the Man_Idle/Walk/Run/Punch clips and is 1.8 m tall, feet at y = 0', async () => {
+    await MeshoptDecoder.ready;
+    const io = new NodeIO()
+      .registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
+      .registerDependencies({ 'meshopt.decoder': MeshoptDecoder });
+    const thieves = entries.filter((e) => e.id.startsWith('c-thief-'));
+    expect(thieves.map((e) => e.id).sort()).toEqual(['c-thief-casual', 'c-thief-longsleeve']);
+    for (const e of thieves) {
+      expect(e.kind, e.id).toBe('character');
+      const root = (await io.read(join(assets, e.lod0))).getRoot();
+      expect(root.listAnimations().map((a) => a.getName()).sort(), e.id).toEqual(['Man_Idle', 'Man_Punch', 'Man_Run', 'Man_Walk']);
+      const { min, max } = getBounds(root.listScenes()[0]!);
+      expect(max[1] - min[1], e.id).toBeCloseTo(1.8, 1);
+      expect(min[1], e.id).toBeCloseTo(0, 1);
     }
   });
 

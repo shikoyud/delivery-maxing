@@ -32,6 +32,8 @@ export const palette = {
   poiTarget: 0xf27166,
   /** Cardboard parcels on the courier's back. */
   parcel: 0xd8b98a,
+  /** The street thieves' capsule when their models fail to load. */
+  thief: 0x2b2f36,
 } as const;
 
 /**

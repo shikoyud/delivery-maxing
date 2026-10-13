@@ -1027,6 +1027,90 @@ test('a courier with no package is never chased', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+/** On the Harbor arterial just south of the plaza edge (same street as STREET), ~40 m from the spawn. */
+const PLAZA_EDGE = { x: 0, y: 0, z: 40 };
+
+test('thieves near the plaza edge are visible and animate (mixer time advances)', async ({ page }) => {
+  const errors = await boot(page, CITY_SEED);
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  const radius = clientJson.thieves.renderRadius;
+  const id = await page.evaluate((p) => window.__dm!.placeThief(window.__dm!.thieves()[0]!.id, p).id, PLAZA_EDGE);
+  await waitTicks(page, 3);
+  const at = async (): Promise<Map<string, { visible: boolean; loaded: boolean; clip: string | null; time: number }>> =>
+    new Map((await page.evaluate(() => window.__dm!.thiefViews())).map((v) => [v.id, v]));
+  const v0 = await at();
+  await waitTicks(page, 10);
+  const v1 = await at();
+  const player = (await page.evaluate(() => window.__dm!.player())).position;
+  const thieves = await page.evaluate(() => window.__dm!.thieves());
+  expect(v1.size).toBe(thieves.length);
+  // Every thief is drawn as the model; the placed one walks its patrol in view and its mixer runs.
+  for (const v of v1.values()) expect(v.loaded).toBe(true);
+  expect(v1.get(id)).toMatchObject({ visible: true, clip: 'Man_Walk' });
+  expect(v1.get(id)!.time).toBeGreaterThan(v0.get(id)!.time);
+  // Visibility follows renderRadius (horizontal); a thief out of range is not drawn and its mixer is frozen.
+  const far = thieves.filter((t) => Math.hypot(t.position.x - player.x, t.position.z - player.z) > radius + 5);
+  expect(far.length).toBeGreaterThan(0);
+  for (const t of thieves) {
+    const d = Math.hypot(t.position.x - player.x, t.position.z - player.z);
+    if (Math.abs(d - radius) < 5) continue; // moved across the edge between the two reads
+    expect(v1.get(t.id)!.visible, `${t.id} at ${d.toFixed(1)} m`).toBe(d <= radius);
+    if (d > radius) expect(v1.get(t.id)!.time).toBe(v0.get(t.id)!.time);
+  }
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`thieves: ${[...v1.values()].filter((v) => v.visible).length} visible; ${info.calls} draw calls, ${info.triangles} triangles`);
+  expect(info.calls).toBeLessThanOrEqual(clientJson.graphics.drawCallBudget);
+  expect(errors).toEqual([]);
+});
+
+test('sp2 thief chase screenshot: a thief runs at a carrying courier along the street', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = await boot(page, CITY_SEED);
+  const drop = await firstDropoff(page);
+  expect(await page.evaluate((id) => window.__dm!.orders.accept(id), drop.id)).toBe('ok');
+  await page.waitForFunction(() => window.__dm!.courier().packages === 1);
+  await page.evaluate((p) => window.__dm!.teleport({ x: p.x, y: p.y + 0.2, z: p.z }), STREET);
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  // Look up the street (+z, yaw π) past the courier, slightly down; the thief starts 6 m up the street behind it.
+  await page.evaluate(() => window.__dm!.setLook(Math.PI, -0.12));
+  const id = await page.evaluate((p) => window.__dm!.placeThief(window.__dm!.thieves()[0]!.id, p).id, { x: STREET.x, y: STREET.y, z: STREET.z + 6 });
+  // The courier backs away down the street (toward the camera, facing it) while the thief gives chase: one second of sim.
+  await page.keyboard.down('KeyS');
+  await waitTicks(page, 30);
+  await page.screenshot({ path: `${artifacts}sp2-thief-chase.png` });
+  await page.keyboard.up('KeyS');
+  const t = (await page.evaluate(() => window.__dm!.thieves())).find((x) => x.id === id)!;
+  const v = (await page.evaluate(() => window.__dm!.thiefViews())).find((x) => x.id === id)!;
+  const c = (await page.evaluate(() => window.__dm!.player())).position;
+  expect(t.mode).toBe('chase');
+  expect(v).toMatchObject({ visible: true, loaded: true, clip: 'Man_Run' });
+  // On the street, facing the courier (yaw 0 faces −Z, positive turns left; see movement facing()).
+  expect(Math.abs(t.position.x - STREET.x)).toBeLessThan(3);
+  const toCourier = Math.atan2(-(c.x - t.position.x), -(c.z - t.position.z));
+  const off = Math.atan2(Math.sin(v.yaw - toCourier), Math.cos(v.yaw - toCourier));
+  expect(Math.abs(off)).toBeLessThan(0.35);
+  console.log(`thief chase: gap ${Math.hypot(c.x - t.position.x, c.z - t.position.z).toFixed(2)} m, yaw off ${off.toFixed(3)} rad`);
+  expect(errors).toEqual([]);
+});
+
+test('missing thief models fall back to capsules with one warning and no errors', async ({ page }) => {
+  const warnings: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'warning') warnings.push(m.text());
+  });
+  await page.route('**/thief-*.glb', (r) => r.fulfill({ status: 404, body: 'not found' }));
+  const errors = await boot(page, CITY_SEED);
+  expect(errors.filter((e) => !/^Failed to load resource: .*404/.test(e))).toEqual([]);
+  await page.evaluate((p) => window.__dm!.placeThief(window.__dm!.thieves()[0]!.id, p), PLAZA_EDGE);
+  await waitTicks(page, 3);
+  const views = await page.evaluate(() => window.__dm!.thiefViews());
+  expect(views.length).toBeGreaterThan(0);
+  for (const v of views) expect(v).toMatchObject({ loaded: false, clip: null });
+  expect(views.some((v) => v.visible)).toBe(true);
+  expect(warnings.filter((w) => w.startsWith('Thief models unavailable'))).toHaveLength(1);
+  expect(await page.evaluate(() => window.__dm!.courier().loaded)).toBe(true);
+});
+
 test('sp2 side view: the 700 m LOD cutoff is fogged out at the screen sides', async ({ page }) => {
   const errors = await boot(page, CITY);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);

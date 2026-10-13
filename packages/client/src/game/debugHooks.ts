@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, MoveMode, Order, ThiefState, Totals, Vec3 } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
+import type { ThiefDebug } from '../render/thieves/ThiefView';
 import type { Game } from './Game';
 import type { PerfResult } from './perf';
 
@@ -40,6 +41,8 @@ export interface DebugApi {
   thieves(): ThiefState[];
   /** Moves a thief to the street point nearest `p` (kept on the streets by projection); returns its new state. City only. */
   placeThief(id: string, p: Vec3): ThiefState;
+  /** The drawn thieves (empty on the greybox): within renderRadius, the model or capsule, clip and mixer time. */
+  thiefViews(): ThiefDebug[];
   /** Whether the Order Board is open. */
   boardOpen(): boolean;
   /** Ground point of a POI zone, by id. */
@@ -122,7 +125,8 @@ export function installDebugHooks(game: Game): void {
       accept: (id) => game.delivery.accept(id),
     },
     thieves: () => structuredClone(game.delivery.thieves?.thieves ?? []),
-    placeThief: (id, p) => structuredClone(game.delivery.placeThief(id, p)),
+    placeThief: (id, p) => structuredClone(game.placeThief(id, p)),
+    thiefViews: () => game.thiefView?.debug() ?? [],
     boardOpen: () => game.delivery.modalOpen,
     poiPosition(id) {
       const p = game.map.pois.find((x) => x.id === id);

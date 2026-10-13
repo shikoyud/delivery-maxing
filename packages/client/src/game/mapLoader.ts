@@ -32,7 +32,7 @@ export interface LoadedMap {
 /** Every runtime city model, by its path relative to the repo's assets/ dir (the piece catalog's lod0/lod1). */
 const ASSET_PREFIX = '../../../../assets/';
 const cityModels = import.meta.glob<string>(
-  ['../../../../assets/city/buildings/*.glb', '../../../../assets/city/parts/*.glb'],
+  ['../../../../assets/city/buildings/*.glb', '../../../../assets/city/parts/*.glb', '../../../../assets/city/characters/*.glb'],
   { query: '?url', import: 'default', eager: true },
 );
 

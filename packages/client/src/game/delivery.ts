@@ -114,6 +114,7 @@ export class DeliveryLoop {
   private zones: PlayerZones = { inPlaza: false, inDropZone: false, poiIds: new Set() };
   private nextHudAt = 0;
   private readonly modalListeners: (() => void)[] = [];
+  private readonly caughtListeners: ((thiefId: string) => void)[] = [];
   /** Sim time of the last board refresh (null before the first): Accept clicks wait out the guard after it (R28). */
   private boardRefreshedAt: number | null = null;
   private readonly colors = new SlotColorAssigner();
@@ -169,6 +170,11 @@ export class DeliveryLoop {
   /** Called when the Order Board opens or closes (main.ts hides the "click to play" hint while it is open). */
   onModalChange(fn: () => void): void {
     this.modalListeners.push(fn);
+  }
+
+  /** Called with the thief's id when a thief catches the courier (ThiefView plays its punch). */
+  onThiefCaught(fn: (thiefId: string) => void): void {
+    this.caughtListeners.push(fn);
   }
 
   /** Packages the courier is carrying now (accepted and collected, not yet delivered). */
@@ -345,6 +351,7 @@ export class DeliveryLoop {
     this.epoch = penalizeEpoch(this.epoch, this.clock(), ordersConfig.epoch.seconds, thievesConfig.penaltyPoints);
     this.saveProgress();
     this.popups.show(robbedText(robbed.lostOrderIds.length, thievesConfig.penaltyPoints, before), [], 'warn');
+    for (const fn of this.caughtListeners) fn(e.thiefId);
   }
 
   private emitModal(): void {

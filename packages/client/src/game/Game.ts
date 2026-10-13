@@ -16,6 +16,7 @@ import {
   type PagedPhysicsWorld,
   type PoiTableFile,
   type SimEvent,
+  type ThiefState,
   type Vec3,
   type WorldFeatureState,
 } from '@dm/shared';
@@ -30,6 +31,7 @@ import type { CourierView } from '../render/courier/CourierView';
 import { createCourierPlaceholder } from '../render/courierPlaceholder';
 import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
 import { CityView } from '../render/city/CityView';
+import { ThiefView } from '../render/thieves/ThiefView';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer, toSun } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
@@ -90,6 +92,8 @@ export class Game {
   /** The animated courier, or the capsule when the model failed to load (Review Focus 4). */
   readonly courier: CourierView;
   private prevPosition: Vec3;
+  /** Each thief's position before the last tick (index-aligned with delivery.thieves.thieves), for interpolation. */
+  private prevThieves: Vec3[] = [];
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
   private lastFrameMs: number | null = null;
@@ -120,6 +124,8 @@ export class Game {
     poiTable: PoiTableFile | null,
     /** The city placement file (null on the greybox): its streets carry the thieves. */
     cityMap: CityMap | null,
+    /** The street thieves' models (null on the greybox, which has no thieves). */
+    readonly thiefView: ThiefView | null,
   ) {
     this.prevPosition = { ...sim.state.position };
     const chase = this.cfg.camera.chase;
@@ -162,6 +168,11 @@ export class Game {
       now: () => this.time,
       player: () => this.sim.state,
     });
+    if (thiefView) {
+      this.renderer.scene.add(thiefView.group);
+      this.delivery.onThiefCaught((id) => thiefView.caught(id));
+    }
+    this.snapThieves();
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
       onBackpack: (n) => this.delivery.setBackpackCapacity(n),
@@ -202,13 +213,17 @@ export class Game {
     // The model loads alongside physics; a missing or broken file falls back to the capsule with one warning.
     // The city's models load alongside them; a city that fails to load fails the start (main.ts shows the error).
     const gfx = clientConfig.graphics;
-    const [rapier, model, { map, city, view, poiTable }] = await Promise.all([
+    // The thief models fall back to capsules with one warning, like the courier.
+    const [rapier, model, { map, city, view, thiefView, poiTable }] = await Promise.all([
       initRapier(),
       CourierModel.load(robotUrl, clientConfig.courier),
-      loadMap(opts.map ?? 'city').then(async (m) => ({
-        ...m,
-        view: m.city && m.pieces ? await CityView.load(m.city, m.pieces, clientConfig.city, gfx.shadows ? { toSun, extent: gfx.shadowExtent } : undefined) : null,
-      })),
+      loadMap(opts.map ?? 'city').then(async (m) => {
+        const [view, thiefView] = await Promise.all([
+          m.city && m.pieces ? CityView.load(m.city, m.pieces, clientConfig.city, gfx.shadows ? { toSun, extent: gfx.shadowExtent } : undefined) : null,
+          m.city && m.pieces ? ThiefView.load(m.pieces, clientConfig.thieves) : null,
+        ]);
+        return { ...m, view, thiefView };
+      }),
     ]);
     // The city pages its colliders around the player (loaded around the spawn before the first step); the greybox keeps
     // SP1's all-at-once world.
@@ -219,7 +234,7 @@ export class Game {
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
     const sim = new PlayerSim(physics, map, settings.movement, map.hub.spawn, map.hub.spawnYaw);
-    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model, pager, view, poiTable, city);
+    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model, pager, view, poiTable, city, thiefView);
     if (opts.debug) installDebugHooks(game);
     return game;
   }
@@ -251,6 +266,18 @@ export class Game {
     this.prevPosition = { ...this.sim.state.position };
     this.courier.snap();
     this.chase.snap();
+  }
+
+  /** Tests (?debug): moves a thief onto the streets near `p` (DeliveryLoop.placeThief), drawn there without a sweep. */
+  placeThief(id: string, p: Vec3): ThiefState {
+    const t = this.delivery.placeThief(id, p);
+    this.snapThieves();
+    return t;
+  }
+
+  /** The thieves are drawn at their current positions until the next tick (no interpolation across a jump). */
+  private snapThieves(): void {
+    this.prevThieves = (this.delivery.thieves?.thieves ?? []).map((t) => ({ ...t.position }));
   }
 
   /**
@@ -296,6 +323,7 @@ export class Game {
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
+    const thievesBefore = (this.delivery.thieves?.thieves ?? []).map((t) => ({ ...t.position }));
     const wasZip = this.sim.state.mode === 'zipline';
     const now = this.time;
     const mods = this.delivery.statModifiers();
@@ -306,6 +334,7 @@ export class Game {
     this.delivery.afterStep(events, this.sim.state.position, now);
     const leftZip = wasZip && this.sim.state.mode !== 'zipline';
     this.prevPosition = interpolationStart(before, this.sim.state.position, events, leftZip);
+    this.prevThieves = thievesBefore;
     if (events.some((e) => e.kind === 'respawned')) {
       // A teleport: no camera sweep, and no turn or animation blend across it.
       this.chase.snap();
@@ -313,6 +342,14 @@ export class Game {
     }
     this.tick++;
     return events;
+  }
+
+  /** The thieves between their last two ticks (as the courier), within renderRadius of the player's feet. */
+  private drawThieves(alpha: number, dt: number, feet: Vec3): void {
+    const thieves = this.delivery.thieves?.thieves;
+    if (!this.thiefView || !thieves) return;
+    const drawn = thieves.map((t, i) => ({ ...t, position: lerpVec3(this.prevThieves[i] ?? t.position, t.position, alpha) }));
+    this.thiefView.update(dt, drawn, feet);
   }
 
   private renderFrame(alpha: number, dt: number, clockSeconds: number): void {
@@ -329,6 +366,7 @@ export class Game {
       this.cityUpdateMs = performance.now() - t0;
     }
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
+    this.drawThieves(alpha, dt, feet);
     this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);
     for (const orb of this.map.boostOrbs) {

@@ -42,6 +42,7 @@ export interface ClientConfig {
     bindings: Record<BindingName, string[]>;
   };
   courier: CourierConfig;
+  thieves: ThievesRenderConfig;
   city: CityRenderConfig;
   perf: PerfConfig;
   ui: {
@@ -58,6 +59,20 @@ export interface ClientConfig {
     /** After a board refresh, Accept clicks are ignored this long (s) and the board flashes (Review Focus 3). */
     boardRefreshGuardSeconds: number;
   };
+}
+
+/** The street thieves' models (Task 18; their simulation is config/thieves.json). Speeds in m/s, times in s. */
+export interface ThievesRenderConfig {
+  /** Only thieves within this horizontal distance (m) of the player are drawn and animated. */
+  renderRadius: number;
+  /** Clip cross-fade time. */
+  crossFade: number;
+  /** Man_Run plays at normal speed at this chase speed (faster above, slower below). */
+  runSpeedForFullRun: number;
+  /** On patrol or return, at or below this speed the thief idles; above it, it walks. */
+  idleSpeed: number;
+  /** Man_Punch plays this long after a catch. */
+  punchSeconds: number;
 }
 
 /** City rendering (spec §5.1 streaming; plan assumption 13). Distances are horizontal, in metres. */
