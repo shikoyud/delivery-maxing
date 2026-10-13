@@ -1,0 +1,247 @@
+import type { OrdersConfig } from '../config/types';
+import type { Vec3 } from '../math/vec3';
+import { NO_MODS, type SimEvent, type StatModifiers } from '../movement/types';
+import type { Rng } from '../util/rng';
+import type { PathDistance } from '../world/distance';
+import type { OrderRules, Poi } from '../world/mapTypes';
+import type { PlayerZones } from '../world/zones';
+import { generateOffer } from './offers';
+import { scoreOrder } from './rules';
+import type { ActiveOrder, Bonus, CarrierCapacity, Offer } from './types';
+
+export type AcceptResult = 'ok' | 'gone' | 'expired' | 'no_slots' | 'too_heavy';
+export type CancelResult = 'ok' | 'unknown';
+
+export type OrderEvent =
+  | { kind: 'offered'; offerId: string }
+  | { kind: 'offerExpired'; offerId: string }
+  | { kind: 'pickedUp'; orderId: string }
+  | { kind: 'fragileBroken'; orderId: string; reason: 'fall' | 'respawn' }
+  | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; inTime: boolean; expressOnTime: boolean | null }
+  | { kind: 'lockoutEnded' };
+
+export interface Totals {
+  points: number;
+  coins: number;
+  deliveries: number;
+}
+
+export interface OrderSystemOptions {
+  pois: Poi[];
+  distance: PathDistance;
+  rules: OrderRules;
+  cfg: OrdersConfig;
+  rng: Rng;
+  capacity: CarrierCapacity;
+  totals?: Totals;
+}
+
+/** Per-player order state: offers on the phone, accepted orders, lockout and totals (spec §3.2–§3.5). */
+export class OrderSystem {
+  private readonly opts: OrderSystemOptions;
+  private readonly poiById: Map<string, Poi>;
+  private readonly _offers: Offer[] = [];
+  private readonly _active: ActiveOrder[] = [];
+  /** Pickup and dropoff door ids of accepted orders, with the accept time (reuse rule). */
+  private used: { ids: [string, string]; at: number }[] = [];
+  private idCounter = 0;
+  private lockoutActive = false;
+
+  totals: Totals;
+  capacity: CarrierCapacity;
+  lockoutUntil = 0;
+  nextOfferAt: number;
+
+  constructor(opts: OrderSystemOptions, now: number) {
+    this.opts = opts;
+    this.poiById = new Map(opts.pois.map((p) => [p.id, p]));
+    this.capacity = opts.capacity;
+    this.totals = opts.totals ? { ...opts.totals } : { points: 0, coins: 0, deliveries: 0 };
+    this.nextOfferAt = now + this.interval();
+  }
+
+  get offers(): ReadonlyArray<Offer> {
+    return this._offers;
+  }
+
+  get active(): ReadonlyArray<ActiveOrder> {
+    return this._active;
+  }
+
+  private interval(): number {
+    const { minIntervalSeconds: lo, maxIntervalSeconds: hi } = this.opts.cfg.offers;
+    return lo + this.opts.rng() * (hi - lo);
+  }
+
+  canSwitchCapacity(c: CarrierCapacity): boolean {
+    return this.usedSlots() <= c.slots && this.carriedKg() <= c.maxPackageKg;
+  }
+
+  /** Switch carrier capacity; ignored when the active orders would not fit (orders are never dropped). */
+  setCapacity(c: CarrierCapacity): void {
+    if (this.canSwitchCapacity(c)) this.capacity = c;
+  }
+
+  usedSlots(): number {
+    return this._active.length;
+  }
+
+  freeSlots(): number {
+    return Math.max(0, this.capacity.slots - this.usedSlots());
+  }
+
+  /** Package kg of every active order, picked up or not (reserved on accept). */
+  carriedKg(): number {
+    return this._active.reduce((kg, a) => kg + (a.order.weightKg ?? 0), 0);
+  }
+
+  canAccept(offerId: string, now: number): AcceptResult {
+    const offer = this._offers.find((o) => o.order.id === offerId);
+    if (!offer) return 'gone';
+    if (now >= offer.expiresAt) return 'expired';
+    if (this.freeSlots() <= 0) return 'no_slots';
+    const kg = offer.order.weightKg ?? 0;
+    if (kg > 0 && kg > this.capacity.maxPackageKg - this.carriedKg()) return 'too_heavy';
+    return 'ok';
+  }
+
+  accept(offerId: string, now: number): AcceptResult {
+    const result = this.canAccept(offerId, now);
+    if (result !== 'ok' && result !== 'expired') return result;
+    const i = this._offers.findIndex((o) => o.order.id === offerId);
+    const [offer] = this._offers.splice(i, 1) as [Offer];
+    if (result === 'expired') return result;
+    this._active.push({ order: offer.order, acceptedAt: now, pickedUpAt: null, fragileIntact: true });
+    this.used.push({ ids: [offer.order.pickupPoiId, offer.order.dropoffPoiId], at: now });
+    return 'ok';
+  }
+
+  /** Cancel an accepted order (picked up or not): it disappears without reward and starts the offer lockout. */
+  cancel(orderId: string, now: number): CancelResult {
+    const i = this._active.findIndex((a) => a.order.id === orderId);
+    if (i < 0) return 'unknown';
+    this._active.splice(i, 1);
+    this.lockoutUntil = now + this.opts.cfg.lockout.seconds;
+    this.lockoutActive = true;
+    return 'ok';
+  }
+
+  /** Dev / GAME-burn stub (price Pending): end the lockout now. */
+  skipLockout(): void {
+    this.lockoutUntil = 0;
+  }
+
+  isCarried(a: ActiveOrder): boolean {
+    return a.pickedUpAt !== null;
+  }
+
+  currentTarget(a: ActiveOrder): string {
+    return this.isCarried(a) ? a.order.dropoffPoiId : a.order.pickupPoiId;
+  }
+
+  statModifiers(): StatModifiers {
+    const bulky = this._active.some((a) => this.isCarried(a) && a.order.weightClass === 'bulky');
+    return bulky ? { ...NO_MODS, canSprint: false } : NO_MODS;
+  }
+
+  update(now: number, player: Vec3, zones: PlayerZones): OrderEvent[] {
+    const events: OrderEvent[] = [];
+    const { cfg } = this.opts;
+
+    for (let i = this._offers.length - 1; i >= 0; i--) {
+      const offer = this._offers[i] as Offer;
+      if (now >= offer.expiresAt) {
+        this._offers.splice(i, 1);
+        events.push({ kind: 'offerExpired', offerId: offer.order.id });
+      }
+    }
+
+    if (this.lockoutActive && now >= this.lockoutUntil) {
+      this.lockoutActive = false;
+      events.push({ kind: 'lockoutEnded' });
+    }
+
+    if (now >= this.nextOfferAt && this._offers.length < cfg.offers.maxShown && this.freeSlots() > 0 && now >= this.lockoutUntil) {
+      const order = generateOffer({
+        pois: this.opts.pois,
+        distance: this.opts.distance,
+        rules: this.opts.rules,
+        cfg,
+        rng: this.opts.rng,
+        player,
+        capacity: this.capacity,
+        carriedKg: this.carriedKg(),
+        freeSlots: this.freeSlots(),
+        blockedDoors: this.blockedDoors(),
+        recentlyUsed: this.recentlyUsed(now),
+        nextId: () => `o${++this.idCounter}`,
+      });
+      if (order) {
+        this._offers.push({ order, offeredAt: now, expiresAt: now + cfg.offers.lifetimeSeconds });
+        events.push({ kind: 'offered', offerId: order.id });
+      }
+      this.nextOfferAt = now + this.interval();
+    }
+
+    for (let i = 0; i < this._active.length; i++) {
+      const a = this._active[i] as ActiveOrder;
+      if (a.pickedUpAt === null) {
+        if (zones.poiIds.has(a.order.pickupPoiId)) {
+          a.pickedUpAt = now;
+          events.push({ kind: 'pickedUp', orderId: a.order.id });
+        }
+        continue;
+      }
+      if (!zones.poiIds.has(a.order.dropoffPoiId)) continue;
+      const elapsed = now - a.pickedUpAt;
+      const inTime = elapsed <= a.order.timeLimit;
+      const expressOnTime = a.order.modifier === 'express' && a.order.expressLimit !== null ? elapsed <= a.order.expressLimit : null;
+      const score = scoreOrder(a.order, { inTime, expressOnTime: expressOnTime ?? false, intact: a.fragileIntact }, cfg);
+      this.totals = {
+        points: this.totals.points + score.points,
+        coins: this.totals.coins + score.coins,
+        deliveries: this.totals.deliveries + 1,
+      };
+      this._active.splice(i--, 1);
+      events.push({ kind: 'completed', orderId: a.order.id, ...score, inTime, expressOnTime });
+    }
+    return events;
+  }
+
+  /** Fragile damage from the movement sim: a fall above maxFallMeters or a respawn, carried orders only. */
+  onSimEvents(simEvents: SimEvent[]): OrderEvent[] {
+    const events: OrderEvent[] = [];
+    for (const e of simEvents) {
+      let reason: 'fall' | 'respawn' | null = null;
+      if (e.kind === 'landed' && e.fallHeight > this.opts.cfg.fragile.maxFallMeters) reason = 'fall';
+      else if (e.kind === 'respawned') reason = 'respawn';
+      if (!reason) continue;
+      for (const a of this._active) {
+        if (a.order.modifier === 'fragile' && a.fragileIntact && this.isCarried(a)) {
+          a.fragileIntact = false;
+          events.push({ kind: 'fragileBroken', orderId: a.order.id, reason });
+        }
+      }
+    }
+    return events;
+  }
+
+  private blockedDoors(): Vec3[] {
+    const doors: Vec3[] = [];
+    for (const order of [...this._offers.map((o) => o.order), ...this._active.map((a) => a.order)]) {
+      for (const id of [order.pickupPoiId, order.dropoffPoiId]) {
+        const poi = this.poiById.get(id);
+        if (poi) doors.push(poi.position);
+      }
+    }
+    return doors;
+  }
+
+  private recentlyUsed(now: number): Set<string> {
+    const window = this.opts.cfg.spacing.reuseSeconds;
+    this.used = this.used.filter((u) => now - u.at < window);
+    const ids = new Set<string>();
+    for (const u of this.used) for (const id of u.ids) ids.add(id);
+    return ids;
+  }
+}
