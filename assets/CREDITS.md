@@ -1,6 +1,6 @@
 # Asset credits
 
-Only CC0 assets (Kenney, Quaternius) may be used. List each asset's source and license here.
+Assets are either CC0 (Kenney, Quaternius) or the owner's licensed Unity Asset Store packs listed below. List each asset's source and license here.
 
 | File | Asset | Author | License | Source |
 |---|---|---|---|---|
@@ -10,3 +10,11 @@ The file is committed unchanged. At runtime the game recolours its orange body m
 courier branding, spec §16) and uses its Idle, Walking, Running and Jump clips.
 
 Everything else in the SP1 greybox is built in code.
+
+## Owner-licensed packs (not in git)
+
+| Folder | Asset | Author / store | License | Source |
+|---|---|---|---|---|
+| `assets/packs/megatropolis */`, `assets/packs/tropical city */` | Low Poly Asset Bundle (Megatropolis and Tropical City packs), converted to `.glb` with glTFast | Unity Asset Store, purchased by the project owner | Unity Asset Store EULA, Standard license, **Single Entity** seat. The packs may be shipped inside the game (deployed bundle) but their source files may not be redistributed, so they are **git-ignored** (`assets/packs/`) and never committed to this public repository. Contractors need their own seat. | https://assetstore.unity.com/packages/3d/environments/low-poly-asset-bundle-196214 |
+
+The catalog of these models is `map/catalog.json`; see `docs/superpowers/specs/2026-10-14-city-map-design.md`.

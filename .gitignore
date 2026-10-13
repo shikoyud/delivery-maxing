@@ -3,3 +3,6 @@ dist
 e2e-artifacts
 playwright-report
 test-results
+
+# Owner-supplied model packs (not redistributable; see docs/superpowers/specs/2026-10-14-city-map-design.md §7.4)
+assets/packs/
