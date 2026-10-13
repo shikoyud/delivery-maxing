@@ -16,7 +16,7 @@ import type { ActionState } from '../input/actionState';
 import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
 import { Hud } from '../ui/hud';
 import { hudModel } from '../ui/hudModel';
-import type { ProgressStore, Totals } from './progress';
+import type { Progress, ProgressStore } from './progress';
 
 export interface DeliveryDeps {
   host: HTMLElement;
@@ -40,7 +40,7 @@ export interface DeliveryDeps {
 export class DeliveryLoop {
   readonly poiMeshes: PoiMeshes;
   private readonly hud: Hud;
-  private readonly totals: Totals;
+  private readonly progress: Progress;
   private zones: PlayerZones;
   private nextHudAt = 0;
 
@@ -48,7 +48,7 @@ export class DeliveryLoop {
     this.poiMeshes = buildPoiMeshes(d.map, ordersConfig.zones.poiRadius);
     d.scene.add(this.poiMeshes.group);
     this.hud = new Hud(d.host);
-    this.totals = d.progress.load();
+    this.progress = d.progress.load();
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
   }
 
@@ -79,10 +79,8 @@ export class DeliveryLoop {
 
   /** Zeroes Points, Coins and deliveries in storage and in the running totals (dev panel). */
   resetProgress(): void {
-    this.totals.points = 0;
-    this.totals.coins = 0;
-    this.totals.deliveries = 0;
-    this.d.progress.save(this.totals);
+    this.progress.totals = { points: 0, coins: 0, deliveries: 0 };
+    this.d.progress.save(this.progress);
     this.nextHudAt = 0;
   }
 
@@ -92,6 +90,6 @@ export class DeliveryLoop {
     this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
     const safe = this.zones.safeZone;
     const name = safe === null ? null : (this.d.map.hospitals.find((h) => h.id === safe)?.name ?? safe);
-    this.hud.update(hudModel(this.totals, name));
+    this.hud.update(hudModel(this.progress.totals, name));
   }
 }

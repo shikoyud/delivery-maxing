@@ -1,5 +1,4 @@
-import type { MapData, Poi, Vec3 } from '@dm/shared';
-import type { Totals } from '../game/progress';
+import type { MapData, Poi, Totals, Vec3 } from '@dm/shared';
 
 /**
  * What the HUD shows. Transitional (SP3 Task 4): the old order loop is gone, so only the totals and the hospital safe
