@@ -30,6 +30,7 @@ import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoin
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
 import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
 import { Popups, type PopupSink } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
 import type { ProgressStore } from './progress';
@@ -48,8 +49,13 @@ export interface DeliveryDeps {
   player(): { position: Vec3; mode: MoveMode };
   /** The carrier capacity tier the player has (saved progress). */
   capacityTier: VehicleTier;
-  /** HUD and popups; default to the DOM ones on `host` (tests pass recorders). */
-  ui?: { hud: HudView; popups: PopupSink };
+  /**
+   * HUD, popups and the phone; default to the DOM ones on `host` (tests pass recorders). `phone` builds the phone
+   * from the callbacks DeliveryLoop wires (accept, cancel, skip, closed) and its close keys.
+   */
+  ui?: { hud: HudView; popups: PopupSink; phone: (cb: PhoneCallbacks, closeCodes: string[]) => PhoneView };
+  /** The phone opened (true) or closed (false): Game exits or re-requests the pointer lock. */
+  phoneChanged?(open: boolean): void;
 }
 
 const BONUS_LINE: Record<Bonus, string> = { hot: 'Still hot', par: 'Within par', express: 'Express on time', fragile: 'Fragile intact' };
@@ -78,11 +84,7 @@ const ZERO: Totals = { points: 0, coins: 0, deliveries: 0 };
 export class DeliveryLoop {
   readonly poiMeshes: PoiMeshes;
   readonly waypoints: Waypoints;
-  /**
-   * While true (the phone is up, Task 10) the sim gets only the look; Y still accepts the top offer.
-   * Whoever opens the phone sets it and releases held keys (`actions.releaseAll()`).
-   */
-  phoneOpen = false;
+  private readonly phone: PhoneView;
   private sys: OrderSystem;
   private tier: VehicleTier;
   private readonly rng: Rng;
@@ -102,6 +104,18 @@ export class DeliveryLoop {
     d.scene.add(this.poiMeshes.group, this.waypoints.mesh);
     this.hud = d.ui?.hud ?? new Hud(d.host, d.cfg.ui, keyLabel(d.cfg.input.bindings.accept[0] ?? ''));
     this.popups = d.ui?.popups ?? new Popups(d.host, d.cfg.ui.popupSeconds, d.cfg.ui.maxPopups);
+    const phoneCb: PhoneCallbacks = {
+      accept: (id) => void this.accept(id),
+      cancel: (id) => void this.cancel(id),
+      skipLockout: () => this.skipLockout(),
+      closed: () => {
+        this.d.actions.releaseAll();
+        this.d.phoneChanged?.(false);
+      },
+    };
+    // Esc and the phone key close it (spec §8; Tab opens it through the `phone` action in beforeStep).
+    const closeCodes = ['Escape', ...d.cfg.input.bindings.phone];
+    this.phone = d.ui ? d.ui.phone(phoneCb, closeCodes) : new Phone(d.host, phoneCb, closeCodes);
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
   }
 
@@ -143,16 +157,47 @@ export class DeliveryLoop {
     return this.sys.statModifiers();
   }
 
+  /** Whether the phone is up (the sim then gets only the look, and Y is ignored: accept with the phone's buttons). */
+  get phoneOpen(): boolean {
+    return this.phone.isOpen;
+  }
+
+  /** Opens the phone on `app` (Orders by default), or switches to `app` when it is already open. */
+  openPhone(app: PhoneApp = 'orders'): void {
+    if (this.phone.isOpen) {
+      this.phone.show(app);
+      return;
+    }
+    this.phone.open(app);
+    this.d.actions.releaseAll(); // keys held when it opened must not stay pressed underneath
+    this.nextHudAt = 0; // draw the phone at once
+    this.d.phoneChanged?.(true);
+  }
+
+  /** Closes the phone (its `closed` callback releases keys and reports it). */
+  closePhone(): void {
+    this.phone.close();
+  }
+
+  togglePhone(): void {
+    if (this.phone.isOpen) this.closePhone();
+    else this.openPhone();
+  }
+
   /**
-   * The input the sim sees this tick. Y accepts the top offer here, before afterStep's update, so an accept on an
-   * offer's expiry tick reports 'expired' (Review Focus 1). While the phone is open only the look passes.
+   * The input the sim sees this tick. The phone key toggles the phone. Y accepts the top offer here, before
+   * afterStep's update, so an accept on an offer's expiry tick reports 'expired' (Review Focus 1). While the phone is
+   * open Y is ignored and only the look passes (the Orders app's buttons accept, between ticks at `now()`).
    */
   beforeStep(frame: InputFrame): InputFrame {
-    if (frame.accept.pressed) {
-      const top = this.sys.offers[0];
-      if (top) this.accept(top.order.id);
+    if (frame.phone.pressed) this.togglePhone();
+    if (!this.phone.isOpen) {
+      if (frame.accept.pressed) {
+        const top = this.sys.offers[0];
+        if (top) this.accept(top.order.id);
+      }
+      return frame;
     }
-    if (!this.phoneOpen) return frame;
     const idle = emptyInput();
     idle.look = frame.look;
     return idle;
@@ -247,7 +292,10 @@ export class DeliveryLoop {
 
     if (clockSeconds < this.nextHudAt) return;
     this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
-    this.hud.update(this.model(this.d.now()), this.colorIndex);
+    const now = this.d.now();
+    const m = this.model(now);
+    this.hud.update(m, this.colorIndex);
+    if (this.phone.isOpen) this.phone.render(m, now);
   }
 
   private save(): void {

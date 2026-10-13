@@ -2,6 +2,7 @@ import {
   ordersConfig,
   orderText,
   scoreOrder,
+  type AcceptResult,
   type ActiveOrder,
   type Band,
   type MapData,
@@ -48,6 +49,8 @@ export interface HudOffer {
   secondsLeft: number;
   /** Best case: the order delivered with every bonus it can earn. */
   reward: { points: number; coins: number };
+  /** `OrderSystem.canAccept` at the model's time: the phone disables Accept with the reason when not 'ok'. */
+  acceptStatus: AcceptResult;
 }
 
 export interface HudLoad {
@@ -159,6 +162,7 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
         weightKg: order.weightKg,
         secondsLeft: Math.max(0, expiresAt - now),
         reward: { points: best.points, coins: best.coins },
+        acceptStatus: orders.canAccept(order.id, now),
       };
     }),
     safeZone,

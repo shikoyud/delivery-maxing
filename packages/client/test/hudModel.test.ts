@@ -96,6 +96,17 @@ describe('hudModel', () => {
     expect(card.reward.points).toBeGreaterThan(base.points + 1); // time bonus plus the modifier bonus
   });
 
+  it("offers carry the phone's accept status (OrderSystem.canAccept at that time)", () => {
+    const sys = makeSystem('motorbike');
+    const { offer, t } = waitForOffer(sys, (o) => (o.order.weightKg ?? 0) > 0);
+    const status = (): string => hudModel(sys, map, spawn, t, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus;
+    expect(status()).toBe('ok');
+    sys.setCapacity(vehiclesConfig.walk); // takes no packages
+    expect(status()).toBe('too_heavy');
+    expect(status()).toBe(sys.canAccept(offer.order.id, t));
+    expect(hudModel(sys, map, spawn, offer.expiresAt, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus).toBe('expired');
+  });
+
   it('timers are null before pickup and count down from pickup; stage text follows the order', () => {
     const sys = makeSystem('car');
     const { offer, t } = waitForOffer(sys, (o) => o.order.kind === 'food');

@@ -315,3 +315,37 @@ test('dev panel screenshot', async ({ page }) => {
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${artifacts}sp1-devpanel.png` });
 });
+
+test('phone: Tab opens it on Orders, the player stands still while it is up, Esc and Tab close it', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await expect(page.locator('.phone')).toBeVisible();
+  await expect(page.locator('.phone-title')).toHaveText('Orders');
+  await expect(page.locator('.hud')).toBeVisible(); // behind the dimmed backdrop
+  const { start, tick0 } = await page.evaluate(() => ({ start: window.__dm!.player().position, tick0: window.__dm!.tick }));
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 15, tick0);
+  await page.keyboard.up('KeyW');
+  const end = await page.evaluate(() => window.__dm!.player().position);
+  expect(Math.hypot(end.x - start.x, end.z - start.z)).toBeLessThan(0.05);
+  await page.locator('.phone-nav-btn[data-app="wallet"]').click();
+  await expect(page.locator('.phone-title')).toHaveText('Wallet');
+  await expect(page.locator('.phone-note')).toHaveText('GAME rewards arrive with the reward program (spec §9)');
+  await page.screenshot({ path: `${artifacts}sp3-phone-wallet.png` });
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+  await expect(page.locator('.phone')).toBeHidden();
+  // Tab again opens it (on Orders), and Tab in the phone closes it without reopening.
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await expect(page.locator('.phone-title')).toHaveText('Orders');
+  await page.screenshot({ path: `${artifacts}sp3-phone-orders.png` });
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+  const t1 = await page.evaluate(() => window.__dm!.tick);
+  await page.waitForFunction((t) => window.__dm!.tick - t >= 10, t1);
+  expect(await page.evaluate(() => window.__dm!.phoneOpen())).toBe(false);
+  expect(errors).toEqual([]);
+});

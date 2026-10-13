@@ -127,6 +127,7 @@ export class Game {
       now: () => this.time,
       player: () => this.sim.state,
       capacityTier: this.progress.load().capacityTier,
+      phoneChanged: (open) => this.phoneChanged(open),
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
@@ -151,6 +152,19 @@ export class Game {
     };
   }
 
+  /**
+   * The phone opened or closed (Tab, Esc). Open: the pointer lock is released so the player can click the phone
+   * (DeliveryLoop already released held keys). Closed: ask for the lock back — browsers may refuse without a click
+   * (Esc gives no user activation), and then a click on the canvas locks it as usual.
+   */
+  private phoneChanged(open: boolean): void {
+    const canvas = this.renderer.renderer.domElement;
+    if (open) {
+      if (this.input.locked) this.host.ownerDocument.exitPointerLock();
+    } else if (!this.opts.debug && !this.input.locked) {
+      void Promise.resolve(canvas.requestPointerLock()).catch(() => undefined);
+    }
+  }
 
   /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
   private toggleDevPanel(): void {

@@ -7,6 +7,7 @@ import { DeliveryLoop } from '../src/game/delivery';
 import { createProgressStore, type Progress } from '../src/game/progress';
 import { ActionState } from '../src/input/actionState';
 import type { HudModel } from '../src/ui/hudModel';
+import type { PhoneApp, PhoneCallbacks, PhoneView } from '../src/ui/phone/Phone';
 
 const map = expandGreybox(greybox as GreyboxSource);
 const TICK = 0.25;
@@ -25,12 +26,44 @@ function setup(capacityTier: VehicleTier = 'car', saved?: Progress) {
   const popups: Popup[] = [];
   const huds: HudModel[] = [];
   const env = { now: 0, position: { ...map.hospitals[0]!.spawn } as Vec3 };
+  const actions = new ActionState(clientConfig.input, -1, 1);
+  /** A recording phone: open/close state, the app, the renders, the callbacks and close keys DeliveryLoop gave it. */
+  const phone = {
+    isOpen: false,
+    app: null as PhoneApp | null,
+    renders: [] as HudModel[],
+    cb: null as PhoneCallbacks | null,
+    closeCodes: [] as string[],
+    changes: [] as boolean[],
+  };
+  const phoneView: PhoneView = {
+    get isOpen() {
+      return phone.isOpen;
+    },
+    open(app = 'orders') {
+      phone.isOpen = true;
+      phone.app = app;
+    },
+    show(app) {
+      phone.app = app;
+    },
+    close() {
+      if (!phone.isOpen) return;
+      phone.isOpen = false;
+      phone.cb!.closed();
+    },
+    toggle() {
+      if (phone.isOpen) this.close();
+      else this.open();
+    },
+    render: (m) => void phone.renders.push(m),
+  };
   const loop = new DeliveryLoop({
     host: {} as HTMLElement,
     scene: new THREE.Scene(),
     map,
     cfg: clientConfig,
-    actions: new ActionState(clientConfig.input, -1, 1),
+    actions,
     progress,
     seed: 11,
     now: () => env.now,
@@ -39,12 +72,19 @@ function setup(capacityTier: VehicleTier = 'car', saved?: Progress) {
     ui: {
       hud: { update: (m) => void huds.push(m) },
       popups: { show: (text, lines = [], tone = 'good') => void popups.push({ text, lines, tone }) },
+      phone: (cb, closeCodes) => {
+        phone.cb = cb;
+        phone.closeCodes = closeCodes;
+        return phoneView;
+      },
     },
+    phoneChanged: (open) => void phone.changes.push(open),
   });
   /** One tick as Game runs it: beforeStep, (sim), afterStep, all at the same sim time. */
-  const tick = (accept = false): void => {
+  const tick = (accept = false, phoneKey = false): void => {
     const frame = emptyInput();
     if (accept) frame.accept = { held: true, pressed: true };
+    if (phoneKey) frame.phone = { held: true, pressed: true };
     loop.beforeStep(frame);
     loop.afterStep([], env.position, env.now);
     env.now += TICK;
@@ -63,7 +103,7 @@ function setup(capacityTier: VehicleTier = 'car', saved?: Progress) {
     tick();
   };
   const stored = (): Progress => progress.load();
-  return { loop, env, popups, huds, tick, waitForOffer, goTo, stored };
+  return { loop, env, popups, huds, phone, actions, tick, waitForOffer, goTo, stored };
 }
 
 describe('DeliveryLoop', () => {
@@ -97,7 +137,8 @@ describe('DeliveryLoop', () => {
 
   it('while the phone is open only the look passes to the sim', () => {
     const s = setup();
-    s.loop.phoneOpen = true;
+    s.loop.openPhone();
+    expect(s.loop.phoneOpen).toBe(true);
     const frame = emptyInput();
     frame.move = { x: 1, y: 0 };
     frame.look = { yaw: 1.5, pitch: 0.2 };
@@ -106,6 +147,65 @@ describe('DeliveryLoop', () => {
     expect(out.move).toEqual({ x: 0, y: 0 });
     expect(out.jump.pressed).toBe(false);
     expect(out.look).toEqual({ yaw: 1.5, pitch: 0.2 });
+  });
+
+  it('the phone key (Tab) opens the phone on Orders, releases held keys and reports it', () => {
+    const s = setup();
+    s.actions.keyDown('KeyW');
+    s.tick(false, true);
+    expect(s.loop.phoneOpen).toBe(true);
+    expect(s.phone.app).toBe('orders');
+    expect(s.phone.changes).toEqual([true]);
+    expect(s.actions.sampleTick().move).toEqual({ x: 0, y: 0 }); // W was released
+    expect(s.phone.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.phone]);
+  });
+
+  it('closing the phone (Esc or Tab in the phone) reports it and gives the sim its input back', () => {
+    const s = setup();
+    s.loop.openPhone('wallet');
+    expect(s.phone.app).toBe('wallet');
+    s.loop.closePhone();
+    expect(s.loop.phoneOpen).toBe(false);
+    expect(s.phone.changes).toEqual([true, false]);
+    const frame = emptyInput();
+    frame.move = { x: 1, y: 0 };
+    expect(s.loop.beforeStep(frame).move).toEqual({ x: 1, y: 0 });
+  });
+
+  it('openPhone(app) while open switches the app without reporting a second open', () => {
+    const s = setup();
+    s.loop.openPhone();
+    s.loop.openPhone('settings');
+    expect(s.phone.app).toBe('settings');
+    expect(s.phone.changes).toEqual([true]);
+  });
+
+  it('Y is ignored while the phone is open; the Orders app Accept goes through accept()', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer();
+    s.loop.openPhone();
+    s.tick(true);
+    expect(s.loop.orders.active).toHaveLength(0);
+    s.phone.cb!.accept(offer.order.id);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([offer.order.id]);
+    expect(s.popups.at(-1)!.text).toBe('Offer accepted');
+    s.phone.cb!.cancel(offer.order.id);
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.loop.orders.lockoutUntil).toBeGreaterThan(s.env.now);
+    s.phone.cb!.skipLockout();
+    expect(s.loop.orders.lockoutUntil).toBeLessThanOrEqual(s.env.now);
+  });
+
+  it('draw renders the phone with the HUD model while it is open', () => {
+    const s = setup('car');
+    s.waitForOffer();
+    s.loop.draw(0);
+    expect(s.phone.renders).toHaveLength(0);
+    s.loop.openPhone();
+    s.loop.draw(0.01); // opening forces a refresh
+    expect(s.phone.renders).toHaveLength(1);
+    expect(s.phone.renders[0]!.offers.length).toBeGreaterThan(0);
+    expect(s.phone.renders[0]!.offers[0]!.acceptStatus).toBe('ok');
   });
 
   it('pickup then dropoff completes the order, adds totals, saves progress and announces it', () => {

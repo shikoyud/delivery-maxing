@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, Totals, Vec3 } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
+import type { PhoneApp } from '../ui/phone/Phone';
 import type { Game } from './Game';
 
 /** Test and debugging API on window.__dm, installed only with ?debug. */
@@ -29,6 +30,12 @@ export interface DebugApi {
   cancel(orderId: string): CancelResult;
   /** Delivery Points, Coins and deliveries so far. */
   totals(): Totals;
+  /** Whether the phone is up (Tab). */
+  phoneOpen(): boolean;
+  /** Opens the phone on `app` (as Tab does, for Orders), or switches to it when open. */
+  openPhone(app: PhoneApp): void;
+  /** Closes the phone (as Esc does). */
+  closePhone(): void;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
   /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
@@ -89,6 +96,9 @@ export function installDebugHooks(game: Game): void {
     accept: (id) => game.delivery.accept(id),
     cancel: (id) => game.delivery.cancel(id),
     totals: () => ({ ...game.delivery.orders.totals }),
+    phoneOpen: () => game.delivery.phoneOpen,
+    openPhone: (app) => game.delivery.openPhone(app),
+    closePhone: () => game.delivery.closePhone(),
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),
