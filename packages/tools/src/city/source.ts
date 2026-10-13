@@ -58,6 +58,11 @@ export interface PoiSource {
   perBandMin: number;
   /** A band is estimated from the straight-line distance from the hub centre × this (the navmesh confirms in Task 14). */
   bandEstimateFactor: number;
+  /**
+   * Each estimated band gets at least perBandMin + this, so a POI the navmesh's longer path distance moves into the next
+   * band (Task 14) still leaves perBandMin in every band.
+   */
+  bandMargin: number;
   /** A POI is elevated when it stands at least this high above the street-level ground there (plan assumption 6), m. */
   elevatedMin: number;
   /**

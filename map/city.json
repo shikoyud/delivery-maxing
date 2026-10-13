@@ -2934,7 +2934,7 @@
       "radius": 1.2
     },
     {
-      "id": "poi-downtown-17-pad",
+      "id": "poi-downtown-18-pad",
       "launch": {
         "x": 0,
         "y": 25.63,
@@ -2948,7 +2948,7 @@
       "radius": 1.2
     },
     {
-      "id": "poi-hillside-06-pad",
+      "id": "poi-hillside-03-pad",
       "launch": {
         "x": 0,
         "y": 19.74,
@@ -2962,7 +2962,7 @@
       "radius": 1.2
     },
     {
-      "id": "poi-downtown-36-pad",
+      "id": "poi-downtown-37-pad",
       "launch": {
         "x": 0,
         "y": 25.85,
@@ -11762,13 +11762,43 @@
       }
     },
     {
+      "bidirectional": true,
+      "from": {
+        "x": -169.48,
+        "y": 0,
+        "z": 115.01
+      },
+      "id": "poi-suburbs-14-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -174.48,
+        "y": 3.5,
+        "z": 115.01
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -174.98,
+        "y": 3.5,
+        "z": 115.01
+      },
+      "id": "poi-suburbs-14-drop",
+      "kind": "drop",
+      "to": {
+        "x": -174.98,
+        "y": 0,
+        "z": 113.51
+      }
+    },
+    {
       "bidirectional": false,
       "from": {
         "x": 217.5,
         "y": 0,
         "z": -577.32
       },
-      "id": "poi-downtown-17-pad-nav",
+      "id": "poi-downtown-18-pad-nav",
       "kind": "pad",
       "to": {
         "x": 217.5,
@@ -11783,42 +11813,12 @@
         "y": 17.11,
         "z": -583.97
       },
-      "id": "poi-downtown-17-zip-nav",
+      "id": "poi-downtown-18-zip-nav",
       "kind": "zip",
       "to": {
         "x": 242.32,
         "y": 3.2,
         "z": -574.63
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": 763.93,
-        "y": 0,
-        "z": 717.06
-      },
-      "id": "poi-harbor-12-climb",
-      "kind": "mantle",
-      "to": {
-        "x": 758.93,
-        "y": 3.5,
-        "z": 717.06
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": 758.43,
-        "y": 3.5,
-        "z": 717.06
-      },
-      "id": "poi-harbor-12-drop",
-      "kind": "drop",
-      "to": {
-        "x": 758.43,
-        "y": 0,
-        "z": 718.56
       }
     },
     {
@@ -11828,7 +11828,7 @@
         "y": 13.52,
         "z": -719.5
       },
-      "id": "poi-hillside-06-pad-nav",
+      "id": "poi-hillside-03-pad-nav",
       "kind": "pad",
       "to": {
         "x": -138.1,
@@ -11843,7 +11843,7 @@
         "y": 23.96,
         "z": -728.33
       },
-      "id": "poi-hillside-06-zip-nav",
+      "id": "poi-hillside-03-zip-nav",
       "kind": "zip",
       "to": {
         "x": -116.15,
@@ -11854,361 +11854,31 @@
     {
       "bidirectional": true,
       "from": {
-        "x": 637.1,
+        "x": 763.93,
         "y": 0,
-        "z": -341.72
+        "z": 717.06
       },
-      "id": "poi-downtown-26-climb",
+      "id": "poi-harbor-15-climb",
       "kind": "mantle",
       "to": {
-        "x": 642.1,
+        "x": 758.93,
         "y": 3.5,
-        "z": -341.72
+        "z": 717.06
       }
     },
     {
       "bidirectional": false,
       "from": {
-        "x": 642.6,
+        "x": 758.43,
         "y": 3.5,
-        "z": -341.72
+        "z": 717.06
       },
-      "id": "poi-downtown-26-drop",
+      "id": "poi-harbor-15-drop",
       "kind": "drop",
       "to": {
-        "x": 642.6,
+        "x": 758.43,
         "y": 0,
-        "z": -340.22
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -231.58,
-        "y": 11.4,
-        "z": -866.46
-      },
-      "id": "poi-hillside-08-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -236.58,
-        "y": 14.9,
-        "z": -866.46
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -237.08,
-        "y": 14.9,
-        "z": -866.46
-      },
-      "id": "poi-hillside-08-drop",
-      "kind": "drop",
-      "to": {
-        "x": -237.08,
-        "y": 11.4,
-        "z": -867.96
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": 645.59,
-        "y": 0,
-        "z": -687.68
-      },
-      "id": "poi-downtown-27-climb",
-      "kind": "mantle",
-      "to": {
-        "x": 640.59,
-        "y": 3.5,
-        "z": -687.68
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": 640.09,
-        "y": 3.5,
-        "z": -687.68
-      },
-      "id": "poi-downtown-27-drop",
-      "kind": "drop",
-      "to": {
-        "x": 640.09,
-        "y": 0,
-        "z": -686.18
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -684.99,
-        "y": 0,
-        "z": 664.53
-      },
-      "id": "poi-suburbs-20-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -684.99,
-        "y": 3.5,
-        "z": 659.53
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -684.99,
-        "y": 3.5,
-        "z": 659.03
-      },
-      "id": "poi-suburbs-20-drop",
-      "kind": "drop",
-      "to": {
-        "x": -686.49,
-        "y": 0,
-        "z": 659.03
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -469.48,
-        "y": 0,
-        "z": 684.75
-      },
-      "id": "poi-suburbs-21-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -474.48,
-        "y": 3.5,
-        "z": 684.75
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -474.98,
-        "y": 3.5,
-        "z": 684.75
-      },
-      "id": "poi-suburbs-21-drop",
-      "kind": "drop",
-      "to": {
-        "x": -474.98,
-        "y": 0,
-        "z": 686.25
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -431.97,
-        "y": 13.5,
-        "z": -333.46
-      },
-      "id": "poi-hillside-10-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -436.97,
-        "y": 17,
-        "z": -333.46
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -437.47,
-        "y": 17,
-        "z": -333.46
-      },
-      "id": "poi-hillside-10-drop",
-      "kind": "drop",
-      "to": {
-        "x": -437.47,
-        "y": 13.5,
-        "z": -334.96
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": 826.82,
-        "y": 0,
-        "z": -449.28
-      },
-      "id": "poi-downtown-30-climb",
-      "kind": "mantle",
-      "to": {
-        "x": 821.82,
-        "y": 3.5,
-        "z": -449.28
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": 821.32,
-        "y": 3.5,
-        "z": -449.28
-      },
-      "id": "poi-downtown-30-drop",
-      "kind": "drop",
-      "to": {
-        "x": 821.32,
-        "y": 0,
-        "z": -447.78
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": 633.24,
-        "y": 0,
-        "z": -258.46
-      },
-      "id": "poi-downtown-31-climb",
-      "kind": "mantle",
-      "to": {
-        "x": 628.24,
-        "y": 3.5,
-        "z": -258.46
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": 627.74,
-        "y": 3.5,
-        "z": -258.46
-      },
-      "id": "poi-downtown-31-drop",
-      "kind": "drop",
-      "to": {
-        "x": 627.74,
-        "y": 0,
-        "z": -259.96
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -484.09,
-        "y": 0,
-        "z": 247.33
-      },
-      "id": "poi-suburbs-23-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -484.09,
-        "y": 3.5,
-        "z": 242.33
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -484.09,
-        "y": 3.5,
-        "z": 241.83
-      },
-      "id": "poi-suburbs-23-drop",
-      "kind": "drop",
-      "to": {
-        "x": -485.59,
-        "y": 0,
-        "z": 241.83
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -123,
-        "y": 0,
-        "z": 784.97
-      },
-      "id": "poi-suburbs-26-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -128,
-        "y": 3.5,
-        "z": 784.97
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -128.5,
-        "y": 3.5,
-        "z": 784.97
-      },
-      "id": "poi-suburbs-26-drop",
-      "kind": "drop",
-      "to": {
-        "x": -128.5,
-        "y": 0,
-        "z": 786.47
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": 482.97,
-        "y": 0,
-        "z": 175.47
-      },
-      "id": "poi-harbor-21-climb",
-      "kind": "mantle",
-      "to": {
-        "x": 482.97,
-        "y": 3.5,
-        "z": 170.47
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": 482.97,
-        "y": 3.5,
-        "z": 169.97
-      },
-      "id": "poi-harbor-21-drop",
-      "kind": "drop",
-      "to": {
-        "x": 481.47,
-        "y": 0,
-        "z": 169.97
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": 155.3,
-        "y": 0,
-        "z": -458.38
-      },
-      "id": "poi-downtown-33-climb",
-      "kind": "mantle",
-      "to": {
-        "x": 150.3,
-        "y": 3.5,
-        "z": -458.38
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": 149.8,
-        "y": 3.5,
-        "z": -458.38
-      },
-      "id": "poi-downtown-33-drop",
-      "kind": "drop",
-      "to": {
-        "x": 149.8,
-        "y": 0,
-        "z": -459.88
+        "z": 718.56
       }
     },
     {
@@ -12218,7 +11888,7 @@
         "y": 0,
         "z": 932.14
       },
-      "id": "poi-suburbs-29-climb",
+      "id": "poi-suburbs-21-climb",
       "kind": "mantle",
       "to": {
         "x": -784.74,
@@ -12233,12 +11903,372 @@
         "y": 3.5,
         "z": 926.64
       },
-      "id": "poi-suburbs-29-drop",
+      "id": "poi-suburbs-21-drop",
       "kind": "drop",
       "to": {
         "x": -786.24,
         "y": 0,
         "z": 926.64
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": -921.35,
+        "y": 0,
+        "z": 515.26
+      },
+      "id": "poi-suburbs-22-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -926.35,
+        "y": 3.5,
+        "z": 515.26
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -926.85,
+        "y": 3.5,
+        "z": 515.26
+      },
+      "id": "poi-suburbs-22-drop",
+      "kind": "drop",
+      "to": {
+        "x": -926.85,
+        "y": 0,
+        "z": 513.76
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": 637.1,
+        "y": 0,
+        "z": -341.72
+      },
+      "id": "poi-downtown-28-climb",
+      "kind": "mantle",
+      "to": {
+        "x": 642.1,
+        "y": 3.5,
+        "z": -341.72
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": 642.6,
+        "y": 3.5,
+        "z": -341.72
+      },
+      "id": "poi-downtown-28-drop",
+      "kind": "drop",
+      "to": {
+        "x": 642.6,
+        "y": 0,
+        "z": -340.22
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": -231.58,
+        "y": 11.4,
+        "z": -866.46
+      },
+      "id": "poi-hillside-09-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -236.58,
+        "y": 14.9,
+        "z": -866.46
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -237.08,
+        "y": 14.9,
+        "z": -866.46
+      },
+      "id": "poi-hillside-09-drop",
+      "kind": "drop",
+      "to": {
+        "x": -237.08,
+        "y": 11.4,
+        "z": -867.96
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": 645.59,
+        "y": 0,
+        "z": -687.68
+      },
+      "id": "poi-downtown-29-climb",
+      "kind": "mantle",
+      "to": {
+        "x": 640.59,
+        "y": 3.5,
+        "z": -687.68
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": 640.09,
+        "y": 3.5,
+        "z": -687.68
+      },
+      "id": "poi-downtown-29-drop",
+      "kind": "drop",
+      "to": {
+        "x": 640.09,
+        "y": 0,
+        "z": -686.18
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": -684.99,
+        "y": 0,
+        "z": 664.53
+      },
+      "id": "poi-suburbs-24-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -684.99,
+        "y": 3.5,
+        "z": 659.53
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -684.99,
+        "y": 3.5,
+        "z": 659.03
+      },
+      "id": "poi-suburbs-24-drop",
+      "kind": "drop",
+      "to": {
+        "x": -686.49,
+        "y": 0,
+        "z": 659.03
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": -469.48,
+        "y": 0,
+        "z": 684.75
+      },
+      "id": "poi-suburbs-25-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -474.48,
+        "y": 3.5,
+        "z": 684.75
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -474.98,
+        "y": 3.5,
+        "z": 684.75
+      },
+      "id": "poi-suburbs-25-drop",
+      "kind": "drop",
+      "to": {
+        "x": -474.98,
+        "y": 0,
+        "z": 686.25
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": -431.97,
+        "y": 13.5,
+        "z": -333.46
+      },
+      "id": "poi-hillside-11-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -436.97,
+        "y": 17,
+        "z": -333.46
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -437.47,
+        "y": 17,
+        "z": -333.46
+      },
+      "id": "poi-hillside-11-drop",
+      "kind": "drop",
+      "to": {
+        "x": -437.47,
+        "y": 13.5,
+        "z": -334.96
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": 826.82,
+        "y": 0,
+        "z": -449.28
+      },
+      "id": "poi-downtown-32-climb",
+      "kind": "mantle",
+      "to": {
+        "x": 821.82,
+        "y": 3.5,
+        "z": -449.28
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": 821.32,
+        "y": 3.5,
+        "z": -449.28
+      },
+      "id": "poi-downtown-32-drop",
+      "kind": "drop",
+      "to": {
+        "x": 821.32,
+        "y": 0,
+        "z": -447.78
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": 633.24,
+        "y": 0,
+        "z": -258.46
+      },
+      "id": "poi-downtown-33-climb",
+      "kind": "mantle",
+      "to": {
+        "x": 628.24,
+        "y": 3.5,
+        "z": -258.46
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": 627.74,
+        "y": 3.5,
+        "z": -258.46
+      },
+      "id": "poi-downtown-33-drop",
+      "kind": "drop",
+      "to": {
+        "x": 627.74,
+        "y": 0,
+        "z": -259.96
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": -484.09,
+        "y": 0,
+        "z": 247.33
+      },
+      "id": "poi-suburbs-27-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -484.09,
+        "y": 3.5,
+        "z": 242.33
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -484.09,
+        "y": 3.5,
+        "z": 241.83
+      },
+      "id": "poi-suburbs-27-drop",
+      "kind": "drop",
+      "to": {
+        "x": -485.59,
+        "y": 0,
+        "z": 241.83
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": -123,
+        "y": 0,
+        "z": 784.97
+      },
+      "id": "poi-suburbs-30-climb",
+      "kind": "mantle",
+      "to": {
+        "x": -128,
+        "y": 3.5,
+        "z": 784.97
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": -128.5,
+        "y": 3.5,
+        "z": 784.97
+      },
+      "id": "poi-suburbs-30-drop",
+      "kind": "drop",
+      "to": {
+        "x": -128.5,
+        "y": 0,
+        "z": 786.47
+      }
+    },
+    {
+      "bidirectional": true,
+      "from": {
+        "x": 155.3,
+        "y": 0,
+        "z": -458.38
+      },
+      "id": "poi-downtown-35-climb",
+      "kind": "mantle",
+      "to": {
+        "x": 150.3,
+        "y": 3.5,
+        "z": -458.38
+      }
+    },
+    {
+      "bidirectional": false,
+      "from": {
+        "x": 149.8,
+        "y": 3.5,
+        "z": -458.38
+      },
+      "id": "poi-downtown-35-drop",
+      "kind": "drop",
+      "to": {
+        "x": 149.8,
+        "y": 0,
+        "z": -459.88
       }
     },
     {
@@ -12248,7 +12278,7 @@
         "y": 0.02,
         "z": -205.49
       },
-      "id": "poi-downtown-36-pad-nav",
+      "id": "poi-downtown-37-pad-nav",
       "kind": "pad",
       "to": {
         "x": 349.28,
@@ -12263,7 +12293,7 @@
         "y": 17.43,
         "z": -212.55
       },
-      "id": "poi-downtown-36-zip-nav",
+      "id": "poi-downtown-37-zip-nav",
       "kind": "zip",
       "to": {
         "x": 369.49,
@@ -12308,7 +12338,7 @@
         "y": 0,
         "z": 759.21
       },
-      "id": "poi-suburbs-30-climb",
+      "id": "poi-suburbs-32-climb",
       "kind": "mantle",
       "to": {
         "x": -184.97,
@@ -12323,7 +12353,7 @@
         "y": 3.5,
         "z": 753.71
       },
-      "id": "poi-suburbs-30-drop",
+      "id": "poi-suburbs-32-drop",
       "kind": "drop",
       "to": {
         "x": -186.47,
@@ -12338,7 +12368,7 @@
         "y": 0,
         "z": 215.26
       },
-      "id": "poi-suburbs-31-climb",
+      "id": "poi-suburbs-33-climb",
       "kind": "mantle",
       "to": {
         "x": -530.3,
@@ -12353,7 +12383,7 @@
         "y": 3.5,
         "z": 215.26
       },
-      "id": "poi-suburbs-31-drop",
+      "id": "poi-suburbs-33-drop",
       "kind": "drop",
       "to": {
         "x": -530.8,
@@ -12368,7 +12398,7 @@
         "y": 0,
         "z": 115.03
       },
-      "id": "poi-suburbs-32-climb",
+      "id": "poi-suburbs-34-climb",
       "kind": "mantle",
       "to": {
         "x": -940.84,
@@ -12383,72 +12413,12 @@
         "y": 3.5,
         "z": 115.03
       },
-      "id": "poi-suburbs-32-drop",
+      "id": "poi-suburbs-34-drop",
       "kind": "drop",
       "to": {
         "x": -941.34,
         "y": 0,
         "z": 113.53
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -921.35,
-        "y": 0,
-        "z": 515.26
-      },
-      "id": "poi-suburbs-33-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -926.35,
-        "y": 3.5,
-        "z": 515.26
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -926.85,
-        "y": 3.5,
-        "z": 515.26
-      },
-      "id": "poi-suburbs-33-drop",
-      "kind": "drop",
-      "to": {
-        "x": -926.85,
-        "y": 0,
-        "z": 513.76
-      }
-    },
-    {
-      "bidirectional": true,
-      "from": {
-        "x": -15.96,
-        "y": 0,
-        "z": 449.01
-      },
-      "id": "poi-suburbs-34-climb",
-      "kind": "mantle",
-      "to": {
-        "x": -15.96,
-        "y": 3.5,
-        "z": 444.01
-      }
-    },
-    {
-      "bidirectional": false,
-      "from": {
-        "x": -15.96,
-        "y": 3.5,
-        "z": 443.51
-      },
-      "id": "poi-suburbs-34-drop",
-      "kind": "drop",
-      "to": {
-        "x": -14.46,
-        "y": 0,
-        "z": 443.51
       }
     },
     {
@@ -13175,6 +13145,17 @@
       "id": "poi-downtown-16",
       "kind": "door",
       "position": {
+        "x": 382.15,
+        "y": 0,
+        "z": -10.5
+      }
+    },
+    {
+      "district": "downtown",
+      "elevated": false,
+      "id": "poi-downtown-17",
+      "kind": "door",
+      "position": {
         "x": 148.27,
         "y": 0,
         "z": -610.5
@@ -13183,7 +13164,7 @@
     {
       "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-17",
+      "id": "poi-downtown-18",
       "kind": "door",
       "position": {
         "x": 217.5,
@@ -13194,62 +13175,7 @@
     {
       "district": "downtown",
       "elevated": false,
-      "id": "poi-downtown-18",
-      "kind": "door",
-      "position": {
-        "x": 553.84,
-        "y": 0,
-        "z": -870.5
-      }
-    },
-    {
-      "district": "downtown",
-      "elevated": false,
       "id": "poi-downtown-19",
-      "kind": "mailbox",
-      "position": {
-        "x": 72.5,
-        "y": 0.15,
-        "z": -978
-      }
-    },
-    {
-      "district": "downtown",
-      "elevated": false,
-      "id": "poi-downtown-20",
-      "kind": "door",
-      "position": {
-        "x": 940.32,
-        "y": 0,
-        "z": -589.5
-      }
-    },
-    {
-      "district": "downtown",
-      "elevated": false,
-      "id": "poi-downtown-21",
-      "kind": "mailbox",
-      "position": {
-        "x": 925,
-        "y": 0.15,
-        "z": -461.5
-      }
-    },
-    {
-      "district": "downtown",
-      "elevated": false,
-      "id": "poi-downtown-22",
-      "kind": "door",
-      "position": {
-        "x": 882.79,
-        "y": 0,
-        "z": -610.5
-      }
-    },
-    {
-      "district": "downtown",
-      "elevated": false,
-      "id": "poi-downtown-23",
       "kind": "door",
       "position": {
         "x": 318.25,
@@ -13260,7 +13186,7 @@
     {
       "district": "downtown",
       "elevated": false,
-      "id": "poi-downtown-24",
+      "id": "poi-downtown-20",
       "kind": "door",
       "position": {
         "x": 173.36,
@@ -13271,7 +13197,73 @@
     {
       "district": "downtown",
       "elevated": false,
+      "id": "poi-downtown-21",
+      "kind": "door",
+      "position": {
+        "x": 553.84,
+        "y": 0,
+        "z": -870.5
+      }
+    },
+    {
+      "district": "downtown",
+      "elevated": false,
+      "id": "poi-downtown-22",
+      "kind": "mailbox",
+      "position": {
+        "x": 72.5,
+        "y": 0.15,
+        "z": -978
+      }
+    },
+    {
+      "district": "downtown",
+      "elevated": false,
+      "id": "poi-downtown-23",
+      "kind": "door",
+      "position": {
+        "x": 940.32,
+        "y": 0,
+        "z": -589.5
+      }
+    },
+    {
+      "district": "downtown",
+      "elevated": false,
+      "id": "poi-downtown-24",
+      "kind": "mailbox",
+      "position": {
+        "x": 925,
+        "y": 0.15,
+        "z": -461.5
+      }
+    },
+    {
+      "district": "downtown",
+      "elevated": false,
       "id": "poi-downtown-25",
+      "kind": "door",
+      "position": {
+        "x": 882.79,
+        "y": 0,
+        "z": -610.5
+      }
+    },
+    {
+      "district": "downtown",
+      "elevated": false,
+      "id": "poi-downtown-26",
+      "kind": "mailbox",
+      "position": {
+        "x": 672.5,
+        "y": 0.15,
+        "z": -721
+      }
+    },
+    {
+      "district": "downtown",
+      "elevated": false,
+      "id": "poi-downtown-27",
       "kind": "door",
       "position": {
         "x": 370.09,
@@ -13282,7 +13274,7 @@
     {
       "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-26",
+      "id": "poi-downtown-28",
       "kind": "balcony",
       "position": {
         "x": 642.6,
@@ -13293,7 +13285,7 @@
     {
       "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-27",
+      "id": "poi-downtown-29",
       "kind": "balcony",
       "position": {
         "x": 640.09,
@@ -13304,7 +13296,7 @@
     {
       "district": "downtown",
       "elevated": false,
-      "id": "poi-downtown-28",
+      "id": "poi-downtown-30",
       "kind": "door",
       "position": {
         "x": 559.76,
@@ -13315,7 +13307,7 @@
     {
       "district": "downtown",
       "elevated": false,
-      "id": "poi-downtown-29",
+      "id": "poi-downtown-31",
       "kind": "door",
       "position": {
         "x": 701.73,
@@ -13326,7 +13318,7 @@
     {
       "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-30",
+      "id": "poi-downtown-32",
       "kind": "balcony",
       "position": {
         "x": 821.32,
@@ -13337,7 +13329,7 @@
     {
       "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-31",
+      "id": "poi-downtown-33",
       "kind": "balcony",
       "position": {
         "x": 627.74,
@@ -13348,7 +13340,7 @@
     {
       "district": "downtown",
       "elevated": false,
-      "id": "poi-downtown-32",
+      "id": "poi-downtown-34",
       "kind": "door",
       "position": {
         "x": 118.23,
@@ -13359,7 +13351,7 @@
     {
       "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-33",
+      "id": "poi-downtown-35",
       "kind": "balcony",
       "position": {
         "x": 149.8,
@@ -13370,7 +13362,7 @@
     {
       "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-34",
+      "id": "poi-downtown-36",
       "kind": "door",
       "position": {
         "x": 450.92,
@@ -13380,35 +13372,13 @@
     },
     {
       "district": "downtown",
-      "elevated": false,
-      "id": "poi-downtown-35",
-      "kind": "mailbox",
-      "position": {
-        "x": 672.5,
-        "y": 0.15,
-        "z": -721
-      }
-    },
-    {
-      "district": "downtown",
       "elevated": true,
-      "id": "poi-downtown-36",
+      "id": "poi-downtown-37",
       "kind": "door",
       "position": {
         "x": 349.28,
         "y": 14.23,
         "z": -215.17
-      }
-    },
-    {
-      "district": "downtown",
-      "elevated": false,
-      "id": "poi-downtown-37",
-      "kind": "door",
-      "position": {
-        "x": 871.96,
-        "y": 0,
-        "z": -340.5
       }
     },
     {
@@ -13600,8 +13570,41 @@
     },
     {
       "district": "harbor",
-      "elevated": false,
+      "elevated": true,
       "id": "poi-harbor-10",
+      "kind": "door",
+      "position": {
+        "x": 131,
+        "y": 5.2,
+        "z": 317.2
+      }
+    },
+    {
+      "district": "harbor",
+      "elevated": true,
+      "id": "poi-harbor-11",
+      "kind": "door",
+      "position": {
+        "x": 232.1,
+        "y": 7.8,
+        "z": 282
+      }
+    },
+    {
+      "district": "harbor",
+      "elevated": false,
+      "id": "poi-harbor-12",
+      "kind": "counter",
+      "position": {
+        "x": 312,
+        "y": 0.15,
+        "z": 191.5
+      }
+    },
+    {
+      "district": "harbor",
+      "elevated": false,
+      "id": "poi-harbor-13",
       "kind": "door",
       "position": {
         "x": 241.32,
@@ -13612,7 +13615,7 @@
     {
       "district": "harbor",
       "elevated": true,
-      "id": "poi-harbor-11",
+      "id": "poi-harbor-14",
       "kind": "door",
       "position": {
         "x": 946,
@@ -13623,7 +13626,7 @@
     {
       "district": "harbor",
       "elevated": true,
-      "id": "poi-harbor-12",
+      "id": "poi-harbor-15",
       "kind": "balcony",
       "position": {
         "x": 758.43,
@@ -13634,7 +13637,7 @@
     {
       "district": "harbor",
       "elevated": true,
-      "id": "poi-harbor-13",
+      "id": "poi-harbor-16",
       "kind": "door",
       "position": {
         "x": 565.99,
@@ -13645,7 +13648,7 @@
     {
       "district": "harbor",
       "elevated": true,
-      "id": "poi-harbor-14",
+      "id": "poi-harbor-17",
       "kind": "door",
       "position": {
         "x": 934,
@@ -13656,7 +13659,29 @@
     {
       "district": "harbor",
       "elevated": true,
-      "id": "poi-harbor-15",
+      "id": "poi-harbor-18",
+      "kind": "door",
+      "position": {
+        "x": 831.28,
+        "y": 7.8,
+        "z": 928
+      }
+    },
+    {
+      "district": "harbor",
+      "elevated": false,
+      "id": "poi-harbor-19",
+      "kind": "door",
+      "position": {
+        "x": 579.98,
+        "y": 0,
+        "z": 810.5
+      }
+    },
+    {
+      "district": "harbor",
+      "elevated": true,
+      "id": "poi-harbor-20",
       "kind": "door",
       "position": {
         "x": 380.78,
@@ -13667,7 +13692,7 @@
     {
       "district": "harbor",
       "elevated": true,
-      "id": "poi-harbor-16",
+      "id": "poi-harbor-21",
       "kind": "door",
       "position": {
         "x": 652.89,
@@ -13678,7 +13703,7 @@
     {
       "district": "harbor",
       "elevated": true,
-      "id": "poi-harbor-17",
+      "id": "poi-harbor-22",
       "kind": "door",
       "position": {
         "x": 549,
@@ -13689,7 +13714,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-18",
+      "id": "poi-harbor-23",
       "kind": "door",
       "position": {
         "x": 92.5,
@@ -13700,7 +13725,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-19",
+      "id": "poi-harbor-24",
       "kind": "mailbox",
       "position": {
         "x": 712,
@@ -13711,7 +13736,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-20",
+      "id": "poi-harbor-25",
       "kind": "door",
       "position": {
         "x": 410.5,
@@ -13721,30 +13746,8 @@
     },
     {
       "district": "harbor",
-      "elevated": true,
-      "id": "poi-harbor-21",
-      "kind": "balcony",
-      "position": {
-        "x": 483.22,
-        "y": 3.5,
-        "z": 169.97
-      }
-    },
-    {
-      "district": "harbor",
-      "elevated": true,
-      "id": "poi-harbor-22",
-      "kind": "door",
-      "position": {
-        "x": 561,
-        "y": 2.6,
-        "z": 231.28
-      }
-    },
-    {
-      "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-23",
+      "id": "poi-harbor-26",
       "kind": "mailbox",
       "position": {
         "x": 408.5,
@@ -13754,19 +13757,8 @@
     },
     {
       "district": "harbor",
-      "elevated": true,
-      "id": "poi-harbor-24",
-      "kind": "door",
-      "position": {
-        "x": 20.2,
-        "y": 7.8,
-        "z": 898
-      }
-    },
-    {
-      "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-25",
+      "id": "poi-harbor-27",
       "kind": "mailbox",
       "position": {
         "x": 12,
@@ -13777,7 +13769,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-26",
+      "id": "poi-harbor-28",
       "kind": "door",
       "position": {
         "x": 762.5,
@@ -13788,18 +13780,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-27",
-      "kind": "door",
-      "position": {
-        "x": 579.98,
-        "y": 0,
-        "z": 810.5
-      }
-    },
-    {
-      "district": "harbor",
-      "elevated": false,
-      "id": "poi-harbor-28",
+      "id": "poi-harbor-29",
       "kind": "door",
       "position": {
         "x": 745.32,
@@ -13810,7 +13791,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-29",
+      "id": "poi-harbor-30",
       "kind": "door",
       "position": {
         "x": 343.53,
@@ -13821,7 +13802,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-30",
+      "id": "poi-harbor-31",
       "kind": "mailbox",
       "position": {
         "x": 512,
@@ -13832,7 +13813,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-31",
+      "id": "poi-harbor-32",
       "kind": "door",
       "position": {
         "x": 189.5,
@@ -13843,7 +13824,7 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-32",
+      "id": "poi-harbor-33",
       "kind": "door",
       "position": {
         "x": 707.5,
@@ -13854,23 +13835,12 @@
     {
       "district": "harbor",
       "elevated": false,
-      "id": "poi-harbor-33",
+      "id": "poi-harbor-34",
       "kind": "counter",
       "position": {
         "x": 191.5,
         "y": 0.15,
         "z": 612
-      }
-    },
-    {
-      "district": "harbor",
-      "elevated": false,
-      "id": "poi-harbor-34",
-      "kind": "mailbox",
-      "position": {
-        "x": 212,
-        "y": 0.15,
-        "z": 890.5
       }
     },
     {
@@ -13908,41 +13878,8 @@
     },
     {
       "district": "hillside",
-      "elevated": false,
-      "id": "poi-hillside-03",
-      "kind": "door",
-      "position": {
-        "x": -464.42,
-        "y": 27,
-        "z": -950.5
-      }
-    },
-    {
-      "district": "hillside",
-      "elevated": false,
-      "id": "poi-hillside-04",
-      "kind": "mailbox",
-      "position": {
-        "x": -578,
-        "y": 27.15,
-        "z": -939.5
-      }
-    },
-    {
-      "district": "hillside",
-      "elevated": false,
-      "id": "poi-hillside-05",
-      "kind": "door",
-      "position": {
-        "x": -981.98,
-        "y": 31.5,
-        "z": -753.5
-      }
-    },
-    {
-      "district": "hillside",
       "elevated": true,
-      "id": "poi-hillside-06",
+      "id": "poi-hillside-03",
       "kind": "door",
       "position": {
         "x": -138.1,
@@ -13953,7 +13890,51 @@
     {
       "district": "hillside",
       "elevated": false,
+      "id": "poi-hillside-04",
+      "kind": "door",
+      "position": {
+        "x": -464.42,
+        "y": 27,
+        "z": -950.5
+      }
+    },
+    {
+      "district": "hillside",
+      "elevated": false,
+      "id": "poi-hillside-05",
+      "kind": "mailbox",
+      "position": {
+        "x": -578,
+        "y": 27.15,
+        "z": -939.5
+      }
+    },
+    {
+      "district": "hillside",
+      "elevated": false,
+      "id": "poi-hillside-06",
+      "kind": "door",
+      "position": {
+        "x": -981.98,
+        "y": 31.5,
+        "z": -753.5
+      }
+    },
+    {
+      "district": "hillside",
+      "elevated": false,
       "id": "poi-hillside-07",
+      "kind": "door",
+      "position": {
+        "x": -619.4,
+        "y": 31.5,
+        "z": -951.5
+      }
+    },
+    {
+      "district": "hillside",
+      "elevated": false,
+      "id": "poi-hillside-08",
       "kind": "door",
       "position": {
         "x": -534.91,
@@ -13964,7 +13945,7 @@
     {
       "district": "hillside",
       "elevated": true,
-      "id": "poi-hillside-08",
+      "id": "poi-hillside-09",
       "kind": "balcony",
       "position": {
         "x": -237.08,
@@ -13975,7 +13956,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-09",
+      "id": "poi-hillside-10",
       "kind": "door",
       "position": {
         "x": -108.77,
@@ -13986,7 +13967,7 @@
     {
       "district": "hillside",
       "elevated": true,
-      "id": "poi-hillside-10",
+      "id": "poi-hillside-11",
       "kind": "balcony",
       "position": {
         "x": -437.47,
@@ -13997,7 +13978,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-11",
+      "id": "poi-hillside-12",
       "kind": "door",
       "position": {
         "x": -501.95,
@@ -14008,7 +13989,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-12",
+      "id": "poi-hillside-13",
       "kind": "door",
       "position": {
         "x": -366.66,
@@ -14019,7 +14000,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-13",
+      "id": "poi-hillside-14",
       "kind": "door",
       "position": {
         "x": -451.51,
@@ -14030,7 +14011,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-14",
+      "id": "poi-hillside-15",
       "kind": "door",
       "position": {
         "x": -425.65,
@@ -14041,7 +14022,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-15",
+      "id": "poi-hillside-16",
       "kind": "counter",
       "position": {
         "x": -578,
@@ -14052,7 +14033,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-16",
+      "id": "poi-hillside-17",
       "kind": "mailbox",
       "position": {
         "x": -295.5,
@@ -14063,7 +14044,7 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-17",
+      "id": "poi-hillside-18",
       "kind": "mailbox",
       "position": {
         "x": -288,
@@ -14074,23 +14055,12 @@
     {
       "district": "hillside",
       "elevated": false,
-      "id": "poi-hillside-18",
+      "id": "poi-hillside-19",
       "kind": "counter",
       "position": {
         "x": -504.5,
         "y": 9.15,
         "z": -457
-      }
-    },
-    {
-      "district": "hillside",
-      "elevated": false,
-      "id": "poi-hillside-19",
-      "kind": "door",
-      "position": {
-        "x": -619.4,
-        "y": 31.5,
-        "z": -951.5
       }
     },
     {
@@ -14407,37 +14377,26 @@
       "id": "poi-suburbs-13",
       "kind": "door",
       "position": {
-        "x": -984.04,
+        "x": -215,
         "y": 0,
-        "z": 385
+        "z": 24.95
       }
     },
     {
       "district": "suburbs",
-      "elevated": false,
+      "elevated": true,
       "id": "poi-suburbs-14",
-      "kind": "door",
+      "kind": "balcony",
       "position": {
-        "x": -853.35,
-        "y": 0,
-        "z": 685
+        "x": -174.98,
+        "y": 3.5,
+        "z": 115.26
       }
     },
     {
       "district": "suburbs",
       "elevated": false,
       "id": "poi-suburbs-15",
-      "kind": "mailbox",
-      "position": {
-        "x": -883,
-        "y": 0.15,
-        "z": 708.5
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": false,
-      "id": "poi-suburbs-16",
       "kind": "door",
       "position": {
         "x": -115,
@@ -14448,7 +14407,7 @@
     {
       "district": "suburbs",
       "elevated": false,
-      "id": "poi-suburbs-17",
+      "id": "poi-suburbs-16",
       "kind": "door",
       "position": {
         "x": -460.44,
@@ -14459,7 +14418,7 @@
     {
       "district": "suburbs",
       "elevated": false,
-      "id": "poi-suburbs-18",
+      "id": "poi-suburbs-17",
       "kind": "door",
       "position": {
         "x": -231.92,
@@ -14470,117 +14429,40 @@
     {
       "district": "suburbs",
       "elevated": false,
-      "id": "poi-suburbs-19",
+      "id": "poi-suburbs-18",
       "kind": "door",
       "position": {
-        "x": -285,
+        "x": -984.04,
         "y": 0,
-        "z": 825.39
+        "z": 385
       }
     },
     {
       "district": "suburbs",
-      "elevated": true,
-      "id": "poi-suburbs-20",
-      "kind": "balcony",
+      "elevated": false,
+      "id": "poi-suburbs-19",
+      "kind": "door",
       "position": {
-        "x": -684.74,
-        "y": 3.5,
-        "z": 659.03
+        "x": -853.35,
+        "y": 0,
+        "z": 685
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": false,
+      "id": "poi-suburbs-20",
+      "kind": "mailbox",
+      "position": {
+        "x": -883,
+        "y": 0.15,
+        "z": 708.5
       }
     },
     {
       "district": "suburbs",
       "elevated": true,
       "id": "poi-suburbs-21",
-      "kind": "balcony",
-      "position": {
-        "x": -474.98,
-        "y": 3.5,
-        "z": 684.5
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": false,
-      "id": "poi-suburbs-22",
-      "kind": "door",
-      "position": {
-        "x": -910,
-        "y": 0,
-        "z": 73.13
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": true,
-      "id": "poi-suburbs-23",
-      "kind": "balcony",
-      "position": {
-        "x": -483.84,
-        "y": 3.5,
-        "z": 241.83
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": false,
-      "id": "poi-suburbs-24",
-      "kind": "door",
-      "position": {
-        "x": -115,
-        "y": 0,
-        "z": 656.41
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": false,
-      "id": "poi-suburbs-25",
-      "kind": "door",
-      "position": {
-        "x": -341.63,
-        "y": 0,
-        "z": 415.01
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": true,
-      "id": "poi-suburbs-26",
-      "kind": "balcony",
-      "position": {
-        "x": -128.5,
-        "y": 3.5,
-        "z": 784.72
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": false,
-      "id": "poi-suburbs-27",
-      "kind": "mailbox",
-      "position": {
-        "x": -688,
-        "y": 0.15,
-        "z": 208.5
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": false,
-      "id": "poi-suburbs-28",
-      "kind": "door",
-      "position": {
-        "x": -484.99,
-        "y": 0,
-        "z": 138.41
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": true,
-      "id": "poi-suburbs-29",
       "kind": "balcony",
       "position": {
         "x": -784.49,
@@ -14591,7 +14473,117 @@
     {
       "district": "suburbs",
       "elevated": true,
+      "id": "poi-suburbs-22",
+      "kind": "balcony",
+      "position": {
+        "x": -926.85,
+        "y": 3.5,
+        "z": 515.51
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": false,
+      "id": "poi-suburbs-23",
+      "kind": "door",
+      "position": {
+        "x": -285,
+        "y": 0,
+        "z": 825.39
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": true,
+      "id": "poi-suburbs-24",
+      "kind": "balcony",
+      "position": {
+        "x": -684.74,
+        "y": 3.5,
+        "z": 659.03
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": true,
+      "id": "poi-suburbs-25",
+      "kind": "balcony",
+      "position": {
+        "x": -474.98,
+        "y": 3.5,
+        "z": 684.5
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": false,
+      "id": "poi-suburbs-26",
+      "kind": "door",
+      "position": {
+        "x": -910,
+        "y": 0,
+        "z": 73.13
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": true,
+      "id": "poi-suburbs-27",
+      "kind": "balcony",
+      "position": {
+        "x": -483.84,
+        "y": 3.5,
+        "z": 241.83
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": false,
+      "id": "poi-suburbs-28",
+      "kind": "door",
+      "position": {
+        "x": -115,
+        "y": 0,
+        "z": 656.41
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": false,
+      "id": "poi-suburbs-29",
+      "kind": "door",
+      "position": {
+        "x": -341.63,
+        "y": 0,
+        "z": 415.01
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": true,
       "id": "poi-suburbs-30",
+      "kind": "balcony",
+      "position": {
+        "x": -128.5,
+        "y": 3.5,
+        "z": 784.72
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": false,
+      "id": "poi-suburbs-31",
+      "kind": "mailbox",
+      "position": {
+        "x": -688,
+        "y": 0.15,
+        "z": 208.5
+      }
+    },
+    {
+      "district": "suburbs",
+      "elevated": true,
+      "id": "poi-suburbs-32",
       "kind": "balcony",
       "position": {
         "x": -184.72,
@@ -14602,7 +14594,7 @@
     {
       "district": "suburbs",
       "elevated": true,
-      "id": "poi-suburbs-31",
+      "id": "poi-suburbs-33",
       "kind": "balcony",
       "position": {
         "x": -530.8,
@@ -14613,34 +14605,12 @@
     {
       "district": "suburbs",
       "elevated": true,
-      "id": "poi-suburbs-32",
+      "id": "poi-suburbs-34",
       "kind": "balcony",
       "position": {
         "x": -941.34,
         "y": 3.5,
         "z": 115.28
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": true,
-      "id": "poi-suburbs-33",
-      "kind": "balcony",
-      "position": {
-        "x": -926.85,
-        "y": 3.5,
-        "z": 515.51
-      }
-    },
-    {
-      "district": "suburbs",
-      "elevated": true,
-      "id": "poi-suburbs-34",
-      "kind": "balcony",
-      "position": {
-        "x": -16.21,
-        "y": 3.5,
-        "z": 443.51
       }
     }
   ],
@@ -270926,11 +270896,67 @@
     },
     {
       "center": {
+        "x": -174.98,
+        "y": 3.25,
+        "z": 115.26
+      },
+      "id": "poi-suburbs-14-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -171.23,
+        "y": 0.58,
+        "z": 115.01
+      },
+      "id": "poi-suburbs-14-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -172.73,
+        "y": 1.17,
+        "z": 115.01
+      },
+      "id": "poi-suburbs-14-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 312,
+        "y": 0.55,
+        "z": 189.1
+      },
+      "id": "poi-harbor-12-stall",
+      "kind": "prop",
+      "size": {
+        "x": 2.4,
+        "y": 1.1,
+        "z": 1.2
+      }
+    },
+    {
+      "center": {
         "x": 758.43,
         "y": 3.25,
         "z": 716.81
       },
-      "id": "poi-harbor-12-balcony",
+      "id": "poi-harbor-15-balcony",
       "kind": "prop",
       "size": {
         "x": 3,
@@ -270944,7 +270970,7 @@
         "y": 0.58,
         "z": 717.06
       },
-      "id": "poi-harbor-12-step-0",
+      "id": "poi-harbor-15-step-0",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -270958,7 +270984,7 @@
         "y": 1.17,
         "z": 717.06
       },
-      "id": "poi-harbor-12-step-1",
+      "id": "poi-harbor-15-step-1",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -270972,7 +270998,7 @@
         "y": 0.7,
         "z": -978
       },
-      "id": "poi-downtown-19-mailbox",
+      "id": "poi-downtown-22-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -270986,7 +271012,7 @@
         "y": 27.7,
         "z": -938.5
       },
-      "id": "poi-hillside-04-mailbox",
+      "id": "poi-hillside-05-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -271000,7 +271026,7 @@
         "y": 0.7,
         "z": 709.5
       },
-      "id": "poi-suburbs-15-mailbox",
+      "id": "poi-suburbs-20-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -271014,553 +271040,7 @@
         "y": 0.7,
         "z": -460.5
       },
-      "id": "poi-downtown-21-mailbox",
-      "kind": "prop",
-      "size": {
-        "x": 0.5,
-        "y": 1.1,
-        "z": 0.5
-      }
-    },
-    {
-      "center": {
-        "x": 642.6,
-        "y": 3.25,
-        "z": -341.97
-      },
-      "id": "poi-downtown-26-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": 638.85,
-        "y": 0.58,
-        "z": -341.72
-      },
-      "id": "poi-downtown-26-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 640.35,
-        "y": 1.17,
-        "z": -341.72
-      },
-      "id": "poi-downtown-26-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -237.08,
-        "y": 14.65,
-        "z": -866.21
-      },
-      "id": "poi-hillside-08-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -233.33,
-        "y": 11.98,
-        "z": -866.46
-      },
-      "id": "poi-hillside-08-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -234.83,
-        "y": 12.57,
-        "z": -866.46
-      },
-      "id": "poi-hillside-08-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 640.09,
-        "y": 3.25,
-        "z": -687.93
-      },
-      "id": "poi-downtown-27-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": 643.84,
-        "y": 0.58,
-        "z": -687.68
-      },
-      "id": "poi-downtown-27-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 642.34,
-        "y": 1.17,
-        "z": -687.68
-      },
-      "id": "poi-downtown-27-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -684.74,
-        "y": 3.25,
-        "z": 659.03
-      },
-      "id": "poi-suburbs-20-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 0.5,
-        "z": 3
-      }
-    },
-    {
-      "center": {
-        "x": -684.99,
-        "y": 0.58,
-        "z": 662.78
-      },
-      "id": "poi-suburbs-20-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 1.16,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -684.99,
-        "y": 1.17,
-        "z": 661.28
-      },
-      "id": "poi-suburbs-20-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 2.34,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -474.98,
-        "y": 3.25,
-        "z": 684.5
-      },
-      "id": "poi-suburbs-21-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -471.23,
-        "y": 0.58,
-        "z": 684.75
-      },
-      "id": "poi-suburbs-21-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -472.73,
-        "y": 1.17,
-        "z": 684.75
-      },
-      "id": "poi-suburbs-21-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -437.47,
-        "y": 16.75,
-        "z": -333.21
-      },
-      "id": "poi-hillside-10-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -433.72,
-        "y": 14.08,
-        "z": -333.46
-      },
-      "id": "poi-hillside-10-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -435.22,
-        "y": 14.67,
-        "z": -333.46
-      },
-      "id": "poi-hillside-10-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 821.32,
-        "y": 3.25,
-        "z": -449.53
-      },
-      "id": "poi-downtown-30-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": 825.07,
-        "y": 0.58,
-        "z": -449.28
-      },
-      "id": "poi-downtown-30-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 823.57,
-        "y": 1.17,
-        "z": -449.28
-      },
-      "id": "poi-downtown-30-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 627.74,
-        "y": 3.25,
-        "z": -258.21
-      },
-      "id": "poi-downtown-31-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": 631.49,
-        "y": 0.58,
-        "z": -258.46
-      },
-      "id": "poi-downtown-31-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 629.99,
-        "y": 1.17,
-        "z": -258.46
-      },
-      "id": "poi-downtown-31-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 712,
-        "y": 0.7,
-        "z": 209.5
-      },
-      "id": "poi-harbor-19-mailbox",
-      "kind": "prop",
-      "size": {
-        "x": 0.5,
-        "y": 1.1,
-        "z": 0.5
-      }
-    },
-    {
-      "center": {
-        "x": -483.84,
-        "y": 3.25,
-        "z": 241.83
-      },
-      "id": "poi-suburbs-23-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 0.5,
-        "z": 3
-      }
-    },
-    {
-      "center": {
-        "x": -484.09,
-        "y": 0.58,
-        "z": 245.58
-      },
-      "id": "poi-suburbs-23-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 1.16,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -484.09,
-        "y": 1.17,
-        "z": 244.08
-      },
-      "id": "poi-suburbs-23-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 2.34,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -128.5,
-        "y": 3.25,
-        "z": 784.72
-      },
-      "id": "poi-suburbs-26-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -124.75,
-        "y": 0.58,
-        "z": 784.97
-      },
-      "id": "poi-suburbs-26-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -126.25,
-        "y": 1.17,
-        "z": 784.97
-      },
-      "id": "poi-suburbs-26-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 483.22,
-        "y": 3.25,
-        "z": 169.97
-      },
-      "id": "poi-harbor-21-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 0.5,
-        "z": 3
-      }
-    },
-    {
-      "center": {
-        "x": 482.97,
-        "y": 0.58,
-        "z": 173.72
-      },
-      "id": "poi-harbor-21-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 1.16,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": 482.97,
-        "y": 1.17,
-        "z": 172.22
-      },
-      "id": "poi-harbor-21-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 2.34,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": 149.8,
-        "y": 3.25,
-        "z": -458.13
-      },
-      "id": "poi-downtown-33-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": 153.55,
-        "y": 0.58,
-        "z": -458.38
-      },
-      "id": "poi-downtown-33-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": 152.05,
-        "y": 1.17,
-        "z": -458.38
-      },
-      "id": "poi-downtown-33-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -688,
-        "y": 0.7,
-        "z": 209.5
-      },
-      "id": "poi-suburbs-27-mailbox",
-      "kind": "prop",
-      "size": {
-        "x": 0.5,
-        "y": 1.1,
-        "z": 0.5
-      }
-    },
-    {
-      "center": {
-        "x": 409.5,
-        "y": 0.7,
-        "z": 812
-      },
-      "id": "poi-harbor-23-mailbox",
+      "id": "poi-downtown-24-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -271574,7 +271054,7 @@
         "y": 0.7,
         "z": -721
       },
-      "id": "poi-downtown-35-mailbox",
+      "id": "poi-downtown-26-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -271588,7 +271068,7 @@
         "y": 3.25,
         "z": 926.64
       },
-      "id": "poi-suburbs-29-balcony",
+      "id": "poi-suburbs-21-balcony",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -271602,7 +271082,7 @@
         "y": 0.58,
         "z": 930.39
       },
-      "id": "poi-suburbs-29-step-0",
+      "id": "poi-suburbs-21-step-0",
       "kind": "prop",
       "size": {
         "x": 2,
@@ -271616,7 +271096,7 @@
         "y": 1.17,
         "z": 928.89
       },
-      "id": "poi-suburbs-29-step-1",
+      "id": "poi-suburbs-21-step-1",
       "kind": "prop",
       "size": {
         "x": 2,
@@ -271626,11 +271106,557 @@
     },
     {
       "center": {
+        "x": -926.85,
+        "y": 3.25,
+        "z": 515.51
+      },
+      "id": "poi-suburbs-22-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -923.1,
+        "y": 0.58,
+        "z": 515.26
+      },
+      "id": "poi-suburbs-22-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -924.6,
+        "y": 1.17,
+        "z": 515.26
+      },
+      "id": "poi-suburbs-22-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 642.6,
+        "y": 3.25,
+        "z": -341.97
+      },
+      "id": "poi-downtown-28-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": 638.85,
+        "y": 0.58,
+        "z": -341.72
+      },
+      "id": "poi-downtown-28-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 640.35,
+        "y": 1.17,
+        "z": -341.72
+      },
+      "id": "poi-downtown-28-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -237.08,
+        "y": 14.65,
+        "z": -866.21
+      },
+      "id": "poi-hillside-09-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -233.33,
+        "y": 11.98,
+        "z": -866.46
+      },
+      "id": "poi-hillside-09-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -234.83,
+        "y": 12.57,
+        "z": -866.46
+      },
+      "id": "poi-hillside-09-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 640.09,
+        "y": 3.25,
+        "z": -687.93
+      },
+      "id": "poi-downtown-29-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": 643.84,
+        "y": 0.58,
+        "z": -687.68
+      },
+      "id": "poi-downtown-29-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 642.34,
+        "y": 1.17,
+        "z": -687.68
+      },
+      "id": "poi-downtown-29-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -684.74,
+        "y": 3.25,
+        "z": 659.03
+      },
+      "id": "poi-suburbs-24-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 0.5,
+        "z": 3
+      }
+    },
+    {
+      "center": {
+        "x": -684.99,
+        "y": 0.58,
+        "z": 662.78
+      },
+      "id": "poi-suburbs-24-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 2,
+        "y": 1.16,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -684.99,
+        "y": 1.17,
+        "z": 661.28
+      },
+      "id": "poi-suburbs-24-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 2,
+        "y": 2.34,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -474.98,
+        "y": 3.25,
+        "z": 684.5
+      },
+      "id": "poi-suburbs-25-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -471.23,
+        "y": 0.58,
+        "z": 684.75
+      },
+      "id": "poi-suburbs-25-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -472.73,
+        "y": 1.17,
+        "z": 684.75
+      },
+      "id": "poi-suburbs-25-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -437.47,
+        "y": 16.75,
+        "z": -333.21
+      },
+      "id": "poi-hillside-11-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -433.72,
+        "y": 14.08,
+        "z": -333.46
+      },
+      "id": "poi-hillside-11-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -435.22,
+        "y": 14.67,
+        "z": -333.46
+      },
+      "id": "poi-hillside-11-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 821.32,
+        "y": 3.25,
+        "z": -449.53
+      },
+      "id": "poi-downtown-32-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": 825.07,
+        "y": 0.58,
+        "z": -449.28
+      },
+      "id": "poi-downtown-32-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 823.57,
+        "y": 1.17,
+        "z": -449.28
+      },
+      "id": "poi-downtown-32-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 627.74,
+        "y": 3.25,
+        "z": -258.21
+      },
+      "id": "poi-downtown-33-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": 631.49,
+        "y": 0.58,
+        "z": -258.46
+      },
+      "id": "poi-downtown-33-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 629.99,
+        "y": 1.17,
+        "z": -258.46
+      },
+      "id": "poi-downtown-33-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 712,
+        "y": 0.7,
+        "z": 209.5
+      },
+      "id": "poi-harbor-24-mailbox",
+      "kind": "prop",
+      "size": {
+        "x": 0.5,
+        "y": 1.1,
+        "z": 0.5
+      }
+    },
+    {
+      "center": {
+        "x": -483.84,
+        "y": 3.25,
+        "z": 241.83
+      },
+      "id": "poi-suburbs-27-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 0.5,
+        "z": 3
+      }
+    },
+    {
+      "center": {
+        "x": -484.09,
+        "y": 0.58,
+        "z": 245.58
+      },
+      "id": "poi-suburbs-27-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 2,
+        "y": 1.16,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -484.09,
+        "y": 1.17,
+        "z": 244.08
+      },
+      "id": "poi-suburbs-27-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 2,
+        "y": 2.34,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -128.5,
+        "y": 3.25,
+        "z": 784.72
+      },
+      "id": "poi-suburbs-30-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": -124.75,
+        "y": 0.58,
+        "z": 784.97
+      },
+      "id": "poi-suburbs-30-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -126.25,
+        "y": 1.17,
+        "z": 784.97
+      },
+      "id": "poi-suburbs-30-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 149.8,
+        "y": 3.25,
+        "z": -458.13
+      },
+      "id": "poi-downtown-35-balcony",
+      "kind": "prop",
+      "size": {
+        "x": 3,
+        "y": 0.5,
+        "z": 1.5
+      }
+    },
+    {
+      "center": {
+        "x": 153.55,
+        "y": 0.58,
+        "z": -458.38
+      },
+      "id": "poi-downtown-35-step-0",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 1.16,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": 152.05,
+        "y": 1.17,
+        "z": -458.38
+      },
+      "id": "poi-downtown-35-step-1",
+      "kind": "prop",
+      "size": {
+        "x": 1.5,
+        "y": 2.34,
+        "z": 2
+      }
+    },
+    {
+      "center": {
+        "x": -688,
+        "y": 0.7,
+        "z": 209.5
+      },
+      "id": "poi-suburbs-31-mailbox",
+      "kind": "prop",
+      "size": {
+        "x": 0.5,
+        "y": 1.1,
+        "z": 0.5
+      }
+    },
+    {
+      "center": {
+        "x": 409.5,
+        "y": 0.7,
+        "z": 812
+      },
+      "id": "poi-harbor-26-mailbox",
+      "kind": "prop",
+      "size": {
+        "x": 0.5,
+        "y": 1.1,
+        "z": 0.5
+      }
+    },
+    {
+      "center": {
         "x": 12,
         "y": 0.7,
         "z": 706.5
       },
-      "id": "poi-harbor-25-mailbox",
+      "id": "poi-harbor-27-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -271644,7 +271670,7 @@
         "y": 7.45,
         "z": -246.9
       },
-      "id": "poi-hillside-15-stall",
+      "id": "poi-hillside-16-stall",
       "kind": "prop",
       "size": {
         "x": 2.4,
@@ -271658,7 +271684,7 @@
         "y": 3.25,
         "z": 753.71
       },
-      "id": "poi-suburbs-30-balcony",
+      "id": "poi-suburbs-32-balcony",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -271672,7 +271698,7 @@
         "y": 0.58,
         "z": 757.46
       },
-      "id": "poi-suburbs-30-step-0",
+      "id": "poi-suburbs-32-step-0",
       "kind": "prop",
       "size": {
         "x": 2,
@@ -271686,7 +271712,7 @@
         "y": 1.17,
         "z": 755.96
       },
-      "id": "poi-suburbs-30-step-1",
+      "id": "poi-suburbs-32-step-1",
       "kind": "prop",
       "size": {
         "x": 2,
@@ -271700,7 +271726,7 @@
         "y": 3.25,
         "z": 215.51
       },
-      "id": "poi-suburbs-31-balcony",
+      "id": "poi-suburbs-33-balcony",
       "kind": "prop",
       "size": {
         "x": 3,
@@ -271714,7 +271740,7 @@
         "y": 0.58,
         "z": 215.26
       },
-      "id": "poi-suburbs-31-step-0",
+      "id": "poi-suburbs-33-step-0",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -271728,7 +271754,7 @@
         "y": 1.17,
         "z": 215.26
       },
-      "id": "poi-suburbs-31-step-1",
+      "id": "poi-suburbs-33-step-1",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -271742,7 +271768,7 @@
         "y": 3.25,
         "z": 115.28
       },
-      "id": "poi-suburbs-32-balcony",
+      "id": "poi-suburbs-34-balcony",
       "kind": "prop",
       "size": {
         "x": 3,
@@ -271756,7 +271782,7 @@
         "y": 0.58,
         "z": 115.03
       },
-      "id": "poi-suburbs-32-step-0",
+      "id": "poi-suburbs-34-step-0",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -271770,7 +271796,7 @@
         "y": 1.17,
         "z": 115.03
       },
-      "id": "poi-suburbs-32-step-1",
+      "id": "poi-suburbs-34-step-1",
       "kind": "prop",
       "size": {
         "x": 1.5,
@@ -271784,7 +271810,7 @@
         "y": 9.7,
         "z": -657
       },
-      "id": "poi-hillside-16-mailbox",
+      "id": "poi-hillside-17-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -271798,7 +271824,7 @@
         "y": 12.1,
         "z": -845.5
       },
-      "id": "poi-hillside-17-mailbox",
+      "id": "poi-hillside-18-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
@@ -271812,7 +271838,7 @@
         "y": 9.55,
         "z": -457
       },
-      "id": "poi-hillside-18-stall",
+      "id": "poi-hillside-19-stall",
       "kind": "prop",
       "size": {
         "x": 1.2,
@@ -271836,100 +271862,16 @@
     },
     {
       "center": {
-        "x": -926.85,
-        "y": 3.25,
-        "z": 515.51
-      },
-      "id": "poi-suburbs-33-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 3,
-        "y": 0.5,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -923.1,
-        "y": 0.58,
-        "z": 515.26
-      },
-      "id": "poi-suburbs-33-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 1.16,
-        "z": 2
-      }
-    },
-    {
-      "center": {
-        "x": -924.6,
-        "y": 1.17,
-        "z": 515.26
-      },
-      "id": "poi-suburbs-33-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 2.34,
-        "z": 2
-      }
-    },
-    {
-      "center": {
         "x": 512,
         "y": 0.7,
         "z": 891.5
       },
-      "id": "poi-harbor-30-mailbox",
+      "id": "poi-harbor-31-mailbox",
       "kind": "prop",
       "size": {
         "x": 0.5,
         "y": 1.1,
         "z": 0.5
-      }
-    },
-    {
-      "center": {
-        "x": -16.21,
-        "y": 3.25,
-        "z": 443.51
-      },
-      "id": "poi-suburbs-34-balcony",
-      "kind": "prop",
-      "size": {
-        "x": 1.5,
-        "y": 0.5,
-        "z": 3
-      }
-    },
-    {
-      "center": {
-        "x": -15.96,
-        "y": 0.58,
-        "z": 447.26
-      },
-      "id": "poi-suburbs-34-step-0",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 1.16,
-        "z": 1.5
-      }
-    },
-    {
-      "center": {
-        "x": -15.96,
-        "y": 1.17,
-        "z": 445.76
-      },
-      "id": "poi-suburbs-34-step-1",
-      "kind": "prop",
-      "size": {
-        "x": 2,
-        "y": 2.34,
-        "z": 1.5
       }
     },
     {
@@ -271938,26 +271880,12 @@
         "y": 0.55,
         "z": 612
       },
-      "id": "poi-harbor-33-stall",
+      "id": "poi-harbor-34-stall",
       "kind": "prop",
       "size": {
         "x": 1.2,
         "y": 1.1,
         "z": 2.4
-      }
-    },
-    {
-      "center": {
-        "x": 212,
-        "y": 0.7,
-        "z": 891.5
-      },
-      "id": "poi-harbor-34-mailbox",
-      "kind": "prop",
-      "size": {
-        "x": 0.5,
-        "y": 1.1,
-        "z": 0.5
       }
     },
     {
@@ -288587,7 +288515,7 @@
         "y": 3.2,
         "z": -574.63
       },
-      "id": "poi-downtown-17-zip"
+      "id": "poi-downtown-18-zip"
     },
     {
       "a": {
@@ -288600,7 +288528,7 @@
         "y": 16.72,
         "z": -719.43
       },
-      "id": "poi-hillside-06-zip"
+      "id": "poi-hillside-03-zip"
     },
     {
       "a": {
@@ -288613,7 +288541,7 @@
         "y": 3.22,
         "z": -194.96
       },
-      "id": "poi-downtown-36-zip"
+      "id": "poi-downtown-37-zip"
     },
     {
       "a": {

@@ -19,8 +19,8 @@ export const TOUCH = 0.02;
 export const LEVEL_TOL = 0.02;
 /** Feature lines are marked at points this far apart, m. */
 const MARK_STEP = 1;
-/** Whether a solid is tilted (turned about x or z): its top is not a flat surface. */
-export const isTilted = (s: Solid): boolean => !!s.rotationDeg && (s.rotationDeg.x !== 0 || s.rotationDeg.y !== 0 || s.rotationDeg.z !== 0);
+/** Whether a solid is tilted (turned about x or z): its top is not a flat surface. A turn about y alone keeps it flat. */
+export const isTilted = (s: Solid): boolean => !!s.rotationDeg && (s.rotationDeg.x !== 0 || s.rotationDeg.z !== 0);
 
 // ---- Space: what stands where ---------------------------------------------------------------------------------
 

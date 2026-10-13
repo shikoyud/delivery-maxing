@@ -153,7 +153,8 @@ function dropFor(w: Pass, ledge: Ledge, avoid: Rect): { from: Vec3; to: Vec3 } |
     if (fall > w.maxFall) continue;
     const run = move.run.runSpeed * Math.sqrt((2 * fall) / move.gravity) + w.p.kits.dropMargin;
     const lane = laneRect(face, along, 0, run, DROP_HALF_WIDTH);
-    if (overlaps(lane, avoid, 0) || !allowed(w, lane)) continue;
+    // The lane (holding the landing) keeps clear of movement features like every other kit part
+    if (overlaps(lane, avoid, 0) || !allowed(w, lane) || !w.space.clear(lane, w.p.featureClearance)) continue;
     // A curb at most under the lane, and nothing in the way down to it
     if (!w.space.levelIn(lane, g.top - 0.05, g.top + 0.2, STREET)) continue;
     if (!w.space.free(lane, g.top + 0.25, ledge.top + move.capsule.height)) continue;

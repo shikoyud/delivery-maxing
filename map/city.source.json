@@ -143,6 +143,7 @@
     "perDistrict": { "downtown": 45, "harbor": 35, "hillside": 35, "suburbs": 35 },
     "perBandMin": 20,
     "bandEstimateFactor": 1.25,
+    "bandMargin": 6,
     "elevatedMin": 2.5,
     "pickWeights": { "street": 1, "route": 4, "mantle": 1, "padZip": 0.25 },
     "kindMin": { "mailbox": 8, "counter": 8, "balcony": 8 },

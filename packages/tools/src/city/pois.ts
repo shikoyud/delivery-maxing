@@ -36,7 +36,7 @@ function poiParams(p: PoiSource, ctx: PoiContext): PoiSource {
   const maxFall = ctx.orders.fragile.maxFallMeters;
   const raw = p as unknown as Record<string, unknown>;
   positive(raw, ['total', 'minSpacing', 'perBandMin', 'bandEstimateFactor', 'elevatedMin', 'featureClearance'], '');
-  nums(raw, ['elevatedTarget'], '');
+  nums(raw, ['elevatedTarget', 'bandMargin'], '');
   positive(obj(p.pickWeights, 'pickWeights'), ['street', 'route', 'mantle', 'padZip'], 'pickWeights.');
   if (p.elevatedTarget > 1) fail('elevatedTarget must be at most 1');
   const per = obj(p.perDistrict, 'perDistrict');
@@ -283,7 +283,9 @@ function select(w: Pass, cands: Candidate[]): { pois: Poi[]; built: Built[] } {
   for (const [kind, min] of Object.entries(p.kindMin) as [PoiKind, number][]) {
     for (const c of cands) if (c.slot.kind === kind && (kinds.get(kind) ?? 0) < min) take(c);
   }
-  for (const band of BANDS) for (const c of cands) if (c.band === band && (bands.get(band) ?? 0) < p.perBandMin) take(c);
+  // Aim past perBandMin by bandMargin: Task 14's path distances run longer than the straight-line estimate
+  const bandTarget = p.perBandMin + p.bandMargin;
+  for (const band of BANDS) for (const c of cands) if (c.band === band && (bands.get(band) ?? 0) < bandTarget) take(c);
   for (const c of cands) take(c);
 
   for (const [d, q] of left) {
@@ -293,7 +295,8 @@ function select(w: Pass, cands: Candidate[]): { pois: Poi[]; built: Built[] } {
     if ((kinds.get(kind) ?? 0) < min) throw new Error(`POI pass: only ${kinds.get(kind) ?? 0} ${kind} POIs (need ${min})`);
   }
   for (const band of BANDS) {
-    if ((bands.get(band) ?? 0) < p.perBandMin) throw new Error(`POI pass: only ${bands.get(band) ?? 0} POIs in the ${band} band (need ${p.perBandMin})`);
+    const n = bands.get(band) ?? 0;
+    if (n < bandTarget) throw new Error(`POI pass: only ${n} POIs in the ${band} band (need perBandMin + bandMargin = ${bandTarget})`);
   }
   return { pois, built };
 }
