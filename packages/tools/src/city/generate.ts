@@ -7,10 +7,11 @@ import {
   type PieceCatalog,
 } from '@dm/shared';
 import { cliffs, groundTiles, quays } from './boundary';
-import { buildFiller, type CityFrame, type DistrictContext, type DistrictOutput, type DistrictReport } from './district';
+import { type CityFrame, type DistrictContext, type DistrictOutput, type DistrictReport } from './district';
 import { buildDowntown } from './districts/downtown';
 import { buildHarbor } from './districts/harbor';
 import { buildHillside } from './districts/hillside';
+import { buildSuburbs } from './districts/suburbs';
 import { buildHub } from './hub';
 import { arterialLines, landRect } from './layout';
 import type { CitySource, QuadrantDistrict, Template } from './source';
@@ -32,7 +33,7 @@ const BUILDERS: Record<Template, (ctx: DistrictContext) => DistrictOutput> = {
   downtown: buildDowntown,
   harbor: buildHarbor,
   hillside: buildHillside,
-  suburbs: buildFiller,
+  suburbs: buildSuburbs,
 };
 
 /** FNV-1a of the district name mixed with the seed: each district has its own random stream. */

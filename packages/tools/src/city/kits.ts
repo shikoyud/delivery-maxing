@@ -7,6 +7,7 @@ import {
   type Rect,
   type RotY,
   type Solid,
+  type SolidKind,
   type Vec3,
   type ZipLine,
 } from '@dm/shared';
@@ -71,6 +72,34 @@ export const MANTLE_STEP_MIN_RISE = MANTLE_WALL_PROBE_HEIGHT;
 export function mantleStepRises(climb: number, rise: number): number[] {
   const tops = [0, ...mantleSteps({ x: 0, y: 0, z: 0 }, { x: 0, y: climb, z: 0 }, 0, rise).map(top), climb];
   return tops.slice(1).map((t, k) => t - tops[k]!);
+}
+
+const DEG = 180 / Math.PI;
+
+/**
+ * A slab whose top face runs from `hi` (its upper end) straight down to `lo`, reaching `embed` m on past `lo` along
+ * the same slope: a box tilted about x (a slope along z) or about z (a slope along x). `hi` and `lo` must differ along
+ * one horizontal axis only, and `lo` must be lower. `width` is across the slope and `thickness` perpendicular to the
+ * face (it hangs below the face).
+ */
+export function slopedSlab(id: string, kind: SolidKind, hi: Vec3, lo: Vec3, width: number, thickness: number, embed: number): Solid {
+  const alongZ = Math.abs(lo.x - hi.x) < 1e-9;
+  if (!alongZ && Math.abs(lo.z - hi.z) > 1e-9) throw new Error(`${id}: a sloped slab must run along x or z`);
+  const d = alongZ ? lo.z - hi.z : lo.x - hi.x;
+  const run = Math.abs(d);
+  const drop = hi.y - lo.y;
+  if (!(run > 0) || !(drop > 0)) throw new Error(`${id}: a sloped slab must fall from hi to lo`);
+  const s = Math.sign(d);
+  const a = Math.atan2(drop, run);
+  const len = Math.hypot(run, drop) + embed;
+  // Down the top face (s·cos a, −sin a) along the slope axis; the face's normal (s·sin a, cos a)
+  const midY = hi.y - (Math.sin(a) * len) / 2;
+  const midU = (alongZ ? hi.z : hi.x) + s * ((Math.cos(a) * len) / 2);
+  const y = midY - (Math.cos(a) * thickness) / 2;
+  const u = midU - s * ((Math.sin(a) * thickness) / 2);
+  return alongZ
+    ? { id, kind, center: v2({ x: hi.x, y, z: u }), size: v2({ x: width, y: thickness, z: len }), rotationDeg: v2({ x: s * a * DEG, y: 0, z: 0 }) }
+    : { id, kind, center: v2({ x: u, y, z: hi.z }), size: v2({ x: len, y: thickness, z: width }), rotationDeg: v2({ x: 0, y: 0, z: -s * a * DEG }) };
 }
 
 /** A zip line between two cable points (rounded to 0.01 m). */

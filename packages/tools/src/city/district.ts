@@ -88,6 +88,29 @@ export interface StairRun { id: string; steps: string[]; from: Vec3; to: Vec3 }
 /** A chute: `segments` (solid ids, top end first) laid end to end, its surface running from `start` down to `end`. */
 export interface ChuteReport { id: string; segments: string[]; start: Vec3; end: Vec3 }
 
+/**
+ * A grind rail: along a street's sidewalk (`street`) or in the skatepark. `approach` is a standing spot behind its
+ * first point, on its first segment's line, where a courier starts a run at it.
+ */
+export interface RailReport { id: string; kind: 'street' | 'skatepark'; approach: Vec3 }
+/**
+ * A ramp of the skatepark (`solids`, lowest first): its face climbs from `foot` (on the surface in front) along the
+ * horizontal unit direction `facing` to `top` (its crest, level with the deck or rim behind it).
+ */
+export interface RampReport {
+  id: string;
+  kind: 'quarter' | 'funbox' | 'bowl-wall' | 'bowl-outer';
+  solids: string[];
+  foot: Vec3;
+  top: Vec3;
+  facing: { x: number; z: number };
+}
+/**
+ * The skatepark bowl: a sunken-looking floor at ground level ringed by walls (`walls`, ramp ids) up to a rim deck at
+ * `height`, the whole bowl inside `rim`; outer ramps (`outerRamps`) climb onto the rim from outside.
+ */
+export interface BowlReport { id: string; floor: Rect; rim: Rect; height: number; walls: string[]; outerRamps: string[] }
+
 /** Test metadata about what a district built, for its content tests (map:build never writes it). */
 export interface DistrictReport {
   rooftopGaps: RooftopGap[];
@@ -101,6 +124,11 @@ export interface DistrictReport {
   steepStreets: SteepStreet[];
   stairRuns: StairRun[];
   chutes: ChuteReport[];
+  rails: RailReport[];
+  ramps: RampReport[];
+  bowl: BowlReport;
+  /** The skatepark's plaza. */
+  skatepark: Rect;
 }
 
 export interface DistrictOutput {

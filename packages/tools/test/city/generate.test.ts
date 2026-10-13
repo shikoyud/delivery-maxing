@@ -290,6 +290,10 @@ describe('generateCity on map/city.source.json', () => {
       ['hillside', (p) => ((p.stairs as Record<string, number>).rise = 0), /stairs\.rise must be positive/],
       ['hillside', (p) => ((p.chute as Record<string, number>).maxSegment = 0), /chute\.maxSegment must be positive/],
       ['hillside', (p) => (p.featureWidth = 0), /featureWidth must be positive/],
+      ['suburbs', (p) => ((p.skatepark as Record<string, number>).runUp = 0), /skatepark\.runUp must be positive/],
+      ['suburbs', (p) => ((p.skatepark as { transition: { deg: number }[] }).transition[1]!.deg = 52), /skatepark ramps must be under 50°/],
+      ['suburbs', (p) => ((p.skatepark as { rails: { points: number[][] }[] }).rails[0]!.points.push([20, 0, -0.3])), /must start and end with a level segment/],
+      ['suburbs', (p) => ((p.skatepark as Record<string, { x: number; z: number }>).cellAt = { x: -900, z: 300 }), /arterials on all sides/],
     ];
     for (const [district, patch, why] of cases) expect(() => generateCity(withParams(district, patch), pieces), String(why)).toThrow(why);
   });

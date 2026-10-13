@@ -86,12 +86,39 @@
       "rect": { "minX": -1000, "minZ": 0, "maxX": 0, "maxZ": 1000 },
       "template": "suburbs",
       "params": {
-        "pitch": 100, "streetHalfWidth": 7, "scaleMin": 1, "scaleMax": 1, "fillChance": 0.32,
-        "setback": 3, "gapMin": 4, "gapMax": 10, "edgeMargin": 2, "doorOffset": 1,
-        "pieces": [
-          "b-1story", "b-1story-gableroof", "b-1story-roundroof", "b-1story-sign", "b-2story",
-          "b-2story-2", "b-2story-gableroof", "b-2story-roundroof", "b-2story-center", "b-2story-stairs"
-        ]
+        "pitch": 100, "streetHalfWidth": 10, "edgeMargin": 2, "apronWidth": 20,
+        "houses": {
+          "pieces": [
+            "b-1story", "b-1story-gableroof", "b-1story-roundroof", "b-2story", "b-2story-2",
+            "b-2story-gableroof", "b-2story-roundroof", "b-2story-center"
+          ],
+          "scaleMin": 1, "scaleMax": 1, "fillChance": 0.55, "setback": 6, "gapMin": 6, "gapMax": 12, "doorOffset": 1
+        },
+        "rails": { "height": 0.8, "runUp": 8, "minClearance": 0.3 },
+        "streetRails": { "count": 6, "inset": 0.6, "endGap": 8, "minLength": 40 },
+        "skatepark": {
+          "cellAt": { "x": -100, "z": 300 }, "margin": 4, "runUp": 15, "embed": 0.5, "spacing": 1,
+          "transition": [{ "deg": 18, "rise": 0.8 }, { "deg": 38, "rise": 1.6 }],
+          "quarter": { "width": 10, "deck": 3, "runOut": 8 },
+          "funbox": { "height": 1.2, "deg": 20, "width": 8, "deck": 12, "rail": { "offset": 2.5, "inset": 4, "endGap": 1 } },
+          "bowl": { "at": [50, 50], "floor": 18, "rim": 3, "outerDeg": 20, "outerWidth": 10 },
+          "quarters": [
+            { "at": [30, 150], "dir": "+z" }, { "at": [60, 150], "dir": "+z" },
+            { "at": [150, 50], "dir": "+x" }, { "at": [150, 95], "dir": "+x" }
+          ],
+          "funboxes": [{ "at": [115, 25], "axis": "x" }, { "at": [110, 122], "axis": "z" }],
+          "rails": [
+            { "at": [15, 95], "dir": "+x", "points": [[0, 0, 0], [14, 0, 0]] },
+            { "at": [55, 95], "dir": "+x", "points": [[0, 0, 0], [20, 0, 0]] },
+            { "at": [15, 103], "dir": "+x", "points": [[0, 0, 0], [5, 0, 0], [11, 0, -0.4], [16, 0, -0.4]] },
+            { "at": [55, 103], "dir": "+x", "points": [[0, 0, 0], [3, 0, 0], [8, 0, 0.4], [13, 0, 0.4], [18, 0, 0], [21, 0, 0]] },
+            { "at": [15, 111], "dir": "+x", "points": [[0, 0, 0], [8, 0, 0], [14, 4, 0], [22, 4, 0]] },
+            { "at": [55, 113], "dir": "+x", "points": [[0, 0, 0], [30, 0, 0]] },
+            { "at": [15, 122], "dir": "+x", "points": [[0, 0, 0.2], [6, 0, 0.2], [14, 0, -0.4], [18, 0, -0.4]] },
+            { "at": [55, 122], "dir": "+x", "points": [[0, 0, 0], [16, 0, 0]] }
+          ]
+        },
+        "checkpoint": { "inset": 5, "streetClearance": 3 }
       }
     }
   ],

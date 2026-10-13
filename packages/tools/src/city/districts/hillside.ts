@@ -1,4 +1,4 @@
-import { ordersConfig, solidRect, type PieceEntry, type Rect, type Solid, type SolidKind, type Vec3 } from '@dm/shared';
+import { ordersConfig, solidRect, type PieceEntry, type Rect, type Solid, type Vec3 } from '@dm/shared';
 import {
   emptyOutput,
   paramChecks,
@@ -7,7 +7,7 @@ import {
   type DistrictReport,
   type StreetRamp,
 } from '../district';
-import { navLinkFor, obstacleOf, padFlightClear, padLaunchFor } from '../kits';
+import { navLinkFor, obstacleOf, padFlightClear, padLaunchFor, slopedSlab } from '../kits';
 import { box, gridLines, intersectRect, r2, v2, type GridLine } from '../layout';
 import { fillLot, type FillerParams, type Lot } from '../lots';
 import { GraphBuilder, splitAtChunks } from '../streets';
@@ -299,27 +299,6 @@ function buildTerraces(b: Build, lay: CellLayout): void {
     addSolids(b, solids);
     b.report.terraces.push({ id, rect, top: t.level, solids: solids.map((s) => s.id) });
   });
-}
-
-/**
- * A slab along z whose top face runs from `hi` (its upper end, at the smaller z) down to `lo`, reaching `embed` m on
- * past `lo` along the same slope: a box tilted about x (rotationDeg.x is the slope).
- */
-function slopedSlab(id: string, kind: SolidKind, hi: Vec3, lo: Vec3, width: number, thickness: number, embed: number): Solid {
-  const run = lo.z - hi.z;
-  const drop = hi.y - lo.y;
-  if (!(run > 0) || !(drop > 0)) throw new Error(`${id}: a sloped slab must fall toward +z`);
-  const a = Math.atan2(drop, run);
-  const len = Math.hypot(run, drop) + embed;
-  // Down the top face (0, −sin a, cos a); the face's normal (0, cos a, sin a): local +z and +y turned by Rx(a)
-  const mid = { y: hi.y - (Math.sin(a) * len) / 2, z: hi.z + (Math.cos(a) * len) / 2 };
-  return {
-    id,
-    kind,
-    center: v2({ x: hi.x, y: mid.y - (Math.cos(a) * thickness) / 2, z: mid.z - (Math.sin(a) * thickness) / 2 }),
-    size: v2({ x: width, y: thickness, z: len }),
-    rotationDeg: v2({ x: a * DEG, y: 0, z: 0 }),
-  };
 }
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { movementConfig as cfg, type JumpPad, type Vec3, type ZipLine } from '@dm/shared';
-import { MANTLE_STEP_MIN_RISE, mantleStepRises, mantleSteps, navLinkFor, obstacleOf, padLaunchFor, zipBetween } from '../../src/city/kits';
+import { MANTLE_STEP_MIN_RISE, mantleStepRises, mantleSteps, navLinkFor, obstacleOf, padLaunchFor, slopedSlab, zipBetween } from '../../src/city/kits';
 
 const g = cfg.gravity;
 
@@ -127,5 +127,37 @@ describe('obstacleOf', () => {
     const tilted = { ...flat, size: { x: 2, y: 1, z: 10 }, rotationDeg: { x: 30, y: 0, z: 0 } };
     // Half extents turned 30° about x: y = 0.5·cos 30° + 5·sin 30°
     expect(obstacleOf(tilted).top).toBeCloseTo(2 + 0.5 * Math.cos(Math.PI / 6) + 5 * Math.sin(Math.PI / 6), 6);
+  });
+});
+
+describe('slopedSlab', () => {
+  /** `p` in the slab's own frame (undoing its x or z rotation about its centre). */
+  const local = (s: ReturnType<typeof slopedSlab>, p: Vec3): Vec3 => {
+    const [ax, az] = [((s.rotationDeg?.x ?? 0) * Math.PI) / 180, ((s.rotationDeg?.z ?? 0) * Math.PI) / 180];
+    const d = { x: p.x - s.center.x, y: p.y - s.center.y, z: p.z - s.center.z };
+    // Inverse of Rx(ax)·Rz(az) (one of them is 0): Rz(−az) then Rx(−ax)
+    const z1 = { x: d.x * Math.cos(az) + d.y * Math.sin(az), y: -d.x * Math.sin(az) + d.y * Math.cos(az), z: d.z };
+    return { x: z1.x, y: z1.y * Math.cos(ax) + z1.z * Math.sin(ax), z: -z1.y * Math.sin(ax) + z1.z * Math.cos(ax) };
+  };
+
+  it('in each of the four directions the top face runs through hi and lo, hi at its upper end, reaching embed past lo', () => {
+    const hi = { x: 10, y: 3, z: -20 };
+    for (const [dx, dz] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+      const lo = { x: hi.x + dx * 6, y: 1, z: hi.z + dz * 6 };
+      const s = slopedSlab('s', 'ramp', hi, lo, 4, 0.8, 0.5);
+      const alongX = dx !== 0;
+      const half = (alongX ? s.size.x : s.size.z) / 2;
+      expect(alongX ? s.size.z : s.size.x, `${dx},${dz} width`).toBe(4);
+      expect(half * 2, `${dx},${dz} length`).toBeCloseTo(Math.hypot(6, 2) + 0.5, 2);
+      for (const [p, at] of [[hi, -half], [lo, -half + Math.hypot(6, 2)]] as const) {
+        const l = local(s, p);
+        expect(l.y, `${dx},${dz} on the top face`).toBeCloseTo(0.4, 2);
+        // The slab's long axis runs from hi (one end) past lo; which end is −half depends on the turn
+        expect(Math.abs(alongX ? l.x : l.z), `${dx},${dz} along`).toBeCloseTo(Math.abs(at), 2);
+        expect(alongX ? l.z : l.x, `${dx},${dz} centred across`).toBeCloseTo(0, 6);
+      }
+    }
+    expect(() => slopedSlab('s', 'ramp', hi, { x: 12, y: 1, z: -18 }, 4, 0.8, 0)).toThrow(/along x or z/);
+    expect(() => slopedSlab('s', 'ramp', hi, { x: 10, y: 4, z: -14 }, 4, 0.8, 0)).toThrow(/fall from hi to lo/);
   });
 });
