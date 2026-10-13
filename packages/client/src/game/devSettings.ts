@@ -1,10 +1,9 @@
-import { movementConfig, ordersConfig, type MovementConfig } from '@dm/shared';
+import { movementConfig, type MovementConfig } from '@dm/shared';
 
 /** localStorage key for the dev tuning panel's overrides. */
 export const DEV_KEY = 'dm.dev.v1';
 
 export interface DevSettings {
-  backpackSlots: number;
   movement: MovementConfig;
 }
 
@@ -69,19 +68,18 @@ const countLeaves = (t: Tree | null): number =>
   t === null ? 0 : Object.values(t).reduce<number>((n, v) => n + (typeof v === 'number' ? 1 : countLeaves(v)), 0);
 
 /** Only the settings that differ from the defaults (R27): what save() stores. */
-export function devOverrides(s: DevSettings): { backpackSlots?: number; movement?: Tree } {
+export function devOverrides(s: DevSettings): { movement?: Tree } {
   const def = defaultDevSettings();
-  const out: { backpackSlots?: number; movement?: Tree } = {};
-  if (s.backpackSlots !== def.backpackSlots) out.backpackSlots = s.backpackSlots;
+  const out: { movement?: Tree } = {};
   const movement = diffNumbers(s.movement as unknown as Tree, def.movement as unknown as Tree, FIXED_MOVEMENT_KEYS);
   if (movement) out.movement = movement;
   return out;
 }
 
-/** Number of values (movement leaves plus backpack slots) that differ from the defaults. */
+/** Number of values (movement leaves) that differ from the defaults. */
 export function countOverrides(s: DevSettings): number {
   const o = devOverrides(s);
-  return (o.backpackSlots === undefined ? 0 : 1) + countLeaves(o.movement ?? null);
+  return countLeaves(o.movement ?? null);
 }
 
 /** Dev panel status line for `n` active overrides. */
@@ -110,7 +108,7 @@ export function createDebouncedSave(save: () => void, ms: number): { schedule():
 }
 
 export function defaultDevSettings(): DevSettings {
-  return { backpackSlots: ordersConfig.backpack.baseSlots, movement: structuredClone(movementConfig) };
+  return { movement: structuredClone(movementConfig) };
 }
 
 function parse(raw: string | null): DevSettings {
@@ -123,10 +121,6 @@ function parse(raw: string | null): DevSettings {
     return out;
   }
   if (!isObj(v)) return out;
-  const slots = v.backpackSlots;
-  if (typeof slots === 'number' && Number.isFinite(slots)) {
-    out.backpackSlots = Math.min(ordersConfig.backpack.maxSlots, Math.max(1, Math.round(slots)));
-  }
   if (isObj(v.movement)) mergeNumbers(out.movement as unknown as Tree, v.movement, FIXED_MOVEMENT_KEYS);
   return out;
 }

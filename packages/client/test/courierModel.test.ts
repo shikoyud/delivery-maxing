@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { ordersConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
+import { vehiclesConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 import { CourierModel } from '../src/render/courier/CourierModel';
 
@@ -218,7 +218,7 @@ describe('CourierModel', () => {
     expect(m.packages.visible).toBe(true);
     expect(m.packages.count).toBe(3);
     m.setPackages(99);
-    expect(m.packages.count).toBe(ordersConfig.backpack.maxSlots);
+    expect(m.packages.count).toBe(vehiclesConfig.car.slots);
     // Behind the courier (+Z at heading 0), around its back.
     m.root.updateMatrixWorld(true);
     const p = new THREE.Box3().setFromObject(m.packages);

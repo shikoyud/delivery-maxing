@@ -1,29 +1,42 @@
 import type { Band } from '../world/distance';
 
-export type OrderType = 'dropoff' | 'pickup' | 'chain';
-export type Modifier = 'express' | 'fragile' | 'heavy';
-export type Bonus = 'express' | 'fragile' | 'heavy' | 'par';
-export type Step = { kind: 'poi'; poiId: string } | { kind: 'hub' };
+export type OrderKind = 'food' | 'package';
+export type WeightClass = 'small' | 'medium' | 'large' | 'bulky';
+export type Modifier = 'express' | 'fragile';
+export type Bonus = 'hot' | 'par' | 'express' | 'fragile';
 
 export interface Order {
   id: string;
-  type: OrderType;
+  kind: OrderKind;
+  pickupPoiId: string;
+  dropoffPoiId: string;
+  item: string;
+  weightKg: number | null;
+  weightClass: WeightClass | null;
   modifier: Modifier | null;
-  steps: Step[];
-  /** null for chain */
-  band: Band | null;
-  /** One-way HUB to first POI. */
-  hubDistance: number;
-  /** Drop-off d; pick-up 2d; chain hub to A + A to B + B to hub. */
-  routeDistance: number;
-  slots: number;
-  /** Seconds; express only. */
+  band: Band;
+  /** Path distance pickup to dropoff. */
+  distance: number;
+  /** Hot limit (food) or par limit (package), seconds from pickup. */
+  timeLimit: number;
+  /** Seconds from pickup; express packages only. */
   expressLimit: number | null;
-  /** Seconds from accept; every order. Delivering within it earns the par bonus. */
-  parLimit: number;
 }
 
-export interface Unlocks {
-  express: boolean;
-  chain: boolean;
+export interface Offer {
+  order: Order;
+  offeredAt: number;
+  expiresAt: number;
+}
+
+export interface ActiveOrder {
+  order: Order;
+  acceptedAt: number;
+  pickedUpAt: number | null;
+  fragileIntact: boolean;
+}
+
+export interface CarrierCapacity {
+  slots: number;
+  maxPackageKg: number;
 }

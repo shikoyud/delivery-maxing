@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { bandFor, streetDistance } from '../../src/world/distance';
-import { ordersConfig } from '../../src/config';
+import { testOrderRules } from './fixtures';
 import { vec3 } from '../../src/math/vec3';
 
-const b = ordersConfig.bands;
+const b = testOrderRules().bands;
 
 describe('distance', () => {
   it('streetDistance is Manhattan on x/z and ignores y', () => {

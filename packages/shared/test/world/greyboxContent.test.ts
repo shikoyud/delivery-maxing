@@ -172,10 +172,10 @@ describe('greybox city: POIs', () => {
 });
 
 describe('greybox city: schema v2', () => {
-  it('has no solids of kind chute or hub, and no feature arrays remain', () => {
-    expect(map.solids.some((s) => (s.kind as string) === 'chute' || (s.kind as string) === 'hub')).toBe(false);
+  it('has no chute solids, and no feature arrays remain', () => {
+    expect(map.solids.some((s) => (s.kind as string) === 'chute')).toBe(false);
     expect(map.solids.some((s) => 'surface' in s)).toBe(false);
-    for (const key of ['zipLines', 'jumpPads', 'boostOrbs', 'rails', 'checkpoints', 'hub', 'spawn']) {
+    for (const key of ['zipLines', 'jumpPads', 'boostOrbs', 'rails', 'checkpoints', 'spawn']) {
       expect(key in (src as object), key).toBe(false);
       expect(key in (map as object), key).toBe(false);
     }

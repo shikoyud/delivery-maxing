@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { ordersConfig, type PlayerState, type Vec3 } from '@dm/shared';
+import { vehiclesConfig, type PlayerState, type Vec3 } from '@dm/shared';
 import type { CourierConfig, CourierPoseName } from '../../clientConfig';
 import { palette } from '../palette';
 import { animFor, displayYaw, easeYaw, type CourierAnim, type CourierClip } from './animState';
@@ -420,7 +420,7 @@ export class CourierModel implements CourierView {
   /** Boxes in `columns` up the back, placed in the body frame at rest and then carried by the torso bone. */
   private buildPackages(): THREE.InstancedMesh {
     const { size, gap, columns } = this.cfg.packages;
-    const max = ordersConfig.backpack.maxSlots;
+    const max = vehiclesConfig.car.slots;
     const mesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(size, size, size),
       new THREE.MeshLambertMaterial({ color: palette.parcel }),

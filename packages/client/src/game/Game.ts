@@ -133,7 +133,6 @@ export class Game {
         this.saver.cancel(); // a pending save would bring the overrides back
         const fresh = this.devStore.reset();
         assignNumbers(settings.movement as never, fresh.movement as never);
-        settings.backpackSlots = fresh.backpackSlots;
         this.devPanel.setOverrideCount(0);
       },
       onResetProgress: () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { movementConfig, ordersConfig } from '@dm/shared';
+import { movementConfig } from '@dm/shared';
 import { DEV_KEY, countOverrides, createDebouncedSave, createDevSettingsStore, overridesLabel } from '../src/game/devSettings';
 
 function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & { data: Map<string, string> } {
@@ -13,10 +13,9 @@ function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & 
 }
 
 describe('createDevSettingsStore', () => {
-  it('defaults equal config/movement.json and backpackSlots = baseSlots', () => {
+  it('defaults equal config/movement.json', () => {
     const s = createDevSettingsStore(memoryStorage()).load();
     expect(s.movement).toEqual(movementConfig);
-    expect(s.backpackSlots).toBe(ordersConfig.backpack.baseSlots);
     expect(DEV_KEY).toBe('dm.dev.v1');
   });
 
@@ -25,12 +24,10 @@ describe('createDevSettingsStore', () => {
     storage.data.set(
       DEV_KEY,
       JSON.stringify({
-        backpackSlots: 3,
         movement: { run: { sprintSpeed: 9.5, runSpeed: 'fast', bogus: 1 }, nope: { a: 1 }, gravity: 25, jump: 'x' },
       }),
     );
     const s = createDevSettingsStore(storage).load();
-    expect(s.backpackSlots).toBe(3);
     expect(s.movement.run.sprintSpeed).toBe(9.5);
     expect(s.movement.run.runSpeed).toBe(movementConfig.run.runSpeed);
     expect(s.movement.gravity).toBe(25);
@@ -47,7 +44,6 @@ describe('createDevSettingsStore', () => {
     expect(store.load().movement).toEqual(movementConfig);
     expect(() => store.save(store.load())).not.toThrow();
     expect(store.reset().movement).toEqual(movementConfig);
-    expect(createDevSettingsStore(null).load().backpackSlots).toBe(ordersConfig.backpack.baseSlots);
   });
 
   it('malformed JSON falls back to defaults', () => {
@@ -72,11 +68,9 @@ describe('createDevSettingsStore', () => {
     const store = createDevSettingsStore(memoryStorage());
     const s = store.load();
     s.movement.jump.height = 2;
-    s.backpackSlots = 4;
     store.save(s);
     const back = store.load();
     expect(back.movement.jump.height).toBe(2);
-    expect(back.backpackSlots).toBe(4);
   });
 
   it('load returns a deep clone: editing it never mutates the shared movementConfig import', () => {
@@ -96,12 +90,6 @@ describe('createDevSettingsStore', () => {
     s.movement.run.sprintSpeed = 9.5;
     store.save(s);
     expect(JSON.parse(storage.data.get(DEV_KEY)!)).toEqual({ movement: { run: { sprintSpeed: 9.5 } } });
-    s.backpackSlots = ordersConfig.backpack.baseSlots + 1;
-    store.save(s);
-    expect(JSON.parse(storage.data.get(DEV_KEY)!)).toEqual({
-      backpackSlots: ordersConfig.backpack.baseSlots + 1,
-      movement: { run: { sprintSpeed: 9.5 } },
-    });
     // Load still merges the diff over the current defaults.
     const back = store.load();
     expect(back.movement.run.sprintSpeed).toBe(9.5);
@@ -126,8 +114,7 @@ describe('createDevSettingsStore', () => {
     expect(countOverrides(s)).toBe(0);
     s.movement.jump.height = 2;
     s.movement.gravity = 25;
-    s.backpackSlots = ordersConfig.backpack.baseSlots + 1;
-    expect(countOverrides(s)).toBe(3);
+    expect(countOverrides(s)).toBe(2);
   });
 
   it('R27: Reset tuning cancels a pending debounced save, so no saved key comes back', () => {

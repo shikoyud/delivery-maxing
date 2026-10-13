@@ -36,37 +36,29 @@ export interface MovementConfig {
   fall: { outOfBoundsY: number; boundsMargin: number };
 }
 
+export type VehicleTier = 'walk' | 'skateboard' | 'bicycle' | 'motorbike' | 'car';
+export interface VehicleSpec { slots: number; maxPackageKg: number; topSpeed: number }
+export type VehiclesConfig = Record<VehicleTier, VehicleSpec>;
+
+interface TimeRule { distanceFactor: number; extraSeconds: number }
+interface Rewards { short: number; medium: number; long: number; hot: number; par: number; express: number; fragile: number }
+
 export interface OrdersConfig {
-  board: { size: number; refreshSeconds: number; cancelCooldownSeconds: number };
-  backpack: { baseSlots: number; maxSlots: number };
-  bands: { shortMax: number; mediumMax: number };
-  points: {
-    short: number;
-    medium: number;
-    long: number;
-    chain: number;
-    expressOnTime: number;
-    fragileIntact: number;
-    heavy: number;
-    withinPar: number;
-  };
-  coins: {
-    short: number;
-    medium: number;
-    long: number;
-    chain: number;
-    expressOnTime: number;
-    fragileIntact: number;
-    heavy: number;
-    withinPar: number;
-  };
-  express: { distanceFactor: number; extraSeconds: number };
-  par: { distanceFactor: number; extraSeconds: number };
+  offers: { maxShown: number; lifetimeSeconds: number; minIntervalSeconds: number; maxIntervalSeconds: number };
+  lockout: { seconds: number };
+  spacing: { doorMeters: number; reuseSeconds: number };
+  referenceSpeed: number;
+  hot: TimeRule;
+  par: TimeRule;
+  express: TimeRule;
   fragile: { maxFallMeters: number };
-  heavy: { slots: number; jumpHeightMultiplier: number };
+  weightClasses: { smallMax: number; mediumMax: number; largeMax: number; bulkyMax: number };
+  weightMultiplier: { small: number; medium: number; large: number; bulky: number };
+  points: Rewards;
+  coins: Rewards;
   mix: {
-    typeWeights: { dropoff: number; pickup: number; chain: number };
-    modifierWeights: { none: number; express: number; fragile: number; heavy: number };
+    kindWeights: { food: number; package: number };
+    modifierWeights: { none: number; express: number; fragile: number };
   };
   zones: { poiRadius: number; poiHeight: number };
 }
