@@ -84,7 +84,7 @@ A modifier can be added to a Drop-off or Pick-up order.
 | **Fragile** | Earns a bonus if delivered intact. A fall of more than 7 m, being hit by another player, or an out-of-bounds respawn cancels the bonus. The order itself is never lost. | Rookie |
 | **Heavy** | Takes 2 backpack slots and reduces jump height by 10% while carried. Earns a bonus. Offered only to players whose backpack has 2 or more slots. | Rookie |
 
-**Order distances.** An order's distance band (§3.4, §5.3) uses the one-way path distance from the HUB to its POI. The **route distance** is the full trip the order needs: HUB → POI for a Drop-off, HUB → POI → HUB for a Pick-up. The Express timer and the minimum plausible time (§10) use the route distance.
+**Order distances.** An order's distance band (§3.4, §5.3) uses the one-way path distance from the HUB to its POI. The **route distance** is the full trip the order needs: HUB → POI for a Drop-off, HUB → POI → HUB for a Pick-up (Chain: §5.3). The Express timer and the minimum plausible time (§10) use the route distance.
 
 ### 3.3 Order Board
 
@@ -165,7 +165,7 @@ Falling into water or out of bounds respawns the player at the nearest checkpoin
 | Fog | Radial (distance from the camera), ends at 700 m |
 | Model loading | All models load at start; only physics colliders page in and out, and render LOD switches by distance |
 
-**Performance proof (SP2).** CI checks proxies at 8 perf-route viewpoints covering every district: at most 200 draw calls and 700,000 triangles at 1280 × 720. Real frame times come from `?map=city&perf=1`, a flythrough of the same route that passes when the p95 frame time is ≤ 18 ms. Measured 2026-10-13 on the user's RTX 4050 laptop at 1920 × 957: p95 4.3 ms.
+**Performance proof (SP2).** CI checks proxies at 8 perf-route viewpoints covering every district: at most 200 draw calls and 700,000 triangles at 1280 × 720. These are CI proxies, not hard limits on the real viewport: a wider window sees more of the city (the user's 1920 × 957 run peaked at 707,288 triangles). Real frame times come from `?map=city&perf=1`, a flythrough of the same route that passes when the p95 frame time is ≤ 18 ms. Measured 2026-10-13 on the user's RTX 4050 laptop at 1920 × 957: p95 4.3 ms.
 
 ### 5.2 How the map is built
 
@@ -484,7 +484,7 @@ Each sub-project gets its own implementation plan.
 - **Custody:** the program holds both the AMZNx pool and players' locked GAME, which makes it a high-value target. The audit must cover the lock vault.
 - **Branding:** no Amazon name, logo or trade dress in the game. Courier branding is fictional.
 
-**Performance risk:** a 2 × 2 km city in the browser depends on chunk streaming, LOD and collider paging. SP2 must prove the 60 fps target on a mid-range laptop before the full city is authored.
+**Performance risk (settled in SP2):** a 2 × 2 km city in the browser depends on chunk streaming, LOD and collider paging. SP2 proved the 60 fps target: p95 frame time 4.3 ms on the user's RTX 4050 laptop at 1920 × 957, with CI draw-call and triangle proxies at every perf-route viewpoint (§5.1). Later sub-projects keep running the `?perf=1` check as content and player counts grow.
 
 **Open items to verify:**
 - Confirm AMZNx is offered in Pump.fun's Custom Pair selector.
