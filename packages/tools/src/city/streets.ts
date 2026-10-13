@@ -114,7 +114,8 @@ export function mergeStreetGraphs(graphs: StreetGraph[]): StreetGraph {
 }
 
 type Kind = 'road' | 'sidewalk';
-interface Cell { kind: Kind; r: Rect }
+/** A road or sidewalk cell of a street level (the street's y: the slab's top is that much above it). */
+interface Cell { kind: Kind; r: Rect; level: number }
 interface Arms { n: number; s: number; e: number; w: number }
 
 const rect = (x0: number, x1: number, z0: number, z1: number): Rect => ({
@@ -128,7 +129,7 @@ const rect = (x0: number, x1: number, z0: number, z1: number): Rect => ({
 function mergeAlong(cells: Cell[], axis: 'x' | 'z'): Cell[] {
   const groups = new Map<string, Cell[]>();
   for (const c of cells) {
-    const key = axis === 'x' ? `${c.kind}|${c.r.minZ}|${c.r.maxZ}` : `${c.kind}|${c.r.minX}|${c.r.maxX}`;
+    const key = axis === 'x' ? `${c.kind}|${c.level}|${c.r.minZ}|${c.r.maxZ}` : `${c.kind}|${c.level}|${c.r.minX}|${c.r.maxX}`;
     const list = groups.get(key);
     if (list) list.push(c);
     else groups.set(key, [c]);
@@ -142,7 +143,7 @@ function mergeAlong(cells: Cell[], axis: 'x' | 'z'): Cell[] {
     for (const c of list) {
       if (cur && c.r[lo] <= cur.r[hi] + EPS) cur.r[hi] = Math.max(cur.r[hi], c.r[hi]);
       else {
-        cur = { kind: c.kind, r: { ...c.r } };
+        cur = { kind: c.kind, r: { ...c.r }, level: c.level };
         out.push(cur);
       }
     }
@@ -171,7 +172,8 @@ export function splitAtChunks(r: Rect, size: number): Rect[] {
  * Road and sidewalk solids for the flat, axis-aligned edges of a street graph, split at chunk borders. Each edge is a
  * road strip with a sidewalk on each side (`halfWidth` covers both). Where streets cross, the junction box gets road
  * toward each arm and sidewalk at its corners and on armless sides, so sidewalks run unbroken past T-junctions.
- * Edges inside the plaza (both ends `plaza`) and sloped or diagonal edges get no solids here.
+ * Each slab stands at its street's level (the nodes' y). Edges inside the plaza (both ends `plaza`) and sloped or
+ * diagonal edges get no solids here.
  */
 export function streetSolids(graph: StreetGraph, style: StreetStyle, chunkSize: number): Solid[] {
   const pos = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -201,10 +203,12 @@ export function streetSolids(graph: StreetGraph, style: StreetStyle, chunkSize: 
   };
 
   const cells: Cell[] = [];
+  let level = 0;
   const add = (kind: Kind, r: Rect): void => {
-    if (r.maxX - r.minX > EPS && r.maxZ - r.minZ > EPS) cells.push({ kind, r });
+    if (r.maxX - r.minX > EPS && r.maxZ - r.minZ > EPS) cells.push({ kind, r, level });
   };
   for (const { a, b, hw, horizontal } of flat) {
+    level = a.p.y;
     const rw = hw - sw;
     if (horizontal) {
       const x0 = a.p.x + box(a.id).hx;
@@ -229,6 +233,7 @@ export function streetSolids(graph: StreetGraph, style: StreetStyle, chunkSize: 
     if (hx === 0) continue;
     const m = arms.get(n.id)!;
     const { x, z } = n.p;
+    level = n.p.y;
     const [rx, rz] = [hx - sw, hz - sw];
     const xs = [x - hx, x - rx, x + rx, x + hx];
     const zs = [z - hz, z - rz, z + rz, z + hz];
@@ -256,16 +261,18 @@ export function streetSolids(graph: StreetGraph, style: StreetStyle, chunkSize: 
   }
 
   const merged = mergeAlong(mergeAlong(cells, 'x'), 'z');
-  const pieces = merged.flatMap((c) => splitAtChunks(c.r, chunkSize).map((r) => ({ kind: c.kind, r })));
-  pieces.sort((p, q) => (p.kind === q.kind ? p.r.minZ - q.r.minZ || p.r.minX - q.r.minX : p.kind === 'road' ? -1 : 1));
+  const pieces = merged.flatMap((c) => splitAtChunks(c.r, chunkSize).map((r) => ({ kind: c.kind, r, level: c.level })));
+  pieces.sort((p, q) =>
+    p.kind === q.kind ? p.level - q.level || p.r.minZ - q.r.minZ || p.r.minX - q.r.minX : p.kind === 'road' ? -1 : 1,
+  );
   const counters = { road: 0, sidewalk: 0 };
-  return pieces.map(({ kind, r }) => {
+  return pieces.map(({ kind, r, level: y }) => {
     const top = kind === 'road' ? style.roadTop : style.sidewalkTop;
-    // Slabs reach as far below y = 0 (into the ground tile) as above it, so the centre stays on the 0.01 grid
+    // Slabs reach as far below their level (into the ground) as above it, so the centre stays on the 0.01 grid
     return {
       id: `${kind === 'road' ? 'road' : 'walk'}-${counters[kind]++}`,
       kind,
-      center: v2({ x: (r.minX + r.maxX) / 2, y: 0, z: (r.minZ + r.maxZ) / 2 }),
+      center: v2({ x: (r.minX + r.maxX) / 2, y, z: (r.minZ + r.maxZ) / 2 }),
       size: v2({ x: r.maxX - r.minX, y: 2 * top, z: r.maxZ - r.minZ }),
     };
   });

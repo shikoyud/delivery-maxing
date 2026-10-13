@@ -172,13 +172,21 @@ describe('generateCity on map/city.source.json', () => {
     expect(len('west')).toBeCloseTo(city.size - src.boundary.cliffDepth, 6);
   });
 
-  it('roads (top 0.02) and sidewalks (top 0.15) never cross a chunk border', () => {
+  it('flat roads (top 0.02 above their street level) and sidewalks (0.15) never cross a chunk border', () => {
     const streets = city.solids.filter((s) => s.kind === 'road' || s.kind === 'sidewalk');
-    expect(streets.length).toBeGreaterThan(500);
-    for (const s of streets) {
+    const levels = new Set(city.streets.nodes.map((n) => n.p.y));
+    // Sloped road slabs are Hillside's steep-street ramps (its content test checks them)
+    const sloped = streets.filter((s) => s.rotationDeg);
+    expect(sloped.every((s) => s.kind === 'road' && s.id.startsWith('hillside-'))).toBe(true);
+    const flat = streets.filter((s) => !s.rotationDeg);
+    expect(flat.length).toBeGreaterThan(500);
+    for (const s of flat) {
       expect(chunksOverlapping(solidRect(s), city.chunkSize), s.id).toHaveLength(1);
-      expect(s.center.y + s.size.y / 2, s.id).toBeCloseTo(s.kind === 'road' ? 0.02 : 0.15, 6);
+      // A slab is centred on its street level and reaches as far above it as below
+      expect(levels.has(s.center.y), `${s.id} at a street level`).toBe(true);
+      expect(s.size.y / 2, s.id).toBeCloseTo(s.kind === 'road' ? 0.02 : 0.15, 6);
     }
+    expect(flat.filter((s) => s.center.y === 0).length).toBeGreaterThan(500);
   });
 
   it('the hub ports the SP1 plaza, kiosk and drop zone, with a checkpoint at the spawn', () => {

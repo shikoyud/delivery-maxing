@@ -74,6 +74,20 @@ export interface CraneReport { id: string; height: number; jib: Rect; pads: stri
 /** A district's quays: where the land stops (`line` on the `across` axis), and the checkpoints along them. */
 export interface QuayReport { quays: QuayEdge[]; checkpoints: string[] }
 
+/** A terrace: a flat plateau over `rect` (its solids `solids`, split at chunk borders) with its top at `top`. */
+export interface Terrace { id: string; rect: Rect; top: number; solids: string[] }
+/** One ramp of a steep street: the `solid` (a rotated road slab) from `bottom` to `top`, on its road surface. */
+export interface StreetRamp { solid: string; bottom: Vec3; top: Vec3 }
+/**
+ * A steep street: a straight street running from `from` (on the arterial at its foot) up its `ramps` (lowest first)
+ * to `to` (on the street of its top terrace), every point on the road surface of its centre line.
+ */
+export interface SteepStreet { id: string; from: Vec3; to: Vec3; ramps: StreetRamp[] }
+/** A stair run: `steps` (solid ids, lowest first) walked from `from` (in front of the lowest step) to `to` (above). */
+export interface StairRun { id: string; steps: string[]; from: Vec3; to: Vec3 }
+/** A chute: `segments` (solid ids, top end first) laid end to end, its surface running from `start` down to `end`. */
+export interface ChuteReport { id: string; segments: string[]; start: Vec3; end: Vec3 }
+
 /** Test metadata about what a district built, for its content tests (map:build never writes it). */
 export interface DistrictReport {
   rooftopGaps: RooftopGap[];
@@ -83,6 +97,10 @@ export interface DistrictReport {
   containerStacks: ContainerStack[];
   cranes: CraneReport[];
   quay: QuayReport;
+  terraces: Terrace[];
+  steepStreets: SteepStreet[];
+  stairRuns: StairRun[];
+  chutes: ChuteReport[];
 }
 
 export interface DistrictOutput {

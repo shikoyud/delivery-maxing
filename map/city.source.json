@@ -66,12 +66,19 @@
       "rect": { "minX": -1000, "minZ": -1000, "maxX": 0, "maxZ": 0 },
       "template": "hillside",
       "params": {
-        "pitch": 100, "streetHalfWidth": 6, "scaleMin": 1, "scaleMax": 1.1, "fillChance": 0.27,
-        "setback": 1.5, "gapMin": 3, "gapMax": 8, "edgeMargin": 2, "doorOffset": 1,
-        "pieces": [
-          "b-1story-gableroof", "b-1story-roundroof", "b-2story-gableroof", "b-2story-roundroof",
-          "b-2story-balcony", "b-2story-columns", "b-3story-small", "b-2story-slim"
-        ]
+        "streetHalfWidth": 6, "edgeMargin": 2, "topHeight": 36, "bandRiseMax": 12,
+        "rampDeg": 22, "rampThickness": 2, "rampEmbed": 0.5, "footRunup": 6, "rampFlat": 2,
+        "backMargin": 3, "sideMargin": 3, "featureWidth": 14,
+        "stairs": { "rise": 0.3, "depth": 0.35, "width": 3 },
+        "pad": { "radius": 1.2, "apexAbove": 2.5, "inset": 4, "back": 6, "landInset": 4, "clearance": 0.5 },
+        "chute": { "minTop": 25, "width": 4, "laneWidth": 7, "thickness": 0.6, "runout": 10, "embed": 0.5, "overlap": 0.2, "maxSegment": 90 },
+        "houses": {
+          "pieces": [
+            "b-1story-gableroof", "b-1story-roundroof", "b-2story-gableroof", "b-2story-roundroof",
+            "b-1story", "b-2story-slim", "b-2story-columns"
+          ],
+          "scaleMin": 1, "scaleMax": 1, "fillChance": 0.6, "setback": 1.5, "gapMin": 3, "gapMax": 8, "doorOffset": 1
+        }
       }
     },
     {

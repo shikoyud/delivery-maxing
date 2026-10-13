@@ -10,6 +10,7 @@ import { cliffs, groundTiles, quays } from './boundary';
 import { buildFiller, type CityFrame, type DistrictContext, type DistrictOutput, type DistrictReport } from './district';
 import { buildDowntown } from './districts/downtown';
 import { buildHarbor } from './districts/harbor';
+import { buildHillside } from './districts/hillside';
 import { buildHub } from './hub';
 import { arterialLines, landRect } from './layout';
 import type { CitySource, QuadrantDistrict, Template } from './source';
@@ -30,7 +31,7 @@ export interface GenerationReport { districts: Partial<Record<QuadrantDistrict, 
 const BUILDERS: Record<Template, (ctx: DistrictContext) => DistrictOutput> = {
   downtown: buildDowntown,
   harbor: buildHarbor,
-  hillside: buildFiller,
+  hillside: buildHillside,
   suburbs: buildFiller,
 };
 
