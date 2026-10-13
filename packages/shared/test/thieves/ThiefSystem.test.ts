@@ -5,7 +5,7 @@ import { ThiefSystem } from '../../src/thieves/ThiefSystem';
 import type { CourierInfo, ThiefEvent, ThiefState } from '../../src/thieves/types';
 import { mulberry32 } from '../../src/util/rng';
 import { StreetGraph } from '../../src/world/streets';
-import { levelsCity, thiefCity } from '../world/fixtures';
+import { levelsCity, slopesCity, thiefCity } from '../world/fixtures';
 
 const DT = 1 / movementConfig.tickRate;
 const cfg = thievesConfig;
@@ -295,6 +295,56 @@ describe('ThiefSystem', () => {
     for (const s of back) expect(s.d).toBeCloseTo(cfg.returnSpeed * DT, 6);
     expect(patrol.length).toBeGreaterThan(20);
     for (const s of patrol) expect(s.d).toBeCloseTo(cfg.patrolSpeed * DT, 6);
+  });
+
+  describe('follows sloped streets across junctions and catches a courier up (or down) them', () => {
+    /** Places the one thief at `at` (heading for `next`) and runs a static courier until caught or the chase ends. */
+    const chaseFrom = (city: ReturnType<typeof thiefCity>, at: Vec3, next: string, courier: Vec3): string[] => {
+      const sys = new ThiefSystem(city, cfg, mulberry32(1));
+      Object.assign(thief(sys), { position: at, route: [next] });
+      const maxDy = new StreetGraph(city.streets, city.hub, cfg.plazaMargin).maxSlope * cfg.chaseSpeed * DT + 1e-6;
+      let lastY = at.y;
+      const { events } = run(sys, courier, (p: Vec3) => {
+        expect(Math.abs(thief(sys).position.y - lastY)).toBeLessThanOrEqual(maxDy);
+        lastY = thief(sys).position.y;
+        return p;
+      }, 12, { until: (e) => e.kind !== 'chaseStarted' });
+      return kinds(events);
+    };
+    const one = (node: string) => [{ id: 'th', node, district: 'downtown' as const }];
+    const ramp = (z: number): Vec3 => vec3(420, (5 * z) / 60, z);
+
+    it('L-junction: the ramp leaves the main street at n6; from the node and from along the street, beside it', () => {
+      expect(chaseFrom(thiefCity(one('n5')), vec3(420, 0, 0), 'n5', ramp(8))).toEqual(['chaseStarted', 'caught']);
+      expect(chaseFrom(thiefCity(one('n5')), vec3(420, 0, 0), 'n5', vec3(420, ramp(12).y, 12))).toEqual(['chaseStarted', 'caught']);
+      // Coming along the main street toward a courier up the ramp: it reaches the street's side before the junction
+      expect(chaseFrom(thiefCity(one('n5')), vec3(408, 0, 0), 'n6', vec3(418, ramp(8).y, 8))).toEqual(['chaseStarted', 'caught']);
+    });
+
+    // A courier more than catchHeight above the thief is not chased (R26), so on these slopes the courier stands within
+    // that height: beyond the end cap of the thief's edge (halfWidth 6 m past the node), where the thief used to stall
+    it('a straight slope split in two edges, uphill and downhill', () => {
+      expect(chaseFrom(slopesCity(one('S0')), vec3(200, 20, 0), 'S1', vec3(207.5, 21.5, 0))).toEqual(['chaseStarted', 'caught']);
+      expect(chaseFrom(slopesCity(one('S0')), vec3(200, 20, 0), 'S0', vec3(192.5, 18.5, 0))).toEqual(['chaseStarted', 'caught']);
+    });
+
+    it('a flat street running on into a ramp: down off the flat top onto the ramp', () => {
+      expect(chaseFrom(slopesCity(one('F0')), vec3(204, 15, 60), 'F3', vec3(192, 12.6, 59))).toEqual(['chaseStarted', 'caught']);
+    });
+
+    it('a flat street running on into a ramp: up from the foot after a courier 3 m ahead, on the ramp surface', () => {
+      const city = slopesCity(one('F0'));
+      const surface = (x: number): number => (x < 150 ? 0 : x < 200 ? 0.3 * (x - 150) : 15);
+      const sys = new ThiefSystem(city, cfg, mulberry32(1));
+      Object.assign(thief(sys), { position: vec3(146, 0, 60), route: ['F1'] });
+      for (let i = 1; i <= 60; i++) {
+        const x = thief(sys).position.x + 3;
+        expect(sys.step(DT, i * DT, courierAt(vec3(x, surface(x), 60)), always).filter((e) => e.kind !== 'chaseStarted')).toEqual([]);
+        expect(thief(sys).position.y).toBeCloseTo(surface(thief(sys).position.x), 1);
+      }
+      expect(thief(sys).mode).toBe('chase');
+      expect(thief(sys).position.x).toBeGreaterThan(156 + 3);
+    });
   });
 
   it('is deterministic for a seed', () => {

@@ -339,6 +339,43 @@ describe('generateCity on map/city.source.json', () => {
     }
   });
 
+  it('from every node joining a sloped street, a chasing thief follows each street on from it, on its surface', () => {
+    const graph = new StreetGraph(city.streets, city.hub, thievesConfig.plazaMargin);
+    const sys = new ThiefSystem({ ...city, thiefSpawns: city.thiefSpawns.slice(0, 1) }, thievesConfig, mulberry32(5));
+    const thief = sys.thieves[0]!;
+    const pos = new Map(city.streets.nodes.map((n) => [n.id, n.p]));
+    const edges = city.streets.edges.filter((e) => graph.isThiefNode(e.a) && graph.isThiefNode(e.b));
+    const sloped = edges.filter((e) => pos.get(e.a)!.y !== pos.get(e.b)!.y);
+    const junctions = new Set(sloped.flatMap((e) => [e.a, e.b]));
+    const bad: string[] = [];
+    let runs = 0;
+    for (const n of junctions) {
+      for (const e of edges.filter((x) => x.a === n || x.b === n)) {
+        const [from, to] = [pos.get(n)!, pos.get(e.a === n ? e.b : e.a)!];
+        const len = Math.hypot(to.x - from.x, to.z - from.z);
+        const dir = { x: (to.x - from.x) / len, z: (to.z - from.z) / len };
+        const at = (s: number) => ({ x: from.x + dir.x * s, y: from.y + ((to.y - from.y) * s) / len, z: from.z + dir.z * s });
+        const along = (p: { x: number; z: number }): number => (p.x - from.x) * dir.x + (p.z - from.z) * dir.z;
+        // The thief starts on the node; the courier keeps 3 m ahead of it along the street, on its surface
+        Object.assign(thief, { mode: 'chase', position: at(0), route: [], chaseTime: 0, aboveTime: 0 });
+        sys.ignoreUntil = 0;
+        const goal = Math.min(len - 0.5, e.halfWidth + 3);
+        let caught = false;
+        for (let i = 1; i <= 3 * 30 && !caught && along(thief.position) < goal; i++) {
+          const events = sys.step(DT, i * DT, { position: at(Math.min(len, along(thief.position) + 3)), carrying: 1, inPlaza: false }, () => true);
+          caught = events.some((ev) => ev.kind === 'caught');
+          if (events.some((ev) => ev.kind === 'chaseEnded')) break;
+        }
+        runs++;
+        const s = along(thief.position);
+        if (!caught && s < goal) bad.push(`${n} → ${e.a === n ? e.b : e.a}: stuck ${s.toFixed(2)} m along (goal ${goal.toFixed(2)})`);
+        else if (Math.abs(thief.position.y - at(Math.max(0, Math.min(len, s))).y) > 0.05) bad.push(`${n} → ${e.a === n ? e.b : e.a}: off the surface`);
+      }
+    }
+    expect(bad.slice(0, 5)).toEqual([]);
+    expect(runs).toBeGreaterThanOrEqual(2 * sloped.length);
+  });
+
   it('thief spawns fail fast when perDistrict has no count for a district', () => {
     const perDistrict: Partial<typeof thievesConfig.perDistrict> = { ...thievesConfig.perDistrict };
     delete perDistrict.suburbs;

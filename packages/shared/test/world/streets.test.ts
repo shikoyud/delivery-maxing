@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { closestOnSegment, vec3, type Vec3 } from '../../src/math/vec3';
 import { mulberry32 } from '../../src/util/rng';
 import { StreetGraph } from '../../src/world/streets';
-import { levelsCity, thiefCity } from './fixtures';
+import { levelsCity, slopesCity, thiefCity } from './fixtures';
 
 const MARGIN = 6;
 const city = thiefCity();
@@ -101,5 +101,27 @@ describe('StreetGraph', () => {
     expectAt(g.projectOnLevel(vec3(200, 6, 1), 6, 0.1)?.p, 200, 6, 1);
     // No street on that level at all
     expect(g.projectOnLevel(vec3(150, 3, 0), 3, 0.1)).toBeNull();
+  });
+
+  it("past a node on a slope, a point takes the next edge's height, not the end cap of the edge before", () => {
+    const sl = slopesCity();
+    const g = new StreetGraph(sl.streets, sl.hub, MARGIN);
+    // 3 m past M on the straight 1-in-5 slope (S0 → M → S1), uphill and downhill
+    expectAt(g.project(vec3(203, 20, 0)).p, 203, 20.6, 0);
+    expectAt(g.projectOnLevel(vec3(203, 20, 0), 20, 0.7)?.p, 203, 20.6, 0);
+    expectAt(g.projectOnLevel(vec3(197, 20, 0), 20, 0.7)?.p, 197, 19.4, 0);
+    // 2 m onto the 0.3 ramp past the flat street's end (F1), and 2 m onto the flat street past its top (F2)
+    expectAt(g.projectOnLevel(vec3(152, 0, 61), 0, 0.7)?.p, 152, 0.6, 61);
+    expectAt(g.projectOnLevel(vec3(202, 15, 61), 15, 0.7)?.p, 202, 15, 61);
+    expectAt(g.projectOnLevel(vec3(198, 15, 61), 15, 0.7)?.p, 198, 14.4, 61);
+  });
+
+  it('routeToward walks from one edge to another through the ends that make the shortest walk', () => {
+    const g = graph();
+    const edgeOf = (a: string, b: string): number => city.streets.edges.findIndex((e) => e.a === a && e.b === b);
+    // On n4–n5 near n5, toward the ramp n6–r2: via n5 and n6
+    expect(g.routeToward(vec3(350, 0, 0), edgeOf('n4', 'n5'), vec3(420, 1, 12), edgeOf('n6', 'r2'))).toEqual(['n5', 'n6']);
+    // From the corner of n5–n6 at n6 onto the ramp: just n6
+    expect(g.routeToward(vec3(418, 0, 6), edgeOf('n5', 'n6'), vec3(420, 1, 12), edgeOf('n6', 'r2'))).toEqual(['n6']);
   });
 });

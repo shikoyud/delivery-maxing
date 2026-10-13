@@ -11,8 +11,13 @@ const TIE = 1e-9;
 interface Edge { a: number; b: number; ax: number; ay: number; az: number; bx: number; by: number; bz: number; hw: number; len2: number }
 /** Accept only strip points whose height is within `maxDy` of `y` (one street level). */
 interface Level { y: number; maxDy: number }
-/** A point of a strip: `out` is how far (horizontally) the query lies outside it, `dy` the height difference. */
-interface Hit { x: number; y: number; z: number; edge: number; out: number; dy: number; centre: number }
+/** A projection query: an optional level, and an edge preferred among the strips holding the point (−1: none). */
+interface Query { level: Level | null; prefer: number }
+/**
+ * A point of a strip: `out` is how far (horizontally) the query lies outside it, `dy` the height difference, `capped`
+ * whether it lies on the strip's round end cap (past an end node, where the edge's height stays the node's).
+ */
+interface Hit { x: number; y: number; z: number; edge: number; out: number; dy: number; centre: number; capped: boolean }
 
 /**
  * The street graph as thieves see it (spec §7.3): they walk only on the edge strips (a capsule of `halfWidth` around
@@ -116,7 +121,7 @@ export class StreetGraph {
    * (a point there is pushed out radially onto a strip). Among strips that hold the point, the one nearest in height wins.
    */
   project(p: Vec3): { p: Vec3; edge: number } {
-    const out = this.projectWithin(p, null);
+    const out = this.projectWithin(p, { level: null, prefer: -1 });
     if (!out) throw new Error('street graph has no thief streets');
     return out;
   }
@@ -124,10 +129,32 @@ export class StreetGraph {
   /**
    * project, restricted to one street level: only strip points whose height is within `maxDy` of `y` count, so a
    * thief moving a step never lands on a street beside or over its own (a terrace, a bridge), nor drops off a ledge
-   * onto one below. Null when no street of that level exists.
+   * onto one below. Null when no street of that level exists. Among strips holding the point, `prefer` (an edge
+   * index) wins first: a chaser heads onto the courier's street where it meets its own.
    */
-  projectOnLevel(p: Vec3, y: number, maxDy: number): { p: Vec3; edge: number } | null {
-    return this.projectWithin(p, { y, maxDy });
+  projectOnLevel(p: Vec3, y: number, maxDy: number, prefer = -1): { p: Vec3; edge: number } | null {
+    return this.projectWithin(p, { level: { y, maxDy }, prefer });
+  }
+
+  /**
+   * The node path that takes a thief at `from` on edge `fromEdge` round the streets to `to` on edge `toEdge`: from an
+   * end of the one to an end of the other, whichever pair makes the shortest walk (straight to the first node, along
+   * the path, straight on to `to`). [] if they are not connected.
+   */
+  routeToward(from: Vec3, fromEdge: number, to: Vec3, toEdge: number): string[] {
+    let best: string[] = [];
+    let bestLen = Infinity;
+    for (const a of this.edgeEnds(fromEdge).filter((n) => this.isThiefNode(n))) {
+      for (const b of this.edgeEnds(toEdge).filter((n) => this.isThiefNode(n))) {
+        const path = this.route(a, b);
+        if (path.length === 0) continue;
+        const pts = [from, ...path.map((n) => this.pos[this.node(n)]!), to];
+        let len = 0;
+        for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y, pts[i]!.z - pts[i - 1]!.z);
+        if (len < bestLen - TIE) [best, bestLen] = [path, len];
+      }
+    }
+    return best;
   }
 
   /** A random thief-street neighbour of `from`, other than `prev` unless it is the only one (`from` when isolated). */
@@ -205,8 +232,8 @@ export class StreetGraph {
     return Math.min(this.gh - 1, Math.max(0, Math.floor((z - this.gz0) / CELL)));
   }
 
-  private projectWithin(p: Vec3, level: Level | null): { p: Vec3; edge: number } | null {
-    const hit = this.nearestOnStrips(p, level);
+  private projectWithin(p: Vec3, q: Query): { p: Vec3; edge: number } | null {
+    const hit = this.nearestOnStrips(p, q);
     if (!hit) return null;
     if (!this.inExclusion(hit.x, hit.z)) return { p: vec3(hit.x, hit.y, hit.z), edge: hit.edge };
     const dx = hit.x - this.centre.x;
@@ -214,17 +241,17 @@ export class StreetGraph {
     const d = Math.hypot(dx, dz);
     if (d > 0) {
       const k = this.exclusion / d;
-      const out = this.nearestOnStrips(vec3(this.centre.x + dx * k, p.y, this.centre.z + dz * k), level);
+      const out = this.nearestOnStrips(vec3(this.centre.x + dx * k, p.y, this.centre.z + dz * k), q);
       if (out && out.out <= TIE) return { p: vec3(out.x, out.y, out.z), edge: out.edge };
     }
-    return this.nearestCentreOutside(p, level);
+    return this.nearestCentreOutside(p, q.level);
   }
 
   /**
    * The nearest strip point (on `level`, if given), by rings of grid cells around p until no farther ring can hold a
    * nearer one.
    */
-  private nearestOnStrips(p: Vec3, level: Level | null): Hit | null {
+  private nearestOnStrips(p: Vec3, { level, prefer }: Query): Hit | null {
     this.query++;
     const ci = this.cellX(p.x);
     const cj = this.cellZ(p.z);
@@ -241,7 +268,7 @@ export class StreetGraph {
             this.stamp[k] = this.query;
             const hit = stripPoint(this.edges[k]!, k, p);
             if (level && Math.abs(hit.y - level.y) > level.maxDy) continue;
-            if (!best || better(hit, best)) best = hit;
+            if (!best || better(hit, best, prefer)) best = hit;
           }
         }
       }
@@ -297,19 +324,27 @@ const clamp01 = (t: number): number => Math.min(1, Math.max(0, t));
 function stripPoint(e: Edge, edge: number, p: Vec3): Hit {
   const ex = e.bx - e.ax;
   const ez = e.bz - e.az;
-  const t = clamp01(((p.x - e.ax) * ex + (p.z - e.az) * ez) / e.len2);
+  const raw = ((p.x - e.ax) * ex + (p.z - e.az) * ez) / e.len2;
+  const t = clamp01(raw);
+  const capped = raw < -TIE || raw > 1 + TIE;
   const cx = e.ax + ex * t;
   const cz = e.az + ez * t;
   const y = e.ay + (e.by - e.ay) * t;
   const centre = Math.hypot(p.x - cx, p.z - cz);
-  if (centre <= e.hw) return { x: p.x, y, z: p.z, edge, out: 0, dy: Math.abs(p.y - y), centre };
+  if (centre <= e.hw) return { x: p.x, y, z: p.z, edge, out: 0, dy: Math.abs(p.y - y), centre, capped };
   const k = e.hw / centre;
-  return { x: cx + (p.x - cx) * k, y, z: cz + (p.z - cz) * k, edge, out: centre - e.hw, dy: Math.abs(p.y - y), centre };
+  return { x: cx + (p.x - cx) * k, y, z: cz + (p.z - cz) * k, edge, out: centre - e.hw, dy: Math.abs(p.y - y), centre, capped };
 }
 
-/** Nearer strip first; between strips holding the point, the nearer in height, then the nearer centre line. */
-function better(a: Hit, b: Hit): boolean {
+/**
+ * Nearer strip first. Between strips holding the point: the preferred edge; then an edge's body over another's end
+ * cap (past a node the next edge carries the height on, not the flat cap of the edge before); then the nearer in
+ * height, then the nearer centre line.
+ */
+function better(a: Hit, b: Hit, prefer: number): boolean {
   if (Math.abs(a.out - b.out) > TIE) return a.out < b.out;
+  if ((a.edge === prefer) !== (b.edge === prefer)) return a.edge === prefer;
+  if (a.capped !== b.capped) return !a.capped;
   if (Math.abs(a.dy - b.dy) > TIE) return a.dy < b.dy;
   return a.centre < b.centre - TIE;
 }

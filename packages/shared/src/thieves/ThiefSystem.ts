@@ -11,6 +11,11 @@ const TIME_EPS = 1e-9;
 const LEVEL_EPS = 0.01;
 /** Most nodes a thief may pass in one tick (a guard against zero-length hops). */
 const MAX_HOPS = 8;
+/**
+ * A chase step that gets the thief less than this share of the way it tried (it is held at the side of its street, the
+ * courier being on another street it cannot reach in a straight line) sends it round by the streets instead.
+ */
+const PINNED_SHARE = 0.5;
 /** The line-of-sight target on the courier: the middle of the standing capsule above the feet. */
 const CHEST_HEIGHT = movementConfig.capsule.height / 2;
 
@@ -97,23 +102,17 @@ function triggerChase({ cfg }: Ctx, thieves: ThiefState[], courier: CourierInfo,
 }
 
 /**
- * One chase tick: toward the courier at chase speed, kept on the streets; then catch and give-up checks. A courier in
- * the plaza or carrying nothing (R25) ends the chase before the thief moves, so an empty courier is never caught.
+ * One chase tick: toward the courier at chase speed, kept on the streets (see stepToward, or round by the streets while
+ * `route` holds a detour); then catch and give-up checks. A courier in the plaza or carrying nothing (R25) ends the
+ * chase before the thief moves, so an empty courier is never caught.
  */
-function chaseStep({ graph, cfg }: Ctx, t: ThiefState, dt: number, courier: CourierInfo): ChaseOutcome {
+function chaseStep(ctx: Ctx, t: ThiefState, dt: number, courier: CourierInfo): ChaseOutcome {
+  const { cfg } = ctx;
   if (courier.inPlaza) return 'plaza';
   if (courier.carrying < 1) return 'empty';
   const c = courier.position;
-  const dx = c.x - t.position.x;
-  const dz = c.z - t.position.z;
-  const h = Math.hypot(dx, dz);
-  const k = h > 0 ? Math.min(1, (cfg.chaseSpeed * dt) / h) : 0;
-  // Stay on the thief's own street level: a step moves it at most twice its length along a street (the projection can
-  // add up to one step), so its height changes by at most maxSlope times that. Streets beside, over or under are out.
-  const maxDy = 2 * graph.maxSlope * cfg.chaseSpeed * dt + LEVEL_EPS;
-  const next = graph.projectOnLevel(vec3(t.position.x + dx * k, t.position.y, t.position.z + dz * k), t.position.y, maxDy);
-  if (next) t.position = next.p;
-  t.heading = yawOf(dx, dz, t.heading);
+  if (t.route.length > 0) followRoute(ctx.graph, t, cfg.chaseSpeed * dt);
+  else stepToward(ctx, t, c, dt);
 
   const dy = c.y - t.position.y;
   if (Math.hypot(c.x - t.position.x, c.z - t.position.z) <= cfg.catchRadius && Math.abs(dy) <= cfg.catchHeight) return 'caught';
@@ -123,6 +122,53 @@ function chaseStep({ graph, cfg }: Ctx, t: ThiefState, dt: number, courier: Cour
   if (t.chaseTime >= cfg.maxChaseSeconds - TIME_EPS) return 'timeout';
   if (dist3(t.position, c) > cfg.loseDistance) return 'distance';
   return null;
+}
+
+/**
+ * A straight chase step toward the courier, projected onto the thief's own street level: the step moves it at most
+ * twice its length along a street (the projection can add up to one step), so its height changes by at most maxSlope
+ * times that, and streets beside, over or under its own are out. Where the strips meet, the courier's street is
+ * preferred. Held at the side of its street (the courier on another street it cannot reach straight), the thief
+ * takes the streets round to the courier's instead, from the next tick.
+ */
+function stepToward({ graph, cfg }: Ctx, t: ThiefState, c: Vec3, dt: number): void {
+  const dx = c.x - t.position.x;
+  const dz = c.z - t.position.z;
+  const h = Math.hypot(dx, dz);
+  const step = Math.min(h, cfg.chaseSpeed * dt);
+  const k = h > 0 ? step / h : 0;
+  t.heading = yawOf(dx, dz, t.heading);
+  const there = graph.project(c).edge;
+  const maxDy = 2 * graph.maxSlope * cfg.chaseSpeed * dt + LEVEL_EPS;
+  const next = graph.projectOnLevel(vec3(t.position.x + dx * k, t.position.y, t.position.z + dz * k), t.position.y, maxDy, there);
+  const moved = next ? Math.hypot(next.p.x - t.position.x, next.p.z - t.position.z) : 0;
+  if (moved < PINNED_SHARE * step) {
+    const here = graph.projectOnLevel(t.position, t.position.y, LEVEL_EPS)?.edge;
+    if (here !== undefined && here !== there) t.route = graph.routeToward(t.position, here, c, there);
+  }
+  if (next) t.position = next.p;
+}
+
+/** Chase detour: straight on along the route's nodes by `dist`, dropping each node reached. */
+function followRoute(graph: StreetGraph, t: ThiefState, dist: number): void {
+  let left = dist;
+  for (let hop = 0; hop < MAX_HOPS && left >= 0 && t.route.length > 0; hop++) {
+    left = moveToward(t, graph.position(t.route[0]!), left);
+    if (left >= 0) t.route.shift();
+  }
+}
+
+/** Moves the thief straight toward p by at most `dist`; the distance left over once there, or −1 if not there yet. */
+function moveToward(t: ThiefState, p: Vec3, dist: number): number {
+  const d = dist3(t.position, p);
+  if (d > dist) {
+    const k = dist / d;
+    t.heading = yawOf(p.x - t.position.x, p.z - t.position.z, t.heading);
+    t.position = vec3(t.position.x + (p.x - t.position.x) * k, t.position.y + (p.y - t.position.y) * k, t.position.z + (p.z - t.position.z) * k);
+    return -1;
+  }
+  t.position = p;
+  return dist - d;
 }
 
 /**
@@ -153,17 +199,9 @@ function walkRoute({ graph, cfg, rng }: Ctx, t: ThiefState, dt: number): void {
   for (let hop = 0; hop < MAX_HOPS && time > 0; hop++) {
     const target = t.route[0];
     if (target === undefined || t.speed <= 0) return;
-    const p = graph.position(target);
-    const d = dist3(t.position, p);
-    const left = t.speed * time;
-    if (d > left) {
-      const k = left / d;
-      t.heading = yawOf(p.x - t.position.x, p.z - t.position.z, t.heading);
-      t.position = vec3(t.position.x + (p.x - t.position.x) * k, t.position.y + (p.y - t.position.y) * k, t.position.z + (p.z - t.position.z) * k);
-      return;
-    }
-    time -= d / t.speed;
-    t.position = p;
+    const left = moveToward(t, graph.position(target), t.speed * time);
+    if (left < 0) return;
+    time = left / t.speed;
     t.route.shift();
     const before = t.prevNode;
     t.prevNode = target;
