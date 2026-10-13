@@ -11,7 +11,7 @@ import {
   type Vec3,
   type ZipLine,
 } from '@dm/shared';
-import { DEG, top, v2 } from './layout';
+import { contains, DEG, top, v2 } from './layout';
 import { yawPoint } from './lots';
 
 /** Depth of one crate step along the climb, m. */
@@ -132,9 +132,6 @@ export function obstacleOf(s: Solid): Obstacle {
   return { rect: solidRect(s), top: s.center.y + h.y };
 }
 
-const inRect = (x: number, z: number, r: Rect, pad: number): boolean =>
-  x >= r.minX - pad && x <= r.maxX + pad && z >= r.minZ - pad && z <= r.maxZ + pad;
-
 /**
  * Whether a rider hanging `hang` m below the cable from `a` to `b` (a capsule of `radius`) clears every obstacle:
  * at each 0.5 m along the cable, every obstacle whose footprint (grown by `radius`) is under the cable tops out at
@@ -148,7 +145,7 @@ export function cableClear(a: Vec3, b: Vec3, hang: number, radius: number, obsta
     const x = a.x + (b.x - a.x) * t;
     const y = a.y + (b.y - a.y) * t;
     const z = a.z + (b.z - a.z) * t;
-    for (const o of obstacles) if (inRect(x, z, o.rect, radius) && o.top > y - hang + 1e-6) return false;
+    for (const o of obstacles) if (contains(o.rect, x, z, radius) && o.top > y - hang + 1e-6) return false;
   }
   return true;
 }
@@ -171,7 +168,7 @@ export function padFlightClear(
   const peak = start.y + (vy * vy) / (2 * gravity);
   if (peak < target.y) return false;
   const total = vy / gravity + Math.sqrt((2 * (peak - target.y)) / gravity);
-  const landing = obstacles.filter((o) => inRect(target.x, target.z, o.rect, 0) && Math.abs(o.top - target.y) < 0.05);
+  const landing = obstacles.filter((o) => contains(o.rect, target.x, target.z) && Math.abs(o.top - target.y) < 0.05);
   const entered = new Set<Obstacle>();
   const steps = Math.ceil(total * 60);
   for (let k = 0; k < steps; k++) {
@@ -180,7 +177,7 @@ export function padFlightClear(
     const y = start.y + vy * t - (gravity * t * t) / 2;
     const z = start.z + launch.z * t;
     for (const o of obstacles) {
-      if (!inRect(x, z, o.rect, radius)) continue;
+      if (!contains(o.rect, x, z, radius)) continue;
       if (landing.includes(o) && entered.has(o)) continue;
       entered.add(o);
       if (y < o.top + clearance) return false;

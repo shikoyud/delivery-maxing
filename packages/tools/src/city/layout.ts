@@ -20,6 +20,18 @@ export const top = (s: Solid): number => s.center.y + s.size.y / 2;
 /** Horizontal distance from a point to a rect (0 inside it). */
 export const distToRect = (p: { x: number; z: number }, r: Rect): number =>
   Math.hypot(Math.max(0, r.minX - p.x, p.x - r.maxX), Math.max(0, r.minZ - p.z, p.z - r.maxZ));
+/** Horizontal distance between two points. */
+export const flatDistance = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.hypot(a.x - b.x, a.z - b.z);
+/** The square of half-side `h` around a point. */
+export const sq = (c: { x: number; z: number }, h: number): Rect => ({ minX: c.x - h, maxX: c.x + h, minZ: c.z - h, maxZ: c.z + h });
+/** `r` grown by `d` on every side. */
+export const grow = (r: Rect, d: number): Rect => ({ minX: r.minX - d, maxX: r.maxX + d, minZ: r.minZ - d, maxZ: r.maxZ + d });
+/** Whether (x, z) lies in `r` grown by `pad` (edges included). */
+export const contains = (r: Rect, x: number, z: number, pad = 0): boolean =>
+  x >= r.minX - pad && x <= r.maxX + pad && z >= r.minZ - pad && z <= r.maxZ + pad;
+/** Whether two rects overlap by more than `slack` on both axes (rects closer than `slack` only touch). */
+export const overlaps = (a: Rect, b: Rect, slack = 0): boolean =>
+  a.minX < b.maxX - slack && a.maxX > b.minX + slack && a.minZ < b.maxZ - slack && a.maxZ > b.minZ + slack;
 /** The smallest rect holding every rect of `rs`. */
 export const union = (rs: readonly Rect[]): Rect => ({
   minX: Math.min(...rs.map((r) => r.minX)),
