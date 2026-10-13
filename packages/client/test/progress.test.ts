@@ -66,7 +66,6 @@ describe('createProgressStore', () => {
 
   it('returns zero progress for malformed v2 data', () => {
     const storage = memoryStorage();
-    const totals = { points: 1, coins: 1, deliveries: 1 };
     for (const bad of [
       '{not json',
       'null',
@@ -75,13 +74,24 @@ describe('createProgressStore', () => {
       '{}',
       JSON.stringify({ totals: { points: '7', coins: 1, deliveries: 1 }, epoch: { id: EPOCH, points: 0 } }),
       JSON.stringify({ totals: { points: -1, coins: 0, deliveries: 0 }, epoch: { id: EPOCH, points: 0 } }),
+      JSON.stringify({ totals: null, epoch: { id: EPOCH, points: 3 } }),
+    ]) {
+      storage.data.set(PROGRESS_KEY, bad);
+      expect(createProgressStore(storage).load(NOW), bad).toEqual(ZERO);
+    }
+  });
+
+  it('a v2 entry with valid totals but a malformed epoch keeps the totals and starts a fresh epoch', () => {
+    const storage = memoryStorage();
+    const totals = { points: 7, coins: 70, deliveries: 4 };
+    for (const bad of [
       JSON.stringify({ totals, epoch: { id: EPOCH, points: -1 } }),
       JSON.stringify({ totals, epoch: { id: 1.5, points: 0 } }),
       JSON.stringify({ totals, epoch: null }),
       JSON.stringify({ totals }),
     ]) {
       storage.data.set(PROGRESS_KEY, bad);
-      expect(createProgressStore(storage).load(NOW), bad).toEqual(ZERO);
+      expect(createProgressStore(storage).load(NOW), bad).toEqual({ totals, epoch: { id: EPOCH, points: 0 } });
     }
   });
 

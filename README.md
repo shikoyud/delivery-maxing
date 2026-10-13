@@ -76,7 +76,11 @@ pnpm map:check     # regenerates the map files, byte-compares them with the
 ```
 
 Run `pnpm map:build` after changing `map/city.source.json`, `map/pieces.json`
-or the generator, and commit its outputs. Asset sources and licenses are listed
+or the generator, and commit its outputs. The map build also reads config values
+(e.g. `config/movement.json` capsule, gravity and zip line; `config/thieves.json`
+perDistrict, plazaMargin and longStreetExtra; `config/orders.json` bands, poiChecks
+and fragile; `config/world.json` nav): after editing one, run `pnpm map:build`, or
+`pnpm check` fails at map:check. Asset sources and licenses are listed
 in `assets/CREDITS.md`.
 
 ### One-time Pages setup

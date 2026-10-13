@@ -39,15 +39,15 @@ function asEpoch(v: unknown): EpochPoints | null {
 
 /**
  * The stored progress, or null when nothing valid is stored. A v2 entry wins; without one a v1 entry migrates (its
- * totals kept, no epoch points). Malformed data gives null (zero progress), never a throw.
+ * totals kept, no epoch points). Malformed totals give null (zero progress), never a throw; valid totals with a
+ * malformed epoch keep the totals and start a fresh epoch (the next save would otherwise overwrite them with zeros).
  */
 function parseStored(v2: string | null, v1: string | null): { totals: Totals; epoch: EpochPoints | null } | null {
   if (v2 !== null) {
     const o = parseJson(v2);
     if (!isObj(o)) return null;
     const totals = asTotals(o.totals);
-    const epoch = asEpoch(o.epoch);
-    return totals && epoch ? { totals, epoch } : null;
+    return totals ? { totals, epoch: asEpoch(o.epoch) } : null;
   }
   if (v1 !== null) {
     const totals = asTotals(parseJson(v1));
@@ -57,7 +57,7 @@ function parseStored(v2: string | null, v1: string | null): { totals: Totals; ep
 }
 
 /**
- * Local progress. Never throws: blocked storage (private windows, disabled site data), quota errors and malformed data
+ * Local progress. Never throws: blocked storage (private windows, disabled site data), quota errors and malformed totals
  * all give zero progress (SP1 Review Focus 5).
  */
 export function createProgressStore(storage: Pick<Storage, 'getItem' | 'setItem'> | null): ProgressStore {
