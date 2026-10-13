@@ -44,6 +44,9 @@ export interface ClientConfig {
   courier: CourierConfig;
   thieves: ThievesRenderConfig;
   city: CityRenderConfig;
+  /** The POI posts and ground rings (render/hubMeshes): drawn within `drawRadius` m (horizontal) of the player only. */
+  poiMarkers: { drawRadius: number };
+  mapDebug: MapDebugConfig;
   perf: PerfConfig;
   ui: {
     /** How long a delivery popup stays on screen (s). */
@@ -73,6 +76,12 @@ export interface ThievesRenderConfig {
   idleSpeed: number;
   /** Man_Punch plays this long after a catch. */
   punchSeconds: number;
+}
+
+/** The F4 map debug view (ui/mapDebug, spec §5.2). */
+export interface MapDebugConfig {
+  /** POI beams and labels, and thief labels, show within this horizontal distance (m) of the player. */
+  radius: number;
 }
 
 /** City rendering (spec §5.1 streaming; plan assumption 13). Distances are horizontal, in metres. */
@@ -186,6 +195,6 @@ export interface CourierConfig {
 
 export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
-  | 'interact' | 'board' | 'hit' | 'devPanel' | 'debugOverlay';
+  | 'interact' | 'board' | 'hit' | 'devPanel' | 'debugOverlay' | 'mapDebug';
 
 export const clientConfig: ClientConfig = clientJson;

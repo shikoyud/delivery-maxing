@@ -12,12 +12,16 @@ export interface DevPanelHooks {
   onResetProgress(): void;
   /** Any value changed (the host saves, debounced). */
   onChange(): void;
+  /** The "Map debug" checkbox changed (F4 view). Without this hook (the greybox has no map debug) there is no checkbox. */
+  onMapDebug?(on: boolean): void;
 }
 
 export interface DevPanel {
   toggle(): void;
   /** Shows how many values differ from the defaults (R27). */
   setOverrideCount(n: number): void;
+  /** Shows the map debug view's state on its checkbox (F4 toggles it too). */
+  setMapDebug(on: boolean): void;
   readonly isOpen: boolean;
 }
 
@@ -95,6 +99,10 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     },
     resetProgress: () => hooks.onResetProgress(),
   };
+  const debug = { mapDebug: false };
+  const onMapDebug = hooks.onMapDebug;
+  const mapDebugCtrl = onMapDebug ? gui.add(debug, 'mapDebug').name('Map debug').onChange((on: boolean) => onMapDebug(on)) : null;
+
   gui.add(actions, 'copy').name('Copy movement JSON');
   gui.add(actions, 'reset').name('Reset tuning');
   gui.add(actions, 'resetProgress').name('Reset progress');
@@ -103,6 +111,10 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     setOverrideCount(n) {
       status.overrides = overridesLabel(n);
       statusCtrl.updateDisplay();
+    },
+    setMapDebug(on) {
+      debug.mapDebug = on;
+      mapDebugCtrl?.updateDisplay();
     },
     toggle() {
       if (gui._hidden) gui.show();

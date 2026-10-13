@@ -7,6 +7,7 @@ import { cityAssetUrl, paletteAtlasUrl } from '../../game/mapLoader';
 import { assignLods, type LodRings } from './lodRings';
 import { createPaletteMaterial, paletteRow, PALETTE_ROWS } from './paletteMaterial';
 import { buildRegionMeshes } from './regions';
+import { shadowCameraTest, type ShadowCameraTest, type SunShadow } from '../shadowCamera';
 
 /** A piece's two model levels; a piece without a LOD1 model draws its LOD0 model in the LOD1 ring. */
 export interface PieceModels {
@@ -15,16 +16,10 @@ export interface PieceModels {
 }
 
 /**
- * The shadow-casting sun (Renderer): its orthographic shadow camera looks along -toSun at the player's ground point and
- * covers ±extent across. LOD0 instances just out of view still draw when their shadow may fall into view, and the
- * shadow pass draws only the LOD0 instances inside the shadow camera.
+ * The shadow-casting sun (see SunShadow). LOD0 instances just out of view still draw when their shadow may fall into
+ * view, and the shadow pass draws only the LOD0 instances inside the shadow camera.
  */
-export interface CityShadow {
-  /** Unit vector toward the light (y > 0). */
-  toSun: Vec3;
-  /** graphics.shadowExtent: half-size of the shadow camera (m). */
-  extent: number;
-}
+export type CityShadow = SunShadow;
 
 /** One InstancedMesh and the props it currently draws (indices into city.props, in instance order). */
 interface Slot {
@@ -43,8 +38,6 @@ const DEG = Math.PI / 180;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 /** Float slack of the bounds check (m): the sphere is computed from float32 matrices. */
 const BOUNDS_EPS = 1e-3;
-/** Slack (m) of the shadow-camera test: Renderer snaps the shadow camera's centre to whole shadow texels. */
-const SHADOW_SNAP_SLACK = 1;
 
 /** The single mesh of a runtime building/part GLB (identity transforms, one primitive). */
 function singleGeometry(scene: THREE.Object3D, path: string): THREE.BufferGeometry {
@@ -103,8 +96,8 @@ export class CityView {
   private readonly frustum = new THREE.Frustum();
   private readonly viewProj = new THREE.Matrix4();
   private culled = false;
-  /** Shadow camera axes (light space x and y) and the per-prop "inside the shadow camera" flags of the last fill. */
-  private readonly shadow: { x: THREE.Vector3; y: THREE.Vector3; extent: number } | null;
+  /** The shadow-camera test (null without a shadow-casting sun) and the per-prop "inside the shadow camera" flags of the last fill. */
+  private readonly shadow: ShadowCameraTest | null;
   private readonly inShadow: Uint8Array;
   private center: Vec3 = { x: 0, y: 0, z: 0 };
 
@@ -151,14 +144,7 @@ export class CityView {
     this.spheres = new Float32Array(n * 4);
     this.castSpheres = new Float32Array(n * 4);
     this.inShadow = new Uint8Array(n);
-    if (shadow) {
-      // The shadow camera looks at the target from toSun with up = +y (three's lookAt): x = up × z, y = z × x.
-      const z = new THREE.Vector3(shadow.toSun.x, shadow.toSun.y, shadow.toSun.z).normalize();
-      const x = new THREE.Vector3(0, 1, 0).cross(z).normalize();
-      this.shadow = { x, y: z.clone().cross(x), extent: shadow.extent };
-    } else {
-      this.shadow = null;
-    }
+    this.shadow = shadow ? shadowCameraTest(shadow) : null;
 
     const pieceIds = [...new Set(props.map((p) => p.piece))];
     const pieceIndex = new Map(pieceIds.map((id, i) => [id, i]));
@@ -304,14 +290,8 @@ export class CityView {
 
   /** Whether prop `i`'s sphere reaches into the sun's shadow camera (centred on the player's ground point). */
   private insideShadowCamera(i: number): boolean {
-    if (!this.shadow) return false;
-    const { x, y, extent } = this.shadow;
     const s = this.spheres;
-    const qx = s[i * 4]! - this.center.x;
-    const qy = s[i * 4 + 1]!;
-    const qz = s[i * 4 + 2]! - this.center.z;
-    const reach = extent + s[i * 4 + 3]! + SHADOW_SNAP_SLACK;
-    return Math.abs(qx * x.x + qy * x.y + qz * x.z) <= reach && Math.abs(qx * y.x + qy * y.y + qz * y.z) <= reach;
+    return this.shadow !== null && this.shadow(this.center, s[i * 4]!, s[i * 4 + 1]!, s[i * 4 + 2]!, s[i * 4 + 3]!);
   }
 
   /** Applies a slot's new instance list if it differs from the one drawn. */

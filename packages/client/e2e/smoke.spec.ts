@@ -1175,3 +1175,52 @@ test('?perf=1 completes a short run (seconds=5) and reports a result', async ({ 
   expect(copied.frames).toBe(r.frames);
   expect(errors).toEqual([]);
 });
+
+test('F4 toggles the map debug view', async ({ page }) => {
+  const errors = await boot(page, CITY_SEED);
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  const radius = clientJson.mapDebug.radius;
+  expect(await page.evaluate(() => window.__dm!.mapDebug())).toMatchObject({ visible: false, beams: 0 });
+  // A thief on the street north of the plaza, so its label shows too.
+  await page.evaluate((p) => window.__dm!.placeThief(window.__dm!.thieves()[0]!.id, p), { x: 0, y: 0, z: -70 });
+  await page.keyboard.press('F4');
+  // High over the plaza centre, looking north toward Downtown and Hillside: Short POIs near, Medium ones ~450 m out.
+  const feet = { x: 0, y: 80, z: 0 };
+  await page.evaluate(([f]) => window.__dm!.viewpoint(f, { x: 0, y: 0, z: -360 }), [feet] as const);
+  await settle(page);
+  const d = (await page.evaluate(() => window.__dm!.mapDebug()))!;
+  const chunks = await page.evaluate(() => window.__dm!.loadedChunks());
+  const at = (await page.evaluate(() => window.__dm!.player())).position;
+  expect(d.visible).toBe(true);
+  // One beam and one label per POI within the radius of the player, labelled with its id and navmesh metres.
+  const rows = poiTableJson.pois as { id: string; fromHub: number; reachable: boolean }[];
+  const positions = await page.evaluate((ids) => ids.map((id) => window.__dm!.poiPosition(id)), rows.map((r) => r.id));
+  const near = rows.filter((_, i) => Math.hypot(positions[i]!.x - at.x, positions[i]!.z - at.z) <= radius);
+  expect(near.length).toBeGreaterThan(0);
+  expect(d.beams).toBe(near.length);
+  expect(d.labels.map((l) => l.split(' · ').slice(0, 2).join(' · '))).toEqual(near.map((r) => `${r.id} · ${Math.round(r.fromHub)} m`));
+  // A normal build has no unreachable POIs, so nothing is red.
+  expect(rows.every((r) => r.reachable)).toBe(true);
+  expect(d.labels.some((l) => l.includes('unreachable'))).toBe(false);
+  expect(d.chunks).toBe(chunks.length);
+  expect(d.thieves.length).toBeGreaterThan(0);
+  for (const t of d.thieves) expect(t).toMatch(/^\S+ · (patrol|chase|return) · \d+\.\d s$/);
+  await page.screenshot({ path: `${artifacts}sp2-map-debug.png` });
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`map debug on: ${d.beams} POI beams, ${d.thieves.length} thief labels, ${d.chunks} chunks; ${info.calls} draw calls, ${info.triangles} triangles`);
+  // The dev panel's checkbox follows F4, and unticking it hides the view.
+  await page.keyboard.press('Backquote');
+  const box = page.locator('.dm-dev-panel .lil-controller', { hasText: 'Map debug' }).locator('input[type=checkbox]');
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  expect((await page.evaluate(() => window.__dm!.mapDebug()))!.visible).toBe(false);
+  await box.check();
+  expect((await page.evaluate(() => window.__dm!.mapDebug()))!.visible).toBe(true);
+  await box.blur(); // lil-gui keeps key presses inside a focused controller from reaching the game
+  await page.keyboard.press('Backquote');
+  await page.keyboard.press('F4');
+  expect((await page.evaluate(() => window.__dm!.mapDebug()))!.visible).toBe(false);
+  await page.keyboard.press('Backquote');
+  await expect(box).not.toBeChecked();
+  expect(errors).toEqual([]);
+});

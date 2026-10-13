@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, MoveMode, Order, ThiefState, Totals, Vec3 } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { ThiefDebug } from '../render/thieves/ThiefView';
+import type { MapDebugView } from '../ui/mapDebug';
 import type { Game } from './Game';
 import type { PerfResult } from './perf';
 
@@ -20,6 +21,8 @@ export interface DebugApi {
   /** Places the player on the ground at `feet` and looks at `target`. */
   viewpoint(feet: Vec3, target: Vec3): void;
   renderInfo(): { calls: number; triangles: number };
+  /** The F4 map debug view (null on the greybox): shown or not, and what it shows (see MapDebugView.debug). */
+  mapDebug(): ReturnType<MapDebugView['debug']> | null;
   /** Physics chunks with colliders loaded ("cx,cz"); empty on the greybox (everything is loaded). */
   loadedChunks(): string[];
   /** City only: every building InstancedMesh's bounding sphere contains all the instances it draws (Review Focus 5). */
@@ -110,6 +113,7 @@ export function installDebugHooks(game: Game): void {
     renderInfo() {
       return game.renderer.info();
     },
+    mapDebug: () => game.mapDebug?.debug() ?? null,
     loadedChunks: () => [...(game.pager?.loadedChunks() ?? [])],
     cityBoundsOk() {
       if (!game.city) throw new Error('cityBoundsOk needs the city map (not ?map=greybox)');

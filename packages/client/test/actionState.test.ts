@@ -105,6 +105,20 @@ describe('ActionState', () => {
   });
 });
 
+describe('ActionState map debug key', () => {
+  it('F4 fires onUiKey("mapDebug")', () => {
+    const a = make();
+    const onUi = vi.fn();
+    a.onUiKey = onUi;
+    expect(a.isUiCode('F4')).toBe(true);
+    a.keyDown('F4');
+    expect(onUi.mock.calls).toEqual([['mapDebug']]);
+    a.keyUp('F4');
+    a.keyDown('F4');
+    expect(onUi).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('ActionState.setLook', () => {
   it('sets yaw and clamps pitch', () => {
     const a = make();

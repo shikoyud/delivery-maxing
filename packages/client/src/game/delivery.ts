@@ -38,6 +38,7 @@ import {
 import type { ClientConfig } from '../clientConfig';
 import { buildHubMeshes, type HubMeshes } from '../render/hubMeshes';
 import { buildWaypoints, type Waypoints } from '../render/waypoints';
+import { toSun } from '../render/Renderer';
 import { esc, keyLabel } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { MODIFIER_LABEL, hudModel, poiIndex, pointsText, robbedText, stageText } from '../ui/hudModel';
@@ -137,7 +138,11 @@ export class DeliveryLoop {
       d.now(),
     );
     this.thieves = d.city ? new ThiefSystem(d.city, thievesConfig, mulberry32(d.seed ^ THIEF_SEED_SALT)) : null;
-    this.hubMeshes = buildHubMeshes(d.map, ordersConfig.zones.poiRadius);
+    const gfx = d.cfg.graphics;
+    this.hubMeshes = buildHubMeshes(d.map, ordersConfig.zones.poiRadius, {
+      drawRadius: d.cfg.poiMarkers.drawRadius,
+      shadow: gfx.shadows ? { toSun, extent: gfx.shadowExtent } : null,
+    });
     this.waypoints = buildWaypoints(ordersConfig.backpack.maxSlots, d.cfg.ui.waypointPulseHz);
     d.scene.add(this.hubMeshes.group, this.waypoints.mesh);
     this.hud = new Hud(d.host, d.cfg.ui);
@@ -297,7 +302,7 @@ export class DeliveryLoop {
     return result;
   }
 
-  /** Per frame: beams, POI highlights, the HUD (throttled) and the open board. */
+  /** Per frame: beams, POI highlights and the POI markers near the player, the HUD (throttled) and the open board. */
   draw(clockSeconds: number): void {
     const now = this.d.now();
     const targets: Vec3[] = [];
@@ -313,6 +318,7 @@ export class DeliveryLoop {
     }
     this.waypoints.update(targets, colorIndices, clockSeconds);
     this.hubMeshes.setTargets(targetPois);
+    this.hubMeshes.update(this.d.player().position);
 
     if (clockSeconds >= this.nextHudAt) {
       this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;

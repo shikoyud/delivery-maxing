@@ -36,6 +36,17 @@ export const palette = {
   thief: 0x2b2f36,
 } as const;
 
+/** The F4 map debug view (ui/mapDebug): POI beams and labels by distance band from the HUB; red for unreachable POIs. */
+export const mapDebugColors = {
+  short: 0x2ec4b6,
+  medium: 0xf5a524,
+  long: 0x9b6bff,
+  unreachable: 0xe5383b,
+} as const;
+
+/** The F4 view's overlays: chunk grid lines, the physics-loaded chunks' tint and the thief labels' accent. */
+export const mapDebugOverlay = { grid: 0xffffff, loadedChunk: 0x3d7fe0, thief: 0xf27166 } as const;
+
 /**
  * One colour per active-order slot (backpack holds up to 5): waypoint beams and the HUD swatches share them.
  * Ordered so the first slots read best against the sky and the sand.

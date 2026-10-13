@@ -17,9 +17,9 @@ import {
   type Rect,
   type Solid,
 } from '@dm/shared';
-import { generateCity } from '../../src/city/generate';
+import { buildDistrict, cityFrame, generateCity } from '../../src/city/generate';
 import { arterialLines, landRect } from '../../src/city/layout';
-import { parseCitySource } from '../../src/city/source';
+import { parseCitySource, type QuadrantDistrict } from '../../src/city/source';
 import { stableStringify } from '../../src/city/stableJson';
 import { arterialGraph } from '../../src/city/streets';
 import { placeThiefSpawns } from '../../src/city/thiefSpawns';
@@ -285,12 +285,14 @@ describe('generateCity on map/city.source.json', () => {
   });
 
   it('district params fail fast on zero sizes or loop steps and on kit rises below the R17 floor', () => {
-    const withParams = (district: string, patch: (p: Record<string, unknown>) => void): typeof src => {
+    // Each bad case runs only its own district's builder (which checks its params before building), not the whole city.
+    const frame = cityFrame(src, city.hub.center);
+    const withParams = (district: QuadrantDistrict, patch: (p: Record<string, unknown>) => void): typeof src => {
       const copy = structuredClone(src);
       patch(copy.districts.find((d) => d.district === district)!.params);
       return copy;
     };
-    const cases: [string, (p: Record<string, unknown>) => void, RegExp][] = [
+    const cases: [QuadrantDistrict, (p: Record<string, unknown>) => void, RegExp][] = [
       ['harbor', (p) => ((p.zip as Record<string, number>).apronStep = 0), /zip\.apronStep must be positive/],
       ['harbor', (p) => ((p.container as Record<string, number>).width = 0), /container\.width must be positive/],
       ['harbor', (p) => (p.stepRise = 0.8), /stepRise must be within/],
@@ -306,7 +308,9 @@ describe('generateCity on map/city.source.json', () => {
       ['suburbs', (p) => ((p.skatepark as { transition: { deg: number }[] }).transition[1]!.deg = 52), /skatepark ramps must be under 50°/],
       ['suburbs', (p) => ((p.skatepark as Record<string, { x: number; z: number }>).cellAt = { x: -900, z: 300 }), /arterials on all sides/],
     ];
-    for (const [district, patch, why] of cases) expect(() => generateCity(withParams(district, patch), pieces), String(why)).toThrow(why);
+    for (const [district, patch, why] of cases) {
+      expect(() => buildDistrict(withParams(district, patch), district, pieces, frame), String(why)).toThrow(why);
+    }
   });
 
   it('ids are prefixed by their district, and the city lists the four quadrants', () => {

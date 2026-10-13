@@ -1,13 +1,27 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { MapData } from '@dm/shared';
+import type { MapData, Vec3 } from '@dm/shared';
 import { palette } from './palette';
+import { shadowCameraTest, type SunShadow } from './shadowCamera';
 
 export interface HubMeshes {
   group: THREE.Group;
-  /** Highlights the POIs that are a current step of an active order. */
+  /** Highlights the POIs that are a current step of an active order (drawn wherever they are). */
   setTargets(poiIds: ReadonlySet<string>): void;
   isTarget(poiId: string): boolean;
+  /**
+   * Picks the POI markers drawn around the player's feet `center`: those within drawRadius, plus current targets. Call
+   * once per frame; the instance buffers are rewritten only when the list changes. Nothing is drawn before the first call.
+   */
+  update(center: Vec3): void;
+}
+
+/** How the POI markers are culled (Task 19): by distance from the player, and the posts' shadows by the shadow camera. */
+export interface PoiMarkerOptions {
+  /** clientConfig.poiMarkers.drawRadius: posts and rings farther than this (horizontal, m) are not drawn. */
+  drawRadius: number;
+  /** The shadow-casting sun, or null without shadows: only posts inside its shadow camera cast. */
+  shadow: SunShadow | null;
 }
 
 // Art dimensions (metres). Zone sizes come from the map (hub) and orders config (POI radius).
@@ -70,10 +84,11 @@ function kioskGeometry(map: MapData): THREE.BufferGeometry[] {
 
 /**
  * HUB and POI markers (spec §3, §11): plaza ring, drop-zone disc, the Order Board kiosk, and a post plus a
- * ground ring for every POI. Static parts are merged; POI posts and rings are two InstancedMeshes whose
- * instance colours highlight current targets (draw-call budget, ruling R5). No POI count is assumed.
+ * ground ring for each POI near the player (and each current target). Static parts are merged; POI posts and rings
+ * are two InstancedMeshes whose instance colours highlight current targets (draw-call budget, ruling R5). No POI
+ * count is assumed.
  */
-export function buildHubMeshes(map: MapData, poiRadius: number): HubMeshes {
+export function buildHubMeshes(map: MapData, poiRadius: number, opts: PoiMarkerOptions): HubMeshes {
   const group = new THREE.Group();
   group.name = 'hub';
   const { hub } = map;
@@ -116,9 +131,11 @@ export function buildHubMeshes(map: MapData, poiRadius: number): HubMeshes {
   shaft.dispose();
   shaftFlat.dispose();
   head.dispose();
+  postGeo.computeBoundingSphere();
+  const postSphere = postGeo.boundingSphere!;
   const posts = new THREE.InstancedMesh(postGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), n);
   posts.name = 'poi-posts';
-  posts.castShadow = true;
+  posts.castShadow = opts.shadow !== null;
   const ringGeo = flatRing(poiRadius - POI_RING_WIDTH, poiRadius, 40);
   const rings = new THREE.InstancedMesh(
     ringGeo,
@@ -126,31 +143,80 @@ export function buildHubMeshes(map: MapData, poiRadius: number): HubMeshes {
     n,
   );
   rings.name = 'poi-rings';
-  posts.count = rings.count = pois.length;
-  const m = new THREE.Matrix4();
-  pois.forEach((p, i) => {
-    m.makeTranslation(p.position.x, p.position.y, p.position.z);
-    posts.setMatrixAt(i, m);
-    m.makeTranslation(p.position.x, p.position.y + DECAL_Y, p.position.z);
-    rings.setMatrixAt(i, m);
-  });
+  for (const mesh of [posts, rings]) {
+    mesh.count = 0;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // Allocated up front so the shader is compiled with instance colours from the first frame.
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
+  }
   if (pois.length > 0) group.add(posts, rings);
+
+  // Drawn POIs (indices into map.pois, in instance order): posts inside the shadow camera first, so the shadow pass can
+  // draw just the first `shadowN` posts (posts beyond it would only cost shadow-map triangles).
+  const inShadow = opts.shadow ? shadowCameraTest(opts.shadow) : null;
+  const drawn: number[] = [];
+  let shadowN = 0;
+  posts.onBeforeShadow = () => {
+    posts.count = shadowN;
+  };
+  posts.onAfterShadow = () => {
+    posts.count = drawn.length;
+  };
 
   const idle = new THREE.Color(palette.poiIdle);
   const target = new THREE.Color(palette.poiTarget);
   const targets = new Set<string>();
-  const paintTargets = (): void => {
-    pois.forEach((p, i) => {
+  const m = new THREE.Matrix4();
+  const commit = (): void => {
+    drawn.forEach((k, i) => {
+      const p = pois[k]!;
+      m.makeTranslation(p.position.x, p.position.y, p.position.z);
+      posts.setMatrixAt(i, m);
+      m.makeTranslation(p.position.x, p.position.y + DECAL_Y, p.position.z);
+      rings.setMatrixAt(i, m);
       const c = targets.has(p.id) ? target : idle;
       posts.setColorAt(i, c);
       rings.setColorAt(i, c);
     });
-    if (posts.instanceColor) posts.instanceColor.needsUpdate = true;
-    if (rings.instanceColor) rings.instanceColor.needsUpdate = true;
+    posts.count = rings.count = drawn.length;
+    for (const mesh of [posts, rings]) {
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.instanceColor!.needsUpdate = true;
+    }
   };
-  paintTargets();
+
+  // The bounding spheres cover every POI, so whatever subset is drawn stays inside them (no wrong frustum culling).
+  pois.forEach((p, i) => {
+    m.makeTranslation(p.position.x, p.position.y, p.position.z);
+    posts.setMatrixAt(i, m);
+    rings.setMatrixAt(i, m);
+  });
+  posts.count = rings.count = pois.length;
   posts.computeBoundingSphere();
   rings.computeBoundingSphere();
+  posts.count = rings.count = 0;
+
+  const next: number[] = [];
+  let center: Vec3 | null = null;
+  const pick = (): void => {
+    if (!center) return;
+    const c = center;
+    next.length = 0;
+    const far: number[] = [];
+    pois.forEach((p, k) => {
+      if (Math.hypot(p.position.x - c.x, p.position.z - c.z) > opts.drawRadius && !targets.has(p.id)) return;
+      const y = p.position.y + postSphere.center.y;
+      if (inShadow?.(c, p.position.x, y, p.position.z, postSphere.radius)) next.push(k);
+      else far.push(k);
+    });
+    const nextShadowN = next.length;
+    next.push(...far);
+    if (nextShadowN === shadowN && next.length === drawn.length && next.every((k, i) => drawn[i] === k)) return;
+    drawn.length = 0;
+    drawn.push(...next);
+    shadowN = nextShadowN;
+    commit();
+  };
 
   return {
     group,
@@ -158,8 +224,13 @@ export function buildHubMeshes(map: MapData, poiRadius: number): HubMeshes {
       if (ids.size === targets.size && [...ids].every((id) => targets.has(id))) return;
       targets.clear();
       for (const id of ids) targets.add(id);
-      paintTargets();
+      pick(); // a far target joins (or leaves) the drawn list
+      commit(); // and the colours change
     },
     isTarget: (id) => targets.has(id),
+    update(c) {
+      center = c;
+      pick();
+    },
   };
 }

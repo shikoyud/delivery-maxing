@@ -49,6 +49,39 @@ export function districtSeed(seed: number, name: string): number {
   return h;
 }
 
+/** The city-wide facts every district builder gets (CityFrame); `plazaCenter` is the HUB plaza's centre. */
+export function cityFrame(src: CitySource, plazaCenter: Vec3): CityFrame {
+  const land = landRect(src);
+  return {
+    land,
+    arterials: arterialLines(src, land),
+    plaza: { center: plazaCenter, clearRadius: src.hub.clearRadius },
+    streets: src.streets,
+    palettes: src.buildingPalettes,
+    chunkSize: worldConfig.chunkSize,
+    waterEdges: src.boundary.waterEdges,
+    checkpointSpacing: src.checkpoints.spacing,
+  };
+}
+
+/**
+ * Runs one district's builder (its template, own random stream and params) in `frame`. The generator calls it for each
+ * district in source order; tests call it alone to check one district's params without generating the whole city.
+ */
+export function buildDistrict(src: CitySource, district: QuadrantDistrict, pieces: PieceCatalog, frame: CityFrame): DistrictOutput {
+  const d = src.districts.find((x) => x.district === district);
+  if (!d) throw new Error(`city source has no district ${district}`);
+  return BUILDERS[d.template]({
+    district: d.district,
+    rect: d.rect,
+    rng: mulberry32(districtSeed(src.seed, d.district)),
+    pieces,
+    move: movementConfig,
+    params: d.params,
+    city: frame,
+  });
+}
+
 /**
  * What the districts' features need clear for the POI pass, from their reports: run-up and landing spots, stair and
  * steep-street ends, rail approaches; and the areas kept free of kits (the skatepark, wall-run alleys).
@@ -87,31 +120,11 @@ export function generateCity(src: CitySource, pieces: PieceCatalog): CityMap {
 /** generateCity, plus each district's report of what it built (gaps, alleys, pad targets…) for content tests. */
 export function generateCityWithReport(src: CitySource, pieces: PieceCatalog): { city: CityMap; report: GenerationReport } {
   const chunkSize = worldConfig.chunkSize;
-  const land = landRect(src);
-  const arterials = arterialLines(src, land);
   const hub = buildHub(src);
-  const frame: CityFrame = {
-    land,
-    arterials,
-    plaza: { center: hub.hub.center, clearRadius: src.hub.clearRadius },
-    streets: src.streets,
-    palettes: src.buildingPalettes,
-    chunkSize,
-    waterEdges: src.boundary.waterEdges,
-    checkpointSpacing: src.checkpoints.spacing,
-  };
+  const frame = cityFrame(src, hub.hub.center);
+  const { land, arterials } = frame;
 
-  const outputs = src.districts.map((d) =>
-    BUILDERS[d.template]({
-      district: d.district,
-      rect: d.rect,
-      rng: mulberry32(districtSeed(src.seed, d.district)),
-      pieces,
-      move: movementConfig,
-      params: d.params,
-      city: frame,
-    }),
-  );
+  const outputs = src.districts.map((d) => buildDistrict(src, d.district, pieces, frame));
   const all = <K extends Exclude<keyof DistrictOutput, 'report'>>(k: K): DistrictOutput[K] =>
     outputs.flatMap((o) => o[k] as unknown[]) as DistrictOutput[K];
 

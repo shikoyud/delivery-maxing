@@ -2,10 +2,10 @@ import { emptyInput, type ButtonState, type InputFrame } from '@dm/shared';
 import type { BindingName, ClientConfig } from '../clientConfig';
 
 type ButtonAction = 'jump' | 'crouch' | 'sprint' | 'interact' | 'hit' | 'board';
-export type UiKey = 'devPanel' | 'debugOverlay';
+export type UiKey = 'devPanel' | 'debugOverlay' | 'mapDebug';
 
 const BUTTONS: readonly ButtonAction[] = ['jump', 'crouch', 'sprint', 'interact', 'hit', 'board'];
-const UI_KEYS: readonly UiKey[] = ['devPanel', 'debugOverlay'];
+const UI_KEYS: readonly UiKey[] = ['devPanel', 'debugOverlay', 'mapDebug'];
 
 /** Raw code for a mouse button, as used in bindings ("Mouse0" = left). */
 export const mouseCode = (button: number): string => `Mouse${button}`;
@@ -47,7 +47,7 @@ export class ActionState {
     }
   }
 
-  /** Whether `code` is bound to a UI key (dev panel, debug overlay); those work without pointer lock. */
+  /** Whether `code` is bound to a UI key (dev panel, debug overlay, map debug); those work without pointer lock. */
   isUiCode(code: string): boolean {
     const action = this.codeTo.get(code);
     return action !== undefined && (UI_KEYS as readonly string[]).includes(action);

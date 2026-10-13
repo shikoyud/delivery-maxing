@@ -9,6 +9,7 @@ import {
   initRapier,
   lerpVec3,
   movementConfig,
+  ordersConfig,
   vec3,
   worldConfig,
   type CityMap,
@@ -36,6 +37,7 @@ import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { Renderer, toSun } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
+import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
 import { loadMap, type MapKind } from './mapLoader';
@@ -83,6 +85,8 @@ export class Game {
   readonly delivery: DeliveryLoop;
   readonly overlay: DebugOverlay;
   readonly devPanel: DevPanel;
+  /** The F4 map debug view (null on the greybox, which has no POI table or chunks). */
+  readonly mapDebug: MapDebugView | null;
   private readonly progress = createProgressStore(browserStorage());
   readonly chase: ChaseCamera;
   /** Sphere cast of the camera's collision ball against the map (the courier's own collider excluded). */
@@ -173,6 +177,8 @@ export class Game {
       this.delivery.onThiefCaught((id) => thiefView.caught(id));
     }
     this.snapThieves();
+    this.mapDebug =
+      cityMap && poiTable ? new MapDebugView(this.renderer.scene, cityMap, poiTable, ordersConfig.bands.city, this.cfg.mapDebug) : null;
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
       onBackpack: (n) => this.delivery.setBackpackCapacity(n),
@@ -191,14 +197,22 @@ export class Game {
         this.saver.schedule();
         this.devPanel.setOverrideCount(countOverrides(settings));
       },
+      ...(this.mapDebug ? { onMapDebug: (on: boolean) => this.setMapDebug(on) } : {}),
     });
     this.devPanel.setOverrideCount(countOverrides(settings));
     this.actions.onUiKey = (name) => {
       if (name === 'debugOverlay') this.overlay.toggle();
+      else if (name === 'mapDebug') this.setMapDebug(!(this.mapDebug?.visible ?? false));
       else this.toggleDevPanel();
     };
   }
 
+  /** Shows or hides the F4 map debug view (city only) and keeps the dev panel's checkbox in step. */
+  setMapDebug(on: boolean): void {
+    if (!this.mapDebug) return;
+    this.mapDebug.setVisible(on);
+    this.devPanel.setMapDebug(on);
+  }
 
   /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
   private toggleDevPanel(): void {
@@ -374,6 +388,9 @@ export class Game {
     }
     this.features.update(clockSeconds);
     this.delivery.draw(clockSeconds);
+    if (this.mapDebug?.visible) {
+      this.mapDebug.update(feet, this.pager?.loadedChunks() ?? new Set(), this.delivery.thieves?.thieves ?? []);
+    }
     this.renderer.followShadow(feet);
     this.renderer.render();
     this.frames++;

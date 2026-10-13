@@ -8,7 +8,7 @@
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
     "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "board": ["KeyQ"], "hit": ["Mouse0"],
-    "devPanel": ["Backquote"], "debugOverlay": ["F3"] } },
+    "devPanel": ["Backquote"], "debugOverlay": ["F3"], "mapDebug": ["F4"] } },
   "courier": { "height": 1.8, "turnEaseRate": 14, "facingMinSpeed": 1.0, "dismountEaseRate": 8,
     "crossFade": 0.15, "runSpeedForFullRun": 8, "runMinTimeScale": 0.7,
     "idleSpeed": 0.3, "walkMaxSpeed": 4, "fallSpeed": 2, "airClip": [0.2, 0.36],
@@ -35,6 +35,8 @@
         "bones": { "Abdomen": [-60.0, 0, 0], "UpperLegL": [80.0, 0, 0], "UpperLegR": [80.0, 0, 0], "LowerLegL": [-125.0, 0, 0], "LowerLegR": [-125.0, 0, 0], "UpperArmL": [125, 0, 0], "UpperArmR": [125, 0, 0] } } } },
   "thieves": { "renderRadius": 150, "crossFade": 0.15, "runSpeedForFullRun": 7, "idleSpeed": 0.3, "punchSeconds": 0.5 },
   "city": { "lodRadii": [160, 370, 700], "relodDistance": 25, "renderRegion": 250 },
+  "poiMarkers": { "drawRadius": 400 },
+  "mapDebug": { "radius": 500 },
   "perf": {
     "route": [
       { "feet": { "x": 0, "y": 0.02, "z": 20 }, "target": { "x": 0, "y": 4, "z": -200 } },
