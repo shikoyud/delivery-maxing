@@ -54,13 +54,13 @@ describe('expandGreybox', () => {
     }
   });
 
-  it('keeps hand-placed solids and features unchanged', () => {
+  it('keeps hand-placed solids, POIs, hospitals and order rules unchanged', () => {
     const src = greyboxFixture();
     const out = expandGreybox(src);
     expect(out.solids).toContainEqual(src.solids[0]);
-    expect(out.zipLines).toEqual(src.zipLines);
-    expect(out.checkpoints).toEqual(src.checkpoints);
-    expect(out.hub).toEqual(src.hub);
+    expect(out.pois).toEqual(src.pois);
+    expect(out.hospitals).toEqual(src.hospitals);
+    expect(out.orderRules).toEqual(src.orderRules);
     expect(out.size).toBe(src.size);
   });
 

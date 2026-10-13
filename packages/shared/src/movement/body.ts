@@ -1,13 +1,11 @@
 import type { Collider, KinematicCharacterController, RigidBody } from '@dimforge/rapier3d-compat';
 import type { MovementConfig } from '../config/types';
 import { vec3, type Vec3 } from '../math/vec3';
-import type { Surface } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 
 export interface MoveResult {
   grounded: boolean;
   groundNormal: Vec3;
-  groundSurface: Surface;
   /** Collision normals (pointing out of the obstacle) with |n.y| < WALL_MAX_NY. */
   wallNormals: Vec3[];
   /** Collision normals with n.y < -WALL_MAX_NY (ceilings). */
@@ -134,19 +132,15 @@ export class PlayerBody {
     this.syncFeet();
 
     let groundNormal = vec3(0, 1, 0);
-    let groundSurface: Surface = 'default';
     if (grounded) {
       const probe = this.rayHit(
         vec3(this.feetPos.x, this.feetPos.y + GROUND_PROBE_LIFT, this.feetPos.z),
         vec3(0, -1, 0),
         GROUND_PROBE_LIFT + GROUND_PROBE_REACH,
       );
-      if (probe) {
-        groundNormal = probe.hit.normal;
-        groundSurface = this.physics.surfaceOf(probe.collider);
-      }
+      if (probe) groundNormal = probe.hit.normal;
     }
-    return { grounded, groundNormal, groundSurface, wallNormals, ceilingNormals, movement: vec3(m.x, m.y, m.z) };
+    return { grounded, groundNormal, wallNormals, ceilingNormals, movement: vec3(m.x, m.y, m.z) };
   }
 
   /**

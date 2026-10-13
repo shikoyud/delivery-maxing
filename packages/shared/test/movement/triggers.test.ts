@@ -4,7 +4,7 @@ import { vec3 } from '../../src/math/vec3';
 import { box, makeSim } from '../helpers/simHarness';
 
 describe('out-of-bounds respawn', () => {
-  it('falling below outOfBoundsY respawns at the map spawn and emits respawned', async () => {
+  it('falling below outOfBoundsY respawns at the nearest hospital spawn and emits respawned', async () => {
     const h = await makeSim({
       floor: false,
       solids: [box('plat', vec3(0, -0.5, 0), vec3(8, 1, 8))],
@@ -13,7 +13,7 @@ describe('out-of-bounds respawn', () => {
     h.sim.teleport(vec3(20, 0, 0)); // off the platform, over the void
     let ev = h.tick();
     for (let i = 0; i < 120 && !ev.some((e) => e.kind === 'respawned'); i++) ev = h.tick();
-    expect(ev).toContainEqual({ kind: 'respawned', hospitalId: 'spawn' });
+    expect(ev).toContainEqual({ kind: 'respawned', hospitalId: 'h-test' });
     const s = h.sim.state;
     expect(s.position.x).toBeCloseTo(0, 5);
     expect(s.position.y).toBeCloseTo(0, 5);
@@ -23,13 +23,16 @@ describe('out-of-bounds respawn', () => {
     expect(s.jumpPressAge).toBeNull();
   });
 
-  it('respawns at a non-origin spawn, whatever the last grounded position was', async () => {
-    const h = await makeSim({ spawn: vec3(3, 0, 4) });
-    h.sim.teleport(vec3(0, -10, 0));
+  it('respawns at the hospital nearest the last grounded position, carrying its id', async () => {
+    const far = { id: 'far', name: 'Far', center: vec3(-80, 0, -80), safeRadius: 18, spawn: vec3(-80, 0, -72), spawnYaw: 0 };
+    const near = { id: 'near', name: 'Near', center: vec3(40, 0, 0), safeRadius: 18, spawn: vec3(40, 0, 8), spawnYaw: 0 };
+    const h = await makeSim({ spawn: vec3(30, 0, 0), hospitals: [far, near] });
+    expect(h.sim.state.lastGrounded.x).toBeCloseTo(30, 1);
+    h.sim.teleport(vec3(0, -10, 0)); // the fall position itself is nearer to neither; lastGrounded decides
     const ev = h.tick();
-    expect(ev).toContainEqual({ kind: 'respawned', hospitalId: 'spawn' });
-    expect(h.sim.state.position.x).toBeCloseTo(3, 5);
-    expect(h.sim.state.position.z).toBeCloseTo(4, 5);
+    expect(ev).toContainEqual({ kind: 'respawned', hospitalId: 'near' });
+    expect(h.sim.state.position.x).toBeCloseTo(40, 5);
+    expect(h.sim.state.position.z).toBeCloseTo(8, 5);
   });
 
   it('leaving the island edge (beyond size/2 + boundsMargin) also respawns', async () => {

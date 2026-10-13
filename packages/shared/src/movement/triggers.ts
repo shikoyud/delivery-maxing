@@ -1,5 +1,6 @@
 import type { MovementConfig } from '../config/types';
 import { vec3 } from '../math/vec3';
+import { nearestHospital } from '../world/hospitals';
 import type { MapData } from '../world/mapTypes';
 import type { PlayerBody } from './body';
 import { coyoteTicks } from './jump';
@@ -28,12 +29,13 @@ export function applyTriggers(state: PlayerState, body: PlayerBody, map: MapData
   return [];
 }
 
-/** Teleports to the map spawn (stopgap: the nearest hospital replaces this once the map has hospitals). */
+/** Teleports to the spawn of the hospital nearest the last grounded position. */
 function respawn(state: PlayerState, body: PlayerBody, map: MapData, cfg: MovementConfig): SimEvent {
-  body.setFeet(map.spawn);
+  const hospital = nearestHospital(map, state.lastGrounded);
+  body.setFeet(hospital.spawn);
   state.position = body.feet;
   state.velocity = vec3(0, 0, 0);
   enterAir(state, cfg);
   state.jumpPressAge = null;
-  return { kind: 'respawned', hospitalId: 'spawn' };
+  return { kind: 'respawned', hospitalId: hospital.id };
 }

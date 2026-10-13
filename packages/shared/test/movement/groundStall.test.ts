@@ -27,14 +27,14 @@ beforeAll(async () => {
   rapier = await initRapier();
 });
 
-const hub = map.hub.spawn;
+const hub = map.hospitals[0]!.spawn;
 const RUNS: { label: string; x: number; z: number; yaw: number }[] = [
-  { label: 'plaza (-30, 8) facing +X', x: -30, z: 8, yaw: -Math.PI / 2 },
-  { label: 'HUB spawn facing +Z', x: hub.x, z: hub.z, yaw: Math.PI },
-  { label: 'HUB spawn facing +X', x: hub.x, z: hub.z, yaw: -Math.PI / 2 },
+  { label: '(-30, 8) facing +X', x: -30, z: 8, yaw: -Math.PI / 2 },
+  { label: 'hospital spawn facing +Z', x: hub.x, z: hub.z, yaw: Math.PI },
+  { label: 'hospital spawn facing -Z', x: hub.x, z: hub.z, yaw: 0 },
   { label: 'street (-150, 50) facing +X', x: -150, z: 50, yaw: -Math.PI / 2 },
   { label: 'street (-150, 50) facing -Z', x: -150, z: 50, yaw: 0 },
-  { label: 'hub (0, 0) diagonal', x: 0, z: 0, yaw: Math.PI / 4 },
+  { label: '(0, 0) diagonal', x: 0, z: 0, yaw: Math.PI / 4 },
   { label: '(12, -40) facing +X', x: 12, z: -40, yaw: -Math.PI / 2 },
   { label: '(80, 80) facing -Z', x: 80, z: 80, yaw: 0 },
   { label: '(-200, -120) facing -Z', x: -200, z: -120, yaw: 0 },

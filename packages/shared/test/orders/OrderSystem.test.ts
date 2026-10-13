@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import { OrderSystem } from '../../src/orders/OrderSystem';
+import { OrderSystem, type LegacyZones } from '../../src/orders/OrderSystem';
 import type { Order } from '../../src/orders/types';
 import { mulberry32 } from '../../src/util/rng';
 import { vec3 } from '../../src/math/vec3';
 import { bandFor, streetDistance, type PoiInfo } from '../../src/world/distance';
-import type { PlayerZones } from '../../src/world/zones';
 
 const cfg = ordersConfig;
 const pois: PoiInfo[] = Array.from({ length: 20 }, (_, i) => {
@@ -34,7 +33,7 @@ function make(seed: number, capacity = 1, now = 0, totals?: { points: number; co
   );
 }
 
-const zones = (over: { plaza?: boolean; drop?: boolean; pois?: string[] } = {}): PlayerZones => ({
+const zones = (over: { plaza?: boolean; drop?: boolean; pois?: string[] } = {}): LegacyZones => ({
   inPlaza: over.plaza ?? false,
   inDropZone: over.drop ?? false,
   poiIds: new Set(over.pois ?? []),

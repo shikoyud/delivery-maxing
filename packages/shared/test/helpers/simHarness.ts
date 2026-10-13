@@ -3,7 +3,7 @@ import { emptyInput, type InputFrame } from '../../src/input/inputFrame';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import { PlayerSim } from '../../src/movement/PlayerSim';
 import { NO_MODS, type PlayerState, type SimEvent, type StatModifiers } from '../../src/movement/types';
-import type { MapData, Solid } from '../../src/world/mapTypes';
+import type { Hospital, MapData, Solid } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier } from '../../src/world/physicsWorld';
 
 export interface Hold {
@@ -35,6 +35,7 @@ export interface SimOptions {
   solids?: Solid[];
   spawn?: Vec3;
   yaw?: number;
+  hospitals?: Hospital[];
 }
 
 export const box = (id: string, center: Vec3, size: Vec3, extra?: Partial<Solid>): Solid => ({
@@ -74,21 +75,13 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   const yaw = opts.yaw ?? 0;
   const map: MapData = {
     size: 200,
-    spawn,
     solids: [
       ...(opts.floor === false ? [] : [box('floor', vec3(0, -0.5, 0), vec3(200, 1, 200), { kind: 'ground' })]),
       ...(opts.solids ?? []),
     ],
-    zipLines: [],
-    jumpPads: [],
-    boostOrbs: [],
-    rails: [],
-    checkpoints: [],
     pois: [],
-    hub: {
-      center: vec3(0, 0, 0), plazaRadius: 30, dropZoneRadius: 6, zoneHeight: 6,
-      kiosk: vec3(0, 0, -8), kioskRange: 3, spawn, spawnYaw: yaw,
-    },
+    hospitals: opts.hospitals ?? [{ id: 'h-test', name: 'Test Hospital', center: vec3(spawn.x, spawn.y, spawn.z - 8), safeRadius: 18, spawn, spawnYaw: yaw }],
+    orderRules: { bands: { shortMax: 150, mediumMax: 350 }, foodDropoff: { min: 80, max: 400 }, maxPickupDistance: 250 },
   };
   const physics = createPhysicsWorld(rapier, map);
   const sim = new PlayerSim(physics, map, movementConfig, spawn, yaw);

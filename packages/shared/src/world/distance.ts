@@ -1,6 +1,6 @@
 import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
-import type { MapData, Poi } from './mapTypes';
+import type { Poi } from './mapTypes';
 
 export type PathDistance = (from: Vec3, to: Vec3) => number;
 
@@ -16,11 +16,5 @@ export function bandFor(d: number, bands: OrdersConfig['bands']): Band {
   return 'long';
 }
 
-export interface PoiInfo { poi: Poi; hubDistance: number; band: Band }
-
-export function buildPoiTable(map: MapData, dist: PathDistance, bands: OrdersConfig['bands']): PoiInfo[] {
-  return map.pois.map((poi) => {
-    const hubDistance = dist(map.hub.center, poi.position);
-    return { poi, hubDistance, band: bandFor(hubDistance, bands) };
-  });
-}
+/** Transitional: still used by the old order system, which Task 5 deletes. */
+export interface PoiInfo { poi: Pick<Poi, 'id' | 'position' | 'district' | 'kind'>; hubDistance: number; band: Band }

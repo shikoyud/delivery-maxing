@@ -3,7 +3,8 @@ import type { Vec3 } from '../math/vec3';
 import { NO_MODS, type SimEvent, type StatModifiers } from '../movement/types';
 import type { Rng } from '../util/rng';
 import type { PathDistance, PoiInfo } from '../world/distance';
-import type { PlayerZones } from '../world/zones';
+/** Transitional hub-era zone snapshot; Task 5 deletes this file. */
+export interface LegacyZones { inPlaza: boolean; inDropZone: boolean; poiIds: ReadonlySet<string> }
 import { generateBoard } from './board';
 import { scoreOrder } from './rules';
 import type { Bonus, Order, Step, Unlocks } from './types';
@@ -99,7 +100,7 @@ export class OrderSystem {
     return 'ok';
   }
 
-  update(now: number, zones: PlayerZones): OrderEvent[] {
+  update(now: number, zones: LegacyZones): OrderEvent[] {
     const events: OrderEvent[] = [];
     if (now >= this.nextRefreshAt) {
       this.board = this.generate();

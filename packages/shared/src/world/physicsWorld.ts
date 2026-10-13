@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import type { Collider, World } from '@dimforge/rapier3d-compat';
-import type { MapData, Surface } from './mapTypes';
+import type { World } from '@dimforge/rapier3d-compat';
+import type { MapData } from './mapTypes';
 
 export type Rapier = typeof RAPIER;
 
@@ -15,7 +15,6 @@ export function initRapier(): Promise<Rapier> {
 export interface PhysicsWorld {
   rapier: Rapier;
   world: World;
-  surfaceOf(c: Collider): Surface;
 }
 
 /** Quaternion for an XYZ Euler rotation (degrees), matching three.js 'XYZ' order. */
@@ -35,19 +34,17 @@ function eulerXYZ(xDeg: number, yDeg: number, zDeg: number): { x: number; y: num
 /** Builds a static world with one cuboid per solid. Gravity is zero; the sim applies it itself. */
 export function createPhysicsWorld(rapier: Rapier, map: MapData): PhysicsWorld {
   const world = new rapier.World({ x: 0, y: 0, z: 0 });
-  const surfaces = new Map<number, Surface>();
   for (const s of map.solids) {
     const body = world.createRigidBody(
       rapier.RigidBodyDesc.fixed().setTranslation(s.center.x, s.center.y, s.center.z),
     );
     const r = s.rotationDeg;
     if (r) body.setRotation(eulerXYZ(r.x, r.y, r.z), false);
-    const collider = world.createCollider(
+    world.createCollider(
       rapier.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2),
       body,
     );
-    surfaces.set(collider.handle, s.surface ?? (s.kind === 'chute' ? 'chute' : 'default'));
   }
   world.step();
-  return { rapier, world, surfaceOf: (c) => surfaces.get(c.handle) ?? 'default' };
+  return { rapier, world };
 }

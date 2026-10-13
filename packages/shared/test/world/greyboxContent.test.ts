@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import greyboxJson from '../../../../map/greybox.json';
-import { movementConfig as cfg, ordersConfig } from '../../src/config';
-import { distance, vec3, type Vec3 } from '../../src/math/vec3';
-import { buildPoiTable, streetDistance } from '../../src/world/distance';
+import { movementConfig as cfg } from '../../src/config';
+import { vec3, type Vec3 } from '../../src/math/vec3';
 import { expandGreybox } from '../../src/world/greybox';
 import type { District, GreyboxSource, MapData, Rect, Solid } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier, type PhysicsWorld, type Rapier } from '../../src/world/physicsWorld';
@@ -12,7 +11,7 @@ const map: MapData = expandGreybox(src);
 const half = map.size / 2;
 const generated = map.solids.filter((s) => s.kind === 'building' && /^b-/.test(s.id));
 const handPlaced = map.solids.filter((s) => s.id !== 'ground' && !generated.includes(s));
-const DISTRICTS: Exclude<District, 'hub'>[] = ['downtown', 'harbor', 'hillside', 'suburbs'];
+const DISTRICTS: District[] = ['downtown', 'harbor', 'hillside', 'suburbs'];
 
 let rapier: Rapier;
 let physics: PhysicsWorld;
@@ -81,23 +80,58 @@ const byId = (id: string): Solid => {
 };
 const top = (s: Solid): number => s.center.y + s.size.y / 2;
 
+describe('greybox city: hospitals', () => {
+  it('has 4 hospitals with distinct names and spawns on the ground', () => {
+    expect(map.hospitals).toHaveLength(4);
+    expect(new Set(map.hospitals.map((h) => h.name)).size).toBe(4);
+    expect(new Set(map.hospitals.map((h) => h.id)).size).toBe(4);
+    for (const h of map.hospitals) {
+      expect(h.safeRadius, h.id).toBe(18);
+      expect(Math.hypot(h.spawn.x - h.center.x, h.spawn.z - h.center.z), h.id).toBeCloseTo(8, 6);
+      for (const p of [h.center, h.spawn]) {
+        expect(solidAt(vec3(p.x, p.y + 0.05, p.z))?.id, `${h.id} inside a solid`).toBeUndefined();
+        expect(solidAt(vec3(p.x, p.y + 1.7, p.z))?.id, `${h.id} headroom`).toBeUndefined();
+        const drop = dropTo(vec3(p.x, p.y + 0.25, p.z), 10);
+        expect(drop, `${h.id} has ground below`).not.toBeNull();
+        expect(drop! - 0.25, `${h.id} ground gap`).toBeLessThanOrEqual(0.5);
+      }
+    }
+  });
+
+  it('puts at least one hospital in each district', () => {
+    for (const d of DISTRICTS) {
+      expect(map.hospitals.filter((h) => inRect(h.center, districtRect(d))).length, d).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('has the greybox order rules', () => {
+    expect(map.orderRules).toEqual({
+      bands: { shortMax: 150, mediumMax: 350 },
+      foodDropoff: { min: 80, max: 400 },
+      maxPickupDistance: 250,
+    });
+  });
+});
+
 describe('greybox city: POIs', () => {
-  it('has 18–22 POIs with unique ids, ≥ 4 in each of downtown/harbor/hillside/suburbs, all four kinds', () => {
-    expect(map.pois.length).toBeGreaterThanOrEqual(18);
-    expect(map.pois.length).toBeLessThanOrEqual(22);
+  it('has unique ids and names, and at least 4 POIs in each district', () => {
     expect(new Set(map.pois.map((p) => p.id)).size).toBe(map.pois.length);
+    expect(new Set(map.pois.map((p) => p.name)).size).toBe(map.pois.length);
     for (const d of DISTRICTS) {
       const inD = map.pois.filter((p) => p.district === d);
       expect(inD.length, d).toBeGreaterThanOrEqual(4);
       for (const p of inD) expect(inRect(p.position, districtRect(d)), `${p.id} lies in ${d}`).toBe(true);
     }
-    expect(new Set(map.pois.map((p) => p.kind))).toEqual(new Set(['door', 'mailbox', 'counter', 'balcony']));
   });
 
-  it('has ≥ 5 POIs in each band by street distance from the HUB', () => {
-    const table = buildPoiTable(map, streetDistance, ordersConfig.bands);
-    for (const band of ['short', 'medium', 'long'] as const) {
-      expect(table.filter((t) => t.band === band).length, band).toBeGreaterThanOrEqual(5);
+  it('every POI has at least one role, a name, and a ground-level position reachable without parkour', () => {
+    for (const p of map.pois) {
+      expect(p.roles.length, p.id).toBeGreaterThanOrEqual(1);
+      expect(p.name.length, p.id).toBeGreaterThan(0);
+      expect(['door', 'counter'], p.id).toContain(p.kind);
+      expect(p.position.y, `${p.id} street level`).toBeLessThanOrEqual(1.2);
+      expect(Math.abs(p.position.x)).toBeLessThanOrEqual(half);
+      expect(Math.abs(p.position.z)).toBeLessThanOrEqual(half);
     }
   });
 
@@ -105,144 +139,70 @@ describe('greybox city: POIs', () => {
     for (const p of map.pois) {
       const lifted = vec3(p.position.x, p.position.y + 0.05, p.position.z);
       expect(solidAt(lifted)?.id, `${p.id} inside a solid`).toBeUndefined();
-      // Standing room: the capsule height above the ground point is free too.
       expect(solidAt(vec3(p.position.x, p.position.y + 1.7, p.position.z))?.id, `${p.id} headroom`).toBeUndefined();
       const drop = dropTo(vec3(p.position.x, p.position.y + 0.25, p.position.z), 10);
       expect(drop, `${p.id} has ground below`).not.toBeNull();
       expect(drop! - 0.25, `${p.id} ground gap`).toBeLessThanOrEqual(0.5);
     }
   });
-});
 
-describe('greybox city: features', () => {
-  it('has ≥ 6 zip lines (≥ 2 longer than 80 m), ≥ 8 jump pads, ≥ 10 orbs, ≥ 3 chutes, ≥ 6 rails', () => {
-    expect(map.zipLines.length).toBeGreaterThanOrEqual(6);
-    expect(map.zipLines.filter((z) => distance(z.a, z.b) > 80).length).toBeGreaterThanOrEqual(2);
-    expect(map.jumpPads.length).toBeGreaterThanOrEqual(8);
-    expect(map.boostOrbs.length).toBeGreaterThanOrEqual(10);
-    expect(map.solids.filter((s) => s.kind === 'chute').length).toBeGreaterThanOrEqual(3);
-    expect(map.rails.length).toBeGreaterThanOrEqual(6);
+  it('food pickups carry items; package pickups carry items and a weightKg range within [1,150]', () => {
+    for (const p of map.pois.filter((q) => q.roles.includes('foodPickup'))) {
+      expect(p.items?.length, p.id).toBeGreaterThanOrEqual(1);
+    }
+    for (const p of map.pois.filter((q) => q.roles.includes('packagePickup'))) {
+      expect(p.items?.length, p.id).toBeGreaterThanOrEqual(1);
+      expect(p.weightKg, p.id).toBeDefined();
+      const [lo, hi] = p.weightKg!;
+      expect(lo, p.id).toBeGreaterThanOrEqual(1);
+      expect(hi, p.id).toBeLessThanOrEqual(150);
+      expect(lo, p.id).toBeLessThanOrEqual(hi);
+    }
   });
 
-  it('prefixes every feature id with its area and keeps ids unique', () => {
-    const ids = [
-      ...handPlaced.map((s) => s.id),
-      ...map.zipLines.map((f) => f.id),
-      ...map.jumpPads.map((f) => f.id),
-      ...map.boostOrbs.map((f) => f.id),
-      ...map.rails.map((f) => f.id),
-      ...map.checkpoints.map((f) => f.id),
-    ];
+  it('has at least 6 pickups (4 food, 2 package) and 14 dropoffs, with some food-only dropoffs', () => {
+    const has = (role: string) => map.pois.filter((p) => (p.roles as string[]).includes(role));
+    expect(has('foodPickup').length).toBeGreaterThanOrEqual(4);
+    expect(has('packagePickup').length).toBeGreaterThanOrEqual(2);
+    const dropoffs = map.pois.filter((p) => p.roles.some((r) => r === 'dropoffFood' || r === 'dropoffPackage'));
+    expect(dropoffs.length).toBeGreaterThanOrEqual(14);
+    expect(map.pois.filter((p) => p.roles.length === 1 && p.roles[0] === 'dropoffFood').length).toBeGreaterThanOrEqual(2);
+    for (const p of [...has('foodPickup'), ...has('packagePickup')]) expect(dropoffs).not.toContain(p);
+  });
+});
+
+describe('greybox city: schema v2', () => {
+  it('has no solids of kind chute or hub, and no feature arrays remain', () => {
+    expect(map.solids.some((s) => (s.kind as string) === 'chute' || (s.kind as string) === 'hub')).toBe(false);
+    expect(map.solids.some((s) => 'surface' in s)).toBe(false);
+    for (const key of ['zipLines', 'jumpPads', 'boostOrbs', 'rails', 'checkpoints', 'hub', 'spawn']) {
+      expect(key in (src as object), key).toBe(false);
+      expect(key in (map as object), key).toBe(false);
+    }
+  });
+
+  it('keeps hand-placed solid ids unique and prefixed with their area', () => {
+    const ids = handPlaced.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^(hub|downtown|harbor|hillside|suburbs)-/);
   });
 
-  it('has ≥ 1 checkpoint per district plus one at the HUB', () => {
-    const hubCps = map.checkpoints.filter((c) => c.id.startsWith('hub-'));
-    expect(hubCps.some((c) => Math.hypot(c.position.x - map.hub.center.x, c.position.z - map.hub.center.z) <= map.hub.plazaRadius)).toBe(true);
-    for (const d of DISTRICTS) {
-      const cps = map.checkpoints.filter((c) => c.id.startsWith(`${d}-`));
-      expect(cps.length, d).toBeGreaterThanOrEqual(1);
-      for (const c of cps) expect(inRect(c.position, districtRect(d)), c.id).toBe(true);
-    }
-    for (const c of map.checkpoints) {
-      expect(solidAt(vec3(c.position.x, c.position.y + 0.05, c.position.z))?.id, c.id).toBeUndefined();
-      const drop = dropTo(vec3(c.position.x, c.position.y + 0.25, c.position.z), 10);
-      expect(drop, c.id).not.toBeNull();
-      expect(drop! - 0.25, c.id).toBeLessThanOrEqual(0.5);
-    }
-  });
-
-  it('keeps every feature inside the island (|x|, |z| ≤ size/2)', () => {
-    const points = [
-      ...map.zipLines.flatMap((z) => [z.a, z.b]),
-      ...map.jumpPads.map((p) => p.position),
-      ...map.boostOrbs.map((o) => o.position),
-      ...map.rails.flatMap((r) => r.points),
-      ...map.checkpoints.map((c) => c.position),
-      ...map.pois.map((p) => p.position),
-    ];
-    for (const p of points) {
-      expect(Math.abs(p.x)).toBeLessThanOrEqual(half);
-      expect(Math.abs(p.z)).toBeLessThanOrEqual(half);
-    }
+  it('keeps every hand-placed solid inside the island', () => {
     for (const s of handPlaced) {
       const b = bounds(s);
       expect(Math.max(Math.abs(b.min.x), Math.abs(b.max.x), Math.abs(b.min.z), Math.abs(b.max.z)), s.id).toBeLessThanOrEqual(half);
     }
   });
-
-  it('has no zip line end or orb inside a solid, and every jump pad on a surface', () => {
-    for (const z of map.zipLines) {
-      expect(solidAt(z.a)?.id, `${z.id}.a`).toBeUndefined();
-      expect(solidAt(z.b)?.id, `${z.id}.b`).toBeUndefined();
-    }
-    for (const o of map.boostOrbs) expect(solidAt(o.position)?.id, o.id).toBeUndefined();
-    for (const p of map.jumpPads) {
-      expect(solidAt(vec3(p.position.x, p.position.y + 0.05, p.position.z))?.id, p.id).toBeUndefined();
-      const drop = dropTo(vec3(p.position.x, p.position.y + 0.1, p.position.z), 1);
-      expect(drop, `${p.id} sits on a surface`).not.toBeNull();
-      expect(drop!, p.id).toBeLessThanOrEqual(0.15);
-    }
-  });
-
-  it('keeps every rail point clear of solids with a surface below', () => {
-    for (const r of map.rails) {
-      for (const p of r.points) {
-        expect(solidAt(p)?.id, r.id).toBeUndefined();
-        expect(dropTo(p), r.id).not.toBeNull();
-      }
-    }
-  });
 });
 
 describe('greybox city: layout', () => {
-  it('keeps the HUB plaza and the playground clear of generated buildings', () => {
-    const c = map.hub.center;
-    const plaza: Rect = { minX: c.x - 30, minZ: c.z - 30, maxX: c.x + 30, maxZ: c.z + 30 };
-    // The playground: every hand-placed HUB solid except the kiosk, which stands on the plaza.
-    const hubSolids = handPlaced.filter((s) => s.id.startsWith('hub-') && s.id !== 'hub-kiosk').map(rectOf);
-    const playground: Rect = {
-      minX: Math.min(...hubSolids.map((r) => r.minX)),
-      minZ: Math.min(...hubSolids.map((r) => r.minZ)),
-      maxX: Math.max(...hubSolids.map((r) => r.maxX)),
-      maxZ: Math.max(...hubSolids.map((r) => r.maxZ)),
-    };
-    expect(playground.minX).toBeGreaterThanOrEqual(c.x);
-    for (const b of generated) {
-      expect(overlaps(rectOf(b), plaza), b.id).toBe(false);
-      expect(overlaps(rectOf(b), playground), b.id).toBe(false);
-    }
-  });
-
   it('never overlaps a generated building with a hand-placed solid', () => {
     for (const b of generated) {
       for (const s of handPlaced) expect(overlaps(rectOf(b), rectOf(s)), `${b.id} vs ${s.id}`).toBe(false);
     }
   });
 
-  it('builds the movement playground kit east of the HUB', () => {
-    expect(top(byId('hub-mantle-01'))).toBe(1.0);
-    expect(top(byId('hub-mantle-02'))).toBe(1.5);
-    expect(top(byId('hub-mantle-03'))).toBe(1.8);
-    const [w1, w2] = [byId('hub-wall-01'), byId('hub-wall-02')];
-    for (const w of [w1, w2]) {
-      expect(Math.max(w.size.x, w.size.z)).toBe(20);
-      expect(w.size.y).toBe(6);
-    }
-    const gap = Math.abs(w1.center.z - w2.center.z) - (w1.size.z + w2.size.z) / 2;
-    expect(gap).toBeCloseTo(4, 6);
-    const roof = byId('hub-tunnel-roof');
-    expect(roof.center.y - roof.size.y / 2).toBe(1.4);
-    expect(top(byId('hub-tower-01'))).toBe(12);
-    expect(handPlaced.some((s) => s.id.startsWith('hub-') && s.kind === 'chute')).toBe(true);
-    expect(map.zipLines.some((z) => z.id.startsWith('hub-'))).toBe(true);
-    expect(map.boostOrbs.filter((o) => o.id.startsWith('hub-')).length).toBeGreaterThanOrEqual(3);
-    expect(map.rails.some((r) => r.id.startsWith('hub-'))).toBe(true);
-    expect(handPlaced.some((s) => s.id.startsWith('hub-') && s.kind === 'ramp')).toBe(true);
-  });
-
-  it('keeps every ramp walkable, and hillside ramp streets at ≤ 25°', () => {
+  it('keeps every ramp walkable, and hillside ramp streets at <= 25 degrees', () => {
     for (const s of handPlaced.filter((x) => x.kind === 'ramp')) {
       const m = rotation(s);
       const tilt = (Math.acos(Math.min(1, Math.abs(m[1]![1]!))) * 180) / Math.PI;
@@ -251,20 +211,56 @@ describe('greybox city: layout', () => {
     }
     expect(top(byId('hillside-plateau'))).toBe(20);
   });
+});
 
-  it('has a reserved skatepark in the suburbs with at least 3 rails', () => {
-    expect(map.rails.filter((r) => r.id.startsWith('suburbs-')).length).toBeGreaterThanOrEqual(3);
-  });
+describe('greybox city: walkability', () => {
+  /**
+   * Flood fill over a 2 m grid of standable, headroom-clear ground points (neighbouring cells may differ by at most
+   * 0.4 m of ground height, so ramps up to ~20 degrees pass and building walls do not), starting at the first
+   * hospital spawn. Every other hospital spawn and every POI must have a reached cell within one cell.
+   */
+  const CELL = 2;
+  const STEP = 0.4;
+  const cellKey = (i: number, j: number): string => `${i},${j}`;
+  const groundAt = (x: number, z: number): number | null => {
+    if (Math.abs(x) > half || Math.abs(z) > half) return null;
+    const hit = physics.world.castRay(new rapier.Ray({ x, y: 30, z }, { x: 0, y: -1, z: 0 }), 60, true);
+    if (!hit) return null;
+    const y = 30 - hit.timeOfImpact;
+    const up = physics.world.castRay(new rapier.Ray({ x, y: y + 0.05, z }, { x: 0, y: 1, z: 0 }), 1.7, true);
+    return up ? null : y;
+  };
 
-  it('places a solid kiosk at the HUB, reachable from open ground', () => {
-    const kiosk = byId('hub-kiosk');
-    expect(insideSolid(vec3(map.hub.kiosk.x, map.hub.kiosk.y + 0.5, map.hub.kiosk.z), kiosk)).toBe(true);
-    // In front of the kiosk (toward the plaza centre) there is free ground within kioskRange.
-    const k = map.hub.kiosk;
-    const c = map.hub.center;
-    const d = Math.hypot(c.x - k.x, c.z - k.z);
-    const front = vec3(k.x + ((c.x - k.x) / d) * 1.5, 0, k.z + ((c.z - k.z) / d) * 1.5);
-    expect(solidAt(vec3(front.x, 0.5, front.z))).toBeUndefined();
-    expect(Math.hypot(front.x - k.x, front.z - k.z)).toBeLessThanOrEqual(map.hub.kioskRange);
+  it('reaches every other hospital spawn and every POI from the first hospital spawn on foot', () => {
+    const start = map.hospitals[0]!.spawn;
+    const reached = new Map<string, number>();
+    const si = Math.round(start.x / CELL);
+    const sj = Math.round(start.z / CELL);
+    const y0 = groundAt(si * CELL, sj * CELL);
+    expect(y0, 'start is standable').not.toBeNull();
+    reached.set(cellKey(si, sj), y0!);
+    const queue: [number, number][] = [[si, sj]];
+    while (queue.length) {
+      const [i, j] = queue.pop()!;
+      const y = reached.get(cellKey(i, j))!;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const k = cellKey(i + di, j + dj);
+        if (reached.has(k)) continue;
+        const ny = groundAt((i + di) * CELL, (j + dj) * CELL);
+        if (ny === null || Math.abs(ny - y) > STEP) continue;
+        reached.set(k, ny);
+        queue.push([i + di, j + dj]);
+      }
+    }
+    const near = (p: Vec3): boolean => {
+      for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+          if (reached.has(cellKey(Math.round(p.x / CELL) + di, Math.round(p.z / CELL) + dj))) return true;
+        }
+      }
+      return false;
+    };
+    for (const h of map.hospitals) expect(near(h.spawn), `${h.id} spawn reachable`).toBe(true);
+    for (const p of map.pois) expect(near(p.position), `${p.id} reachable`).toBe(true);
   });
 });
