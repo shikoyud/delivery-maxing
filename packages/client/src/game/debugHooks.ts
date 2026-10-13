@@ -11,6 +11,13 @@ export interface DebugApi {
   /** True once the first frame has been drawn. */
   readonly ready: boolean;
   readonly tick: number;
+  /**
+   * Pauses or resumes the simulation: while paused, frames still draw but run no ticks, and only advance() moves sim time
+   * (tests that must not depend on how fast headless frames draw).
+   */
+  pauseSim(paused: boolean): void;
+  /** Runs `ticks` simulation ticks synchronously (the player, the orders and the thieves, as a frame would); returns the tick after. */
+  advance(ticks: number): number;
   player(): { position: Vec3; velocity: Vec3; mode: MoveMode; onBoard: boolean; heading: number };
   /** Moves the player into the air at `p`, optionally moving at velocity `v` (m/s). */
   teleport(p: Vec3, v?: Vec3): void;
@@ -85,6 +92,13 @@ export function installDebugHooks(game: Game): void {
       return game.frames > 0;
     },
     get tick() {
+      return game.tick;
+    },
+    pauseSim(paused) {
+      game.simPaused = paused;
+    },
+    advance(ticks) {
+      game.advance(ticks);
       return game.tick;
     },
     player() {

@@ -251,6 +251,9 @@ export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
       const pose = viewpointAt(cfg.route, cfg.speed, cfg.seconds, elapsed);
       rec.frame(nowMs, pose.index, readRender);
       overlay.progress(elapsed, cfg.seconds);
+      // A teleport each frame, which also keeps the chase camera snapped behind. The last one places the player at the
+      // end of the route, however long the frame before it took.
+      game.viewpoint(pose.feet, pose.target);
       // A run that was all warm-up (very slow frames) goes on until it has something to report.
       if (pose.done && rec.measured > 0) {
         game.frameDriver = null;
@@ -287,9 +290,7 @@ export function runPerf(game: Game, cfg: PerfConfig): Promise<PerfResult> {
         };
         overlay.show(result);
         resolve(result);
-        return;
       }
-      game.viewpoint(pose.feet, pose.target); // a teleport each frame, which also keeps the chase camera snapped behind
     };
   });
 }

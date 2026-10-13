@@ -108,6 +108,11 @@ export class Game {
   frameDriver: ((nowMs: number) => void) | null = null;
   /** Wall-clock cost (ms) of the last frame's CityView.update; 0 on the greybox. */
   cityUpdateMs = 0;
+  /**
+   * Tests (?debug): while true, frames still draw (at the latest tick) but run no simulation ticks; advance() runs them.
+   * Lets a test step sim time exactly, however slowly the frames draw.
+   */
+  simPaused = false;
   private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
 
@@ -315,9 +320,18 @@ export class Game {
       this.renderFrame(1, dt, nowMs / 1000);
       return;
     }
+    if (this.simPaused) {
+      this.renderFrame(1, dt, nowMs / 1000);
+      return;
+    }
     const steps = this.stepper.advance(dt);
     for (let i = 0; i < steps; i++) this.step();
     this.renderFrame(this.stepper.alpha, dt, nowMs / 1000);
+  }
+
+  /** Tests (?debug): runs `ticks` simulation ticks now, exactly as frames run them (input sampled each tick), without drawing. */
+  advance(ticks: number): void {
+    for (let i = 0; i < ticks; i++) this.step();
   }
 
   /**
