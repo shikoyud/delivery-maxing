@@ -9,7 +9,8 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
-  reporter: [['list']],
+  // On CI the github reporter also turns each failure into a check-run annotation (readable through the API).
+  reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   use: {
     ...devices['Desktop Chrome'],
     baseURL: url,
