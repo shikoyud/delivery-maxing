@@ -870,7 +870,10 @@ test('city: accept a drop-off at the kiosk and deliver it (navmesh distances, ci
 
 // ---- SP2: street thieves (spec §7.3) and local epoch points (§9.4 step 1, §11) ----
 
-/** 2026-10-13 12:05:00 UTC, mid-window: the page's Date is pinned here, so a test never crosses an epoch boundary. */
+/**
+ * 2026-10-13 12:05:00 UTC, mid-window: the page's Date.now starts here (shifted, still ticking), so a test of a few
+ * minutes never crosses an epoch boundary. (Playwright's page.clock fakes the timers too, which stalls screenshots.)
+ */
 const EPOCH_NOW = Date.UTC(2026, 9, 13, 12, 5, 0);
 const EPOCH_ID = Math.floor(EPOCH_NOW / 1000 / ordersJson.epoch.seconds);
 /** On the Harbor arterial south of the plaza (street art-51 → harbor-n55: x 0, z 30..100, flat at y 0), clear of the HUB. */
@@ -878,16 +881,21 @@ const STREET = { x: 0, y: 0, z: 70 };
 /** 12 m further along the same street: inside the thieves' trigger radius (15 m), in plain sight of the courier. */
 const THIEF_AT = { x: 0, y: 0, z: 82 };
 
-/** Pins the page's wall clock and stores `epochPoints` for the current epoch (first load only: a reload keeps what the game saved). */
+/**
+ * Starts the page's wall clock at EPOCH_NOW (on every load, so a reload stays in the same epoch) and stores
+ * `epochPoints` for that epoch on the first load only (a reload keeps what the game saved).
+ */
 async function seedEpoch(page: Page, epochPoints: number, totals: { points: number; coins: number; deliveries: number }): Promise<void> {
-  await page.clock.setFixedTime(EPOCH_NOW);
   await page.addInitScript(
-    ({ id, points, t }) => {
+    ({ now, id, points, t }) => {
+      const shift = now - Date.now();
+      const real = Date.now.bind(Date);
+      Date.now = () => real() + shift;
       if (localStorage.getItem('dm.progress.v2') === null) {
         localStorage.setItem('dm.progress.v2', JSON.stringify({ totals: t, epoch: { id, points } }));
       }
     },
-    { id: EPOCH_ID, points: epochPoints, t: totals },
+    { now: EPOCH_NOW, id: EPOCH_ID, points: epochPoints, t: totals },
   );
 }
 
@@ -905,6 +913,43 @@ async function meetThief(page: Page): Promise<string> {
   return placed.id;
 }
 
+declare global {
+  interface Window {
+    /** recordHud: every chase-banner text and popup title shown since, and the ids of thieves seen chasing. */
+    __hudSeen?: { banners: string[]; popups: string[]; chasers: string[] };
+  }
+}
+
+/**
+ * Starts recording what the HUD shows (a MutationObserver on the HUD and popups, plus the chasing thief each frame):
+ * at swiftshader's ~1 fps a short chase and a 3.5 s popup can come and go between two polls.
+ */
+async function recordHud(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const seen = { banners: [] as string[], popups: [] as string[], chasers: [] as string[] };
+    window.__hudSeen = seen;
+    const banner = document.querySelector<HTMLElement>('.hud-chase')!;
+    const note = (): void => {
+      const text = banner.textContent ?? '';
+      if (!banner.hidden && seen.banners.at(-1) !== text) seen.banners.push(text);
+    };
+    new MutationObserver((records) => {
+      note();
+      for (const r of records) {
+        for (const n of r.addedNodes) {
+          if (n instanceof HTMLElement && n.classList.contains('popup')) seen.popups.push(n.querySelector('.popup-title')?.textContent ?? '');
+        }
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+    const watch = (): void => {
+      const chaser = window.__dm!.thieves().find((t) => t.mode === 'chase')?.id;
+      if (chaser !== undefined && seen.chasers.at(-1) !== chaser) seen.chasers.push(chaser);
+      requestAnimationFrame(watch);
+    };
+    watch();
+  });
+}
+
 test('a thief catches a carrying courier: popup, order gone, epoch points down by 1 (not below 0)', async ({ page }) => {
   test.setTimeout(90_000);
   const totals = { points: 5, coins: 50, deliveries: 2 };
@@ -915,26 +960,31 @@ test('a thief catches a carrying courier: popup, order gone, epoch points down b
   await expect(page.locator('.hud-epoch .hud-stat-label')).toHaveText('epoch');
   expect((await page.evaluate(() => window.__dm!.thieves())).length).toBeGreaterThan(0);
 
-  const robbedOnce = async (expected: string, shot: string): Promise<void> => {
+  const robbedOnce = async (expected: string, shot?: string): Promise<void> => {
     const drop = await firstDropoff(page);
     expect(await page.evaluate((id) => window.__dm!.orders.accept(id), drop.id)).toBe('ok'); // at the spawn, in the plaza
     await page.waitForFunction(() => window.__dm!.courier().packages === 1);
+    await recordHud(page);
     const thiefId = await meetThief(page);
-    // The chase warning, counting down whole seconds from maxChaseSeconds.
+    // Caught: the robbed popup. Swiftshader draws the city at ~1 fps, so the banner and the 3.5 s popup are recorded
+    // as they appear rather than polled for; the screenshots are taken while they are still up.
     const banner = page.locator('.hud-chase');
-    await expect(banner).toBeVisible({ timeout: 5_000 });
-    await expect(banner).toHaveText(/^Thief! Sprint, climb or reach the HUB · \d+s$/);
-    const shown = Number((await banner.textContent())!.match(/(\d+)s$/)![1]);
-    expect(shown).toBeGreaterThan(0);
-    expect(shown).toBeLessThanOrEqual(thievesJson.maxChaseSeconds);
-    await page.screenshot({ path: `${artifacts}sp2-chase-banner.png` });
-    expect((await page.evaluate(() => window.__dm!.thieves())).find((t) => t.mode === 'chase')?.id).toBe(thiefId);
-    // Caught: the robbed popup, the order failed (no package, no HUD row), lifetime totals untouched.
     const popup = page.locator('.popup', { hasText: 'Robbed!' });
-    await expect(popup).toBeVisible({ timeout: 10_000 });
-    await expect(popup.locator('.popup-title')).toHaveText(expected);
-    await expect(popup).toHaveCSS('opacity', '1');
-    await page.screenshot({ path: `${artifacts}${shot}` });
+    if (shot) {
+      await banner.waitFor({ timeout: 5_000 }).then(() => page.screenshot({ path: `${artifacts}sp2-chase-banner.png` })).catch(() => undefined);
+    }
+    await page.waitForFunction(() => window.__hudSeen!.popups.some((t) => t.startsWith('Robbed!')), undefined, { timeout: 20_000 });
+    if (shot && (await popup.isVisible())) await page.screenshot({ path: `${artifacts}${shot}` });
+    const seen = await page.evaluate(() => window.__hudSeen!);
+    expect(seen.popups.filter((t) => t.startsWith('Robbed!'))).toEqual([expected]);
+    // The chase warning was up before the catch, counting down whole seconds from maxChaseSeconds, from this thief.
+    expect(seen.chasers).toEqual([thiefId]);
+    expect(seen.banners.length).toBeGreaterThan(0);
+    for (const text of seen.banners) expect(text).toMatch(/^Thief! Sprint, climb or reach the HUB · \d+s$/);
+    const first = Number(seen.banners[0]!.match(/(\d+)s$/)![1]);
+    expect(first).toBeGreaterThan(0);
+    expect(first).toBeLessThanOrEqual(thievesJson.maxChaseSeconds);
+    // The order failed (no package, no HUD row, no waypoint target), lifetime totals untouched, the chase over.
     expect(await page.evaluate(() => window.__dm!.orders.active())).toEqual([]);
     await page.waitForFunction(() => window.__dm!.courier().packages === 0);
     await expect(page.locator('.hud-order')).toHaveCount(0);
@@ -954,7 +1004,7 @@ test('a thief catches a carrying courier: popup, order gone, epoch points down b
   await page.reload();
   await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
   expect(await page.evaluate(() => window.__dm!.orders.epochPoints())).toBe(0);
-  await robbedOnce('Robbed! 1 package stolen · epoch points already 0', 'sp2-robbed-at-zero.png');
+  await robbedOnce('Robbed! 1 package stolen · epoch points already 0');
   expect(await page.evaluate(() => window.__dm!.orders.epochPoints())).toBe(0);
   await expect(page.locator('.hud-epoch .hud-stat-value')).toHaveText('0');
   expect(errors).toEqual([]);
