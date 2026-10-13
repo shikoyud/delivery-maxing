@@ -190,6 +190,58 @@ describe('crouch-slide', () => {
   });
 });
 
+describe('landing slides (R26)', () => {
+  /**
+   * Slides off a 0.6 m ledge (top at y = 0.6, edge at z = -1): crouch only (W released) until airborne, then `air`
+   * until landing. Returns the harness and the speed on the last airborne tick.
+   */
+  async function slideOffLedge(air: Hold) {
+    const h = await makeSim({ solids: [box('ledge', vec3(0, 0.3, 7), vec3(8, 0.6, 16))], spawn: vec3(0, 0.6, 14) });
+    h.run(20, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    expect(h.sim.state.mode).toBe('slide');
+    h.runUntil((s) => !s.grounded, 60, { crouch: true });
+    let airSpeed = speed(h.sim.state);
+    for (let i = 0; i < 30 && !h.sim.state.grounded; i++) {
+      airSpeed = speed(h.sim.state);
+      h.tick(air);
+    }
+    expect(h.sim.state.grounded).toBe(true);
+    expect(h.sim.state.position.y).toBeCloseTo(0, 1);
+    return { h, airSpeed };
+  }
+
+  it('sliding off a 0.6 m ledge with crouch held (W released) keeps sliding and ≥ 90 % of speed 4 ticks after landing', async () => {
+    const CROUCH: Hold = { crouch: true };
+    const { h, airSpeed } = await slideOffLedge(CROUCH);
+    expect(airSpeed).toBeGreaterThanOrEqual(cfg.slide.endSpeed);
+    expect(h.sim.state.mode).toBe('slide');
+    h.run(4, CROUCH);
+    expect(h.sim.state.mode).toBe('slide');
+    expect(speed(h.sim.state)).toBeGreaterThanOrEqual(0.9 * airSpeed);
+  });
+
+  it('landing from the ledge with crouch NOT held lands on foot (ground) as before', async () => {
+    const { h } = await slideOffLedge({});
+    expect(h.sim.state.mode).toBe('ground');
+    h.run(10, {});
+    expect(h.sim.state.mode).toBe('ground');
+    expect(speed(h.sim.state)).toBeLessThan(0.5);
+  });
+
+  it('a slide-jump landed with crouch held continues the slide', async () => {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    expect(h.sim.state.mode).toBe('slide');
+    h.tick(SLIDE, ['jump']);
+    expect(h.sim.state.grounded).toBe(false);
+    h.runUntil((s) => s.grounded, 40, { crouch: true });
+    expect(h.sim.state.mode).toBe('slide');
+    expect(speed(h.sim.state)).toBeGreaterThanOrEqual(cfg.slide.endSpeed);
+  });
+});
+
 describe('steep slopes', () => {
   it('a slide down a long steep ramp never takes horizontal speed past speedCap', async () => {
     const deg = 25;
