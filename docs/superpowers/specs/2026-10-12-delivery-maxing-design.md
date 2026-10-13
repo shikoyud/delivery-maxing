@@ -1,23 +1,23 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved (revised 2026-10-12 after the SP1 playtest: third-person camera, two-way zip lines, par times, 2 × 2 km city, thieves)
+- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) is waiting for the owner's review:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). Sections marked **Pending** need the owner's input before they are built.
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
 
-Delivery Maxing is a third-person, low-poly, multiplayer parkour courier game that runs in the browser. Players take orders at a central HUB and deliver packages on foot across a large city built for movement: wall-runs, slides, zip lines, jump pads and speed boost orbs. Players can buy a skateboard. They can also shove each other for a short knockback and stun. Street thieves chase couriers who carry packages. There are no health points.
+Delivery Maxing is a third-person, low-poly, multiplayer courier game that runs in the browser. Players take food and package orders on their **phone** and deliver them from one place in the city to another: from a bakery to an apartment, from a factory to a construction site. They get around on foot or on a vehicle they own: **skateboard, bicycle, motorbike or car**. Better vehicles carry more and heavier orders and earn more. Players can shove each other, vehicles knock people over, and street thieves chase couriers on foot. There are no health points.
 
-Every 10 minutes (one **epoch**), a share of an on-chain reward pool is paid out in **AMZNx** (tokenized Amazon stock on Solana, mint `Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg`). Each player gets an amount proportional to the Delivery Points they earned in that epoch. Players who **lock GAME** in the reward program get a points multiplier of up to +30%. The pool is funded by Pump.fun creator fees from the game's own token, **GAME**, which is launched on Pump.fun paired with AMZNx.
+Every completed order adds **GAME** to the player's **Wallet** app on the phone; the player claims it on-chain whenever they like and pays the transaction fee. The reward pool is funded by the Pump.fun creator fees of the game's own token **GAME** (paired with SOL) and by part of every vehicle purchase, and pays out in GAME bought back from the market. How much each order pays is **Pending** (§9).
 
-GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium board skins. Cosmetics and low-impact upgrades are bought with **Coins**, an off-chain currency earned by playing.
+Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel and cosmetics are bought with **Coins**, an off-chain currency earned by playing.
 
 ### Design goals
 
-1. **Movement is the fun.** If running around the city is not enjoyable on its own, nothing else matters.
-2. **Skill decides most of the outcome.** Upgrades reach their ceiling quickly. Lockers get a capped edge (at most +30%). Beyond that, route knowledge and movement skill decide earnings.
-3. **Rewards are honest and verifiable.** The pool, epoch results, locks and claims live on-chain. Delivery validation is server-authoritative.
-4. **Token demand comes from use.** GAME is burned on upgrades and premium skins, and locked for the points bonus.
+1. **Getting around the city is the fun.** Moving through a dense, hilly city on foot and on wheels must feel good on its own.
+2. **Spending buys a stronger courier.** Each vehicle tier carries more and earns more than the one below it. Skill (routes, shortcuts, order choice) decides the rest.
+3. **Rewards are honest and verifiable.** The pool, payouts and claims live on-chain. Delivery validation is server-authoritative.
+4. **Token demand comes from use.** GAME is burned on vehicles and upgrades and paid out for work.
 
 ## 2. Decisions log
 
@@ -30,413 +30,370 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium 
 | Database | PostgreSQL |
 | Chain | Solana. Reward program written in Rust with Anchor. |
 | Account | Wallet required from the start (Phantom, Solflare, OKX Wallet, plus any Wallet Standard wallet) |
-| Token launch | GAME is launched on Pump.fun as a Custom Pair quoted in AMZNx. Creator fees are paid in AMZNx. |
-| Fee collection | The Pump.fun creator-fee split sends a share to the reward program's vault. Harvesting into the vault is permissionless. |
-| Reward pool | Fully on-chain program. Each epoch pays a fraction of the unreserved vault. Players claim their rewards. |
-| GAME pricing | Everything bought with GAME has a fixed USD price. A price keeper posts a 30-minute average GAME→USD rate, bounded by on-chain safety limits. |
-| GAME uses | Burned on token upgrades and premium board skins. Locked for a points multiplier. |
-| Spender advantage | Lock-to-boost only: up to +30% Delivery Points, with diminishing returns. No VIP levels. |
-| Ranks | Kept. They unlock Express and Chain orders and cosmetics. No shortcut doors. |
-| Catch-up | Upgrades hit their ceiling fast. No rookie boost. |
-| Boost orbs | Shared within a room: first to touch takes it. |
-| Art | Free CC0 low-poly packs (Kenney, Quaternius). Gameplay objects are built in code. |
 | Camera | Third-person chase camera behind a visible courier (changed from first-person after the SP1 playtest). |
-| City size | 2 × 2 km, crossed in about 4 minutes (changed from 600 m after the SP1 playtest). Needs streaming and LOD to hold 60 fps. |
-| Thieves | Street-only NPCs chase couriers carrying packages; a catch steals the packages and costs 1 Delivery Point from the current epoch. |
-| Par times | Every order has a par time; beating it pays a bonus. |
-| Express timer | Tightened from 1.5× to 1.1× (route distance ÷ base sprint speed) + 10 s after the SP1 playtest, so it stays tighter than par (1.3×). |
+| Sprint and slide | Shift toggles sprint; starting a slide gives a speed burst with a cooldown; crouch is C only (SP1 playtest 2). |
+| **Core loop (rev. 2)** | No HUB. Orders go pickup → dropoff between buildings, food or package, offered on the phone anywhere in the city (§3). |
+| **Vehicles (rev. 2)** | Walk, skateboard, bicycle, motorbike, car. Slots 1/1/2/3/5; packages only on motorbike (≤ 50 kg) and car (≤ 150 kg); top speeds 8/12/16/22/28 m/s. No truck. Each tier is strictly better than the one below (§4). |
+| **Fuel (rev. 2)** | Motorbike and car use fuel, refilled at gas stations with Coins (§4.4). |
+| **Parkour (rev. 2)** | Removed: wall-runs, wall-jumps, zip lines, jump pads, grind rails, map slide chutes, boost orbs. Kept: sprint, jump, crouch-slide, low mantle (≤ 1.2 m). |
+| **Phone (rev. 2)** | The main UI: orders, map, garage, shop, wallet, wardrobe, leaderboard, settings (§8). |
+| **Spawning and safe zones (rev. 2)** | Four hospitals are the only spawn points and the only safe zones. |
+| **Cancelling (rev. 2)** | Cancel any order from the phone, anywhere. No cooldown, but the server stops sending you offers for a while; burning GAME skips the wait (§3.5). |
+| **Ranks (rev. 2)** | Removed. |
+| **City (rev. 2)** | 1.2 × 1.2 km terraced Western bay city built from the owner's Megatropolis and Tropical City packs; dense wall-to-wall blocks, four levels (§5, `2026-10-14-city-map-design.md`). Replaces the SP2 2 × 2 km city. |
+| **Token (rev. 2)** | GAME launches on Pump.fun paired with SOL (no AMZNx). Creator fees accrue in SOL. |
+| **Rewards (rev. 2)** | Paid in GAME (bought back with pool SOL), accrued per completed order into the Wallet app, claimed by the player who pays the fees. Payout math **Pending** (§9). |
+| **Vehicle purchases (rev. 2)** | Paid in GAME at fixed USD prices: 80% burned, 20% sent to the reward pool. |
+| **Spender advantage (rev. 2)** | Intentional: better vehicles earn more. The legal risk this adds is in §16. |
+| Thieves | Street NPCs chase couriers on foot carrying orders; a catch fails the carried orders. Kept from SP2, adapted to vehicles (§7.3). |
+| Art (rev. 2) | The owner's Megatropolis and Tropical City `.glb` packs for the city; the CC0 Quaternius courier; code-built placeholders for anything missing. Licence **Pending** (§16). |
+| Map build | A seeded generator writes the committed layout and generated files; `pnpm map:check` regenerates and byte-compares them in CI (kept from SP2). |
 
 ## 3. Core loop
 
-1. The player stands at the **HUB** (Central Plaza) and opens their **personal Order Board**.
-2. They accept orders up to their free backpack slots.
-3. They travel across the city to complete each order.
-4. Each completed order earns **Delivery Points** (the reward share) and **Coins** (the shop currency).
-5. Coins and GAME are spent on upgrades and cosmetics. Ranks rise with total deliveries.
+1. The player spawns at a hospital, on foot or next to their parked vehicle.
+2. **Offers** arrive on the phone. The player accepts the ones that fit their free slots and their vehicle's weight limit.
+3. They ride or walk to each **pickup**, collect the order at the door, then take it to the **dropoff** door.
+4. Each completed order earns **Delivery Points** (score and reward weight), **Coins**, and a **GAME** reward credited to the Wallet app (amount **Pending**, §9).
+5. Coins buy fuel and cosmetics; GAME buys vehicles and token upgrades.
 
-### 3.1 Order types
+### 3.1 Order kinds
 
-| Type | Flow | Completes when |
+| Kind | From → to | Rules |
 |---|---|---|
-| **Drop-off** | Package leaves the HUB → POI | The player enters the POI zone |
-| **Pick-up** | Go to the POI, collect the package → HUB | The player enters the HUB drop zone carrying it |
-| **Chain** (Pro rank) | Collect at POI A → deliver to POI B → return to the HUB | The player enters the HUB drop zone |
+| **Food** | Restaurant, café, kiosk or beach bar → home, office, hotel, hospital… | Always timed: delivering within the hot time earns the hot bonus. Weightless; takes one slot. Dropoff is 150–800 m from the pickup. |
+| **Package** | Supermarket, auto service, factory, rail station, post office or warehouse → any dropoff that accepts packages | Has a weight (§3.3). Has a par time; Express and Fragile modifiers can apply. |
 
-### 3.2 Order modifiers
+Which buildings send or receive what is defined per catalog model (city map design §6). The order text names the item and the building, e.g. "Pick up 2 baguettes and a sourdough from Crumb & Co. Bakery, 14 Market St."
 
-**Par time (every order).** Each Drop-off, Pick-up and Chain order has a par time: `route distance ÷ base sprint speed × 1.3 + 10 s` (factor and extra seconds in config). It starts when the order is accepted. Delivering within par earns the par bonus (§3.4). Late delivery still completes the order, without that bonus. Express keeps its own tighter timer; beating both earns both bonuses.
+### 3.2 Timers and modifiers
 
-
-A modifier can be added to a Drop-off or Pick-up order.
-
-| Modifier | Rule | Unlocked at |
-|---|---|---|
-| **Express** | Has a timer: `1.1 × (route distance ÷ base sprint speed) + 10 s`. Delivering in time earns a bonus. Delivering late still completes the order, without the bonus. | Courier |
-| **Fragile** | Earns a bonus if delivered intact. A fall of more than 7 m, being hit by another player, or an out-of-bounds respawn cancels the bonus. The order itself is never lost. | Rookie |
-| **Heavy** | Takes 2 backpack slots and reduces jump height by 10% while carried. Earns a bonus. Offered only to players whose backpack has 2 or more slots. | Rookie |
-
-**Order distances.** An order's distance band (§3.4, §5.3) uses the one-way path distance from the HUB to its POI. The **route distance** is the full trip the order needs: HUB → POI for a Drop-off, HUB → POI → HUB for a Pick-up. The Express timer and the minimum plausible time (§10) use the route distance.
-
-### 3.3 Order Board
-
-- Each player has their own board, so players never compete for the same order.
-- The board shows **6 orders** and refreshes every **60 seconds**. Accepted orders leave the board and are replaced at the next refresh.
-- Orders can only be **accepted** at the HUB.
-- Orders can only be **cancelled** at the HUB. Cancelling starts a **30-second cooldown** before new orders can be accepted.
-- The order mix is weighted by rank. Express and Chain orders appear only once they are unlocked.
-
-### 3.4 Points and Coins per order
-
-| Component | Delivery Points | Coins |
-|---|---|---|
-| Short (path < 500 m) | 1 | 10 |
-| Medium (500–1,200 m) | 2 | 20 |
-| Long (> 1,200 m) | 3 | 30 |
-| Chain (flat) | 4 | 40 |
-| Within par time | +1 | +10 |
-| Express, on time | +1 | +10 |
-| Fragile, intact | +2 | +20 |
-| Heavy | +1 | +10 |
-
-Every value in this table is a tuning value stored in config. The band limits apply to the 2 × 2 km city (SP2); the SP1 greybox keeps its smaller limits (150 m / 350 m) in config. A thief catch (§7.3) subtracts Delivery Points.
-
-## 4. Movement
-
-**Camera:** a third-person chase camera sits about 4.5 m behind and 1.6 m above the courier and is orbited with the mouse. It lags slightly, widens its field of view with speed, tilts during wall-runs, and pulls in when geometry would block the view. Movement is relative to the camera; the courier turns to face its direction of travel. All values are in config.
-
-All movement code lives in the shared package. It runs on a fixed **30 Hz** simulation step on both client and server, and rendering interpolates between steps. The values below are starting points, stored in config.
-
-| Move | Behavior |
-|---|---|
-| Run / sprint | Base sprint speed 8 m/s, sprint held with Shift. No stamina. |
-| Jump | About 1.2 m high. Coyote time 100 ms, jump buffer 100 ms. |
-| Mantle | Automatically climbs ledges up to 1.5 m high. |
-| Crouch-slide | Triggered while sprinting. Keeps speed and gains speed downhill. |
-| Wall-run | Up to 1.5 s on a wall. A wall-jump chains to the next wall. |
-| Zip line | Press E to attach. You ride in the direction you are facing when you attach, uphill or downhill. Speed is at least 10 m/s both ways; downhill gravity accelerates you up to 16 m/s. Momentum carries over when you jump off. |
-| Jump pad | Launches the player along an authored vector. |
-| Boost orb | +40% speed for 3 s. Orbs are **shared**: the first player to touch one takes it (the server decides ties), and it disappears for everyone in the room until it respawns 30 s later. |
-| Slides (map) | Long low-friction chutes. |
-| Grind rails | Usable on foot and on the skateboard. |
-| Skateboard | Q to pull out or put away. Faster on flat ground and rails. Cannot wall-run or mantle. Getting hit knocks the player off the board. |
-| Speed cap | Horizontal speed is capped at 18 m/s. |
-
-**Momentum rule:** chaining moves preserves horizontal speed, up to the speed cap.
-
-**Input layer:** raw input (keys and mouse, later touch) is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `board`. Gameplay code only reads actions.
-
-## 5. City and POIs
-
-### 5.1 Layout
-
-The city is about 2 × 2 km. A skilled runner crosses it in roughly 4 minutes. Water and cliffs form the outer boundary. The client streams the city in chunks with level-of-detail meshes so the 60 fps target holds; physics colliders are loaded for the chunks around the player.
-
-| District | Main features |
-|---|---|
-| **Central Plaza (HUB)** | Order board, shop, drop zone, combat safe zone |
-| **Downtown Rooftops** | Tall blocks, rooftop gaps, wall-run alleys, jump pads |
-| **Harbor Docks** | Cranes and containers, long zip lines, water edge |
-| **Hillside** | Steep streets, long slides downhill, stairs and jump pads uphill |
-| **Suburbs & Skatepark** | Wide roads, rails, ramps |
-
-Falling into water or out of bounds respawns the player at the nearest checkpoint. They keep their packages, but Fragile bonuses are lost.
-
-### 5.2 How the map is built
-
-- **Placement file** (`map/city.json`): lists the asset-pack pieces and their transforms, plus gameplay objects (zip lines, jump pads, orbs, slides, rails, checkpoints) and about **150 POI candidates**. Each POI candidate has an id, position, district and kind (door, mailbox, counter, balcony).
-- **Navmesh:** generated at build time with `recast-navigation`. Jump pads, zip lines and mantle-able ledges are added as off-mesh links, so the navmesh represents the base movement kit with no upgrades.
-- **Generated POI table:** the build computes each candidate's path distance from the HUB and checks it is reachable. Unreachable candidates fail the build.
-- **Debug view:** an in-game overlay shows POIs, their distances and band colors, and any unreachable spots.
-
-### 5.3 POI selection rules
+All times use the **path distance from pickup to dropoff** and a reference speed of 8 m/s (on-foot sprint). Values are in config.
 
 | Rule | Value |
 |---|---|
-| Distance bands (one-way path distance from the HUB) | Short < 500 m, Medium 500–1,200 m, Long > 1,200 m |
-| Elevated targets | At least 40% of POIs are on rooftops, balconies or upper floors that need a parkour route (mantle, wall-run, pad or zip line). Every elevated POI has a way down with no fall over the Fragile limit. |
-| Order mix | Chain orders are weighted higher than in SP1 (tuned in config). |
-| Reachability | Only candidates that pass the build-time check are used |
-| Spread | No two of a player's active orders within 40 m of each other |
-| Reuse | The same POI is not reused within 3 minutes for the same player |
-| District balance | Board generation favors districts the player has not been sent to recently |
+| Hot time (food) | `distance ÷ 8 m/s × 1.3 + 20 s`, counted from pickup |
+| Par time (package) | `distance ÷ 8 m/s × 1.3 + 10 s`, counted from pickup |
+| Express (package modifier) | `distance ÷ 8 m/s × 1.1 + 10 s`; a bonus if delivered in time |
+| Fragile (package modifier) | A bonus if delivered intact. A fall of more than 7 m, being hit or knocked over, crashing a vehicle above 10 m/s into a wall, or an out-of-bounds respawn cancels the bonus. The order is never lost. |
+| Late delivery | Still completes the order, without the time bonus |
+
+Faster vehicles beat the timers more easily; that is intended (design goal 2).
+
+### 3.3 Slots and weight
+
+| | Walk | Skateboard | Bicycle | Motorbike | Car |
+|---|---|---|---|---|---|
+| Slots (food and packages share them) | 1 | 1 | 2 | 3 | 5 |
+| Max total package weight | — | — | — | 50 kg | 150 kg |
+
+- Food uses a slot and has no weight. A package uses a slot and its weight counts against the vehicle's limit.
+- Package weight classes: Small 1–10 kg, Medium 10–25 kg, Large 25–50 kg, Bulky 50–150 kg (car only).
+- Offers are filtered by the vehicle the player is using (or last parked): package offers only appear on a motorbike or car, and only if the weight fits.
+- **Every delivery ends on foot.** The player gets off, carries the order to the door, and walks back. Carrying a Bulky package by hand disables sprint and slide.
+- Switching to a smaller vehicle while carrying orders it can't hold is blocked.
+
+### 3.4 Offers
+
+| Rule | Value (config) |
+|---|---|
+| Offers shown at once | Up to 3 |
+| Offer lifetime | 20 s, then it disappears |
+| New offers | Every 8–15 s while the player has a free slot |
+| Pickup distance | The pickup is at most 400 m (path) from the player when offered |
+| Accepting | One tap on the phone, anywhere; while driving, a one-key accept on the notification |
+| Selection rules | Distance bands, door spacing, reuse and reachability per city map design §6.4 |
+
+Players never compete for the same order: each player's offers are their own.
+
+### 3.5 Cancelling
+
+- Any accepted order can be cancelled from the phone, anywhere, at any time. There is no cancel cooldown.
+- Cancelling starts an **offer lockout**: the server sends that player no new offers for 45 s (config). Orders already accepted continue normally.
+- The lockout can be skipped by burning GAME at a fixed USD price (§6.3). The price is **Pending**.
+- A cancelled order that was already picked up simply disappears. No points, Coins or GAME.
+
+### 3.6 Points and Coins per order
+
+| Component | Delivery Points | Coins |
+|---|---|---|
+| Short (path < 350 m) | 1 | 10 |
+| Medium (350–800 m) | 2 | 20 |
+| Long (> 800 m) | 3 | 30 |
+| Package weight multiplier (on the band value) | Small ×1 · Medium ×1.5 · Large ×2 · Bulky ×3 | same |
+| Food within hot time | +1 | +10 |
+| Package within par time | +1 | +10 |
+| Express, on time | +1 | +10 |
+| Fragile, intact | +2 | +20 |
+
+Every value is a tuning value in config. Points are rounded to the nearest whole point. A thief catch (§7.3) subtracts points. How points relate to the GAME reward is **Pending** (§9).
+
+## 4. Movement and vehicles
+
+**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). Movement is relative to the camera.
+
+All movement and vehicle code lives in the shared package and runs on the fixed **30 Hz** step on client and server; rendering interpolates between steps.
+
+### 4.1 On foot
+
+| Move | Behavior |
+|---|---|
+| Run / sprint | Base sprint speed 8 m/s. Shift toggles sprint on and off. Sprint switches off whenever no move key is held. No stamina. The sprint state is part of the shared sim state. |
+| Jump | About 1.2 m high. Coyote time 100 ms, jump buffer 100 ms. |
+| Mantle | Automatically climbs ledges up to **1.2 m** (stoops, low walls, loading docks). |
+| Crouch-slide | Pressing C while sprinting on the ground starts a slide with a +4 m/s burst (never above the on-foot cap), low friction, and speed gain downhill. The burst has a 2 s cooldown from the start of the boosted slide. |
+| Speed cap | 12 m/s horizontal on foot |
+
+**Removed in revision 2:** wall-runs, wall-jumps, zip lines, jump pads, grind rails, map slide chutes, boost orbs.
+
+**Input layer:** raw input is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `mount`, `phone`, `accept`. Gameplay code only reads actions. Default keys: WASD move, mouse look, Space jump (on a vehicle: handbrake), C crouch, Shift sprint (toggle; on a vehicle: boost is not used), E interact (pick up, hand over, refuel), F mount/dismount, Tab phone, Y accept the top offer, left click hit. Crouch is C only, never Ctrl (Ctrl+W closes the tab).
+
+### 4.2 Vehicles
+
+| | Walk | Skateboard | Bicycle | Motorbike | Car |
+|---|---|---|---|---|---|
+| Top speed | 8 m/s | 12 m/s | 16 m/s | 22 m/s | 28 m/s |
+| Slots | 1 | 1 | 2 | 3 | 5 |
+| Max package weight | — | — | — | 50 kg | 150 kg |
+| Fuel | — | — | — | Yes | Yes |
+| Price | Free | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) |
+
+- **Physics:** an arcade vehicle model in the shared package (kinematic, like the character controller), not Rapier dynamic-body cars, so server authority and client prediction stay simple. Each vehicle has acceleration, braking, turn rate, grip and slope behavior in config.
+- **Mount and dismount:** F next to an owned vehicle. A dismounted vehicle stays parked where it was left; other players can't use it.
+- **Summon:** from the phone's Garage, an owned vehicle more than 100 m away is moved to the nearest legal road spot next to the player. Cooldown 60 s.
+- **Speed caps:** each vehicle's top speed is its server-enforced cap (§10).
+- **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Only one vehicle of each tier is needed; a player may own several tiers and switch at any parked vehicle.
+- **Models:** the skateboard, bicycle and motorbike are not in the art packs yet (placeholders until supplied); the car is chosen from the pack's cars.
+
+### 4.3 Where each vehicle can go
+
+| Surface | Walk | Skateboard | Bicycle | Motorbike | Car |
+|---|---|---|---|---|---|
+| Avenues, streets, switchback roads, Hillcrest Drive | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Alleys (4 m) | ✓ | ✓ | ✓ | ✓ | ✗ |
+| Steep lanes (14%) | ✓ | ✗ | ✓ | ✓ | ✗ |
+| Stairs | ✓ | ✗ (carried) | ✗ | ✗ | ✗ |
+| Boardwalk, pier, park paths | ✓ | ✓ | ✓ | ✗ | ✗ |
+
+Every package door is within 30 m of a road cars can use, and at most 15% of food dropoffs are alley- or stair-only, so small vehicles get shortcuts but cars always earn more on average.
+
+### 4.4 Fuel
+
+| Rule | Value (config, starting values) |
+|---|---|
+| Tank range | Motorbike 6 km, car 5 km of driving |
+| Refuel | At any of the 6 gas stations: stop at a pump and hold E. A full tank costs 40 Coins (motorbike) or 80 Coins (car); partial fills cost proportionally. |
+| Empty tank | The vehicle still moves at 3 m/s so the player is never stranded |
+| HUD | Fuel gauge while riding; the phone Map shows gas stations |
+
+## 5. City and POIs
+
+The city is defined in **`2026-10-14-city-map-design.md`**: a 1.2 × 1.2 km Western bay city that climbs north from the water in four terraces (Waterfront 2 m, Bayview 10 m, Midtown 24 m, Uptown 38 m, Hillcrest ridge 48–60 m), joined by switchback roads, steep lanes and stairs. Blocks are wall to wall (about 2,600 buildings); four hospitals and six gas stations are fixed landmarks; about 800 POI doors are placed only on buildings that would plausibly send or receive orders.
+
+- **Building blocks:** the owner's Megatropolis and Tropical City packs, used at 1:1, listed in `map/catalog.json`. Missing types (post office, warehouse, school, courier vehicles, containers, cranes) render as placeholders until supplied.
+- **Layout data:** `map/city.layout.json` (lots, roads, connectors, POI doors), generated deterministically and then editable; swapping a model never moves a lot.
+- **Streaming and LOD (kept from SP2):** 100 m chunks; colliders paged around the player; render LOD rings (LOD0 near, simplified LOD1, placeholder boxes far) with radial fog; one merged mesh and one compound collider per block.
+- **Navmeshes:** generated at build time per vehicle class (foot, two-wheeler, car). A path counts only if it really reaches both ends (recast reports partial paths as success). Path distance is the navmesh straight-path length.
+- **Debug view:** an overlay shows POI doors with their roles, catalog ids and distance bands, the chunk grid, physics-loaded chunks and thief states.
+- Falling into the water or out of bounds respawns the player at the nearest hospital. They keep their orders; Fragile bonuses are lost.
 
 ## 6. Progression and economy
 
-### 6.1 Ranks
-
-Ranks are based on total completed orders. A Chain order counts as one.
-
-| Rank | Deliveries | Unlocks |
-|---|---|---|
-| Rookie | 0 | Short, Medium and Long orders; Fragile and Heavy modifiers |
-| Courier | 25 | Express modifier |
-| Pro | 100 | Chain orders |
-| Legend | 300 | Legend outfit and nameplate (cosmetic only) |
-
-### 6.2 Token upgrades
-
-These are paid by burning GAME at a fixed USD price. Ownership is recorded on-chain against the wallet and is permanent. Tiers must be bought in order.
-
-| Upgrade | Tiers | Effect (starting values) |
-|---|---|---|
-| Backpack | 2 → 3 → 4 → 5 slots (4 purchases) | More concurrent orders. The base is 1 slot. |
-| Shoes | 5 tiers | +3.5% sprint speed per tier, plus small jump and slide gains. Fully maxed is about +17.5%. |
-| Skateboard | Buy the board, then 3 tiers | Base board top speed 12 m/s. Each tier adds top speed and turning, up to 15 m/s. |
-| Premium board skins | Individual items (up to 64) | Cosmetic only |
-
-USD prices are set in the program's settings by the admin multisig.
-
-### 6.3 Coin purchases
+### 6.1 Coins
 
 Coins are off-chain, stored in the database, and cannot be traded or withdrawn.
 
-| Item | Tiers | Effect |
+| Item | Effect |
+|---|---|
+| Fuel | §4.4 |
+| Cosmetics | Outfits, helmets, vehicle colours, bag skins, emotes, phone cases |
+
+### 6.2 GAME purchases
+
+Paid with GAME at a fixed USD price (§6.4). Ownership is recorded on-chain against the wallet and is permanent.
+
+| Item | Effect | GAME split |
 |---|---|---|
-| Gloves | 3 | Faster zip line and mantle. Hit cooldown 5 s → 4 s → 3 s. |
-| GPS Watch | 2 | Tier 1: improved waypoint line. Tier 2: boost orbs shown on the minimap. |
-| Cosmetics | — | Outfits, trails, emotes, backpack skins, basic board skins |
+| Skateboard, bicycle, motorbike, car | The vehicle (§4.2). Tiers can be bought in any order. | 80% burned, 20% to the reward pool |
+| Shoes (5 tiers, in order) | +3.5% on-foot sprint speed per tier (about +17.5% maxed) | 100% burned |
+| Premium skins | Cosmetic only | 100% burned |
+| Offer-lockout skip | Ends the cancel lockout (§3.5) | 100% burned |
 
-### 6.4 USD pricing mechanism
+USD prices are set in the program's settings by the admin multisig and are **Pending**.
 
-This applies to everything bought with GAME (§6.2) and to valuing locked GAME (§6.5).
+**Removed in revision 2:** Backpack tiers (slots now come from the vehicle), skateboard tiers, Gloves, the GPS Watch (its features are standard on the phone), ranks and rank unlocks.
+
+### 6.3 USD pricing mechanism
 
 - Each GAME-priced item has `usd_price` (6 decimals) stored on-chain.
-- The **price keeper** computes a **30-minute average** GAME→USD rate (the GAME/AMZNx pool average × the AMZNx/USD average) and posts it every few minutes.
-- At purchase time: `game_to_burn = usd_price ÷ rate`.
-- **Safety limits (enforced on-chain):**
-  - The rate must be younger than 15 minutes; otherwise purchases fail.
-  - A single update may change the rate by at most 20%.
-  - The buyer passes `max_game`, and the purchase fails if `game_to_burn > max_game`.
-- The shop displays both values, for example "$10 ≈ 41,250 GAME", updated live.
-- The keeper reads the bonding-curve price before GAME graduates and the PumpSwap pool price after.
+- The **price keeper** computes a **30-minute average** GAME→USD rate (the GAME/SOL pool average × a SOL/USD oracle average, e.g. Pyth) and posts it every few minutes. It reads the bonding curve before GAME graduates and the PumpSwap pool after.
+- At purchase time: `game_to_spend = usd_price ÷ rate`.
+- **Safety limits (on-chain):** the rate must be younger than 15 minutes; one update may move it at most 20%; the buyer passes `max_game` and the purchase fails above it.
+- The shop shows both values, e.g. "$10 ≈ 41,250 GAME", updated live.
 
-### 6.5 Lock-to-boost
+### 6.4 Lock-to-boost — **Pending**
 
-Players can lock GAME in the reward program to multiply the Delivery Points that count toward their epoch payout. Locked GAME is **not burned**; it is returned in full on unlock.
-
-- **Valued in USD** with the §6.4 rate at each epoch's settlement, so the same dollar amount always gives the same bonus.
-- **Curve (diminishing returns):** `bonus = 30% × √(min(locked USD, $1,500) ÷ $1,500)`
-
-  | Locked value | Bonus |
-  |---|---|
-  | $15 | +3.0% |
-  | $150 | +9.5% |
-  | $375 | +15.0% |
-  | $1,500 or more | +30.0% (cap) |
-
-- **Warm-up:** newly locked GAME starts counting **24 hours** after deposit. Each new deposit restarts the warm-up timer for the not-yet-active amount only.
-- **Unlocking:** the player requests an unlock. That amount stops counting **immediately** and can be withdrawn after a **7-day cooldown**. Unlock requests take from the warming amount first, then from the active amount.
-- **Scope:** the multiplier applies only to the reward share. Ranks use base points.
-- **Custody:** locked GAME sits in a program-owned vault, separate from the AMZNx reward vault. No admin instruction can move it. The emergency pause can temporarily stop withdrawals, but can never redirect funds.
-- All values (30% cap, $1,500 cap, 24 h, 7 days) are program config, changeable by the admin multisig.
+The v1 lock-to-boost (lock GAME for up to +30% epoch points) was designed for epoch payouts. Whether it survives with per-order payouts is decided together with §9.
 
 ## 7. Multiplayer and combat
 
 ### 7.1 Rooms and networking
 
-- Each city room holds **24 players**. Matchmaking fills the fullest room that has space and opens new rooms on demand.
-- Epochs are **global**: points from every room count toward the same epoch.
-- Clients send **inputs only**. The server simulates at 30 Hz and is authoritative.
-- The local player uses client-side prediction with reconciliation. Remote players are interpolated about 100 ms behind.
-- **Reconnects:** a player who reconnects within 60 s keeps their active orders. After 60 s, the orders are cancelled with no penalty.
+- Each city room holds **24 players**. Matchmaking fills the fullest room that has space.
+- Clients send **inputs only**. The server simulates at 30 Hz and is authoritative. The local player uses client-side prediction with reconciliation; remote players and vehicles are interpolated about 100 ms behind.
+- **Reconnects:** within 60 s the player keeps their orders and parked vehicles; after that, accepted orders are cancelled with no penalty and no lockout.
 
-### 7.2 Combat
+### 7.2 Combat and collisions
 
 | Rule | Value |
 |---|---|
-| Hit | Left click, 2.5 m range, frontal cone |
-| Effect | Knockback impulse plus a 1.75 s stun. The stunned player can look around but not move. |
-| Cooldown | 5 s (reduced by Gloves to 4 s, then 3 s) |
-| Stun immunity | 4 s after a stun ends |
-| Safe zone | No hits inside the HUB plaza |
-| Zip line / skateboard | A hit knocks the target off |
-| Fragile | Being hit cancels the target's Fragile bonuses; orders are never lost |
-| Lag compensation | The server rewinds targets up to 150 ms to validate hits |
+| Hit (on foot) | Left click, 2.5 m range, frontal cone. Knockback plus a 1.75 s stun. Cooldown 5 s; 4 s stun immunity after a stun. |
+| Hitting a rider | A hit knocks a skateboard, bicycle or motorbike rider off. Car drivers can't be hit. |
+| Vehicle collisions | A moving vehicle that hits a player on foot or a two-wheel rider knocks them away and stuns them for **2 s**. Car-to-car contact only pushes. |
+| Safe zones | The four hospitals (18 m radius around each lot): no hits and no vehicle knockback inside. |
+| Fragile | Being hit or knocked over cancels the target's Fragile bonuses; orders are never lost. |
+| Lag compensation | The server rewinds targets up to 150 ms to validate hits and collisions. |
 
-**Visible to other players:** outfit, nameplate, rank badge and the packages on the backpack.
+**Visible to other players:** outfit, nameplate, vehicle and the orders being carried.
 
 ### 7.3 Thieves
 
-Thieves are street NPCs that make carrying packages risky.
+Thieves are street NPCs (kept from SP2) that make carrying orders on foot risky.
 
-| Rule | Value (starting values, in config) |
+| Rule | Value (config) |
 |---|---|
-| Where | Patrol streets and plazas only. They cannot wall-run, mantle, use zip lines, pads or rails. They never enter the HUB plaza. |
-| Trigger | A courier who carries at least one package comes within 15 m (and in line of sight). |
-| Chase | Faster than the courier's run speed (5.5 m/s) but slower than sprint (8 m/s), e.g. 7 m/s, for at most 10 s, then they give up and return to patrol. |
-| Escape | Out-run them by sprinting, get above street level (rooftops, zip lines, pads), or reach the HUB safe zone. |
-| Catch | One touch robs the courier: every carried package is stolen and those orders fail (no points or Coins). Accepted but not yet collected Pick-up and Chain orders are kept. |
-| Penalty | 1 Delivery Point is subtracted from the courier's points in the current epoch. Epoch points never go below 0. Points from settled epochs are never touched. |
-| Cooldown | A robbed courier is ignored by thieves for 20 s. |
-| Density | A few thieves per district, more on long-distance streets. |
-| Authority | In multiplayer (SP4) thieves are simulated by the server and shared by everyone in the room. |
+| Where | Streets and plazas; they stay on their level and never enter hospital safe zones |
+| Trigger | A courier **on foot or on a skateboard** carrying at least one order comes within 15 m in line of sight |
+| Chase | 7 m/s for at most 10 s; one chaser at a time |
+| Escape | Out-run them, mount a faster vehicle, or reach a hospital |
+| Catch | Within 0.9 m: every carried order fails (no points, Coins or GAME); orders not yet picked up are kept. 1 Delivery Point is subtracted from the player's current total, floored at 0. |
+| Cooldown | A robbed courier is ignored by thieves for 20 s |
+| Authority | Server-simulated and shared in multiplayer |
 
-## 8. Wallet and accounts
+## 8. Phone
 
-- **Sign-in:** the player connects a wallet through the Solana Wallet Adapter / Wallet Standard. Phantom, Solflare and OKX Wallet are listed explicitly. The player signs a Sign-In With Solana message containing a server nonce. The server verifies it and issues a session token bound to the wallet.
-- **The wallet is the account.** Coins, ranks, cosmetics and Delivery Points are keyed by wallet address.
-- **On-chain actions from the client:** buying upgrades and skins, locking, unlocking, withdrawing and claiming rewards. All are signed by the player's wallet.
-- **Server sync:** the server reads each player's on-chain upgrade and lock accounts when they join and subscribes to changes. Purchases take effect only after they are confirmed on-chain.
+The phone replaces the HUB screens. Tab raises it in the courier's hand; the full phone works on foot or when stopped. While riding, only notifications show, with a one-key accept for the top offer. A player using the phone can still be hit.
 
-## 9. Reward program (Solana, Anchor)
-
-### 9.1 Funding
-
-- GAME launches on Pump.fun as a Custom Pair quoted in AMZNx, so creator fees accrue in AMZNx.
-- Pump.fun's creator fee sharing splits the fees: by default **80% to the reward vault PDA** and **20% to the team wallet** (configured on Pump.fun).
-- **Warning:** Pump.fun allows only one post-launch change to the fee recipients, after which the setting is permanently locked. The program must be audited and deployed, and its vault address final, **before** the fee configuration is set.
-
-### 9.2 Accounts
-
-| Account | Contents |
+| App | Contents |
 |---|---|
-| `Config` | Admin (multisig), server key, keeper key, GAME mint, AMZNx mint, payout fraction (default 10%), price limits, lock settings (§6.5), pause flags, USD prices of upgrades and premium skins |
-| `Vault` | PDA-owned AMZNx token account; tracks `reserved` (allocated but not yet claimed) |
-| `LockVault` | PDA-owned GAME token account holding all locked GAME |
-| `Rate` | GAME→USD rate and last-updated timestamp |
-| `Epoch` (latest) | Epoch number, Merkle root of cumulative totals, allocation |
-| `Claimed` (per wallet) | Total AMZNx already claimed |
-| `Upgrades` (per wallet) | Backpack tier, shoes tier, board tier (0 = not owned), premium skin bitset |
-| `Lock` (per wallet) | `active`, `warming`, `warming_since`, `unlocking`, `unlock_at` |
+| Orders | Incoming offers (item, pickup and dropoff names, distance band, weight, timer, reward), active orders, cancel, lockout timer and skip |
+| Map | City map, route to the next stop for the current vehicle class, hospitals, gas stations; standard waypoint line (the old GPS Watch) |
+| Garage | Owned vehicles, where each is parked, fuel, switch, summon |
+| Shop | Coins tab (fuel cards, cosmetics) and Token tab (vehicles, Shoes, premium skins) with USD and GAME prices |
+| Wallet | Accrued GAME from orders, Claim button (the player signs and pays the fee), claim history |
+| Wardrobe | Outfits, vehicle colours, bag and phone skins |
+| Leaderboard | Daily and weekly Delivery Points |
+| Settings | Controls, audio, graphics |
 
-### 9.3 Instructions
+**HUD (always on screen):** the next stop with distance and arrow, active order timers, the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and GAME.
 
-| Instruction | Signer | Behavior |
-|---|---|---|
-| `harvest` | Anyone | Claims accrued Pump.fun creator fees into the vault through a CPI, with the vault PDA as signer. The only destination is the vault. |
-| `settle_epoch` | Server key | Takes `(epoch_number, merkle_root, allocation)`. Requires `epoch_number = last + 1` and `allocation ≤ payout_fraction × (vault balance − reserved)`. Stores the root and increases `reserved`. |
-| `claim` | Player | Takes `(cumulative_amount, proof)`. Verifies the leaf `(wallet, cumulative_amount)` against the latest root, pays `cumulative_amount − claimed`, and updates `Claimed` and `reserved`. |
-| `buy_upgrade` | Player | Takes `(upgrade, tier_or_skin, max_game)`. Checks pause, rate freshness, tier order (or that the skin isn't already owned), computes `game_to_burn`, burns the player's GAME and records the purchase, all in one instruction. |
-| `lock` | Player | Moves GAME into `LockVault` and adds it to `warming` (restarting `warming_since`). |
-| `request_unlock` | Player | Moves an amount from `warming`, then `active`, to `unlocking`, and sets `unlock_at = now + 7 days`. |
-| `withdraw` | Player | After `unlock_at`, returns the `unlocking` GAME to the player's own wallet. |
-| `update_rate` | Keeper key | Updates the rate within the change-cap limit. |
-| `update_config` / `set_pause` | Admin multisig | Changes settings and keys, and pauses or unpauses actions. |
+## 9. Reward program (Solana, Anchor) — **Pending**
 
-### 9.4 Epoch settlement (off-chain part)
+**This section is a draft. The owner will define the payout design; nothing here is approved for implementation.** Any change to the reward program needs the owner's explicit approval.
 
-1. Epochs are aligned to wall-clock 10-minute boundaries (UTC). A delivery belongs to the epoch in which the server recorded it.
-2. At the boundary, the settler triggers `harvest`, reads the vault, and computes `allocation = payout_fraction × unreserved`.
-3. The settler reads every `Lock` account and the current `Rate`. Each player's effective locked GAME is `active`, plus `warming` if `warming_since + 24 h` is at or before the epoch end. That amount is converted to USD and gives the bonus from §6.5.
-4. **Weighted points** = base points × (1 + bonus), where base points are the epoch's earned points minus thief penalties (§7.3), floored at 0. Each player's share is `allocation × weighted_points ÷ total_weighted_points`, rounded down. Points held for review (see §10) are excluded.
-5. Each share is added to the player's **cumulative total**. The settler builds a Merkle tree of `(wallet, cumulative_total)` over all players ever paid, stores the tree in Postgres, and calls `settle_epoch`.
-6. If no points were earned, the epoch settles with allocation 0.
-7. If submission fails, the settler retries. Missed epochs are settled in order, each using the lock state and rate recorded at its own boundary.
+What is decided:
+- **Funding:** Pump.fun creator fees from the GAME/SOL pair (in SOL) go to the reward vault through the fee-sharing split, harvested permissionlessly as in v1; plus 20% of the GAME spent on every vehicle purchase (§6.2).
+- **Payout currency:** GAME. The vault's SOL is used to buy back GAME (PumpSwap) and that GAME is paid to players.
+- **Accrual:** each completed order adds its reward to the player's balance shown in the Wallet app.
+- **Claim:** the player claims whenever they like; the claim is a transaction the player signs and pays the fee for.
+- **Warning kept from v1:** Pump.fun allows only one post-launch change to the fee recipients. The program must be audited and deployed, and its vault address final, before the fee configuration is set.
 
-Players fetch their proof from the game server's API, then call `claim`.
+What is **Pending** (owner): how much one order pays and how that depends on the pool (fixed fraction per order, a per-order cap, points-weighted share of a periodic budget, …); buyback timing and slippage limits; how accrued balances are proven on-chain (signed vouchers or cumulative Merkle roots, as in v1); the fate of lock-to-boost (§6.4).
 
-### 9.5 Guarantees
-
-- No epoch can allocate more than the payout fraction of the unreserved balance.
-- Epochs cannot be skipped or settled twice.
-- Reserved AMZNx is never re-allocated.
-- Claims are idempotent. Cumulative totals make double payment impossible.
-- A purchase burns GAME and records the upgrade or skin in one instruction, so the buyer always gets both or neither.
-- Locked GAME can only ever return to the wallet that locked it. No admin instruction can move it.
-- **Admin key:** a Squads 2-of-3 multisig.
+Guarantees any design must keep: payouts can never exceed what the vault holds; claims are idempotent and can't double-pay; purchases burn and record in one instruction; only the admin multisig changes settings; an emergency pause can stop claims but never redirect funds.
 
 ## 10. Anti-cheat
 
 | Layer | Mechanism |
 |---|---|
-| Server authority | The client sends only inputs; the server simulates all movement. |
-| Delivery validation | The player must be inside the POI or HUB zone on the server. Each order has a minimum plausible time: `route distance (§3.2) ÷ max legal speed × 0.8`. Faster deliveries are rejected and flagged. |
-| Behavior flags | Repeated identical routes, overly regular input timing, many wallets per IP. Flagged players' points are held. |
-| Review | An admin page lists held points. Approved points are added to the current open epoch; rejected points are discarded. |
-| Per-wallet epoch cap | Available in config, **off by default** |
+| Server authority | The client sends only inputs; the server simulates all movement and vehicles. Each vehicle's top speed is a hard cap. |
+| Delivery validation | The player must be at the pickup and dropoff doors on the server, on foot. Each order has a minimum plausible time: `path distance ÷ top speed of the vehicle used × 0.8`. Faster deliveries are rejected and flagged. |
+| Behavior flags | Repeated identical routes, overly regular input timing, many wallets per IP. Flagged players' rewards are held. |
+| Review | An admin page lists held rewards. Approved rewards are credited; rejected ones are discarded. |
 
 No system fully stops a well-built bot that genuinely plays the game. These layers raise the cost and make bots detectable.
 
-## 11. HUD and UI
+## 11. Wallet and accounts
 
-- **HUD:** active orders with waypoints and distances, par and Express timers, a warning when a thief is chasing, Coins, epoch countdown, current-epoch points and share %, lock bonus %, claimable AMZNx with a Claim button.
-- **HUB screens:**
-  - Order Board
-  - Shop: Coins tab; Token tab (upgrades and premium skins) with USD and GAME prices
-  - Lock panel: locked value, current bonus, warm-up and unlock timers, a preview of the bonus for a given amount
-  - Wardrobe
-  - Epoch leaderboard
-- **Feedback:** hit impact effects and sound; a stun tumble with stars over the head; delivery-complete popups showing points and Coins.
+- **Sign-in:** the player connects a wallet through the Solana Wallet Adapter / Wallet Standard (Phantom, Solflare and OKX Wallet listed explicitly) and signs a Sign-In With Solana message with a server nonce. The server verifies it and issues a session token bound to the wallet.
+- **The wallet is the account.** Coins, cosmetics, Delivery Points and accrued rewards are keyed by wallet address.
+- **On-chain actions from the client:** buying vehicles, Shoes, skins and lockout skips, and claiming rewards. All are signed by the player's wallet.
+- **Server sync:** the server reads each player's on-chain ownership when they join and subscribes to changes. Purchases take effect only after on-chain confirmation.
 
 ## 12. System architecture
 
 ```
 delivery-maxing/
   packages/
-    shared/    movement sim, order rules, POI selection, combat rules, config types
-    client/    Three.js + Vite: rendering, input layer, HUD/UI, wallet
-    server/    Colyseus rooms, auth, Postgres access, epoch settler, admin page
+    shared/    movement and vehicle sim, order rules, offer selection, combat rules, config types
+    client/    Three.js + Vite: rendering, input layer, phone UI and HUD, wallet
+    server/    Colyseus rooms, auth, Postgres access, reward accrual, admin page
     keeper/    price keeper service
+    tools/     Node-only build steps: asset import and check, city generator, navmeshes, POI table (never bundled)
   programs/
     rewards/   Anchor program
-  config/      tuning JSON (movement, orders, prices, combat, economy)
-  map/         city.json placement file, generated POI table and navmesh
-  assets/      CC0 models and textures
+  config/      tuning JSON (movement, vehicles, orders, fuel, prices, combat, economy)
+  map/         catalog.json, city.layout.json, generated POI table and navmeshes
+  assets/      CC0 courier; packs/ (git-ignored) holds the owner's model packs
 ```
 
 - **Package manager:** pnpm workspaces.
-- **Database tables:** `players`, `deliveries`, `epochs`, `epoch_points`, `cumulative_rewards`, `merkle_trees`, `flags`.
-- **Data flow:**
-  - Inputs go from client to server.
-  - The server sends state snapshots back to clients.
-  - Each completed delivery is written to Postgres immediately.
-  - The settler reads Postgres and writes epoch results on-chain.
-  - Clients read on-chain state for claims, upgrades and locks, and the server subscribes to those accounts.
+- **Database tables:** `players`, `vehicles`, `deliveries`, `reward_accruals`, `claims`, `flags`.
+- **Data flow:** inputs go from client to server; the server sends snapshots back; each completed delivery and its reward accrual is written to Postgres immediately; claims go on-chain from the client; the server subscribes to ownership and claim accounts.
 
 ## 13. Error handling
 
 | Failure | Behavior |
 |---|---|
-| Wallet rejects or fails a transaction | A clear message is shown. Nothing is charged and nothing is granted. |
-| Purchase or lock transaction pending | The upgrade, skin or lock appears in-game only after on-chain confirmation. |
-| Withdraw attempted before the cooldown ends | Rejected on-chain. The Lock panel shows the time remaining. |
-| Claim fails | Safe to retry. |
-| Settlement fails | Points stay in Postgres. The settler retries and settles missed epochs in order. |
+| Wallet rejects or fails a transaction | A clear message. Nothing is charged and nothing is granted. |
+| Purchase pending | The vehicle or item appears only after on-chain confirmation. |
+| Claim fails | Safe to retry; the balance stays in the Wallet app. |
 | Rate is stale | The shop shows "Prices updating, purchases paused." |
-| Harvest fails | Retried before the next epoch. Fees wait at Pump.fun. |
-| Server crashes | Completed deliveries are already saved. Active orders are restored when the player reconnects. |
+| Harvest or buyback fails | Retried later; fees wait at Pump.fun or in the vault. |
+| Server crashes | Completed deliveries and accruals are already saved. Active orders are restored when the player reconnects. |
+| Vehicle stuck | Summon from the Garage (§4.2) or respawn at a hospital from Settings. |
 
 ## 14. Testing
 
-- **Shared logic:** Vitest unit tests for movement, orders, POI selection, points, par times, thief chase and robbery rules, upgrade stats and combat timings.
-- **Reward program:** Anchor tests on a local validator covering every guarantee in §9.5, plus a stale-rate pause, the change cap, the emergency pause, wrong-signer rejection, and the lock warm-up, unlock and withdraw timings.
-- **Settler math:** unit tests for the lock bonus curve and weighted shares, including rounding and the zero-points case. Then a full devnet rehearsal with mock GAME and AMZNx mints.
-- **Pump.fun harvest:** a standalone devnet/mainnet-fork spike, done before the rest of the program is built on it.
-- **Server:** simulated rooms filled with bot clients; anti-cheat tests that feed impossible inputs and expect rejection.
-- **Client:** a Playwright smoke test (load, sign in with a mock wallet, run, deliver). Performance target: 60 fps on a mid-range laptop.
+- **Shared logic:** Vitest unit tests for movement, vehicles (speed caps, slopes, access per surface), slots and weight, offer selection, timers, points, fuel, cancel lockout, combat and collision stuns, thieves.
+- **Map:** the layout validator (no overlaps, no lots on roads, package doors within 30 m of a car road, the 15% food-only cap, reachability per vehicle class) runs in `pnpm map:check` and CI.
+- **Reward program:** Anchor tests on a local validator for every guarantee in §9, once the design is approved.
+- **Server:** simulated rooms with bot clients; anti-cheat tests that feed impossible inputs and expect rejection.
+- **Client:** Playwright smoke tests (load, sign in with a mock wallet, take an offer, ride, deliver), driven by sim ticks. Performance target: 60 fps on a mid-range laptop, proven with the SP2 `?perf=1` method.
 - **Release gates:** a playtest at the end of each sub-project, and a professional audit of the reward program before mainnet.
 
 ## 15. Sub-projects and build order
 
-Each sub-project gets its own implementation plan.
+Each sub-project gets its own implementation plan, the owner's approval and a playtest.
 
-| # | Sub-project | Done when |
+| # | Sub-project | Status / done when |
 |---|---|---|
-| 1 | **Movement + delivery loop** | Single-player greybox city. Full movement kit on the shared fixed-step sim, seen through the third-person chase camera with an animated courier. Two-way zip lines. HUB, Order Board, all order types and modifiers, and par times, with about 20 POIs. Points and Coins tracked locally. Playtest confirms movement is fun. |
-| 2 | **City map + POI system** | 2 × 2 km city with five districts built from CC0 packs, chunk streaming and LOD, about 150 POIs (at least 40% elevated), new distance bands, navmesh build step, POI selection rules, single-player thieves (§7.3), debug view, 60 fps target met. |
-| 3 | **Upgrades, shop, ranks** | Ranks, Coin shop, Gloves, GPS Watch, cosmetics, token upgrades, premium skins and Lock panel, all wired to a mock on-chain source. |
-| 4 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation, shared boost orbs, server-authoritative thieves, wallet sign-in, Postgres persistence, combat, anti-cheat layer, reconnects. |
-| 5 | **Reward program + launch** | Harvest spike, Anchor program (pool, upgrades, locks), price keeper, epoch settler with lock bonus, claim UI, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
-
-**Sub-project 1 note:** the navmesh arrives in sub-project 2. Until then, path distance is the street-grid distance `|dx| + |dz|` measured on the greybox city's street grid.
+| 1 | Movement + delivery loop | Done (PR #2) |
+| 2 | City map + POI system (2 × 2 km, Quaternius) | Built (PR #3). Its map is replaced by revision 2; the streaming, LOD, navmesh, generator and perf tooling carry over. |
+| 3 | **Core loop rework** | HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
+| 4 | **Vehicles** | Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
+| 5 | **City v2** | The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs, 60 fps re-proved. |
+| 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps. |
+| 7 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation for players and vehicles, server-authoritative thieves, wallet sign-in, Postgres persistence, combat and collisions, anti-cheat, reconnects. |
+| 8 | **Reward program + launch** | After the owner's payout design (§9): harvest spike, Anchor program, buyback, price keeper, claims, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 
 ## 16. Risks, legal and open items
 
 **Risks and legal:**
-- **Eligibility:** AMZNx is a tokenized certificate available only to eligible participants, and some jurisdictions (including the US) are restricted. A geo-block or eligibility policy for claims is needed. Get legal advice; this spec is not legal advice.
-- **Real-value rewards:** paying rewards funded by token trading fees may be regulated as securities, gambling or another category depending on the country. Get legal advice before launch.
-- **Lock-to-boost:** locking a token to increase a real-money payout can be treated like staking for yield in some jurisdictions. Include it in the legal review.
-- **Custody:** the program holds both the AMZNx pool and players' locked GAME, which makes it a high-value target. The audit must cover the lock vault.
-- **Branding:** no Amazon name, logo or trade dress in the game. Courier branding is fictional.
+- **Real-value rewards:** paying rewards funded by token trading fees may be regulated as securities, gambling or another category depending on the country. Get legal advice before launch; this spec is not legal advice.
+- **Spending for advantage:** revision 2 deliberately lets spending (vehicles bought with GAME) increase earnings. Combined with real-value payouts, this strengthens the case that the game is an investment product or gambling in some jurisdictions. Include it in the legal review. (The v1 spec had rejected spend-for-advantage designs as too pay-to-win.)
+- **Asset licence:** the Megatropolis and Tropical City packs appear to be Unity Asset Store packs, which normally allow use inside a game but not redistribution of the source files. The repository is public, so the packs are kept out of git until the owner confirms the source and licence. The project rule "CC0 assets only" must be updated to cover them.
+- **Custody:** the program holds the reward pool, which makes it a high-value target. The audit must cover it.
+- **Branding:** no Amazon or real delivery-app names, logos or trade dress (Grab, ShopeeFood, Uber Eats, DoorDash…). Business names in the city are fictional.
 
-**Performance risk:** a 2 × 2 km city in the browser depends on chunk streaming, LOD and collider paging. SP2 must prove the 60 fps target on a mid-range laptop before the full city is authored.
+**Performance risk:** the dense city places about 2,600 buildings (7.3 M triangles at full detail). City v2 must re-prove 60 fps with merged blocks, LOD and fog, and keep the first download under about 40 MB with compression.
 
-**Open items to verify:**
-- Confirm AMZNx is offered in Pump.fun's Custom Pair selector.
-- Confirm that a program PDA can be a creator-fee recipient and can claim through a CPI, for both bonding-curve and PumpSwap fees. This is the first task of sub-project 5.
-- Choose the creator fee percentage at launch (Pump.fun allows 0.05%–1%).
-- Set the USD price of each token upgrade and premium skin before launch.
+**Open items (owner):**
+- The reward payout design (§9) and lock-to-boost (§6.4).
+- USD prices of vehicles, Shoes, skins and the lockout skip.
+- Source and licence of the asset packs; models for the skateboard, bicycle, motorbike, post office, warehouse, school, containers and cranes.
+- Confirm the creator fee percentage at launch (Pump.fun allows 0.05%–1%).
 
-**Not in v1 (later ideas):** mobile touch controls, per-route daily speed boards, Rush Hour events, billboard rentals, private rooms.
+**Not in v1 (later ideas):** mobile touch controls, NPC traffic and pedestrians, Rush Hour events, private rooms.
 
-**Considered and rejected:** VIP levels based on spending or holdings (too pay-to-win), holder badges (replaced by locking), race wagers (gambling risk), Courier Pass, rotating premium shop and limited drops, crews, gifting (too much for v1).
+**Considered and rejected:** a truck tier; separate cc classes of motorbike (merged into one); ranks; per-epoch payouts (replaced by per-order accrual); VIP levels; race wagers (gambling risk).
