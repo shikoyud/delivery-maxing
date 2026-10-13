@@ -1,6 +1,6 @@
 # Asset credits
 
-Only CC0 assets (Kenney, Quaternius) may be used. List each asset's source and license here.
+Assets are either the project owner's own library (exported from Unity with glTFast) or CC0 (Kenney, Quaternius). List each third-party CC0 asset's source and license here. Owner-supplied assets don't need an entry.
 
 | File | Asset | Author | License | Source |
 |---|---|---|---|---|
