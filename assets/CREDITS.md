@@ -12,8 +12,8 @@ courier branding, spec §16) and uses its Idle, Walking, Running and Jump clips.
 ## SP2 source packs (`assets/source/`)
 
 These files are committed unchanged, exactly as distributed. The user downloaded them from quaternius.com and supplied
-them for SP2 (2026-10-13). The SP2 asset pipeline converts them into the game's runtime models; each runtime file
-will be listed here as it is added.
+them for SP2 (2026-10-13). The SP2 asset pipeline converts them into the game's runtime models; every runtime file
+is listed under "SP2 runtime files" below.
 
 All files below: author **Quaternius** (https://quaternius.com, https://www.patreon.com/quaternius); license
 **CC0 1.0 Universal (Public Domain Dedication)**, https://creativecommons.org/publicdomain/zero/1.0/ (the pack's own

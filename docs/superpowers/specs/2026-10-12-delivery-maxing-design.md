@@ -1,7 +1,7 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved (revised 2026-10-12 after the SP1 playtest: third-person camera, two-way zip lines, par times, 2 × 2 km city, thieves; revised 2026-10-13 after SP1 playtest 2: sprint toggle, slide boost, crouch key)
+- **Status:** Approved (revised 2026-10-12 after the SP1 playtest: third-person camera, two-way zip lines, par times, 2 × 2 km city, thieves; revised 2026-10-13 after SP1 playtest 2: sprint toggle, slide boost, crouch key; revised 2026-10-13 after SP2 implementation: city layout, art and streaming values, map build and navmesh rules, POI selection details, single-player thief rules, local epoch points, rail ends)
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
@@ -46,6 +46,14 @@ GAME is spent (burned, at fixed USD prices) on high-impact upgrades and premium 
 | Par times | Every order has a par time; beating it pays a bonus. |
 | Express timer | Tightened from 1.5× to 1.1× (route distance ÷ base sprint speed) + 10 s after the SP1 playtest, so it stays tighter than par (1.3×). |
 | Sprint and slide | Changed after SP1 playtest 2: Shift toggles sprint (Apex-style) instead of being held; starting a slide gives a speed burst that then needs a cooldown; crouch stays on C only (Ctrl+W would close the browser tab). |
+| City layout and art (SP2) | Central Plaza at the centre, one district per quadrant; cliffs on the north and west edges, quays over water on the east and south. Every building comes from the Quaternius Ultimate Textured Building Pack; thieves use Quaternius Animated Men; everything else is built in code. The Downtown City MegaKit is not used (photoreal style, about 3× the triangles), and no casino imagery is used (§5.1). |
+| Streaming and performance proof (SP2) | 100 m chunks; colliders paged around the player; three render LOD rings out to 700 m with radial fog; all models load at start. CI checks draw-call and triangle proxies at 8 perf-route viewpoints; `?perf=1` measures real frame times (§5.1). |
+| Map build (SP2) | A seeded generator expands `map/city.source.json` into committed `city.json`, `city.poi.json` and `city.navmesh.bin`; `pnpm map:check` regenerates and byte-compares them and runs in `pnpm check` and CI (§5.2). |
+| Navmesh and path distance (SP2) | Off-mesh links: pads one-way up, zip lines two-way, mantle step stacks two-way, drops one-way down (≤ 7 m). Path distance is the navmesh straight-path length; a path counts only if it really reaches both ends. Elevated = zone base ≥ 2.5 m above street-level ground (§5.2). |
+| POI selection (SP2) | Reuse, horizontal spread, district balance 1/(1 + n), Chain weight 4 with a single-POI fallback, measured route distances per type, and a shorter board when rules leave fewer than 6 POIs (§5.3). |
+| Thieves (SP2, single-player) | Street-graph NPCs that never enter the plaza or change level; a 1.6 m "above street level" rule decides escape; one chaser at a time; robbery fails carried orders and costs 1 point of the current epoch (§7.3). |
+| Local epoch points (SP2) | Epoch points are kept in the browser per 10-minute UTC window and shown on the HUD until SP4/SP5 move them server-side (§7.3). |
+| Rail ends (SP2) | Leaving a rail at its end releases it; the same rail can't re-catch the courier until the feet are more than the rail snap distance away (§4). |
 
 ## 3. Core loop
 
@@ -109,7 +117,7 @@ All movement code lives in the shared package. It runs on a fixed **30 Hz** simu
 
 | Move | Behavior |
 |---|---|
-| Run / sprint | Base sprint speed 8 m/s. Shift toggles sprint on and off. Sprint also switches off whenever no move key is held, so it can only be on while moving. No stamina. The sprint on/off state is part of the shared sim state, not the client's. |
+| Run / sprint | Base sprint speed 8 m/s. Shift toggles sprint on and off. Sprint also switches off whenever no move key is held, so it can only be on while moving; pressing Shift with no move key held leaves sprint off. No stamina. The sprint on/off state is part of the shared sim state, not the client's. |
 | Jump | About 1.2 m high. Coyote time 100 ms, jump buffer 100 ms. |
 | Mantle | Automatically climbs ledges up to 1.5 m high. |
 | Crouch-slide | Pressing crouch (C) while sprinting on the ground starts a slide. Starting a slide adds a speed burst of +4 m/s, so a slide from a sprint reaches about 12 m/s (never above the speed cap). Slides use low friction, keep their speed and gain speed downhill. After a boosted slide the burst needs a 2 s cooldown, counted from the start of that slide (Apex-style). A slide started during the cooldown keeps its current speed but gets no burst. |
@@ -118,7 +126,7 @@ All movement code lives in the shared package. It runs on a fixed **30 Hz** simu
 | Jump pad | Launches the player along an authored vector. |
 | Boost orb | +40% speed for 3 s. Orbs are **shared**: the first player to touch one takes it (the server decides ties), and it disappears for everyone in the room until it respawns 30 s later. |
 | Slides (map) | Long low-friction chutes. |
-| Grind rails | Usable on foot and on the skateboard. |
+| Grind rails | Usable on foot and on the skateboard. Leaving a rail at its end releases it; the same rail can't catch the courier again until the feet are more than the rail snap distance (0.6 m) from it, so a rail whose last segment slopes down doesn't re-catch them. |
 | Skateboard | Q to pull out or put away. Faster on flat ground and rails. Cannot wall-run or mantle. Getting hit knocks the player off the board. |
 | Speed cap | Horizontal speed is capped at 18 m/s. |
 
@@ -142,12 +150,41 @@ The city is about 2 × 2 km. A skilled runner crosses it in roughly 4 minutes. W
 
 Falling into water or out of bounds respawns the player at the nearest checkpoint. They keep their packages, but Fragile bonuses are lost.
 
+**Layout (SP2).** Central Plaza sits at the centre (0, 0). The districts fill the four quadrants: Downtown NE (x > 0, z < 0), Harbor SE (x > 0, z > 0), Hillside NW (x < 0, z < 0), Suburbs & Skatepark SW (x < 0, z > 0). The north and west edges are 40 m cliffs. The east and south edges are quays over water: land stops 30 m inside the edge and the water surface is at y = −1.5. Hillside rises in terraces to about 36 m toward the NW corner; the arterial roads stay at street level.
+
+**Art (SP2).** Every building is from the Quaternius Ultimate Textured Building Pack, baked at ×2.8 (one story ≈ 3.5 m); Downtown places its towers at ×3.2–4.2 of the source art instead. Thieves use Quaternius Animated Men. Ground, roads, plaza, cliffs, containers, cranes and every gameplay object are built in code. The Downtown City MegaKit is not used (photoreal style that doesn't match, about 3× the triangles). No casino imagery is used, because the game pays real-value rewards.
+
+**Streaming and LOD (SP2).**
+
+| Item | Value |
+|---|---|
+| Chunks | 100 m square |
+| Physics colliders | Loaded for chunks within 150 m of the player, unloaded beyond 220 m |
+| Render LOD rings | LOD0 ≤ 160 m, LOD1 ≤ 370 m, LOD2 (tinted boxes) ≤ 700 m |
+| LOD1 models | Drop connected parts whose bounding-box diagonal is under 1.4 m (1.6 m for `3Story_Small`) |
+| Fog | Radial (distance from the camera), ends at 700 m |
+| Model loading | All models load at start; only physics colliders page in and out, and render LOD switches by distance |
+
+**Performance proof (SP2).** CI checks proxies at 8 perf-route viewpoints covering every district: at most 200 draw calls and 700,000 triangles at 1280 × 720. Real frame times come from `?map=city&perf=1`, a flythrough of the same route that passes when the p95 frame time is ≤ 18 ms. Measured 2026-10-13 on the user's RTX 4050 laptop at 1920 × 957: p95 4.3 ms.
+
 ### 5.2 How the map is built
 
 - **Placement file** (`map/city.json`): lists the asset-pack pieces and their transforms, plus gameplay objects (zip lines, jump pads, orbs, slides, rails, checkpoints) and about **150 POI candidates**. Each POI candidate has an id, position, district and kind (door, mailbox, counter, balcony).
+- **Generator (SP2):** a seeded generator in `packages/tools` expands `map/city.source.json` (district templates, their params and quotas) into the committed placement file `map/city.json`. `pnpm map:build` also writes `map/city.poi.json` and `map/city.navmesh.bin`. `pnpm map:check` (part of `pnpm check` and CI) regenerates all three, byte-compares them with the committed files, and fails on any validation error.
 - **Navmesh:** generated at build time with `recast-navigation`. Jump pads, zip lines and mantle-able ledges are added as off-mesh links, so the navmesh represents the base movement kit with no upgrades.
+
+  | Link | Direction | Notes |
+  |---|---|---|
+  | Jump pad | One-way, up | From the pad to its landing point |
+  | Zip line | Two-way | Between the cable ends |
+  | Mantle step stack | Two-way | Crate steps with rises of 1.0–1.5 m |
+  | Drop | One-way, down | At most 7 m (the Fragile limit); drops are part of the base movement kit |
+
+  Chute tops are not walkable on the navmesh, because a courier on a chute always slides down it. Recast tiles are 256 m, so long zip-line links are not dropped.
+- **Path distance:** the length of the navmesh straight path (3D, with each link counted as a straight segment). A path counts only if it starts and ends within 1 m of its endpoints, because recast reports partial paths as success.
+- **Elevated POIs:** a POI is elevated when its zone base is at least 2.5 m above the street-level ground at that spot. Rooftop deliveries use kind `door`; balconies (2 m deep ledges) use kind `balcony`.
 - **Generated POI table:** the build computes each candidate's path distance from the HUB and checks it is reachable. Unreachable candidates fail the build.
-- **Debug view:** an in-game overlay shows POIs, their distances and band colors, and any unreachable spots.
+- **Debug view:** an in-game overlay (F4) shows POI beams and labels within 500 m, coloured by distance band (red = unreachable), the chunk grid, the physics-loaded chunks and the thieves' states.
 
 ### 5.3 POI selection rules
 
@@ -155,11 +192,13 @@ Falling into water or out of bounds respawns the player at the nearest checkpoin
 |---|---|
 | Distance bands (one-way path distance from the HUB) | Short < 500 m, Medium 500–1,200 m, Long > 1,200 m |
 | Elevated targets | At least 40% of POIs are on rooftops, balconies or upper floors that need a parkour route (mantle, wall-run, pad or zip line). Every elevated POI has a way down with no fall over the Fragile limit. |
-| Order mix | Chain orders are weighted higher than in SP1 (tuned in config). |
+| Order mix | Chain orders are weighted higher than in SP1: type weight 4 (SP1: 2). If the spread rule leaves no second POI for a Chain, its first POI is offered as a Drop-off or Pick-up instead. |
 | Reachability | Only candidates that pass the build-time check are used |
-| Spread | No two of a player's active orders within 40 m of each other |
-| Reuse | The same POI is not reused within 3 minutes for the same player |
-| District balance | Board generation favors districts the player has not been sent to recently |
+| Spread | Measured horizontally. Every POI on the board is at least 40 m from every other board POI and from every POI of the player's active orders. |
+| Reuse | A POI counts as used when an order containing it is accepted. It is not offered again to that player for 180 s. |
+| District balance | Each POI is weighted 1/(1 + n), where n is how many times its district appears among the player's last 6 accepted POIs. |
+| Route distance | Drop-off = HUB→POI; Pick-up = HUB→POI + POI→HUB; Chain = HUB→A + A→B + B→HUB, each leg measured in its own direction on the navmesh. Distance bands use the one-way HUB→POI distance. |
+| Short boards | When the rules leave fewer than 6 candidates, the board shows fewer cards. |
 
 ## 6. Progression and economy
 
@@ -272,6 +311,17 @@ Thieves are street NPCs that make carrying packages risky.
 | Density | A few thieves per district, more on long-distance streets. |
 | Authority | In multiplayer (SP4) thieves are simulated by the server and shared by everyone in the room. |
 
+**Single-player thieves (SP2).** These details apply to the single-player thieves built in SP2 (values in `config/thieves.json`):
+
+| Rule | Value |
+|---|---|
+| Movement | Thieves move on the street graph (road and sidewalk strips). They never pass through the HUB plaza exclusion (plaza radius + 6 m). They stay on their street level: they follow streets up ramps but never jump onto or off another level. |
+| Catch | Within 0.9 m horizontally and 1.6 m vertically. |
+| Above street level | More than 1.6 m above the street surface under the courier (roofs, ledges, zip lines, balconies). A thief never starts a chase on a courier above street level; during a chase, staying above street level for 1 s ends it. Running up a steep street is not an escape. |
+| Chase ends | Beyond 35 m, after 10 s, when the courier enters the HUB plaza, or when the courier no longer carries a package. At most one thief chases at a time. Line of sight is a physics ray. |
+| Robbery | Carried orders fail; accepted but uncollected Pick-up and Chain orders stay. 1 point is subtracted from the current epoch's points, floored at 0; lifetime points are unchanged. |
+| Epoch points | Kept locally in SP2, per wall-clock 10-minute UTC window (§9.4), and shown on the HUD. SP4/SP5 move them server-side. |
+
 ## 8. Wallet and accounts
 
 - **Sign-in:** the player connects a wallet through the Solana Wallet Adapter / Wallet Standard. Phantom, Solflare and OKX Wallet are listed explicitly. The player signs a Sign-In With Solana message containing a server nonce. The server verifies it and issues a session token bound to the wallet.
@@ -368,10 +418,12 @@ delivery-maxing/
     client/    Three.js + Vite: rendering, input layer, HUD/UI, wallet
     server/    Colyseus rooms, auth, Postgres access, epoch settler, admin page
     keeper/    price keeper service
+    tools/     Node-only build steps: asset pipeline, city generator, navmesh + POI table (never bundled)
   programs/
     rewards/   Anchor program
   config/      tuning JSON (movement, orders, prices, combat, economy)
-  map/         city.json placement file, generated POI table and navmesh
+  map/         city.source.json (generator input), pieces.json, city.json placement file,
+               city.poi.json (generated POI table), city.navmesh.bin
   assets/      CC0 models and textures
 ```
 
@@ -420,6 +472,8 @@ Each sub-project gets its own implementation plan.
 | 5 | **Reward program + launch** | Harvest spike, Anchor program (pool, upgrades, locks), price keeper, epoch settler with lock bonus, claim UI, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 
 **Sub-project 1 note:** the navmesh arrives in sub-project 2. Until then, path distance is the street-grid distance `|dx| + |dz|` measured on the greybox city's street grid.
+
+**Sub-project 2 note:** the plan is `docs/superpowers/plans/2026-10-13-sp2-city-map-poi.md`. The city is the default map; the SP1 greybox stays available as `?map=greybox`.
 
 ## 16. Risks, legal and open items
 
