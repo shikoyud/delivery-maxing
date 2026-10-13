@@ -56,6 +56,10 @@ export interface PoiContext {
 
 /** Solid kinds a courier stands on at street level: crates, pads, zip ends and drop landings stand on these. */
 const STREET: ReadonlySet<SolidKind> = new Set<SolidKind>(['ground', 'road', 'sidewalk']);
+/** Open ground off the streets (yards, lots): kit crates and stalls stand only on this, never on a road or sidewalk. */
+const YARD: ReadonlySet<SolidKind> = new Set<SolidKind>(['ground']);
+/** A mailbox stands on the sidewalk. */
+const SIDEWALK: ReadonlySet<SolidKind> = new Set<SolidKind>(['sidewalk']);
 /** Solid kinds that are street-level surfaces for navigation (everything else is elevated). */
 const GROUNDS: ReadonlySet<SolidKind> = new Set<SolidKind>(['ground', 'road', 'sidewalk', 'hub', 'stairs', 'ramp', 'chute', 'cliff']);
 /** Boxes closer than this (city.json rounds to 0.01 m, half-sizes to 0.005) touch rather than overlap, m. */
@@ -91,7 +95,7 @@ function poiParams(p: PoiSource, ctx: PoiContext): PoiSource {
   const raw = p as unknown as Record<string, unknown>;
   positive(raw, ['total', 'minSpacing', 'perBandMin', 'bandEstimateFactor', 'elevatedMin', 'featureClearance'], '');
   nums(raw, ['elevatedTarget'], '');
-  positive(obj(p.accessWeights, 'accessWeights'), ['street', 'route', 'kit'], 'accessWeights.');
+  positive(obj(p.pickWeights, 'pickWeights'), ['street', 'route', 'mantle', 'padZip'], 'pickWeights.');
   if (p.elevatedTarget > 1) fail('elevatedTarget must be at most 1');
   const per = obj(p.perDistrict, 'perDistrict');
   for (const [d, n] of Object.entries(per)) {
@@ -136,7 +140,8 @@ function poiParams(p: PoiSource, ctx: PoiContext): PoiSource {
   if (k.zip.endHeight < move.zipLine.hangDrop) fail('kits.zip.endHeight must leave the hang drop under the cable');
   const b = p.balcony;
   if (b.floorHeight < p.elevatedMin || b.floorHeight > maxFall) fail('balcony.floorHeight must be elevated and within a Fragile-safe drop');
-  if (b.depth < move.capsule.radius * 2 + 0.2 || b.width < CRATE_WIDTH) fail('a balcony must hold a courier and a crate step');
+  // A courier mantling off side crate steps (CRATE_WIDTH wide against the facade) lands within the slab's depth
+  if (b.depth < CRATE_WIDTH / 2 + move.capsule.radius + 0.1 || b.width < CRATE_WIDTH) fail('a balcony must hold a courier off its crate steps');
   const sw = ctx.streets.sidewalkWidth;
   if (p.furniture.mailbox.inset + p.furniture.mailbox.depth > sw / 2 - move.capsule.radius) fail('a mailbox must leave the sidewalk centre free');
   return p;
@@ -428,8 +433,8 @@ function dropFor(w: Pass, ledge: Ledge, avoid: Rect): { from: Vec3; to: Vec3 } |
 
 /**
  * Mantle steps up to a ledge (≤ 7 m above the ground at its foot) and a drop link down: crates against the first climb
- * spot whose ground is level street ground with room for the crates and the run-up behind them (clear of everything
- * and of marked features), with a drop spot. Null when no spot works.
+ * spot whose ground is level yard ground (no road or sidewalk) with room for the crates and the run-up behind them
+ * (clear of everything and of marked features), with a drop spot. Null when no spot works.
  */
 function mantleKit(w: Pass, ledge: Ledge, id: string): Built | null {
   const { move } = w.ctx;
@@ -438,7 +443,7 @@ function mantleKit(w: Pass, ledge: Ledge, id: string): Built | null {
     const foot = facePoint(face, along, 0);
     const first = facePoint(face, along, 0.75);
     const g = w.space.surface(first.x, first.z, ledge.top - w.p.elevatedMin);
-    if (!g || g.solid.kind !== 'ground') continue;
+    if (!g || !YARD.has(g.solid.kind)) continue;
     const level = g.top;
     const climb = ledge.top - level;
     if (climb < w.p.elevatedMin - 1e-9 || climb > w.maxFall) continue;
@@ -453,7 +458,7 @@ function mantleKit(w: Pass, ledge: Ledge, id: string): Built | null {
     }));
     const area = laneRect(face, along, 0, reach + k.runUp, CRATE_WIDTH / 2);
     if (!allowed(w, area) || !w.space.clear(area, w.p.featureClearance)) continue;
-    if (!w.space.levelIn(area, level - LEVEL_TOL, level + LEVEL_TOL, new Set<SolidKind>(['ground']))) continue;
+    if (!w.space.levelIn(area, level - LEVEL_TOL, level + LEVEL_TOL, YARD)) continue;
     if (!w.space.free(area, level + 0.05, ledge.top + move.capsule.height)) continue;
     const drop = dropFor(w, ledge, area);
     if (!drop) continue;
@@ -564,16 +569,19 @@ function padZipKit(w: Pass, ledge: Ledge, poi: Vec3, id: string): Built | null {
   };
 }
 
-/** The kit for an elevated roof slot: mantle steps up to 7 m above the ground beside it, a pad and a zip above that. */
-function roofKit(w: Pass, slot: PoiSlot, id: string): Built | null {
+/**
+ * The roof under an elevated kit slot as a ledge, and the kit it needs: mantle steps when it is at most 7 m above the
+ * ground beside it, else a pad and a zip line. Null when the slot is not on a roof elevated above street-level ground.
+ */
+function roofLedge(w: Pass, slot: PoiSlot): { ledge: Ledge; kit: 'mantle' | 'padZip' } | null {
   const p = slot.position;
   const roof = w.space.surface(p.x, p.z, p.y);
-  if (!roof || GROUNDS.has(roof.solid.kind) || Math.abs(roof.top - p.y) > 0.01 || !standing(w, p)) return null;
+  if (!roof || GROUNDS.has(roof.solid.kind) || Math.abs(roof.top - p.y) > 0.01) return null;
   const level = groundAround(w, roof.rect, roof.top - w.p.elevatedMin);
   if (level === null || roof.top - level < w.p.elevatedMin) return null;
   const spots = facesOf(roof.rect).flatMap((face) => alongs(face, w.p.kits.alongStep, CRATE_WIDTH / 2).map((along) => ({ face, along })));
   const ledge: Ledge = { rect: roof.rect, top: roof.top, bottom: roof.bottom, climbs: spots, drops: spots };
-  return roof.top - level <= w.maxFall ? mantleKit(w, ledge, id) : padZipKit(w, ledge, p, id);
+  return { ledge, kit: roof.top - level <= w.maxFall ? 'mantle' : 'padZip' };
 }
 
 // ---- Balconies ------------------------------------------------------------------------------------------------
@@ -642,13 +650,16 @@ function facadeDirs(rotY: number): { x: number; z: number }[] {
 
 // ---- Candidates -----------------------------------------------------------------------------------------------
 
-/** A POI candidate: its slot, estimated band, and how to build what it needs (null when it cannot be built). */
-interface Candidate { slot: PoiSlot; band: Band; build: (id: string) => Built | null }
+/** What a candidate costs to build: nothing (street, route), crate steps (mantle) or a pad and a zip line (padZip). */
+type Cost = keyof PoiSource['pickWeights'];
 
-function candidate(w: Pass, slot: PoiSlot, build: (id: string) => Built | null): Candidate {
+/** A POI candidate: its slot, estimated band, cost, and how to build what it needs (null when it cannot be built). */
+interface Candidate { slot: PoiSlot; band: Band; cost: Cost; build: (id: string) => Built | null }
+
+function candidate(w: Pass, slot: PoiSlot, cost: Cost, build: (id: string) => Built | null): Candidate {
   const { center } = w.ctx.plaza;
   const band = bandFor(flat(slot.position, center) * w.p.bandEstimateFactor, w.ctx.orders.bands.city);
-  return { slot, band, build };
+  return { slot, band, cost, build };
 }
 
 /** The district holding `p` (the first listed whose rect does), or null. */
@@ -666,8 +677,15 @@ function slotCandidates(w: Pass, slots: readonly PoiSlot[]): Candidate[] {
   const out: Candidate[] = [];
   for (const slot of slots) {
     if (inPlaza(w, slot.position)) continue;
-    if (slot.access === 'kit') out.push(candidate(w, slot, (id) => roofKit(w, slot, id)));
-    else if (slot.access === 'street' || w.reach.both(slot.position)) out.push(candidate(w, slot, () => (standing(w, slot.position) ? nothing() : null)));
+    if (slot.access === 'kit') {
+      const roof = roofLedge(w, slot);
+      if (!roof) continue;
+      const { ledge, kit } = roof;
+      const build = kit === 'mantle' ? (id: string) => mantleKit(w, ledge, id) : (id: string) => padZipKit(w, ledge, slot.position, id);
+      out.push(candidate(w, slot, kit, (id) => (standing(w, slot.position) ? build(id) : null)));
+    } else if (slot.access === 'street' || w.reach.both(slot.position)) {
+      out.push(candidate(w, slot, slot.access, () => (standing(w, slot.position) ? nothing() : null)));
+    }
   }
   return out;
 }
@@ -705,7 +723,7 @@ function balconyCandidates(w: Pass): Candidate[] {
     const position = v2({ x: (plan.rect.minX + plan.rect.maxX) / 2, y: floor, z: (plan.rect.minZ + plan.rect.maxZ) / 2 });
     const district = districtAt(w, position);
     if (!district || inPlaza(w, position)) continue;
-    out.push(candidate(w, { position, kind: 'balcony', elevated: true, district, access: 'kit' }, (id) => balconyKit(w, plan, id)));
+    out.push(candidate(w, { position, kind: 'balcony', elevated: true, district, access: 'kit' }, 'mantle', (id) => balconyKit(w, plan, id)));
   }
   return out;
 }
@@ -749,14 +767,14 @@ function furnitureCandidates(w: Pass): Candidate[] {
               const m = f.mailbox;
               const edge = outer - side * m.inset;
               const rect = rectAt(s - m.width / 2, s + m.width / 2, edge, edge - side * m.depth);
-              return furniture(w, `${id}-mailbox`, rect, position, position.y, m.height, new Set<SolidKind>(['sidewalk']));
+              return furniture(w, `${id}-mailbox`, rect, position, position.y, m.height, SIDEWALK);
             }
             : (id: string): Built | null => {
               const st = f.stall;
               const rect = rectAt(s - st.width / 2, s + st.width / 2, outer + side * st.gap, outer + side * (st.gap + st.depth));
-              return furniture(w, `${id}-stall`, rect, position, a.y, st.height, new Set<SolidKind>(['ground']));
+              return furniture(w, `${id}-stall`, rect, position, a.y, st.height, YARD);
             };
-        out.push(candidate(w, { position, kind, elevated: false, district, access: 'street' }, build));
+        out.push(candidate(w, { position, kind, elevated: false, district, access: 'street' }, 'street', build));
       }
     }
   }
@@ -883,7 +901,7 @@ export function placePois(slots: readonly PoiSlot[], ctx: PoiContext): { pois: P
   const w: Pass = { ctx, p, space, reach: new Reach(space, ctx.city.navLinks), maxFall: ctx.orders.fragile.maxFallMeters };
 
   const all = [...slotCandidates(w, slots), ...balconyCandidates(w), ...furnitureCandidates(w)];
-  const cands = weightedOrder(all, (c) => p.accessWeights[c.slot.access], ctx.rng);
+  const cands = weightedOrder(all, (c) => p.pickWeights[c.cost], ctx.rng);
   const { pois, built } = select(w, cands);
 
   const navLinks = built.flatMap((b) => b.navLinks);

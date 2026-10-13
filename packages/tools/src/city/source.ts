@@ -61,10 +61,11 @@ export interface PoiSource {
   /** A POI is elevated when it stands at least this high above the street-level ground there (plan assumption 6), m. */
   elevatedMin: number;
   /**
-   * Candidates are tried in a seeded shuffle weighted by how they are reached: a slot of weight w comes up about w times
-   * as early as one of weight 1 (route slots need nothing built, so they keep the city lean).
+   * Candidates are tried in a seeded shuffle weighted by what they cost to build: a candidate of weight w comes up about
+   * w times as early as one of weight 1. Street POIs and route slots need nothing built; a mantle kit adds crate steps
+   * (drawn with the city's regions); a pad and zip kit adds features drawn at every distance, so it weighs least.
    */
-  accessWeights: { street: number; route: number; kit: number };
+  pickWeights: { street: number; route: number; mantle: number; padZip: number };
   /** At least this many POIs of each listed kind. */
   kindMin: Partial<Record<PoiKind, number>>;
   /** Kits and street furniture keep this far from movement features and their run-ups, m. */

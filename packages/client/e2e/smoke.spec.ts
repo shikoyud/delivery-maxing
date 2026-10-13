@@ -762,6 +762,28 @@ test('sp2 Suburbs screenshot (high over the skatepark)', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('sp2 POI screenshots (a balcony kit, a roof pad-and-zip kit, a street stall)', async ({ page }) => {
+  const errors = await boot(page, CITY);
+  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
+  // Generation-dependent ids (Task 13). poi-suburbs-05: a balcony 3.5 m up a house's south facade, its two crate steps
+  // along the facade to the east of it; seen from the front yard to the south-east.
+  const shots: [string, string, { x: number; y: number; z: number }, { x: number; y: number; z: number }][] = [
+    ['poi-suburbs-05', 'sp2-poi-balcony.png', { x: 9, y: 0, z: 11 }, { x: 2, y: -1, z: 0 }],
+    // poi-downtown-11: a 13.5 m roof, its pad on the sidewalk in front and its zip line running down the street
+    ['poi-downtown-11', 'sp2-poi-pad-zip.png', { x: -12, y: 0, z: 20 }, { x: 0, y: -3.5, z: 0 }],
+    // poi-harbor-01: a stall (counter) just beyond the sidewalk, the POI on the sidewalk in front of it
+    ['poi-harbor-01', 'sp2-poi-stall.png', { x: 0, y: 0, z: 8.5 }, { x: 0, y: 0.35, z: 0 }],
+  ];
+  for (const [id, file, from, look] of shots) {
+    const p = await page.evaluate((x) => window.__dm!.poiPosition(x), id);
+    const feet = { x: p.x + from.x, y: from.y, z: p.z + from.z };
+    await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, { x: p.x + look.x, y: p.y + look.y, z: p.z + look.z }] as const);
+    await settle(page, 10);
+    await page.screenshot({ path: `${artifacts}${file}` });
+  }
+  expect(errors).toEqual([]);
+});
+
 test('the default (no ?map) still loads the SP1 greybox', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);

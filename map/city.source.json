@@ -144,7 +144,7 @@
     "perBandMin": 20,
     "bandEstimateFactor": 1.25,
     "elevatedMin": 2.5,
-    "accessWeights": { "street": 1, "route": 4, "kit": 1 },
+    "pickWeights": { "street": 1, "route": 4, "mantle": 1, "padZip": 0.25 },
     "kindMin": { "mailbox": 8, "counter": 8, "balcony": 8 },
     "featureClearance": 3,
     "kits": {
