@@ -76,6 +76,7 @@ export class PlayerSim {
     s.velocity = vec3(velocity.x, velocity.y, velocity.z);
     s.jumpPressAge = null;
     enterAir(s, this.cfg);
+    s.railRelease = null; // a teleport starts afresh: any rail may catch it
   }
 
   /**

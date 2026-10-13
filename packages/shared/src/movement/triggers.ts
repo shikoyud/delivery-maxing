@@ -95,5 +95,6 @@ function respawn(state: PlayerState, body: PlayerBody, map: MapData, cfg: Moveme
   state.velocity = vec3(0, 0, 0);
   enterAir(state, cfg);
   state.jumpPressAge = null;
+  state.railRelease = null; // a respawn starts afresh: any rail may catch it
   return { kind: 'respawned', checkpointId: id };
 }

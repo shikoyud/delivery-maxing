@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { movementConfig as cfg } from '../../src/config';
-import { horizontalLength, vec3 } from '../../src/math/vec3';
+import { closestOnSegment, horizontalLength, vec3, type Vec3 } from '../../src/math/vec3';
 import { jumpVelocity } from '../../src/movement/jump';
 import type { Rail } from '../../src/world/mapTypes';
 import { makeSim } from '../helpers/simHarness';
 
 const rail = (id: string, ...pts: [number, number, number][]): Rail => ({ id, points: pts.map((p) => vec3(...p)) });
 const straight = rail('r', [0, 3, 0], [0, 3, -40]);
+/** Distance from `p` to the nearest point of rail `r`. */
+const toRail = (r: Rail, p: Vec3): number =>
+  Math.min(...r.points.slice(1).map((b, i) => closestOnSegment(p, r.points[i]!, b).dist));
 
 /** A player dropping onto the rail at z = -2, heading -Z at `speed`. */
 async function dropOnto(r: Rail, speed = 10, vy = -1) {
@@ -187,6 +190,57 @@ describe('grind rails', () => {
     h.sim.teleport(vec3(0, 3.3, -2), vec3(0, -1, -10));
     h.tick();
     expect(h.sim.state.grind).toMatchObject({ id: 'down', segment: 0, dir: 1 });
+  });
+
+  it('leaving a rail at its end releases it only while the feet are within snapDistance; beyond, it catches again', async () => {
+    const r = rail('down', [0, 3, 0], [0, 3, -10], [0, 2, -14]);
+    const h = await dropOnto(r, 10);
+    h.tick();
+    h.runUntil((s) => s.mode !== 'grind', 200);
+    expect(h.sim.state.railRelease).toBe('down');
+    // Each tick clears the release only when the feet at its start are more than snapDistance from the rail
+    let ticks = 0;
+    while (h.sim.state.railRelease !== null) {
+      const before = toRail(r, h.sim.state.position);
+      h.tick();
+      if (h.sim.state.railRelease === null) expect(before, 'cleared beyond snapDistance').toBeGreaterThan(cfg.rail.snapDistance);
+      else expect(before, 'kept within snapDistance').toBeLessThanOrEqual(cfg.rail.snapDistance);
+      expect(++ticks, 'the release clears once the courier is clear of the rail').toBeLessThan(cfg.tickRate);
+    }
+    expect(ticks).toBeGreaterThan(1);
+    // Cleared (above, by distance): dropping back onto the same rail grinds it
+    h.runUntil((s) => s.grounded, 60);
+    h.sim.teleport(vec3(0, 3.3, -2), vec3(0, -1, -10));
+    h.tick();
+    expect(h.sim.state.grind).toMatchObject({ id: 'down', segment: 0, dir: 1 });
+  });
+
+  it('a teleport or a respawn clears the release: the rail just left catches at once', async () => {
+    const r = rail('down', [0, 3, 0], [0, 3, -10], [0, 2, -14]);
+    const t = await dropOnto(r, 10);
+    t.tick();
+    t.runUntil((s) => s.mode !== 'grind', 200);
+    expect(t.sim.state.railRelease).toBe('down');
+    // Teleported 0.3 m above the rail (well within snapDistance of it)
+    t.sim.teleport(vec3(0, 3.3, -2), vec3(0, -1, -10));
+    expect(t.sim.state.railRelease).toBeNull();
+    t.tick();
+    expect(t.sim.state.grind).toMatchObject({ id: 'down' });
+
+    // A rail ending just past the map's bounds (|z| > size/2 + boundsMargin = 120): the tick that leaves its end
+    // respawns at once, while the feet are still at the rail, at a checkpoint 0.3 m above the rail
+    const edge = rail('edge', [0, 3, -100], [0, 3, -110], [0, 2, -120.01]);
+    const cp = { id: 'cp', position: vec3(0, 3.3, -102) };
+    const h = await makeSim({ rails: [edge], checkpoints: [cp] });
+    h.sim.teleport(vec3(0, 3.3, -102), vec3(0, -1, -10));
+    h.tick();
+    expect(h.sim.state.grind).toMatchObject({ id: 'edge' });
+    h.runUntil((s) => s.mode !== 'grind', 200);
+    // The end detach and the respawn happened in the same tick
+    expect(h.sim.state.position).toEqual(cp.position);
+    expect(h.sim.state.railRelease).toBeNull();
+    h.runUntil((s) => s.mode === 'grind', 5);
+    expect(h.sim.state.grind).toMatchObject({ id: 'edge', segment: 0 });
   });
 
   it('a jump pressed just before a downhill rail end still jumps off (SP1 jump-off unchanged)', async () => {
