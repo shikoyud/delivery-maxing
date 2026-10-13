@@ -4,25 +4,37 @@ import { OrderSystem } from '../../src/orders/OrderSystem';
 import type { Order } from '../../src/orders/types';
 import { mulberry32 } from '../../src/util/rng';
 import { vec3 } from '../../src/math/vec3';
-import { bandFor, streetDistance, type PoiInfo } from '../../src/world/distance';
+import { bandFor, type PoiInfo } from '../../src/world/distance';
+import type { District } from '../../src/world/mapTypes';
 import type { PlayerZones } from '../../src/world/zones';
+import type { DistanceTable } from '../../src/orders/distanceTable';
 
 const cfg = ordersConfig;
+const DISTRICTS: District[] = ['downtown', 'harbor', 'hillside', 'suburbs'];
+// 20 POIs along +x, 50 m apart (beyond the 40 m spread), cycling through the four districts.
 const pois: PoiInfo[] = Array.from({ length: 20 }, (_, i) => {
-  const d = 40 + i * 25;
+  const d = 40 + i * 50;
   return {
-    poi: { id: `p${i}`, position: vec3(d, 0, 0), district: 'downtown', kind: 'door' },
+    poi: { id: `p${i}`, position: vec3(d, 0, 0), district: DISTRICTS[i % 4] as District, kind: 'door' },
     hubDistance: d,
     band: bandFor(d, cfg.bands.greybox),
+    elevated: false,
   };
 });
+const xOf = (id: string): number => (pois.find((p) => p.poi.id === id) as PoiInfo).poi.position.x;
+const distances: DistanceTable = { fromHub: xOf, toHub: xOf, between: (a, b) => Math.abs(xOf(a) - xOf(b)) };
 
-function make(seed: number, capacity = 1, now = 0, totals?: { points: number; coins: number; deliveries: number }) {
+function make(
+  seed: number,
+  capacity = 1,
+  now = 0,
+  totals?: { points: number; coins: number; deliveries: number },
+  poiList: PoiInfo[] = pois,
+) {
   return new OrderSystem(
     {
-      pois,
-      distance: streetDistance,
-      hub: vec3(0, 0, 0),
+      pois: poiList,
+      distances,
       cfg,
       baseSprintSpeed: 8,
       rng: mulberry32(seed),
@@ -331,5 +343,61 @@ describe('OrderSystem', () => {
       found = sys.board.some((o) => o?.modifier === 'heavy');
     }
     expect(found).toBe(true);
+  });
+  it('accepting records reuse and district history', () => {
+    const { sys, order } = find((o) => o.type === 'chain', 3);
+    const [a, b] = [poiOf(order, 0), poiOf(order, 1)];
+    const districtOf = (id: string): District => (pois.find((p) => p.poi.id === id) as PoiInfo).poi.district;
+    expect(sys.accept(order.id, 7, true)).toBe('ok');
+    expect([...sys.recentUse]).toEqual([[a, 7], [b, 7]]);
+    // Most recent first: B was handed over after A
+    expect(sys.recentDistricts).toEqual([districtOf(b), districtOf(a)]);
+
+    const one = sys.board.find((o): o is Order => o !== null && o.type !== 'chain');
+    if (!one) throw new Error('no single-POI order');
+    expect(sys.accept(one.id, 9, true)).toBe('ok');
+    expect(sys.recentUse.get(poiOf(one))).toBe(9);
+    expect(sys.recentDistricts).toEqual([districtOf(poiOf(one)), districtOf(b), districtOf(a)]);
+
+    // The next board skips the accepted POIs (reused within 180 s, and active)
+    sys.refreshBoard(10);
+    const offered = sys.board.flatMap((o) => (o ? o.steps.flatMap((s) => (s.kind === 'poi' ? [s.poiId] : [])) : []));
+    expect(offered).not.toContain(a);
+    expect(offered).not.toContain(b);
+    expect(offered).not.toContain(poiOf(one));
+  });
+
+  it('district history keeps only the last districtWindow (6) entries, most recent first', () => {
+    const sys = make(3, 100);
+    const accepted: string[] = [];
+    for (let t = 0; t < 8; t++) {
+      const o = sys.board.find((x): x is Order => x !== null && x.type !== 'chain');
+      if (!o) throw new Error('no order to accept');
+      expect(sys.accept(o.id, t, true)).toBe('ok');
+      accepted.unshift(poiOf(o));
+      sys.refreshBoard(t);
+    }
+    const districtOf = (id: string): District => (pois.find((p) => p.poi.id === id) as PoiInfo).poi.district;
+    expect(sys.recentDistricts).toEqual(accepted.slice(0, cfg.selection.districtWindow).map(districtOf));
+  });
+
+  it('the 6-card board shrinks, never throws, when rules exhaust candidates', () => {
+    // 8 POIs, 50 m apart: accepting orders uses them up (reuse 180 s, spread 40 m from active orders).
+    const few = pois.slice(0, 8);
+    const sys = make(11, 100, 0, undefined, few);
+    const sizes: number[] = [sys.board.length];
+    for (let t = 1; t <= 10; t++) {
+      for (const o of sys.board) if (o) sys.accept(o.id, t, true);
+      expect(() => sys.refreshBoard(t)).not.toThrow();
+      sizes.push(sys.board.length);
+    }
+    expect(sizes[0]).toBe(cfg.board.size);
+    expect(Math.min(...sizes)).toBe(0);
+    expect(sys.board).toEqual([]);
+    // Delivering frees nothing until the reuse window ends; at +180 s the POIs come back
+    sys.active = [];
+    sys.refreshBoard(10 + cfg.selection.reuseSeconds);
+    expect(sys.board.length).toBeGreaterThan(0);
+    expect(() => sys.update(1000, OUT)).not.toThrow();
   });
 });

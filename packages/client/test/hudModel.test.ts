@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   OrderSystem,
-  buildPoiTable,
+  buildPoiInfo,
   expandGreybox,
   movementConfig,
   mulberry32,
   orderSteps,
   ordersConfig,
-  streetDistance,
+  streetDistanceTable,
   vec3,
   type GreyboxSource,
   type MapData,
@@ -25,9 +25,8 @@ const [poiA, poiB] = map.pois as [MapData['pois'][number], MapData['pois'][numbe
 function system(capacity = 3): OrderSystem {
   return new OrderSystem(
     {
-      pois: buildPoiTable(map, streetDistance, ordersConfig.bands.greybox),
-      distance: streetDistance,
-      hub: map.hub.center,
+      pois: buildPoiInfo(map, streetDistanceTable(map), ordersConfig.bands.greybox),
+      distances: streetDistanceTable(map),
       cfg: ordersConfig,
       baseSprintSpeed: movementConfig.run.sprintSpeed,
       rng: mulberry32(1),

@@ -1,11 +1,13 @@
 import type { OrdersConfig } from '../config/types';
-import type { Vec3 } from '../math/vec3';
 import { NO_MODS, type SimEvent, type StatModifiers } from '../movement/types';
 import type { Rng } from '../util/rng';
-import type { PathDistance, PoiInfo } from '../world/distance';
+import type { PoiInfo } from '../world/distance';
+import type { District } from '../world/mapTypes';
 import type { PlayerZones } from '../world/zones';
 import { generateBoard } from './board';
+import type { DistanceTable } from './distanceTable';
 import { scoreOrder } from './rules';
+import type { SelectionContext } from './selection';
 import type { Bonus, Order, Step, Unlocks } from './types';
 
 export interface ActiveOrder { order: Order; acceptedAt: number; stepIndex: number; fragileIntact: boolean }
@@ -19,9 +21,9 @@ export type OrderEvent =
 export interface Totals { points: number; coins: number; deliveries: number }
 
 export interface OrderSystemOptions {
+  /** The board candidates (on the city, only the reachable POIs). Active orders' POIs are looked up here by id. */
   pois: PoiInfo[];
-  distance: PathDistance;
-  hub: Vec3;
+  distances: DistanceTable;
   cfg: OrdersConfig;
   baseSprintSpeed: number;
   rng: Rng;
@@ -37,15 +39,21 @@ export class OrderSystem {
   nextRefreshAt: number;
   cancelCooldownUntil = 0;
   backpackCapacity: number;
+  /** POI id → sim time an order with it was last accepted (the reuse rule, spec §5.3). */
+  readonly recentUse = new Map<string, number>();
+  /** Districts of accepted POIs, most recent first, at most `selection.districtWindow` (district balance). */
+  recentDistricts: readonly District[] = [];
 
   private readonly opts: OrderSystemOptions;
+  private readonly poiById: ReadonlyMap<string, PoiInfo>;
   private idCounter = 0;
 
   constructor(opts: OrderSystemOptions, now: number) {
     this.opts = opts;
+    this.poiById = new Map(opts.pois.map((p) => [p.poi.id, p]));
     this.backpackCapacity = opts.backpackCapacity;
     this.totals = opts.totals ? { ...opts.totals } : { points: 0, coins: 0, deliveries: 0 };
-    this.board = this.generate();
+    this.board = this.generate(now);
     this.nextRefreshAt = now + opts.cfg.board.refreshSeconds;
   }
 
@@ -58,7 +66,7 @@ export class OrderSystem {
    * refresh timer. Returns the boardRefreshed event for the caller to announce, like update() does.
    */
   refreshBoard(now: number): OrderEvent[] {
-    this.board = this.generate();
+    this.board = this.generate(now);
     this.nextRefreshAt = now + this.opts.cfg.board.refreshSeconds;
     return [{ kind: 'boardRefreshed' }];
   }
@@ -88,6 +96,7 @@ export class OrderSystem {
     const order = this.board[idx] as Order;
     this.board = this.board.map((o, i) => (i === idx ? null : o));
     this.active = [...this.active, { order, acceptedAt: now, stepIndex: 0, fragileIntact: true }];
+    this.recordUse(order, now);
     return 'ok';
   }
 
@@ -102,7 +111,7 @@ export class OrderSystem {
   update(now: number, zones: PlayerZones): OrderEvent[] {
     const events: OrderEvent[] = [];
     if (now >= this.nextRefreshAt) {
-      this.board = this.generate();
+      this.board = this.generate(now);
       const period = this.opts.cfg.board.refreshSeconds;
       while (this.nextRefreshAt <= now) this.nextRefreshAt += period;
       events.push({ kind: 'boardRefreshed' });
@@ -170,11 +179,35 @@ export class OrderSystem {
     return heavy ? { ...NO_MODS, jumpHeightMul: this.opts.cfg.heavy.jumpHeightMultiplier } : NO_MODS;
   }
 
-  private generate(): Order[] {
+  /** Accepting "uses" each POI of the order (plan assumption 10): it starts the reuse window and enters the history. */
+  private recordUse(order: Order, now: number): void {
+    const window = this.opts.cfg.selection.districtWindow;
+    let districts = this.recentDistricts;
+    for (const id of poiIdsOf(order)) {
+      this.recentUse.set(id, now);
+      const info = this.poiById.get(id);
+      if (info) districts = [info.poi.district, ...districts];
+    }
+    this.recentDistricts = districts.slice(0, window);
+  }
+
+  private selection(now: number): SelectionContext {
+    // Forget uses past the reuse window, so the map stays small over a long session.
+    for (const [id, at] of this.recentUse) if (now - at >= this.opts.cfg.selection.reuseSeconds) this.recentUse.delete(id);
+    const activePois = this.active.flatMap((a) =>
+      poiIdsOf(a.order).flatMap((id) => {
+        const info = this.poiById.get(id);
+        return info ? [info.poi.position] : [];
+      }),
+    );
+    return { now, recentUse: this.recentUse, activePois, recentDistricts: this.recentDistricts };
+  }
+
+  private generate(now: number): Order[] {
     return generateBoard({
       pois: this.opts.pois,
-      distance: this.opts.distance,
-      hub: this.opts.hub,
+      distances: this.opts.distances,
+      selection: this.selection(now),
       rng: this.opts.rng,
       cfg: this.opts.cfg,
       baseSprintSpeed: this.opts.baseSprintSpeed,
@@ -183,4 +216,9 @@ export class OrderSystem {
       nextId: () => `o${this.idCounter++}`,
     });
   }
+}
+
+/** Every POI an order visits (each step of a Chain), in step order. */
+function poiIdsOf(order: Order): string[] {
+  return order.steps.flatMap((s) => (s.kind === 'poi' ? [s.poiId] : []));
 }

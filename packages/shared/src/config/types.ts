@@ -106,6 +106,12 @@ export interface OrdersConfig {
     typeWeights: { dropoff: number; pickup: number; chain: number };
     modifierWeights: { none: number; express: number; fragile: number; heavy: number };
   };
+  /**
+   * POI selection rules (spec §5.3, plan assumption 10): board POIs are at least `spreadMeters` apart (horizontally)
+   * and from every POI of an active order; a POI is not offered again for `reuseSeconds` after an order with it is
+   * accepted; each POI is weighted 1 / (1 + n), n = how often its district is among the last `districtWindow` accepted.
+   */
+  selection: { spreadMeters: number; reuseSeconds: number; districtWindow: number };
   zones: { poiRadius: number; poiHeight: number };
   /** What the build-time POI table must show (spec §5.3): reachable POIs, elevated share of them, POIs per band. */
   poiChecks: { minReachable: number; minElevatedShare: number; minPerBand: number };

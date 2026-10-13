@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { cityAssetUrl, parseMapKind } from '../src/game/mapLoader';
 
 describe('parseMapKind', () => {
-  it('defaults to the greybox, accepts city and greybox, rejects anything else', () => {
-    expect(parseMapKind(null)).toBe('greybox');
+  it('defaults to the city (Task 15), accepts city and greybox, rejects anything else', () => {
+    expect(parseMapKind(null)).toBe('city');
     expect(parseMapKind('city')).toBe('city');
     expect(parseMapKind('greybox')).toBe('greybox');
     expect(() => parseMapKind('moon')).toThrow(/moon/);

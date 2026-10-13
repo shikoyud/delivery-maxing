@@ -1,21 +1,26 @@
 import * as THREE from 'three';
 import {
   OrderSystem,
-  buildPoiTable,
+  buildPoiInfo,
   emptyInput,
   movementConfig,
   mulberry32,
+  navDistanceTable,
   ordersConfig,
   playerZones,
-  streetDistance,
+  reachablePois,
+  streetDistanceTable,
   type AcceptResult,
   type ActiveOrder,
   type CancelResult,
+  type DistanceTable,
   type InputFrame,
   type MapData,
   type MoveMode,
   type OrderEvent,
   type PlayerZones,
+  type PoiInfo,
+  type PoiTableFile,
   type SimEvent,
   type StatModifiers,
   type Vec3,
@@ -36,6 +41,8 @@ export interface DeliveryDeps {
   host: HTMLElement;
   scene: THREE.Scene;
   map: MapData;
+  /** The city's navmesh POI table; null on the greybox (street distances). */
+  poiTable: PoiTableFile | null;
   cfg: ClientConfig;
   actions: ActionState;
   progress: ProgressStore;
@@ -47,6 +54,20 @@ export interface DeliveryDeps {
   /** Sim time (s) and the player's sim state, read when the UI acts between ticks. */
   now(): number;
   player(): { position: Vec3; mode: MoveMode };
+}
+
+/**
+ * The board candidates and route distances for a map: on the city, the navmesh table, the city bands and only the
+ * POIs that passed the build-time reachability check (spec §5.3); on the greybox (no table), SP1's street distances
+ * and the greybox bands.
+ */
+export function orderDistances(map: MapData, poiTable: PoiTableFile | null): { pois: PoiInfo[]; distances: DistanceTable } {
+  if (poiTable) {
+    const distances = navDistanceTable(poiTable);
+    return { pois: buildPoiInfo({ pois: reachablePois(map, poiTable) }, distances, ordersConfig.bands.city), distances };
+  }
+  const distances = streetDistanceTable(map);
+  return { pois: buildPoiInfo(map, distances, ordersConfig.bands.greybox), distances };
 }
 
 const BONUS_LINE = { express: 'Express on time', fragile: 'Fragile intact', heavy: 'Heavy package', par: 'Within par' } as const;
@@ -75,9 +96,7 @@ export class DeliveryLoop {
   constructor(private readonly d: DeliveryDeps) {
     this.orders = new OrderSystem(
       {
-        pois: buildPoiTable(d.map, streetDistance, ordersConfig.bands.greybox),
-        distance: streetDistance,
-        hub: d.map.hub.center,
+        ...orderDistances(d.map, d.poiTable),
         cfg: ordersConfig,
         baseSprintSpeed: d.baseSprintSpeed ?? movementConfig.run.sprintSpeed,
         rng: mulberry32(d.seed),

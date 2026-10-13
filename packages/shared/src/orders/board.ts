@@ -1,14 +1,17 @@
 import type { OrdersConfig } from '../config/types';
-import type { Vec3 } from '../math/vec3';
 import { pickWeighted, type Rng } from '../util/rng';
-import type { PathDistance, PoiInfo } from '../world/distance';
+import type { PoiInfo } from '../world/distance';
+import type { DistanceTable } from './distanceTable';
 import { expressLimit, orderSteps, parLimit, slotsFor } from './rules';
+import { districtWeight, eligiblePois, horizontalDistance, type SelectionContext } from './selection';
 import type { Modifier, Order, OrderType, Unlocks } from './types';
 
 export interface BoardContext {
   pois: PoiInfo[];
-  distance: PathDistance;
-  hub: Vec3;
+  /** Path metres for the routes: navmesh-measured on the city, street distance on the greybox. */
+  distances: DistanceTable;
+  /** The player's recent use, recent districts and active orders' POIs, for the spec §5.3 rules. */
+  selection: SelectionContext;
   rng: Rng;
   cfg: OrdersConfig;
   baseSprintSpeed: number;
@@ -17,40 +20,43 @@ export interface BoardContext {
   nextId: () => string;
 }
 
+/**
+ * Up to `cfg.board.size` orders. The POIs come from those the selection rules allow (reuse, spread from active
+ * orders); each pick is weighted by district balance and removes every POI within the spread of it from the pool,
+ * so no two board POIs are closer than `spreadMeters`. When the rules leave too few POIs the board is shorter (never
+ * an error, never a retry loop): a Chain whose second POI is missing becomes a single-POI order.
+ */
 export function generateBoard(ctx: BoardContext): Order[] {
-  const { cfg, rng } = ctx;
-  const remaining = [...ctx.pois];
-  const take = (): PoiInfo => remaining.splice(Math.floor(rng() * remaining.length), 1)[0] as PoiInfo;
+  const { cfg, rng, distances: dist } = ctx;
+  let pool = eligiblePois(ctx.pois, ctx.selection, cfg.selection);
+  const take = (): PoiInfo | null => {
+    if (pool.length === 0) return null;
+    const weights: Record<string, number> = {};
+    for (const p of pool) weights[p.poi.id] = districtWeight(p.poi.district, ctx.selection, cfg.selection);
+    const id = pickWeighted(rng, weights);
+    const picked = pool.find((p) => p.poi.id === id) as PoiInfo;
+    pool = pool.filter((p) => horizontalDistance(p.poi.position, picked.poi.position) >= cfg.selection.spreadMeters);
+    return picked;
+  };
+  const tw = cfg.mix.typeWeights;
+  const singleType = (): 'dropoff' | 'pickup' => pickWeighted(rng, { dropoff: tw.dropoff, pickup: tw.pickup });
   const orders: Order[] = [];
 
-  while (orders.length < cfg.board.size && remaining.length > 0) {
-    const tw = cfg.mix.typeWeights;
-    const type: OrderType = pickWeighted(rng, {
+  while (orders.length < cfg.board.size && pool.length > 0) {
+    let type: OrderType = pickWeighted(rng, {
       dropoff: tw.dropoff,
       pickup: tw.pickup,
-      chain: ctx.unlocks.chain && remaining.length >= 2 ? tw.chain : 0,
+      chain: ctx.unlocks.chain && pool.length >= 2 ? tw.chain : 0,
     });
+    const first = take() as PoiInfo;
 
     if (type === 'chain') {
-      const a = take();
-      const b = take();
-      const routeDistance =
-        ctx.distance(ctx.hub, a.poi.position) +
-        ctx.distance(a.poi.position, b.poi.position) +
-        ctx.distance(b.poi.position, ctx.hub);
-      orders.push({
-        id: ctx.nextId(),
-        type,
-        modifier: null,
-        steps: orderSteps(type, [a.poi.id, b.poi.id]),
-        band: null,
-        hubDistance: a.hubDistance,
-        routeDistance,
-        slots: slotsFor(null, cfg),
-        expressLimit: null,
-        parLimit: parLimit(routeDistance, ctx.baseSprintSpeed, cfg),
-      });
-      continue;
+      const second = take();
+      if (second) {
+        orders.push(chainOrder(ctx, first, second));
+        continue;
+      }
+      type = singleType(); // the spread cut every candidate for B: offer A on its own
     }
 
     const mw = cfg.mix.modifierWeights;
@@ -61,15 +67,15 @@ export function generateBoard(ctx: BoardContext): Order[] {
       heavy: ctx.backpackCapacity >= cfg.heavy.slots ? mw.heavy : 0,
     });
     const modifier: Modifier | null = picked === 'none' ? null : picked;
-    const info = take();
-    const routeDistance = type === 'pickup' ? 2 * info.hubDistance : info.hubDistance;
+    const id = first.poi.id;
+    const routeDistance = type === 'pickup' ? dist.fromHub(id) + dist.toHub(id) : dist.fromHub(id);
     orders.push({
       id: ctx.nextId(),
       type,
       modifier,
-      steps: orderSteps(type, [info.poi.id]),
-      band: info.band,
-      hubDistance: info.hubDistance,
+      steps: orderSteps(type, [id]),
+      band: first.band,
+      hubDistance: first.hubDistance,
       routeDistance,
       slots: slotsFor(modifier, cfg),
       expressLimit: modifier === 'express' ? expressLimit(routeDistance, ctx.baseSprintSpeed, cfg) : null,
@@ -77,4 +83,22 @@ export function generateBoard(ctx: BoardContext): Order[] {
     });
   }
   return orders;
+}
+
+/** HUB → A → B → HUB: fromHub(A) + between(A, B) + toHub(B). No band and no modifier. */
+function chainOrder(ctx: BoardContext, a: PoiInfo, b: PoiInfo): Order {
+  const dist = ctx.distances;
+  const routeDistance = dist.fromHub(a.poi.id) + dist.between(a.poi.id, b.poi.id) + dist.toHub(b.poi.id);
+  return {
+    id: ctx.nextId(),
+    type: 'chain',
+    modifier: null,
+    steps: orderSteps('chain', [a.poi.id, b.poi.id]),
+    band: null,
+    hubDistance: a.hubDistance,
+    routeDistance,
+    slots: slotsFor(null, ctx.cfg),
+    expressLimit: null,
+    parLimit: parLimit(routeDistance, ctx.baseSprintSpeed, ctx.cfg),
+  };
 }

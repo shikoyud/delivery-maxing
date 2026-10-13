@@ -2,13 +2,16 @@ import {
   expandGreybox,
   parseCityMap,
   parsePieceCatalog,
+  parsePoiTable,
   type CityMap,
   type GreyboxSource,
   type MapData,
   type PieceCatalog,
+  type PoiTableFile,
 } from '@dm/shared';
 // `?url`: the JSON files ship as separate assets and are fetched at start, so they never enter the JS bundle.
 import cityUrl from '../../../../map/city.json?url';
+import cityPoiUrl from '../../../../map/city.poi.json?url';
 import greyboxUrl from '../../../../map/greybox.json?url';
 import piecesUrl from '../../../../map/pieces.json?url';
 import paletteAtlasUrl from '../../../../assets/city/palette-atlas.png?url';
@@ -22,6 +25,8 @@ export interface LoadedMap {
   /** The city placement file and its piece catalog (null for the greybox). */
   city: CityMap | null;
   pieces: PieceCatalog | null;
+  /** The city's navmesh POI table, map/city.poi.json (null for the greybox, which uses street distances). */
+  poiTable: PoiTableFile | null;
 }
 
 /** Every runtime city model, by its path relative to the repo's assets/ dir (the piece catalog's lod0/lod1). */
@@ -38,10 +43,10 @@ export function cityAssetUrl(path: string): string {
   return url;
 }
 
-/** The `?map=` query value: the SP1 greybox by default (until Task 15), or the city. */
+/** The `?map=` query value: the city by default, or the SP1 greybox (`?map=greybox`). */
 export function parseMapKind(value: string | null): MapKind {
-  if (value === null || value === 'greybox') return 'greybox';
-  if (value === 'city') return 'city';
+  if (value === null || value === 'city') return 'city';
+  if (value === 'greybox') return 'greybox';
   throw new Error(`unknown map "${value}" (expected city or greybox)`);
 }
 
@@ -51,14 +56,17 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
-/** Fetches and validates a map: the city (map/city.json against map/pieces.json) or the expanded SP1 greybox. */
+/**
+ * Fetches and validates a map: the city (map/city.json against map/pieces.json, with its POI table) or the expanded
+ * SP1 greybox.
+ */
 export async function loadMap(kind: MapKind): Promise<LoadedMap> {
   if (kind === 'greybox') {
     const map = expandGreybox((await fetchJson(greyboxUrl)) as GreyboxSource);
-    return { map, city: null, pieces: null };
+    return { map, city: null, pieces: null, poiTable: null };
   }
-  const [cityJson, piecesJson] = await Promise.all([fetchJson(cityUrl), fetchJson(piecesUrl)]);
+  const [cityJson, piecesJson, poiJson] = await Promise.all([fetchJson(cityUrl), fetchJson(piecesUrl), fetchJson(cityPoiUrl)]);
   const pieces = parsePieceCatalog(piecesJson);
   const city = parseCityMap(cityJson, pieces);
-  return { map: city, city, pieces };
+  return { map: city, city, pieces, poiTable: parsePoiTable(poiJson) };
 }

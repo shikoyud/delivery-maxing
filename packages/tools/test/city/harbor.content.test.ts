@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  bandFor,
+  buildPoiInfo,
   distance,
   movementConfig as cfg,
   mulberry32,
@@ -11,7 +11,7 @@ import {
   ordersConfig,
   parsePieceCatalog,
   solidRect,
-  streetDistance,
+  streetDistanceTable,
   type Order,
   type Rect,
   type RotY,
@@ -232,15 +232,14 @@ describe('harbor: container yards', () => {
 
 /** An OrderSystem with one POI whose first board order is a Fragile drop-off (searching board seeds). */
 function fragileDropoff(): { orders: OrderSystem; order: Order } {
-  const position = { x: 500, y: 0, z: 500 };
-  const d = streetDistance(city.hub.center, position);
-  const pois = [{ poi: { id: 'harbor-test-poi', position, district: 'harbor' as const, kind: 'door' as const }, hubDistance: d, band: bandFor(d, ordersConfig.bands.greybox) }];
+  const poi = { id: 'harbor-test-poi', position: { x: 500, y: 0, z: 500 }, district: 'harbor' as const, kind: 'door' as const };
+  const distances = streetDistanceTable({ ...city, pois: [poi] });
+  const pois = buildPoiInfo({ pois: [poi] }, distances, ordersConfig.bands.city);
   for (let seed = 1; seed < 1000; seed++) {
     const orders = new OrderSystem(
       {
         pois,
-        distance: streetDistance,
-        hub: city.hub.center,
+        distances,
         cfg: ordersConfig,
         baseSprintSpeed: cfg.run.sprintSpeed,
         rng: mulberry32(seed),

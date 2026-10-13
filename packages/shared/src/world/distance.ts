@@ -1,5 +1,6 @@
 import type { BandLimits } from '../config/types';
 import type { Vec3 } from '../math/vec3';
+import type { DistanceTable } from '../orders/distanceTable';
 import type { MapData, Poi } from './mapTypes';
 
 export type PathDistance = (from: Vec3, to: Vec3) => number;
@@ -16,11 +17,16 @@ export function bandFor(d: number, bands: BandLimits): Band {
   return 'long';
 }
 
-export interface PoiInfo { poi: Poi; hubDistance: number; band: Band }
+/** A board candidate: the POI, its one-way path distance from the HUB, the band that distance falls in. */
+export interface PoiInfo { poi: Poi; hubDistance: number; band: Band; elevated: boolean }
 
-export function buildPoiTable(map: MapData, dist: PathDistance, bands: BandLimits): PoiInfo[] {
+/**
+ * Board candidates for every POI in `map.pois` (pass a map holding only the reachable ones on the city). The band uses
+ * the one-way `fromHub` distance (spec §3.4, §5.3).
+ */
+export function buildPoiInfo(map: Pick<MapData, 'pois'>, table: DistanceTable, bands: BandLimits): PoiInfo[] {
   return map.pois.map((poi) => {
-    const hubDistance = dist(map.hub.center, poi.position);
-    return { poi, hubDistance, band: bandFor(hubDistance, bands) };
+    const hubDistance = table.fromHub(poi.id);
+    return { poi, hubDistance, band: bandFor(hubDistance, bands), elevated: poi.elevated ?? false };
   });
 }

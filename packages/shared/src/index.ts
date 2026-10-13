@@ -23,4 +23,6 @@ export { MANTLE_WALL_PROBE_HEIGHT } from './movement/mantle';
 export * from './orders/types';
 export * from './orders/rules';
 export * from './orders/board';
+export * from './orders/distanceTable';
+export * from './orders/selection';
 export * from './orders/OrderSystem';

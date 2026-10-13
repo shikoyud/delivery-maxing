@@ -13,6 +13,7 @@ import {
   worldConfig,
   type MapData,
   type PagedPhysicsWorld,
+  type PoiTableFile,
   type SimEvent,
   type Vec3,
   type WorldFeatureState,
@@ -57,7 +58,7 @@ export interface GameOptions {
   overlay?: boolean;
   /** Order Board RNG seed (?seed=N); defaults to Date.now(). */
   seed?: number;
-  /** Which map to play (?map=): the SP1 greybox by default until Task 15. */
+  /** Which map to play (?map=): the city by default, or the SP1 greybox. */
   map?: MapKind;
 }
 
@@ -114,6 +115,8 @@ export class Game {
     readonly pager: PagedPhysicsWorld | null,
     /** The streamed city renderer (null on the greybox). */
     readonly city: CityView | null,
+    /** The city's navmesh POI table (null on the greybox): the board's route distances. */
+    poiTable: PoiTableFile | null,
   ) {
     this.prevPosition = { ...sim.state.position };
     const chase = this.cfg.camera.chase;
@@ -143,6 +146,7 @@ export class Game {
       host,
       scene: this.renderer.scene,
       map,
+      poiTable,
       cfg: this.cfg,
       actions: this.actions,
       progress: this.progress,
@@ -192,10 +196,10 @@ export class Game {
     // The model loads alongside physics; a missing or broken file falls back to the capsule with one warning.
     // The city's models load alongside them; a city that fails to load fails the start (main.ts shows the error).
     const gfx = clientConfig.graphics;
-    const [rapier, model, { map, city, view }] = await Promise.all([
+    const [rapier, model, { map, city, view, poiTable }] = await Promise.all([
       initRapier(),
       CourierModel.load(robotUrl, clientConfig.courier),
-      loadMap(opts.map ?? 'greybox').then(async (m) => ({
+      loadMap(opts.map ?? 'city').then(async (m) => ({
         ...m,
         view: m.city && m.pieces ? await CityView.load(m.city, m.pieces, clientConfig.city, gfx.shadows ? { toSun, extent: gfx.shadowExtent } : undefined) : null,
       })),
@@ -209,7 +213,7 @@ export class Game {
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
     const sim = new PlayerSim(physics, map, settings.movement, map.hub.spawn, map.hub.spawnYaw);
-    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model, pager, view);
+    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model, pager, view, poiTable);
     if (opts.debug) installDebugHooks(game);
     return game;
   }

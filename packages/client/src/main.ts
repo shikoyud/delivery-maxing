@@ -10,7 +10,7 @@ const params = new URLSearchParams(window.location.search);
 const debug = params.has('debug');
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const seed = Number.isFinite(seedParam) ? seedParam : undefined;
-// ?perf=1 runs the flythrough (on the city unless ?map= says otherwise); ?perfSeconds=N shortens it (the e2e uses 5).
+// ?perf=1 runs the flythrough (on the city, the default map); ?perfSeconds=N shortens it (the e2e uses 5).
 const perf = params.get('perf') === '1';
 const perfSeconds = Number.parseFloat(params.get('perfSeconds') ?? '');
 
@@ -18,7 +18,7 @@ if (!host) throw new Error('#app is missing');
 
 // Inside the promise chain, so a bad ?map= value is reported like any other start failure.
 Promise.resolve()
-  .then(() => Game.create(host, { debug, seed, map: parseMapKind(params.get('map') ?? (perf ? 'city' : null)) }))
+  .then(() => Game.create(host, { debug, seed, map: parseMapKind(params.get('map')) }))
   .then((game) => {
     game.start();
     if (perf) {

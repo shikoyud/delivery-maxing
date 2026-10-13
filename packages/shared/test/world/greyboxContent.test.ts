@@ -7,7 +7,8 @@ import { PlayerSim } from '../../src/movement/PlayerSim';
 import { tryAttachZip } from '../../src/movement/zipLine';
 import { createWorldFeatureState } from '../../src/movement/triggers';
 import { NO_MODS } from '../../src/movement/types';
-import { buildPoiTable, streetDistance } from '../../src/world/distance';
+import { buildPoiInfo } from '../../src/world/distance';
+import { streetDistanceTable } from '../../src/orders/distanceTable';
 import { expandGreybox } from '../../src/world/greybox';
 import type { District, GreyboxSource, MapData, Rect, Solid } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier, type PhysicsWorld, type Rapier } from '../../src/world/physicsWorld';
@@ -100,7 +101,7 @@ describe('greybox city: POIs', () => {
   });
 
   it('has ≥ 5 POIs in each band by street distance from the HUB', () => {
-    const table = buildPoiTable(map, streetDistance, ordersConfig.bands.greybox);
+    const table = buildPoiInfo(map, streetDistanceTable(map), ordersConfig.bands.greybox);
     for (const band of ['short', 'medium', 'long'] as const) {
       expect(table.filter((t) => t.band === band).length, band).toBeGreaterThanOrEqual(5);
     }

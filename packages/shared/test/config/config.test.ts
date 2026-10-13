@@ -25,6 +25,10 @@ describe('config pins spec values', () => {
     expect(ordersConfig.fragile.maxFallMeters).toBe(7);
     // Spec §5.3: ≥ 40% elevated; plan Task 14: ≥ 20 POIs per band and ≥ 140 reachable
     expect(ordersConfig.poiChecks).toEqual({ minReachable: 140, minElevatedShare: 0.4, minPerBand: 20 });
+    // Spec §5.3 selection rules (plan assumption 10): 40 m spread, 3 min reuse, the last 6 accepted POIs' districts
+    expect(ordersConfig.selection).toEqual({ spreadMeters: 40, reuseSeconds: 180, districtWindow: 6 });
+    // Spec §5.3: Chain weighted higher than SP1's 2
+    expect(ordersConfig.mix.typeWeights).toEqual({ dropoff: 5, pickup: 4, chain: 4 });
     expect(ordersConfig.heavy).toEqual({ slots: 2, jumpHeightMultiplier: 0.9 });
     expect(ordersConfig.backpack.baseSlots).toBe(1);
   });
