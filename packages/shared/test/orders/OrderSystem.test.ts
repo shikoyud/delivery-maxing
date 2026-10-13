@@ -89,7 +89,8 @@ describe('OrderSystem', () => {
     const sys = makeSystem();
     sys.update(8, offerPlayer, nowhere);
     expect(sys.canAccept('o1', 28)).toBe('expired');
-    expect(() => sys.accept('o1', 28)).not.toThrow();
+    expect(sys.accept('o1', 28)).toBe('expired');
+    expect(sys.offers.find((o) => o.order.id === 'o1')).toBeUndefined();
     expect(sys.offers).toHaveLength(0);
     expect(sys.active).toHaveLength(0);
     expect(sys.accept('o1', 28)).toBe('gone');
@@ -109,6 +110,26 @@ describe('OrderSystem', () => {
     expect(sys.accept(heavy.order.id, 17)).toBe('too_heavy');
     expect(sys.active).toHaveLength(1);
     expect(sys.offers.map((o) => o.order.id)).toContain(heavy.order.id);
+  });
+
+  test('offers too heavy for the remaining kg are not generated (reserved kg reach the generator)', () => {
+    // motorbike 50 kg: o1 = 30 kg (ps-30), o2 = 25 kg (ps-25). Accept the 25 kg, let the 30 kg expire.
+    const sys = makeSystem({ pois: packagePois([25, 30]), cfg: cfgWith('package') });
+    run(sys, 8, 16, 8);
+    const light = sys.offers.find((o) => o.order.weightKg === 25)!;
+    expect(sys.offers.find((o) => o.order.weightKg === 30)).toBeDefined();
+    expect(sys.accept(light.order.id, 17)).toBe('ok');
+    run(sys, 18, 30);
+    expect(sys.offers).toHaveLength(0);
+    // ps-25 and dp-1 are in use, so only ps-30 -> dp-0 is left; 30 kg > 25 kg remaining: never offered
+    const seen: (number | null)[] = [];
+    for (let t = 31; t <= 200; t++) {
+      for (const e of sys.update(t, offerPlayer, nowhere)) {
+        if (e.kind === 'offered') seen.push(sys.offers.find((o) => o.order.id === e.offerId)!.order.weightKg);
+      }
+    }
+    expect(seen).not.toContain(30);
+    expect(seen).toEqual([]);
   });
 
   test('accept returns no_slots when slots are full', () => {
