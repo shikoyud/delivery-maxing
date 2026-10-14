@@ -29,10 +29,10 @@
     {"id": "harbor-gas", "name": "Bayline Fuel", "position": {"x": 225, "y": 0, "z": 125}, "pumps": [{"x": 221, "y": 0, "z": 125}, {"x": 229, "y": 0, "z": 125}]}
   ],
   "hospitals": [
-    {"id": "downtown-hospital", "name": "Downtown General", "center": {"x": 100, "y": 0, "z": -100}, "safeRadius": 18, "spawn": {"x": 100, "y": 0, "z": -92}, "spawnYaw": 3.141592653589793, "bay": {"x": 100, "y": 0, "z": -84}, "bayYaw": -1.5707963267948966},
-    {"id": "harbor-hospital", "name": "Harbor Clinic", "center": {"x": 150, "y": 0, "z": 150}, "safeRadius": 18, "spawn": {"x": 150, "y": 0, "z": 158}, "spawnYaw": 3.141592653589793, "bay": {"x": 150, "y": 0, "z": 166}, "bayYaw": -1.5707963267948966},
-    {"id": "hillside-hospital", "name": "Hillside Medical", "center": {"x": -150, "y": 0, "z": -150}, "safeRadius": 18, "spawn": {"x": -150, "y": 0, "z": -142}, "spawnYaw": 3.141592653589793, "bay": {"x": -150, "y": 0, "z": -134}, "bayYaw": -1.5707963267948966},
-    {"id": "suburbs-hospital", "name": "Suburbs Hospital", "center": {"x": -120, "y": 0, "z": 75}, "safeRadius": 18, "spawn": {"x": -120, "y": 0, "z": 83}, "spawnYaw": 3.141592653589793, "bay": {"x": -120, "y": 0, "z": 91}, "bayYaw": 0}
+    {"id": "downtown-hospital", "name": "Downtown General", "center": {"x": 100, "y": 0, "z": -100}, "safeRadius": 18, "spawn": {"x": 100, "y": 0, "z": -92}, "spawnYaw": 3.141592653589793, "bay": {"x": 103.6, "y": 0, "z": -76}, "bayYaw": 1.5707963267948966},
+    {"id": "harbor-hospital", "name": "Harbor Clinic", "center": {"x": 150, "y": 0, "z": 150}, "safeRadius": 18, "spawn": {"x": 150, "y": 0, "z": 158}, "spawnYaw": 3.141592653589793, "bay": {"x": 153.6, "y": 0, "z": 174}, "bayYaw": 1.5707963267948966},
+    {"id": "hillside-hospital", "name": "Hillside Medical", "center": {"x": -150, "y": 0, "z": -150}, "safeRadius": 18, "spawn": {"x": -150, "y": 0, "z": -142}, "spawnYaw": 3.141592653589793, "bay": {"x": -146.4, "y": 0, "z": -126}, "bayYaw": 1.5707963267948966},
+    {"id": "suburbs-hospital", "name": "Suburbs Hospital", "center": {"x": -120, "y": 0, "z": 75}, "safeRadius": 18, "spawn": {"x": -120, "y": 0, "z": 83}, "spawnYaw": 3.141592653589793, "bay": {"x": -116.4, "y": 0, "z": 99}, "bayYaw": 1.5707963267948966}
   ],
   "orderRules": {"bands": {"shortMax": 150, "mediumMax": 350}, "foodDropoff": {"min": 180, "max": 520}, "packageDropoff": {"min": 150, "max": 650}, "maxPickupDistance": 400},
   "pois": [

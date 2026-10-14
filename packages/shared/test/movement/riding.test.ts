@@ -199,4 +199,40 @@ describe('parked vehicles', () => {
     h.run(3);
     expect(h.sim.mountCandidate()).toBe('skateboard');
   });
+
+  test('F is ignored while the vehicle is airborne, for the car and the skateboard', async () => {
+    for (const tier of ['car', 'skateboard'] as const) {
+      const h = await makeSim({ spawn: vec3(2, 0, -10), garage: [skateboard, parked('car', vec3(0, 0, -10))] });
+      if (tier === 'skateboard') h.sim.teleport(vec3(20, 0, -10));
+      h.runUntil((s) => s.grounded, 30);
+      mount(h, tier);
+      h.sim.teleport(vec3(h.sim.state.position.x, 4, h.sim.state.position.z));
+      expect(h.sim.state.grounded).toBe(false);
+      const ev = h.tick({}, ['mount']);
+      expect(ev.filter((e) => e.kind === 'dismounted' || e.kind === 'mountRefused'), tier).toEqual([]);
+      expect(h.sim.state.riding, tier).toBe(tier);
+      h.runUntil((s) => s.grounded, 60);
+      h.run(10);
+      expect(h.tick({}, ['mount']), tier).toContainEqual({ kind: 'dismounted', tier });
+      if (tier === 'car') expect((h.sim.garage.spot('car') as { position: Vec3 }).position.y).toBeLessThan(0.2);
+    }
+  });
+
+  test('skateboard under a low overhang: no room to stand, noRoom and still riding; clear of it, F gets off', async () => {
+    const h = await makeSim();
+    mount(h, 'skateboard');
+    h.run(3);
+    const feet = h.sim.state.position;
+    const { rapier, world } = h.sim.physics;
+    // A slab at 1.6–1.7 m over the board: a standing courier would be inside it.
+    const slab = world.createCollider(rapier.ColliderDesc.cuboid(1, 0.05, 1).setTranslation(feet.x, feet.y + 1.65, feet.z));
+    world.step();
+    expect(h.tick({}, ['mount'])).toContainEqual({ kind: 'mountRefused', reason: 'noRoom' });
+    expect(h.sim.state.riding).toBe('skateboard');
+    expect(h.sim.garage.body('skateboard').collider.isEnabled()).toBe(true);
+    world.removeCollider(slab, true);
+    world.step();
+    expect(h.tick({}, ['mount'])).toContainEqual({ kind: 'dismounted', tier: 'skateboard' });
+    expect(h.sim.body.fitsAt(h.sim.state.position, false)).toBe(true);
+  });
 });

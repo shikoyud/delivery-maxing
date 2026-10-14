@@ -126,14 +126,18 @@ export class PlayerSim {
     return events;
   }
 
-  /** F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding. */
+  /**
+   * F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding. F is ignored while the
+   * vehicle is airborne (as mountCandidate is while the courier is), so nothing is ever left parked in the air.
+   */
   private toggleMount(events: SimEvent[]): void {
-    if (this.state.riding) {
-      this.dismount(this.state.riding, events);
+    const tier = this.state.riding;
+    if (tier) {
+      if (this.garage.state(tier).grounded) this.dismount(tier, events);
       return;
     }
-    const tier = this.mountCandidate();
-    if (tier) this.mount(tier, events);
+    const candidate = this.mountCandidate();
+    if (candidate) this.mount(candidate, events);
   }
 
   /**
@@ -171,9 +175,10 @@ export class PlayerSim {
   }
 
   /**
-   * Gets off `tier` at no more than riding.dismountMaxSpeed (else `mountRefused 'tooFast'`). The skateboard is picked
-   * up and the courier stands where it was; any other vehicle stays parked where it stopped and the courier steps
-   * off at the first free spot of dismountSpots (none free: `mountRefused 'noRoom'`, still riding).
+   * Gets off the grounded `tier` at no more than riding.dismountMaxSpeed (else `mountRefused 'tooFast'`). The
+   * skateboard is picked up and the courier stands where it was, when a standing courier fits there; any other
+   * vehicle stays parked where it stopped and the courier steps off at the first free spot of dismountSpots. No room
+   * to stand: `mountRefused 'noRoom'`, still riding.
    */
   private dismount(tier: RideTier, events: SimEvent[]): void {
     const s = this.state;
@@ -184,8 +189,13 @@ export class PlayerSim {
       return;
     }
     let feet: Vec3 | undefined;
-    if (restsCarried(tier)) feet = v.position;
-    else feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false));
+    if (restsCarried(tier)) {
+      // The board's own collider stands where the courier would: test the spot with it out of the way.
+      const board = g.body(tier);
+      board.setEnabled(false);
+      if (this.body.fitsAt(v.position, false)) feet = v.position;
+      else board.setEnabled(true);
+    } else feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false));
     if (!feet) {
       events.push({ kind: 'mountRefused', reason: 'noRoom' });
       return;
@@ -196,7 +206,6 @@ export class PlayerSim {
     this.body.setFeet(feet);
     s.position = this.body.feet;
     s.velocity = vec3(0, 0, 0);
-    if (!v.grounded) enterAir(s, this.cfg);
     events.push({ kind: 'dismounted', tier });
   }
 

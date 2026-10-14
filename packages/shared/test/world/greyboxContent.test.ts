@@ -458,6 +458,26 @@ describe('greybox city: SP4 test town and gas stations', () => {
     }
   });
 
+  it('bay slots 0..3 stand clear of the line a courier walks from the spawn (20 m along spawnYaw)', () => {
+    const clearance = car.radius + cfg.capsule.radius + 0.5;
+    for (const h of map.hospitals) {
+      const f = facing(h.spawnYaw);
+      for (let i = 0; i < 4; i++) {
+        const { position: p, heading } = baySlot(h, i);
+        const a = facing(heading);
+        // Samples along the car capsule's axis: their sideways distance from the walk line, where they lie along it.
+        for (let k = -1; k <= 1; k += 0.25) {
+          const q = vec3(p.x + a.x * car.halfLength * k, 0, p.z + a.z * car.halfLength * k);
+          const dx = q.x - h.spawn.x;
+          const dz = q.z - h.spawn.z;
+          const along = dx * f.x + dz * f.z;
+          if (along < -clearance || along > 20 + clearance) continue;
+          expect(Math.abs(dx * f.z - dz * f.x), `${h.id} slot ${i}`).toBeGreaterThan(clearance);
+        }
+      }
+    }
+  });
+
   it('town POIs exist and town-poi-02 is within 30 m (straight line) of the ramp top', () => {
     const poi = (id: string) => {
       const p = map.pois.find((x) => x.id === id);
