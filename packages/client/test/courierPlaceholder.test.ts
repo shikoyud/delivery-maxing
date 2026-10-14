@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { movementConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 import { createCourierPlaceholder } from '../src/render/courierPlaceholder';
+import { riderLift } from '../src/render/vehicles/vehicleMeshes';
 
 const cap = movementConfig.capsule;
 const courierCfg = clientConfig.courier;
@@ -118,5 +119,18 @@ describe('courier placeholder', () => {
     });
     expect(meshes).toHaveLength(2);
     expect(meshes.every((m) => m.castShadow)).toBe(true);
+  });
+
+  it('riding: hidden inside the car, lifted onto the skateboard deck', () => {
+    const c = make();
+    const riding = (t: string): PlayerState => ({ ...st(0), riding: t }) as unknown as PlayerState;
+    c.update(0, riding('car'), { x: 0, y: 0, z: 0 }, 10);
+    expect(c.root.visible).toBe(false);
+    c.update(0, riding('skateboard'), { x: 0, y: 0, z: 0 }, 5);
+    expect(c.root.visible).toBe(true);
+    expect(box(c.root).min.y).toBeCloseTo(riderLift('skateboard'), 3);
+    expect(riderLift('skateboard')).toBeGreaterThan(0.05);
+    c.update(0, st(0), { x: 0, y: 0, z: 0 }, 0);
+    expect(box(c.root).min.y).toBeCloseTo(0, 3);
   });
 });

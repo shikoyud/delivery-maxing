@@ -1,4 +1,4 @@
-import type { SolidKind } from '@dm/shared';
+import type { AccessKind, SolidKind } from '@dm/shared';
 
 /**
  * Fictional courier palette (teal and coral on warm sand). Never orange on black (spec §16 branding).
@@ -25,7 +25,32 @@ export const palette = {
   safeZone: 0x5fc9a8,
   /** Cardboard parcels on the courier's back. */
   parcel: 0xd8b98a,
+  /** Vehicle placeholders: tyres, metal trim (hubs, bars, forks), seats, glass, lights. */
+  tyre: 0x33393d,
+  trim: 0xb8c2c7,
+  seat: 0x4a4f55,
+  glass: 0xa9dde6,
+  headlight: 0xfff6d8,
+  taillight: 0xd93a3a,
+  /** Vehicle bodies: a coral deck, a teal bicycle, a blue motorbike and a teal-and-cream car. */
+  skateDeck: 0xf27166,
+  bicycleFrame: 0x1f9e93,
+  motorbikeBody: 0x3d7fe0,
+  carBody: 0x1f9e93,
+  carRoof: 0xf3ecdf,
+  /** Gas stations: the FUEL sign (cream letters on teal) and the refuel glow around each pump point. */
+  fuelSign: 0x1f9e93,
+  fuelLetters: 0xf7f6f2,
+  pumpGlow: 0x7ff0c8,
 } as const;
+
+/** Access-zone overlay (F3) colour per zone kind. */
+export const accessZoneColors: Record<AccessKind, number> = {
+  alley: 0x8a6cf0,
+  steepLane: 0xf2c94c,
+  stairs: 0xd93a3a,
+  path: 0x5fc9a8,
+};
 
 /**
  * One colour per active-order slot (the car, the largest carrier, holds 5): waypoint beams and the HUD swatches share them.

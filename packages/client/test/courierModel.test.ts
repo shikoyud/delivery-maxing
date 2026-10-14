@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { vehiclesConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
+import { riderLift } from '../src/render/vehicles/vehicleMeshes';
 import { CourierModel } from '../src/render/courier/CourierModel';
 
 const cfg = clientConfig.courier;
@@ -209,6 +210,22 @@ describe('CourierModel', () => {
     expect(p.min.y).toBeGreaterThan(0.4);
     m.setPackages(0);
     expect(m.packages.visible).toBe(false);
+  });
+
+  it('riding: hidden inside the car; on the skateboard it stands on the deck', async () => {
+    const m = await model();
+    const ride = (t: string): PlayerState => ({ ...st(), riding: t }) as unknown as PlayerState;
+    m.snap();
+    m.update(1 / 60, st(), origin, 0);
+    const onFoot = bodyBox(m).min.y;
+    m.snap();
+    m.update(1 / 60, ride('car'), origin, 10);
+    expect(m.root.visible).toBe(false);
+    m.snap();
+    m.update(1 / 60, ride('skateboard'), origin, 5);
+    expect(m.root.visible).toBe(true);
+    expect(m.debug().pose).toBe('board');
+    expect(bodyBox(m).min.y).toBeGreaterThan(onFoot + riderLift('skateboard') * 0.8);
   });
 
   it('hiding keeps every mesh in the shadow map', async () => {

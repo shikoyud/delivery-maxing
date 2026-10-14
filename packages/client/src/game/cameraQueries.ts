@@ -2,22 +2,33 @@ import { WALL_MAX_NY, type PhysicsWorld, type PlayerSim, type Vec3 } from '@dm/s
 import type { RayCast, WallProbe } from '../render/chaseCamera';
 
 /** A Rapier collider (the client has no direct Rapier dependency). */
-type Collider = PlayerSim['body']['collider'];
+export type Collider = PlayerSim['body']['collider'];
+
+/** Colliders the camera looks through, read on every query: the courier's own, plus the ridden vehicle's. */
+export type CameraExclude = () => readonly Collider[];
+
+const NONE: CameraExclude = () => [];
+
+/** A Rapier query predicate that skips the colliders `exclude` lists right now. */
+function notExcluded(exclude: CameraExclude): (c: Collider) => boolean {
+  return (c) => !exclude().includes(c);
+}
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
 
 /**
  * Chase-camera collision as a sphere cast against the map: how far the centre of a ball of `radius` travels along the
- * unit vector `dir` before the ball touches a solid (null when it travels `maxDist` freely). `exclude` is the
- * courier's own collider; sensors (trigger volumes) never block the camera. A ball already touching a surface and
+ * unit vector `dir` before the ball touches a solid (null when it travels `maxDist` freely). `exclude` lists the
+ * courier's own collider and the ridden vehicle's (a parked vehicle still blocks the camera); sensors (trigger volumes) never block the camera. A ball already touching a surface and
  * moving away from it is not stopped (stopAtPenetration false), so a camera resting against a wall can still move off it.
  */
-export function physicsSphereCast(physics: PhysicsWorld, radius: number, exclude?: Collider): RayCast {
+export function physicsSphereCast(physics: PhysicsWorld, radius: number, exclude: CameraExclude = NONE): RayCast {
   const { rapier, world } = physics;
   const ball = new rapier.Ball(radius);
   const flags = rapier.QueryFilterFlags.EXCLUDE_SENSORS;
+  const keep = notExcluded(exclude);
   return (from, dir, maxDist) => {
-    const hit = world.castShape(from, IDENTITY, dir, ball, 0, maxDist, false, flags, undefined, exclude);
+    const hit = world.castShape(from, IDENTITY, dir, ball, 0, maxDist, false, flags, undefined, undefined, undefined, keep);
     return hit ? hit.time_of_impact : null;
   };
 }
@@ -45,11 +56,12 @@ export function ballInSolid(physics: PhysicsWorld, center: Vec3, radius: number,
  * R12 wall probe: projects `p` onto every solid within `reach` (a ball overlap query) and returns the nearest face that
  * counts as a wall — its horizontal unit normal, pointing from the face toward `p`, and its distance. Walls are
  * classified exactly as the movement sim classifies them (|n.y| < WALL_MAX_NY, a geometry rule, not a camera tuning
- * value). Floors, ceilings, sensors and the courier's own collider (`exclude`) never count. The query ball is built
+ * value). Floors, ceilings, sensors and the colliders `exclude` lists (the courier, the ridden vehicle) never count. The query ball is built
  * once and rebuilt only when the reach changes (a dev-panel edit).
  */
-export function physicsWallProbe(physics: PhysicsWorld, exclude?: Collider): WallProbe {
+export function physicsWallProbe(physics: PhysicsWorld, exclude: CameraExclude = NONE): WallProbe {
   const { rapier, world } = physics;
+  const keep = notExcluded(exclude);
   let ball = new rapier.Ball(1);
   let ballRadius = 1;
   return (p, reach) => {
@@ -77,7 +89,9 @@ export function physicsWallProbe(physics: PhysicsWorld, exclude?: Collider): Wal
       },
       rapier.QueryFilterFlags.EXCLUDE_SENSORS,
       undefined,
-      exclude,
+      undefined,
+      undefined,
+      keep,
     );
     return best;
   };

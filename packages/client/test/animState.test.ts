@@ -80,6 +80,24 @@ describe('animFor: poses', () => {
   });
 });
 
+describe('animFor: riding', () => {
+  it('animFor: bicycle → bike pose, car → hidden, skateboard → board pose', () => {
+    expect(animFor(state({ riding: 'bicycle' }), 10, cfg)).toEqual({ clip: 'Idle', timeScale: 1, pose: 'bike' });
+    expect(animFor(state({ riding: 'motorbike' }), 20, cfg).pose).toBe('bike');
+    expect(animFor(state({ riding: 'skateboard' }), 8, cfg)).toEqual({ clip: 'Idle', timeScale: 1, pose: 'board' });
+    const car = animFor(state({ riding: 'car' }), 20, cfg);
+    expect(car.hidden).toBe(true);
+    // On foot and on the other rides the courier is drawn.
+    expect(animFor(state(), 0, cfg).hidden).toBeFalsy();
+    expect(animFor(state({ riding: 'bicycle' }), 0, cfg).hidden).toBeFalsy();
+  });
+
+  it('riding through the air keeps the ride pose (no Jump clip or fall pose on a vehicle)', () => {
+    expect(animFor(state({ riding: 'bicycle', mode: 'air', vy: -6 }), 10, cfg).pose).toBe('bike');
+    expect(animFor(state({ riding: 'skateboard', mode: 'air', vy: 3 }), 10, cfg)).toMatchObject({ clip: 'Idle', pose: 'board' });
+  });
+});
+
 describe('displayYaw (R14: the courier faces its direction of travel)', () => {
   const HALF_PI = Math.PI / 2;
   /** Travel along +Z (yaw π) at `speed`, with the input (heading) turned 90° to it. */

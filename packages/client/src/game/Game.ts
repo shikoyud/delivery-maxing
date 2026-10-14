@@ -29,7 +29,10 @@ import { CourierModel } from '../render/courier/CourierModel';
 import type { CourierView } from '../render/courier/CourierView';
 import { createCourierPlaceholder } from '../render/courierPlaceholder';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
+import { buildAccessZoneMeshes } from '../render/accessZoneMeshes';
+import { buildGasStationMeshes } from '../render/gasStationMeshes';
 import { buildHospitalMeshes } from '../render/hospitalMeshes';
+import { VehicleViews } from '../render/vehicles/VehicleViews';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
@@ -44,7 +47,7 @@ import {
   type DevSettingsStore,
 } from './devSettings';
 import { browserStorage, createProgressStore } from './progress';
-import { ballInSolid, physicsSphereCast, physicsWallProbe } from './cameraQueries';
+import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
 import { interpolationStart } from './interpolation';
 import { loadNavRouter } from './navLoader';
 import { garageRows } from '../ui/phone/garageApp';
@@ -83,6 +86,10 @@ export class Game {
   private readonly cameraCast: RayCast;
   /** The animated courier, or the capsule when the model failed to load (Review Focus 4). */
   readonly courier: CourierView;
+  /** The owned vehicles' placeholders, interpolated like the courier. */
+  readonly vehicles: VehicleViews;
+  /** Access-zone volumes, shown with the F3 overlay. */
+  private readonly accessZones: THREE.Group;
   private prevPosition: Vec3;
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
@@ -112,17 +119,26 @@ export class Game {
     );
     this.actions.setLook(map.hospitals[0]!.spawnYaw, 0);
     this.renderer = new Renderer(host, this.cfg.graphics, this.cfg.camera, map.size);
-    this.cameraCast = physicsSphereCast(sim.physics, chase.collisionRadius, sim.body.collider);
+    // The camera looks through the courier and the vehicle it rides; a parked vehicle blocks it like any solid.
+    const exclude: CameraExclude = () => {
+      const t = sim.state.riding;
+      return t ? [sim.body.collider, sim.garage.body(t).collider] : [sim.body.collider];
+    };
+    this.cameraCast = physicsSphereCast(sim.physics, chase.collisionRadius, exclude);
     this.chase = new ChaseCamera(
       this.renderer.camera,
       this.cfg.camera,
       this.cameraCast,
-      { probe: physicsWallProbe(sim.physics, sim.body.collider), courierRadius: () => settings.movement.capsule.radius },
+      { probe: physicsWallProbe(sim.physics, exclude), courierRadius: () => settings.movement.capsule.radius },
     );
     this.courier = model ?? createCourierPlaceholder(settings.movement.capsule, this.cfg.courier);
     this.renderer.scene.add(this.courier.root);
     this.renderer.scene.add(buildGreyboxMeshes(map));
     this.renderer.scene.add(buildHospitalMeshes(map));
+    this.renderer.scene.add(buildGasStationMeshes(map));
+    this.accessZones = buildAccessZoneMeshes(map);
+    this.renderer.scene.add(this.accessZones);
+    this.vehicles = new VehicleViews(this.renderer.scene);
     this.input = new InputManager(this.renderer.renderer.domElement, this.actions, {
       requirePointerLock: !opts.debug,
     });
@@ -152,7 +168,9 @@ export class Game {
         summon: (t, now) => {
           const s = sim.state;
           const at = s.grounded ? s.position : s.lastGrounded;
-          return sim.garage.summon(t, at, now, (tier) => findRoadSpot(nav, sim.garage, tier, at, s.heading));
+          const result = sim.garage.summon(t, at, now, (tier) => findRoadSpot(nav, sim.garage, tier, at, s.heading));
+          this.vehicles.snap(); // drawn at its new spot, not swept across the map
+          return result;
         },
         respawn: () => {
           const events = sim.respawnAtHospital();
@@ -258,6 +276,7 @@ export class Game {
     this.prevPosition = { ...this.sim.state.position };
     this.courier.snap();
     this.chase.snap();
+    this.vehicles.snap();
   }
 
   /**
@@ -317,6 +336,7 @@ export class Game {
     this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
     this.chase.snap();
     this.courier.snap();
+    this.vehicles.snap();
   }
 
   /** One fixed simulation tick. */
@@ -325,6 +345,7 @@ export class Game {
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
+    this.vehicles.beforeStep(this.sim.garage);
     const events = this.sim.step(frame, mods, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
@@ -340,7 +361,9 @@ export class Game {
     const look = this.actions.look();
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
-    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity));
+    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s.riding);
+    this.vehicles.update(this.sim.garage, alpha);
+    this.accessZones.visible = this.overlay.visible;
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
     this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);
@@ -353,6 +376,7 @@ export class Game {
       speed: horizontalLength(s.velocity),
       mode: s.mode,
       riding: s.riding,
+      fuel: s.riding && this.sim.garage.cfg.rides[s.riding].fuel ? this.sim.garage.state(s.riding).fuel : null,
       sprinting: s.sprinting,
       tick: this.tick,
       position: s.position,

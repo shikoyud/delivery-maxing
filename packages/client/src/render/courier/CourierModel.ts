@@ -3,6 +3,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { vehiclesConfig, type PlayerState, type Vec3 } from '@dm/shared';
 import type { CourierConfig, CourierPoseName } from '../../clientConfig';
 import { palette } from '../palette';
+import { riderLift } from '../vehicles/vehicleMeshes';
 import { animFor, displayYaw, easeYaw, type CourierAnim, type CourierClip } from './animState';
 import type { CourierDebug, CourierView } from './CourierView';
 
@@ -272,9 +273,11 @@ export class CourierModel implements CourierView {
       this.weights.set(p, snap ? target : w < target ? Math.min(target, w + step) : Math.max(target, w - step));
     }
 
+    // Inside the car the courier is not drawn at all (nor its shadow); on the skateboard it stands on the deck.
+    this.root.visible = !anim.hidden;
     this.restore();
     this.mixer.update(Math.max(0, dt));
-    this.applyPose(0);
+    this.applyPose(state.riding ? riderLift(state.riding) : 0);
     this.followTorso();
   }
 
