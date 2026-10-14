@@ -3,7 +3,7 @@
     "skateboard": { "accel": 6, "brakeDecel": 12, "coastDecel": 1, "handbrakeDecel": 8, "reverseSpeed": 0, "turnRateLow": 2.5, "turnRateHigh": 2.0, "grip": 60, "handbrakeGrip": 20, "slopeGravityScale": 1,
       "collider": { "shape": "upright", "radius": 0.35, "halfLength": 0, "height": 1.9 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": null },
     "bicycle": { "accel": 5, "brakeDecel": 10, "coastDecel": 0.6, "handbrakeDecel": 8, "reverseSpeed": 0, "turnRateLow": 2.6, "turnRateHigh": 1.4, "grip": 50, "handbrakeGrip": 15, "slopeGravityScale": 0.6,
-      "collider": { "shape": "upright", "radius": 0.4, "halfLength": 0, "height": 2.0 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": null },
+      "collider": { "shape": "lengthwise", "radius": 0.4, "halfLength": 0.45, "height": 2.0 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": null },
     "motorbike": { "accel": 9, "brakeDecel": 14, "coastDecel": 1.2, "handbrakeDecel": 10, "reverseSpeed": 0, "turnRateLow": 2.4, "turnRateHigh": 1.0, "grip": 40, "handbrakeGrip": 12, "slopeGravityScale": 0.3,
       "collider": { "shape": "lengthwise", "radius": 0.5, "halfLength": 0.6, "height": 1.0 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": { "rangeMeters": 6000, "fullTankCoins": 40 } },
     "car": { "accel": 8, "brakeDecel": 16, "coastDecel": 1.5, "handbrakeDecel": 12, "reverseSpeed": 6, "turnRateLow": 1.8, "turnRateHigh": 0.7, "grip": 30, "handbrakeGrip": 8, "slopeGravityScale": 0.25,

@@ -1011,13 +1011,15 @@ test('playtest screenshots: the four rides and the test town', async ({ page }) 
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   // The greybox test town from above, on foot: ramp, steep lane, stairs, park path and boardwalk, with the F3 overlay's
-  // access-zone volumes.
+  // access-zone volumes (shown while the overlay is on; its text panel is hidden by CSS for the shot only).
   await expect(page.locator('.debug-overlay')).toBeVisible();
+  const hidePanel = await page.addStyleTag({ content: '.debug-overlay { visibility: hidden !important; }' });
   await page.evaluate(() => window.__dm!.viewpoint({ x: -178, y: 42, z: -188 }, { x: -212, y: 0, z: -228 }));
   await page.screenshot({ path: `${sp4}test-town.png` });
+  await hidePanel.evaluate((e) => (e as Element).remove());
   // Each ride on a fresh page (saved progress cleared), so no vehicle parked by the last shot stands in the frame.
-  // Open ground east of the map centre, facing east (as the SP1 shots): a short run, the handbrake, then the ride from
-  // its right side, a little behind, looking down on it.
+  // Open ground east of the map centre, facing east (as the SP1 shots): a short run, the handbrake, then a view
+  // that shows the ride.
   for (const tier of ['skateboard', 'bicycle', 'motorbike', 'car'] as const) {
     await page.evaluate(() => localStorage.clear());
     await page.reload();
@@ -1028,7 +1030,10 @@ test('playtest screenshots: the four rides and the test town', async ({ page }) 
     await hold(page, ['KeyW'], 20);
     await brakeToStop(page);
     const heading = (await player(page)).heading;
-    await page.evaluate((y) => window.__dm!.setLook(y, -0.3), heading + Math.PI / 2 + 0.15);
+    // The skateboard is ridden side-on (the courier faces across the deck), so it is seen from above and behind, its
+    // deck in view; the others side-on, the camera low.
+    const look = tier === 'skateboard' ? [heading + 0.4, 0.1] : [heading + Math.PI / 2, 0.05];
+    await page.evaluate(([y, p]) => window.__dm!.setLook(y!, p!), look);
     await waitCameraSettled(page);
     await page.screenshot({ path: `${sp4}${tier}.png` });
   }
