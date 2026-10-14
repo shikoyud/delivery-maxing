@@ -80,7 +80,9 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
       ...(opts.solids ?? []),
     ],
     pois: [],
-    hospitals: opts.hospitals ?? [{ id: 'h-test', name: 'Test Hospital', center: vec3(spawn.x, spawn.y, spawn.z - 8), safeRadius: 18, spawn, spawnYaw: yaw }],
+    hospitals: opts.hospitals ?? [{ id: 'h-test', name: 'Test Hospital', center: vec3(spawn.x, spawn.y, spawn.z - 8), safeRadius: 18, spawn, spawnYaw: yaw, bay: vec3(spawn.x, spawn.y, spawn.z + 8), bayYaw: yaw }],
+    accessZones: [],
+    gasStations: [],
     orderRules: { bands: { shortMax: 150, mediumMax: 350 }, foodDropoff: { min: 80, max: 400 }, packageDropoff: { min: 100, max: 650 }, maxPickupDistance: 250 },
   };
   const physics = createPhysicsWorld(rapier, map);

@@ -15,6 +15,8 @@ export const testHospital = (id: string, center = vec3(0, 0, 0), name = id): Hos
   safeRadius: 18,
   spawn: vec3(center.x, center.y, center.z + 8),
   spawnYaw: 0,
+  bay: vec3(center.x, center.y, center.z + 16),
+  bayYaw: -Math.PI / 2,
 });
 
 export const emptyMap = (): MapData => ({
@@ -22,6 +24,8 @@ export const emptyMap = (): MapData => ({
   solids: [{ id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(200, 1, 200) }],
   pois: [],
   hospitals: [testHospital('h-test', vec3(0, 0, 0), 'Test Hospital')],
+  accessZones: [],
+  gasStations: [],
   orderRules: testOrderRules(),
 });
 

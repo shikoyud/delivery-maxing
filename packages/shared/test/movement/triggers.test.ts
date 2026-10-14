@@ -24,8 +24,8 @@ describe('out-of-bounds respawn', () => {
   });
 
   it('respawns at the hospital nearest the last grounded position, carrying its id', async () => {
-    const far = { id: 'far', name: 'Far', center: vec3(-80, 0, -80), safeRadius: 18, spawn: vec3(-80, 0, -72), spawnYaw: 0 };
-    const near = { id: 'near', name: 'Near', center: vec3(40, 0, 0), safeRadius: 18, spawn: vec3(40, 0, 8), spawnYaw: 0 };
+    const far = { id: 'far', name: 'Far', center: vec3(-80, 0, -80), safeRadius: 18, spawn: vec3(-80, 0, -72), spawnYaw: 0, bay: vec3(-80, 0, -64), bayYaw: 0 };
+    const near = { id: 'near', name: 'Near', center: vec3(40, 0, 0), safeRadius: 18, spawn: vec3(40, 0, 8), spawnYaw: 0, bay: vec3(40, 0, 16), bayYaw: 0 };
     const h = await makeSim({ spawn: vec3(30, 0, 0), hospitals: [far, near] });
     expect(h.sim.state.lastGrounded.x).toBeCloseTo(30, 1);
     h.sim.teleport(vec3(0, -10, 0)); // the fall position itself is nearer to neither; lastGrounded decides
@@ -36,7 +36,7 @@ describe('out-of-bounds respawn', () => {
   });
 
   it("respawn faces the hospital's spawnYaw (heading, look yaw and board heading)", async () => {
-    const hosp = { id: 'h', name: 'H', center: vec3(0, 0, 0), safeRadius: 18, spawn: vec3(0, 0, 8), spawnYaw: 1.25 };
+    const hosp = { id: 'h', name: 'H', center: vec3(0, 0, 0), safeRadius: 18, spawn: vec3(0, 0, 8), spawnYaw: 1.25, bay: vec3(0, 0, 16), bayYaw: 0 };
     const h = await makeSim({ spawn: vec3(0, 0, 8), hospitals: [hosp] });
     h.sim.state.heading = -2;
     h.sim.state.yaw = -2;

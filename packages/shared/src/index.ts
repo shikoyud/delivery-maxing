@@ -5,6 +5,7 @@ export * from './input/inputFrame';
 export * from './math/vec3';
 export * from './world/mapTypes';
 export * from './world/greybox';
+export * from './world/access';
 export * from './world/physicsWorld';
 export * from './world/distance';
 export * from './world/zones';

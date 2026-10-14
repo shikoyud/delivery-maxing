@@ -1,3 +1,4 @@
+import type { AccessKind } from '../config';
 import type { Vec3 } from '../math/vec3';
 
 /** `hospital`: the solid block at a hospital's centre (generated from `GreyboxSource.hospitalBlock`). */
@@ -35,6 +36,26 @@ export interface Hospital {
   /** Respawn point and facing */
   spawn: Vec3;
   spawnYaw: number;
+  /** First vehicle parking slot; slot i is `bay + i * bays.spacing` along the bay's right vector. */
+  bay: Vec3;
+  /** Facing of parked vehicles (radians, same convention as `spawnYaw`). */
+  bayYaw: number;
+}
+export interface Rect { minX: number; minZ: number; maxX: number; maxZ: number }
+/** A ground-plane region that only some vehicle tiers may enter. */
+export interface AccessZone {
+  id: string;
+  kind: AccessKind;
+  rect: Rect;
+  minY: number;
+  maxY: number;
+}
+export interface GasStation {
+  id: string;
+  name: string;
+  position: Vec3;
+  /** Ground points where a stopped vehicle refuels. */
+  pumps: Vec3[];
 }
 export interface OrderRules {
   bands: { shortMax: number; mediumMax: number };
@@ -47,9 +68,10 @@ export interface MapData {
   solids: Solid[];
   pois: Poi[];
   hospitals: Hospital[];
+  accessZones: AccessZone[];
+  gasStations: GasStation[];
   orderRules: OrderRules;
 }
-export interface Rect { minX: number; minZ: number; maxX: number; maxZ: number }
 export interface GreyboxDistrict {
   district: District;
   rect: Rect;
@@ -57,7 +79,7 @@ export interface GreyboxDistrict {
   heightMax: number;
   fillChance: number;
 }
-/** `solids` here are the hand-placed ones. */
+/** `solids` and `accessZones` here are the hand-placed ones. */
 export interface GreyboxSource extends MapData {
   seed: number;
   grid: { pitch: number; roadWidth: number; alleyWidth: number };

@@ -98,4 +98,32 @@ describe('expandGreybox', () => {
       }
     }
   });
+
+  it('emits an alley zone for each half-alley whose two flanking lots are both built', () => {
+    // One block (centre 25,25 = block 0,0), fillChance 1 everywhere, then keep only lots 0 and 1 via reserved rects.
+    const src = greyboxFixture();
+    src.size = 100;
+    src.districts[0]!.fillChance = 1;
+    src.districts[0]!.rect = { minX: -50, minZ: -50, maxX: 50, maxZ: 50 };
+    src.reserved = [{ minX: 0, minZ: 25, maxX: 50, maxZ: 50 }];
+    src.hospitals = [];
+    const zones = expandGreybox(src).accessZones.filter((z) => z.id.startsWith('alley-0-0-'));
+    expect(zones.map((z) => z.id)).toEqual(['alley-0-0-a']);
+    const z = zones[0]!;
+    expect(z.kind).toBe('alley');
+    expect(z.rect.maxX - z.rect.minX).toBe(4);
+    expect(z.rect.maxZ).toBe(25);
+    expect(z.rect.minZ).toBe(6);
+    expect(z.minY).toBe(0);
+    expect(z.maxY).toBe(0);
+  });
+
+  it('no alley zone where a flanking lot is empty (open plazas stay open to cars)', () => {
+    const src = greyboxFixture();
+    src.districts[0]!.fillChance = 1;
+    const map = expandGreybox(src);
+    const inReserved = map.accessZones.filter((z) => z.rect.minX > -40 && z.rect.maxX < 40 && z.rect.minZ > -40 && z.rect.maxZ < 40);
+    expect(inReserved).toEqual([]);
+    expect(map.accessZones.length).toBeGreaterThan(0);
+  });
 });
