@@ -1,3 +1,4 @@
+import type { AccessKind } from '../config/types';
 import type { Vec3 } from '../math/vec3';
 
 export type MoveMode = 'ground' | 'air' | 'slide' | 'mantle';
@@ -65,5 +66,9 @@ export type SimEvent =
   | { kind: 'landed'; fallHeight: number }
   | { kind: 'respawned'; hospitalId: string }
   | { kind: 'boardToggled'; onBoard: boolean }
-  | { kind: 'slideStarted'; boosted: boolean };
+  | { kind: 'slideStarted'; boosted: boolean }
+  /** A ridden vehicle hit a wall faster than ordersConfig.fragile.crashSpeed (speed: into the wall, m/s). */
+  | { kind: 'crashed'; speed: number }
+  /** A ridden vehicle was stopped at the edge of an access zone its tier may not enter. */
+  | { kind: 'accessBlocked'; zone: AccessKind };
 
