@@ -53,11 +53,12 @@ pnpm install && pnpm dev   # then open the URL Vite prints
 | Mouse | Look (click the page to lock the pointer) |
 | Space | Jump; climb onto ledges up to chest height |
 | C | Crouch; crouch-slide while sprinting |
-| Shift | Sprint on / off (toggle) |
+| Shift | Sprint on / off (toggle); drains the stamina ring top left |
 | E | Interact |
 | F | Mount (reserved for vehicles in SP4; does nothing yet) |
 | Q | Skateboard |
-| Tab | Phone: Orders, Map, Wallet (Esc or Tab closes it) |
+| Tab | Phone: Orders, Map, Wallet (Esc, Tab or M closes it) |
+| M | Map view (the phone opened straight on the Map app) |
 | Y | Accept the top offer |
 | F3 | Toggle the debug overlay |
 | `` ` `` (backtick) | Open the dev panel |

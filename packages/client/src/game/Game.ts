@@ -128,6 +128,7 @@ export class Game {
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
       player: () => this.sim.state,
+      stamina: () => this.sim.state.stamina / settings.movement.stamina.max,
       capacityTier: this.progress.load().capacityTier,
       phoneChanged: (open) => this.phoneChanged(open),
     });

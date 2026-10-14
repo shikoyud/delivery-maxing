@@ -26,6 +26,7 @@ const BINDING_LABEL: Record<BindingName, string> = {
   board: 'Board',
   hit: 'Hit',
   phone: 'Phone',
+  map: 'Map view',
   accept: 'Accept top offer',
   mount: 'Mount',
   devPanel: 'Dev panel',

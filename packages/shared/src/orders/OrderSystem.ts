@@ -15,6 +15,7 @@ export type CancelResult = 'ok' | 'unknown';
 export type OrderEvent =
   | { kind: 'offered'; offerId: string }
   | { kind: 'offerExpired'; offerId: string }
+  | { kind: 'prepStarted'; orderId: string; readySeconds: number }
   | { kind: 'pickedUp'; orderId: string }
   | { kind: 'fragileBroken'; orderId: string; reason: 'fall' | 'respawn' }
   | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; inTime: boolean; expressOnTime: boolean | null }
@@ -111,7 +112,7 @@ export class OrderSystem {
     const i = this._offers.findIndex((o) => o.order.id === offerId);
     const [offer] = this._offers.splice(i, 1) as [Offer];
     if (result === 'expired') return result;
-    this._active.push({ order: offer.order, acceptedAt: now, pickedUpAt: null, fragileIntact: true });
+    this._active.push({ order: offer.order, acceptedAt: now, prepStartedAt: null, pickedUpAt: null, fragileIntact: true });
     this.used.push({ ids: [offer.order.pickupPoiId, offer.order.dropoffPoiId], at: now });
     return 'ok';
   }
@@ -133,6 +134,11 @@ export class OrderSystem {
 
   isCarried(a: ActiveOrder): boolean {
     return a.pickedUpAt !== null;
+  }
+
+  /** When a food order's prep finishes (pickup possible from then on), or null before the courier first arrived. */
+  prepReadyAt(a: ActiveOrder): number | null {
+    return a.prepStartedAt === null ? null : a.prepStartedAt + this.opts.cfg.prep.foodSeconds;
   }
 
   currentTarget(a: ActiveOrder): string {
@@ -186,10 +192,19 @@ export class OrderSystem {
     for (let i = 0; i < this._active.length; i++) {
       const a = this._active[i] as ActiveOrder;
       if (a.pickedUpAt === null) {
-        if (zones.poiIds.has(a.order.pickupPoiId)) {
-          a.pickedUpAt = now;
-          events.push({ kind: 'pickedUp', orderId: a.order.id });
+        if (!zones.poiIds.has(a.order.pickupPoiId)) continue;
+        // Food waits for the kitchen: the first arrival starts the prep timer, and the pickup needs the courier at
+        // the counter once it is ready (prep keeps running while they are away). foodSeconds <= 0 disables prep.
+        if (a.order.kind === 'food' && cfg.prep.foodSeconds > 0) {
+          if (a.prepStartedAt === null) {
+            a.prepStartedAt = now;
+            events.push({ kind: 'prepStarted', orderId: a.order.id, readySeconds: cfg.prep.foodSeconds });
+            continue;
+          }
+          if (now < a.prepStartedAt + cfg.prep.foodSeconds) continue;
         }
+        a.pickedUpAt = now;
+        events.push({ kind: 'pickedUp', orderId: a.order.id });
         continue;
       }
       if (!zones.poiIds.has(a.order.dropoffPoiId)) continue;
@@ -204,6 +219,9 @@ export class OrderSystem {
       };
       this._active.splice(i--, 1);
       events.push({ kind: 'completed', orderId: a.order.id, ...score, inTime, expressOnTime });
+      // Pacing after a delivery (server-side only, no UI): the next offer waits at least the cooldown.
+      const { minSeconds, maxSeconds } = cfg.deliveryCooldown;
+      this.nextOfferAt = Math.max(this.nextOfferAt, now + minSeconds + this.opts.rng() * (maxSeconds - minSeconds));
     }
     return events;
   }

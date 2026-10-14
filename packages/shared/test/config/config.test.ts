@@ -12,7 +12,9 @@ describe('config pins spec values', () => {
   });
   it('orders', () => {
     expect(ordersConfig.lockout.seconds).toBe(45);
-    expect(ordersConfig.offers).toEqual({ maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15 });
+    expect(ordersConfig.offers).toEqual({ maxShown: 3, lifetimeSeconds: 25, minIntervalSeconds: 18, maxIntervalSeconds: 30 });
+    expect(ordersConfig.deliveryCooldown).toEqual({ minSeconds: 8, maxSeconds: 10 });
+    expect(ordersConfig.prep.foodSeconds).toBeGreaterThan(0);
     expect(ordersConfig.referenceSpeed).toBe(8);
     expect(ordersConfig.express.distanceFactor).toBeLessThan(ordersConfig.par.distanceFactor);
     expect(ordersConfig.fragile.maxFallMeters).toBe(7);

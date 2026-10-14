@@ -30,6 +30,8 @@ export interface HudOrder {
   target: Vec3;
   /** Straight-line metres to the current target, rounded. */
   distance: number;
+  /** Food being prepared at the pickup: counts down to ready. Null before arrival and after pickup. */
+  prep: HudTimer | null;
   /** Hot (food) or par (package) time; null before pickup (timers start at pickup, spec §3.2). */
   timer: HudTimer | null;
   /** Express packages only, after pickup. */
@@ -72,6 +74,8 @@ export interface HudModel {
   offers: HudOffer[];
   /** Name of the hospital whose safe zone the player is in, or null. */
   safeZone: string | null;
+  /** Sprint stamina as a fraction 0..1 (the ring top left). */
+  stamina: number;
 }
 
 /** "1 pt", "N pts". */
@@ -122,7 +126,7 @@ function countdown(limit: number, elapsed: number): HudTimer {
   return { secondsLeft: Math.max(0, limit - elapsed), late: elapsed > limit };
 }
 
-export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: number, safeZone: string | null): HudModel {
+export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: number, safeZone: string | null, stamina = 1): HudModel {
   const pois = poiIndex(map);
   return {
     totals: { ...orders.totals },
@@ -138,11 +142,13 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
       const targetPoi = pois.get(orders.currentTarget(a));
       const target = targetPoi.position;
       const elapsed = a.pickedUpAt === null ? null : now - a.pickedUpAt;
+      const readyAt = a.pickedUpAt === null ? orders.prepReadyAt(a) : null;
       return {
         id: order.id,
         kind: order.kind,
         item: order.item,
-        stage: stageText(a, pois),
+        stage: readyAt !== null && now < readyAt ? `Waiting for ${order.item} at ${pois.get(order.pickupPoiId).name}` : stageText(a, pois),
+        prep: readyAt === null ? null : { secondsLeft: Math.max(0, readyAt - now), late: false },
         targetName: targetPoi.name,
         target: { ...target },
         distance: Math.round(Math.hypot(player.x - target.x, player.y - target.y, player.z - target.z)),
@@ -169,5 +175,6 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
       };
     }),
     safeZone,
+    stamina,
   };
 }

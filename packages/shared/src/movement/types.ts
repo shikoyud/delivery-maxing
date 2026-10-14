@@ -31,8 +31,10 @@ export interface PlayerState {
   boardHeading: number;
   /** Mirrors PlayerBody.crouched: the capsule is at capsule.crouchHeight. */
   crouched: boolean;
-  /** Sprint toggle (Shift): on until toggled off or every move key is released. Only ever true while moving. */
+  /** Sprint toggle (Shift): on until toggled off, stamina runs out or every move key is released. Only ever true while moving. */
   sprinting: boolean;
+  /** Sprint stamina, 0..cfg.stamina.max: drains while sprinting, regenerates while not. */
+  stamina: number;
   grounded: boolean;
   groundNormal: Vec3;
   /** Feet position on the most recent grounded tick. */

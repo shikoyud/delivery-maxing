@@ -26,6 +26,7 @@ export function order(id: string, over: Partial<HudOrder> = {}): HudOrder {
     targetName: `Oak Court ${id}`,
     target: { x: 0, y: 0, z: 0 },
     distance: 120,
+    prep: null,
     timer: { secondsLeft: 65, late: false },
     express: null,
     weightKg: 4,
@@ -42,6 +43,7 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     orders: [],
     offers: [],
     safeZone: null,
+    stamina: 1,
     ...over,
   };
 }

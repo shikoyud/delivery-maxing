@@ -39,6 +39,7 @@ export interface Hospital {
 export interface OrderRules {
   bands: { shortMax: number; mediumMax: number };
   foodDropoff: { min: number; max: number };
+  packageDropoff: { min: number; max: number };
   maxPickupDistance: number;
 }
 export interface MapData {

@@ -124,7 +124,18 @@ describe('hudModel', () => {
     expect(o.distance).toBe(Math.round(Math.hypot(spawn.x - pickup.position.x, spawn.y - pickup.position.y, spawn.z - pickup.position.z)));
     expect(m.load.usedSlots).toBe(1);
 
-    const tp = t + 10;
+    // Arriving at the pickup starts the food prep countdown; the pickup follows once it is ready.
+    const prep = ordersConfig.prep.foodSeconds;
+    const arrive = t + 10;
+    sys.update(arrive, pickup.position, playerZones(pickup.position, map, ordersConfig.zones));
+    expect(sys.active[0]!.pickedUpAt).toBeNull();
+    m = hudModel(sys, map, pickup.position, arrive + 1, null);
+    o = m.orders[0]!;
+    expect(o.stage).toBe(`Waiting for ${offer.order.item} at ${pickup.name}`);
+    expect(o.prep!.secondsLeft).toBeCloseTo(prep - 1);
+    expect(o.timer).toBeNull();
+
+    const tp = arrive + prep;
     sys.update(tp, pickup.position, playerZones(pickup.position, map, ordersConfig.zones));
     expect(sys.active[0]!.pickedUpAt).toBe(tp);
     m = hudModel(sys, map, pickup.position, tp + 4, null);
