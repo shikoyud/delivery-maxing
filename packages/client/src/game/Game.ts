@@ -3,7 +3,6 @@ import {
   FixedStepper,
   PlayerSim,
   createPhysicsWorld,
-  createWorldFeatureState,
   expandGreybox,
   horizontalLength,
   initRapier,
@@ -14,7 +13,6 @@ import {
   type MapData,
   type SimEvent,
   type Vec3,
-  type WorldFeatureState,
 } from '@dm/shared';
 import greyboxJson from '../../../../map/greybox.json';
 import { clientConfig, type ClientConfig } from '../clientConfig';
@@ -26,8 +24,8 @@ import { ChaseCamera, clampPivotHeight, pivotHeightFor, type RayCast } from '../
 import { CourierModel } from '../render/courier/CourierModel';
 import type { CourierView } from '../render/courier/CourierView';
 import { createCourierPlaceholder } from '../render/courierPlaceholder';
-import { buildFeatureMeshes, type FeatureMeshes } from '../render/featureMeshes';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
+import { buildHospitalMeshes } from '../render/hospitalMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
@@ -52,7 +50,7 @@ export interface GameOptions {
   debug: boolean;
   /** Show the F3 debug overlay from the start (defaults to `debug`). */
   overlay?: boolean;
-  /** Order Board RNG seed (?seed=N); defaults to Date.now(). */
+  /** Offer RNG seed (?seed=N); defaults to Date.now(). */
   seed?: number;
 }
 
@@ -70,7 +68,6 @@ export class Game {
   tick = 0;
   /** Frames drawn so far. */
   frames = 0;
-  readonly features: FeatureMeshes;
   readonly delivery: DeliveryLoop;
   readonly overlay: DebugOverlay;
   readonly devPanel: DevPanel;
@@ -86,13 +83,14 @@ export class Game {
   private lastFrameMs: number | null = null;
   private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
+  /** Called after the phone opened or closed (main.ts refreshes the play hint from it). */
+  onPhoneChanged: ((open: boolean) => void) | null = null;
 
   private constructor(
     readonly host: HTMLElement,
     readonly opts: GameOptions,
     readonly map: MapData,
     readonly sim: PlayerSim,
-    readonly world: WorldFeatureState,
     private readonly settings: DevSettings,
     private readonly devStore: DevSettingsStore,
     model: CourierModel | null,
@@ -104,7 +102,7 @@ export class Game {
       THREE.MathUtils.degToRad(chase.pitchMinDeg),
       THREE.MathUtils.degToRad(chase.pitchMaxDeg),
     );
-    this.actions.setLook(map.hub.spawnYaw, 0);
+    this.actions.setLook(map.hospitals[0]!.spawnYaw, 0);
     this.renderer = new Renderer(host, this.cfg.graphics, this.cfg.camera, map.size);
     this.cameraCast = physicsSphereCast(sim.physics, chase.collisionRadius, sim.body.collider);
     this.chase = new ChaseCamera(
@@ -116,8 +114,7 @@ export class Game {
     this.courier = model ?? createCourierPlaceholder(settings.movement.capsule, this.cfg.courier);
     this.renderer.scene.add(this.courier.root);
     this.renderer.scene.add(buildGreyboxMeshes(map));
-    this.features = buildFeatureMeshes(map);
-    this.renderer.scene.add(this.features.group);
+    this.renderer.scene.add(buildHospitalMeshes(map));
     this.input = new InputManager(this.renderer.renderer.domElement, this.actions, {
       requirePointerLock: !opts.debug,
     });
@@ -128,26 +125,25 @@ export class Game {
       cfg: this.cfg,
       actions: this.actions,
       progress: this.progress,
-      backpackCapacity: settings.backpackSlots,
-      baseSprintSpeed: settings.movement.run.sprintSpeed,
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
       player: () => this.sim.state,
+      capacityTier: this.progress.load().capacityTier,
+      phoneChanged: (open) => this.phoneChanged(open),
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
-      onBackpack: (n) => this.delivery.setBackpackCapacity(n),
       onReset: () => {
         this.saver.cancel(); // a pending save would bring the overrides back
         const fresh = this.devStore.reset();
         assignNumbers(settings.movement as never, fresh.movement as never);
-        settings.backpackSlots = fresh.backpackSlots;
-        this.delivery.setBackpackCapacity(fresh.backpackSlots);
         this.devPanel.setOverrideCount(0);
       },
       onResetProgress: () => {
         this.delivery.resetProgress();
       },
+      capacityTier: () => this.delivery.capacityTier,
+      setCapacityTier: (t) => this.delivery.setCapacityTier(t),
       onChange: () => {
         this.saver.schedule();
         this.devPanel.setOverrideCount(countOverrides(settings));
@@ -160,6 +156,20 @@ export class Game {
     };
   }
 
+  /**
+   * The phone opened or closed (Tab, Esc). Open: the pointer lock is released so the player can click the phone
+   * (DeliveryLoop already released held keys). Closed: ask for the lock back — browsers may refuse without a click
+   * (Esc gives no user activation), and then a click on the canvas locks it as usual.
+   */
+  private phoneChanged(open: boolean): void {
+    const canvas = this.renderer.renderer.domElement;
+    if (open) {
+      if (this.input.locked) this.host.ownerDocument.exitPointerLock();
+    } else if (!this.opts.debug && !this.input.locked) {
+      void Promise.resolve(canvas.requestPointerLock()).catch(() => undefined);
+    }
+    this.onPhoneChanged?.(open);
+  }
 
   /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
   private toggleDevPanel(): void {
@@ -178,8 +188,11 @@ export class Game {
     // One deep-cloned movement object shared by PlayerSim and the dev panel; the shared import is never mutated.
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
-    const sim = new PlayerSim(physics, map, settings.movement, map.hub.spawn, map.hub.spawnYaw);
-    const game = new Game(host, opts, map, sim, createWorldFeatureState(map), settings, devStore, model);
+    // Hospitals are the only spawn points (spec rev. 2); a fresh session starts at the first one.
+    const spawn = map.hospitals[0];
+    if (!spawn) throw new Error('map has no hospitals');
+    const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw);
+    const game = new Game(host, opts, map, sim, settings, devStore, model);
     if (opts.debug) installDebugHooks(game);
     return game;
   }
@@ -246,19 +259,32 @@ export class Game {
     this.actions.setLook(yaw, Math.atan2(dy, Math.hypot(dx, dz)));
   }
 
+  /**
+   * Debug and tests: runs `ticks` fixed simulation ticks now, synchronously and without drawing (the render loop
+   * carries on afterwards). Returns the player's horizontal speed after each tick.
+   */
+  advanceTicks(ticks: number): number[] {
+    const speeds: number[] = [];
+    for (let i = 0; i < ticks; i++) {
+      this.step();
+      speeds.push(horizontalLength(this.sim.state.velocity));
+    }
+    return speeds;
+  }
+
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
-    const wasZip = this.sim.state.mode === 'zipline';
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
-    const events = this.sim.step(frame, mods, this.world, now);
+    const events = this.sim.step(frame, mods, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
-    const leftZip = wasZip && this.sim.state.mode !== 'zipline';
-    this.prevPosition = interpolationStart(before, this.sim.state.position, events, leftZip);
+    this.prevPosition = interpolationStart(before, this.sim.state.position, events);
     if (events.some((e) => e.kind === 'respawned')) {
-      // A teleport: no camera sweep, and no turn or animation blend across it.
+      // A teleport: no camera sweep, and no turn or animation blend across it. The camera looks the way the
+      // respawned courier faces (the hospital's spawnYaw).
+      this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
       this.chase.snap();
       this.courier.snap();
     }
@@ -273,14 +299,10 @@ export class Game {
     const look = this.actions.look();
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
-    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s);
+    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity));
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
     this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);
-    for (const orb of this.map.boostOrbs) {
-      this.features.setOrbVisible(orb.id, this.time >= (this.world.orbAvailableAt.get(orb.id) ?? 0));
-    }
-    this.features.update(clockSeconds);
     this.delivery.draw(clockSeconds);
     this.renderer.followShadow(feet);
     this.renderer.render();
@@ -290,6 +312,7 @@ export class Game {
       speed: horizontalLength(s.velocity),
       mode: s.mode,
       onBoard: s.onBoard,
+      sprinting: s.sprinting,
       tick: this.tick,
       position: s.position,
     }));

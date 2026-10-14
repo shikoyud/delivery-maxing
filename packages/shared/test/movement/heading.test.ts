@@ -38,35 +38,18 @@ describe('courier heading', () => {
     expect(h.sim.state.heading).toBeCloseTo(1, 9);
   });
 
-  it('strafing right into a 1.5 m ledge mantles it (Review Focus 2)', async () => {
+  it('strafing right into a 1.2 m ledge mantles it (Review Focus 2)', async () => {
     const FACE_X = 3;
     const DEPTH = 10;
-    const ledge = box('ledge', vec3(FACE_X + DEPTH / 2, 0.75, 0), vec3(DEPTH, 1.5, 8));
+    const ledge = box('ledge', vec3(FACE_X + DEPTH / 2, 0.6, 0), vec3(DEPTH, 1.2, 8));
     const h = await makeSim({ solids: [ledge] });
     h.runUntil((s) => s.mode === 'mantle', 60, RIGHT_SPRINT);
     h.runUntil((s) => s.mode !== 'mantle', seconds(cfg.mantle.duration + 0.2), RIGHT_SPRINT);
     const s = h.sim.state;
     expect(s.mode).toBe('ground');
-    expect(s.position.y).toBeGreaterThanOrEqual(1.45);
-    expect(s.position.y).toBeLessThanOrEqual(1.55);
+    expect(s.position.y).toBeGreaterThanOrEqual(1.15);
+    expect(s.position.y).toBeLessThanOrEqual(1.25);
     expect(s.position.x).toBeGreaterThan(FACE_X);
-  });
-
-  it('strafing alongside a wall starts a wall-run', async () => {
-    // A 40 m wall along X whose face (z = -1) points toward +Z: on the courier's left while it runs toward +X.
-    const FACE_Z = -1;
-    const wall = box('wall', vec3(18, 6, FACE_Z - 0.5), vec3(40, 12, 1));
-    const h = await makeSim({ solids: [wall], spawn: vec3(0, 0, FACE_Z + cfg.capsule.radius + 0.5) });
-    h.run(10, RIGHT_SPRINT);
-    expect(h.sim.state.grounded).toBe(true);
-    expect(h.sim.state.velocity.x).toBeCloseTo(cfg.run.sprintSpeed, 3);
-    h.tick(RIGHT_SPRINT, ['jump']);
-    const ticks = h.runUntil((s) => s.mode === 'wallrun', 10, RIGHT_SPRINT);
-    expect(ticks).toBeLessThanOrEqual(10);
-    expect(h.sim.state.wallRun.normal!.z).toBeCloseTo(1, 3);
-    // Holding the strafe keeps the run going.
-    h.run(10, RIGHT_SPRINT);
-    expect(h.sim.state.mode).toBe('wallrun');
   });
 
   it('board steers toward the wish direction; S brakes without turning', async () => {

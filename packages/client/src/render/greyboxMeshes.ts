@@ -67,7 +67,7 @@ function gridTexture(): THREE.Texture | null {
 }
 
 /**
- * Merges every static solid into one mesh per kind (one draw call each), with vertex colours tinted per solid.
+ * Merges every static solid (except hospital blocks, which buildHospitalMeshes draws) into one mesh per kind (one draw call each), with vertex colours tinted per solid.
  * The ground carries a grid texture so speed reads in motion.
  */
 export function buildGreyboxMeshes(map: MapData): THREE.Group {
@@ -75,6 +75,7 @@ export function buildGreyboxMeshes(map: MapData): THREE.Group {
   group.name = 'greybox';
   const byKind = new Map<SolidKind, THREE.BufferGeometry[]>();
   for (const s of map.solids) {
+    if (s.kind === 'hospital') continue; // drawn by buildHospitalMeshes
     const list = byKind.get(s.kind) ?? [];
     list.push(solidGeometry(s));
     byKind.set(s.kind, list);

@@ -34,11 +34,6 @@ export function wishDirection(input: InputFrame): Vec3 {
   return l > 1e-9 ? vec3(x / l, 0, z / l) : vec3(0, 0, 0);
 }
 
-/** Speed multiplier from a boost orb: boostOrb.speedMultiplier while boostLeft > 0, else 1. Boards use it too. */
-export function boostMultiplier(state: PlayerState, cfg: MovementConfig): number {
-  return state.boostLeft > 0 ? cfg.boostOrb.speedMultiplier : 1;
-}
-
 /**
  * Speed the player is trying to reach on the ground: run or sprint, scaled by stick magnitude and speedMul.
  * Crouched (crouch-walk), the target is capped at run.crouchSpeed.
@@ -46,8 +41,8 @@ export function boostMultiplier(state: PlayerState, cfg: MovementConfig): number
 export function targetGroundSpeed(input: InputFrame, state: PlayerState, cfg: MovementConfig, mods: StatModifiers): number {
   const magnitude = Math.min(1, Math.hypot(input.move.x, input.move.y));
   if (magnitude === 0) return 0;
-  const base = input.sprint.held ? cfg.run.sprintSpeed : cfg.run.runSpeed;
-  const target = base * magnitude * mods.speedMul * boostMultiplier(state, cfg);
+  const base = state.sprinting ? cfg.run.sprintSpeed : cfg.run.runSpeed;
+  const target = base * magnitude * mods.speedMul;
   return state.crouched ? Math.min(target, cfg.run.crouchSpeed) : target;
 }
 
@@ -92,7 +87,7 @@ export function applyGroundVelocity(state: PlayerState, wish: Vec3, target: numb
 /**
  * Quake-style air control (ruling R13): accelerate only along the wish direction, and only while v·wish < target
  * (addspeed = target − v·wish, at most airAccel·dt). Velocity is never steered toward wish·target, so perpendicular
- * momentum (e.g. a wall-jump push) survives. The horizontal speed is then clamped to max(speed before, target).
+ * momentum survives. The horizontal speed is then clamped to max(speed before, target).
  */
 export function applyAirVelocity(state: PlayerState, wish: Vec3, target: number, cfg: MovementConfig, dt: number): void {
   if (isZero(wish)) return;

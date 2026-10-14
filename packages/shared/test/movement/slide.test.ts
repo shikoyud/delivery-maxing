@@ -28,7 +28,7 @@ const TUNNEL_FAR = -14;
 const ceiling = () => box('ceiling', vec3(0, 1.9, (TUNNEL_NEAR + TUNNEL_FAR) / 2), vec3(6, 1, TUNNEL_NEAR - TUNNEL_FAR));
 
 describe('crouch-slide', () => {
-  it('crouch while sprinting at 8 m/s starts a slide that keeps speed (≥ 6.9 after 0.5 s on flat)', async () => {
+  it('crouch while sprinting at 8 m/s starts a slide that keeps its speed (≥ 6.9 after 0.5 s on flat, never above the 12 m/s burst)', async () => {
     const h = await makeSim();
     h.run(30, SPRINT);
     expect(speed(h.sim.state)).toBeGreaterThanOrEqual(7.95);
@@ -40,8 +40,20 @@ describe('crouch-slide', () => {
     expect(h.sim.state.mode).toBe('slide');
     expect(h.sim.state.grounded).toBe(true);
     expect(speed(h.sim.state)).toBeGreaterThanOrEqual(6.9);
-    expect(speed(h.sim.state)).toBeLessThan(8);
+    expect(speed(h.sim.state)).toBeLessThanOrEqual(cfg.run.sprintSpeed + cfg.slide.boostSpeed);
     expect(h.sim.state.position.y).toBeCloseTo(0, 1);
+  });
+
+  it('a boosted slide from sprint never exceeds the 12 m/s on-foot cap', async () => {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    expect(h.sim.state.mode).toBe('slide');
+    for (let i = 0; i < 45; i++) {
+      expect(speed(h.sim.state)).toBeLessThanOrEqual(12 + 1e-9);
+      h.tick(SLIDE);
+    }
+    expect(speed(h.sim.state)).toBeLessThanOrEqual(12 + 1e-9);
   });
 
   it('crouch at 5.5 m/s (below minEntrySpeed 6) crouch-walks at ≤ 3 m/s instead', async () => {
@@ -67,6 +79,7 @@ describe('crouch-slide', () => {
     expect(h.sim.state.grounded).toBe(true);
     h.run(15, SPRINT);
     expect(h.sim.state.grounded).toBe(true);
+    h.sim.state.slideBoostCooldown = 10; // no burst: the gain must come from the slope (a burst would sit at the 12 m/s cap)
     h.tick(SLIDE, ['crouch']);
     expect(h.sim.state.mode).toBe('slide');
     const entry = speed(h.sim.state);
@@ -109,9 +122,9 @@ describe('crouch-slide', () => {
     h.run(30, SPRINT);
     h.tick(SLIDE, ['crouch']);
     expect(h.sim.state.mode).toBe('slide');
-    // 8 m/s down to 3.5 m/s at friction 2 m/s² takes 2.25 s (~68 ticks).
-    const ticks = h.runUntil((s) => s.mode !== 'slide', 90, SLIDE);
-    expect(ticks).toBeGreaterThanOrEqual(60);
+    // 12 m/s (8 + burst 4) down to 3.5 m/s at friction 1.2 m/s² takes ~7.1 s (~212 ticks).
+    const ticks = h.runUntil((s) => s.mode !== 'slide', 260, SLIDE);
+    expect(ticks).toBeGreaterThanOrEqual(200);
     expect(h.sim.state.mode).toBe('ground');
     expect(h.sim.state.crouched).toBe(true);
     expect(speed(h.sim.state)).toBeLessThan(cfg.slide.endSpeed);
@@ -177,67 +190,7 @@ describe('crouch-slide', () => {
   });
 });
 
-describe('chutes', () => {
-  it('grounded on a chute: slides without crouch and accelerates downhill', async () => {
-    const h = await makeSim({
-      floor: false,
-      solids: [slope('chute', 20, { kind: 'chute', surface: 'chute' })],
-      spawn: onSlope(20, 20),
-    });
-    expect(h.sim.state.grounded).toBe(true);
-    expect(h.sim.lastMove?.groundSurface).toBe('chute');
-    expect(h.sim.state.mode).toBe('slide');
-    expect(h.sim.state.crouched).toBe(false);
-    const y0 = h.sim.state.position.y;
-    h.run(15);
-    const half = speed(h.sim.state);
-    h.run(15);
-    const s = h.sim.state;
-    expect(s.mode).toBe('slide');
-    expect(s.grounded).toBe(true);
-    expect(s.crouched).toBe(false);
-    // Downhill along the ground plane: 20·sin20·cos²20 ≈ 6.0 m/s² minus chute friction 0.4.
-    expect(speed(s)).toBeGreaterThan(4.5);
-    expect(speed(s)).toBeGreaterThan(half + 2);
-    expect(s.velocity.z).toBeLessThan(0);
-    expect(Math.abs(s.velocity.x)).toBeLessThan(1e-6);
-    expect(s.position.y).toBeLessThan(y0 - 0.5);
-  });
-
-  it('a long steep chute never takes horizontal speed past speedCap, steered downhill or not', async () => {
-    const deg = 25;
-    const a = (deg * Math.PI) / 180;
-    const len = 200; // z in ±82: inside the test map's bounds
-    const chute = box('long-chute', vec3(0, -0.5 * Math.cos(a), 0.5 * Math.sin(a)), vec3(8, 1, len), {
-      rotationDeg: vec3(-deg, 0, 0),
-      kind: 'chute',
-      surface: 'chute',
-    });
-    for (const hold of [{}, { forward: 1, sprint: true }, { crouch: true }]) {
-      const h = await makeSim({ floor: false, solids: [chute], spawn: onSlope(deg, 75) });
-      let max = 0;
-      for (let i = 0; i < 6 * cfg.tickRate && h.sim.state.position.z > 5; i++) {
-        h.tick(hold);
-        max = Math.max(max, speed(h.sim.state));
-      }
-      expect(max, JSON.stringify(hold)).toBeGreaterThan(cfg.speedCap - 0.5); // the chute does reach the cap
-      expect(max, JSON.stringify(hold)).toBeLessThanOrEqual(cfg.speedCap + 1e-6);
-    }
-  });
-
-  it('input on a chute only steers at chute.steerAccel', async () => {
-    const h = await makeSim({
-      floor: false,
-      solids: [slope('chute', 20, { kind: 'chute', surface: 'chute' })],
-      spawn: onSlope(20, 20),
-    });
-    h.run(30, { strafe: 1, sprint: true });
-    expect(h.sim.state.mode).toBe('slide');
-    // 1 s of full strafe adds at most steerAccel·1 s of sideways speed (yaw 0: strafe right is +X).
-    expect(h.sim.state.velocity.x).toBeGreaterThan(0);
-    expect(h.sim.state.velocity.x).toBeLessThanOrEqual(cfg.chute.steerAccel + 1e-6);
-  });
-
+describe('landing slides (R26)', () => {
   /**
    * Slides off a 0.6 m ledge (top at y = 0.6, edge at z = -1): crouch only (W released) until airborne, then `air`
    * until landing. Returns the harness and the speed on the last airborne tick.
@@ -258,7 +211,7 @@ describe('chutes', () => {
     return { h, airSpeed };
   }
 
-  it('R26: sliding off a 0.6 m ledge with crouch held (W released) keeps sliding and ≥ 90 % of speed 4 ticks after landing', async () => {
+  it('sliding off a 0.6 m ledge with crouch held (W released) keeps sliding and ≥ 90 % of speed 4 ticks after landing', async () => {
     const CROUCH: Hold = { crouch: true };
     const { h, airSpeed } = await slideOffLedge(CROUCH);
     expect(airSpeed).toBeGreaterThanOrEqual(cfg.slide.endSpeed);
@@ -268,7 +221,7 @@ describe('chutes', () => {
     expect(speed(h.sim.state)).toBeGreaterThanOrEqual(0.9 * airSpeed);
   });
 
-  it('R26: landing from the ledge with crouch NOT held lands on foot (ground) as before', async () => {
+  it('landing from the ledge with crouch NOT held lands on foot (ground) as before', async () => {
     const { h } = await slideOffLedge({});
     expect(h.sim.state.mode).toBe('ground');
     h.run(10, {});
@@ -276,7 +229,7 @@ describe('chutes', () => {
     expect(speed(h.sim.state)).toBeLessThan(0.5);
   });
 
-  it('R26: a slide-jump landed with crouch held continues the slide', async () => {
+  it('a slide-jump landed with crouch held continues the slide', async () => {
     const h = await makeSim();
     h.run(30, SPRINT);
     h.tick(SLIDE, ['crouch']);
@@ -286,5 +239,115 @@ describe('chutes', () => {
     h.runUntil((s) => s.grounded, 40, { crouch: true });
     expect(h.sim.state.mode).toBe('slide');
     expect(speed(h.sim.state)).toBeGreaterThanOrEqual(cfg.slide.endSpeed);
+  });
+});
+
+describe('steep slopes', () => {
+  it('a slide down a long steep ramp never takes horizontal speed past speedCap', async () => {
+    const deg = 25;
+    const a = (deg * Math.PI) / 180;
+    const len = 200; // z in ±82: inside the test map's bounds
+    const ramp = box('long-ramp', vec3(0, -0.5 * Math.cos(a), 0.5 * Math.sin(a)), vec3(8, 1, len), {
+      rotationDeg: vec3(-deg, 0, 0),
+      kind: 'ramp',
+    });
+    const h = await makeSim({ floor: false, solids: [ramp], spawn: onSlope(deg, 75) });
+    h.run(20, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    expect(h.sim.state.mode).toBe('slide');
+    let max = 0;
+    for (let i = 0; i < 6 * cfg.tickRate && h.sim.state.position.z > 5; i++) {
+      h.tick(SLIDE);
+      max = Math.max(max, speed(h.sim.state));
+    }
+    expect(max).toBeGreaterThan(cfg.speedCap - 0.5); // the slope does reach the cap
+    expect(max).toBeLessThanOrEqual(cfg.speedCap + 1e-6);
+  });
+});
+
+describe('slide boost', () => {
+  const started = (events: { kind: string }[]) => events.filter((e) => e.kind === 'slideStarted') as { kind: 'slideStarted'; boosted: boolean }[];
+
+  it('a sprint slide starts at 12 m/s (8 + boostSpeed 4)', async () => {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    expect(speed(h.sim.state)).toBeCloseTo(cfg.run.sprintSpeed, 2);
+    const events = h.tick(SLIDE, ['crouch']);
+    expect(h.sim.state.mode).toBe('slide');
+    expect(started(events)).toEqual([{ kind: 'slideStarted', boosted: true }]);
+    expect(speed(h.sim.state)).toBeCloseTo(cfg.run.sprintSpeed + cfg.slide.boostSpeed, 1);
+    expect(h.sim.state.slideBoostCooldown).toBeCloseTo(cfg.slide.boostCooldown, 6);
+  });
+
+  it('keeps ≥ 11.3 m/s after 0.5 s on flat (friction 1.2)', async () => {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    h.run(14, SLIDE); // 15 slide ticks = 0.5 s
+    expect(h.sim.state.mode).toBe('slide');
+    expect(speed(h.sim.state)).toBeGreaterThanOrEqual(11.3);
+  });
+
+  /** Boosted slide, then `gap` ticks later releases crouch for one tick and presses crouch again. Returns the second start's events and the speed before it. */
+  async function secondSlide(gapTicks: number) {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    h.run(gapTicks - 2, SLIDE);
+    h.tick(SPRINT); // crouch released: the player stands, still sprinting
+    expect(h.sim.state.mode).toBe('ground');
+    expect(h.sim.state.sprinting).toBe(true);
+    const before = speed(h.sim.state);
+    const events = h.tick(SLIDE, ['crouch']);
+    return { h, events, before };
+  }
+
+  it('a second slide 1.0 s after the first boosted one gets no burst (keeps current speed)', async () => {
+    const { h, events, before } = await secondSlide(30);
+    expect(h.sim.state.mode).toBe('slide');
+    expect(started(events)).toEqual([{ kind: 'slideStarted', boosted: false }]);
+    expect(before).toBeGreaterThan(cfg.run.sprintSpeed + 1);
+    expect(speed(h.sim.state)).toBeLessThanOrEqual(before);
+    expect(speed(h.sim.state)).toBeGreaterThan(before - 0.5);
+    expect(h.sim.state.slideBoostCooldown).toBeGreaterThan(0.9);
+  });
+
+  it('the burst returns 2 s after the start of the boosted slide', async () => {
+    const { events: early } = await secondSlide(58);
+    expect(started(early)[0]?.boosted).toBe(false);
+    const { h, events, before } = await secondSlide(62);
+    expect(started(events)).toEqual([{ kind: 'slideStarted', boosted: true }]);
+    expect(speed(h.sim.state)).toBeGreaterThan(before);
+    expect(speed(h.sim.state)).toBeGreaterThan(cfg.speedCap - 0.05); // 8 + 4 = the 12 m/s cap
+    expect(h.sim.state.slideBoostCooldown).toBeCloseTo(cfg.slide.boostCooldown, 6);
+  });
+
+  it('the burst never passes speedCap: entering at 10 m/s gives 12', async () => {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    h.sim.state.velocity = vec3(0, 0, -10); // injected on the tick before the crouch press: still grounded and sprinting
+    h.tick(SPRINT);
+    expect(h.sim.state.grounded).toBe(true);
+    expect(h.sim.state.sprinting).toBe(true);
+    const events = h.tick(SLIDE, ['crouch']);
+    expect(started(events)).toEqual([{ kind: 'slideStarted', boosted: true }]);
+    expect(speed(h.sim.state)).toBeLessThanOrEqual(cfg.speedCap + 1e-9);
+    expect(speed(h.sim.state)).toBeGreaterThan(cfg.speedCap - 0.1);
+  });
+
+  it('a landing slide (R26) never boosts', async () => {
+    const h = await makeSim();
+    h.run(30, SPRINT);
+    h.tick(SLIDE, ['crouch']);
+    h.tick(SLIDE, ['jump']);
+    h.sim.state.slideBoostCooldown = 0; // as if the cooldown had run out in the air
+    const events: { kind: string }[] = [];
+    for (let i = 0; i < 40 && !h.sim.state.grounded; i++) events.push(...h.tick({ crouch: true }));
+    const airSpeed = speed(h.sim.state);
+    events.push(...h.run(6, { crouch: true }));
+    expect(h.sim.state.mode).toBe('slide');
+    expect(started(events)).toEqual([]);
+    expect(speed(h.sim.state)).toBeLessThanOrEqual(airSpeed + 1e-9);
+    expect(h.sim.state.slideBoostCooldown).toBe(0);
   });
 });

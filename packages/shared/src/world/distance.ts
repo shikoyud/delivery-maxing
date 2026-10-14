@@ -1,6 +1,5 @@
-import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
-import type { MapData, Poi } from './mapTypes';
+import type { OrderRules } from './mapTypes';
 
 export type PathDistance = (from: Vec3, to: Vec3) => number;
 
@@ -10,17 +9,8 @@ export const streetDistance: PathDistance = (from, to) =>
 
 export type Band = 'short' | 'medium' | 'long';
 
-export function bandFor(d: number, bands: OrdersConfig['bands']): Band {
+export function bandFor(d: number, bands: OrderRules['bands']): Band {
   if (d < bands.shortMax) return 'short';
   if (d <= bands.mediumMax) return 'medium';
   return 'long';
-}
-
-export interface PoiInfo { poi: Poi; hubDistance: number; band: Band }
-
-export function buildPoiTable(map: MapData, dist: PathDistance, bands: OrdersConfig['bands']): PoiInfo[] {
-  return map.pois.map((poi) => {
-    const hubDistance = dist(map.hub.center, poi.position);
-    return { poi, hubDistance, band: bandFor(hubDistance, bands) };
-  });
 }

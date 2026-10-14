@@ -1,0 +1,188 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { clientConfig } from '../src/clientConfig';
+import { PHONE_APPS, Phone } from '../src/ui/phone/Phone';
+import { STUB_APPS } from '../src/ui/phone/stubApp';
+import { fakeEvent, installFakeDom, type FakeElement } from './fakeDom';
+import { model, offer } from './phoneFixtures';
+
+describe('Phone', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  let calls: string[];
+  let phone: Phone;
+  const nav = (app: string): FakeElement => dom.host.findAll((e) => e.classList.contains('phone-nav-btn') && e.dataset.app === app)[0]!;
+  const view = (app: string): FakeElement => dom.host.findAll((e) => e.classList.contains('phone-app') && e.dataset.app === app)[0]!;
+
+  beforeEach(() => {
+    dom = installFakeDom();
+    calls = [];
+    phone = new Phone(
+      dom.asHost,
+      {
+        accept: (id) => void calls.push(`accept ${id}`),
+        cancel: (id) => void calls.push(`cancel ${id}`),
+        skipLockout: () => void calls.push('skip'),
+        closed: () => void calls.push('closed'),
+      },
+      ['Escape', 'Tab'],
+    );
+  });
+  afterEach(() => dom.restore());
+
+  it('shows a close hint naming the close keys', () => {
+    expect(dom.host.byClass('phone-footer')[0]!.textContent).toBe('Esc or Tab to close');
+  });
+
+  it('starts closed and hidden', () => {
+    expect(phone.isOpen).toBe(false);
+    expect(dom.host.byClass('phone')[0]!.hidden).toBe(true);
+  });
+
+  it('toggle opens on Orders by default', () => {
+    phone.toggle();
+    expect(phone.isOpen).toBe(true);
+    expect(phone.app).toBe('orders');
+    expect(dom.host.byClass('phone')[0]!.hidden).toBe(false);
+    expect(nav('orders').classList.contains('active')).toBe(true);
+    expect(view('orders').hidden).toBe(false);
+  });
+
+  it('has a nav button and a view for every app', () => {
+    for (const app of PHONE_APPS) {
+      expect(nav(app)).toBeDefined();
+      expect(view(app)).toBeDefined();
+    }
+  });
+
+  it("show('wallet') switches the nav and the view", () => {
+    phone.open();
+    phone.show('wallet');
+    expect(phone.app).toBe('wallet');
+    expect(nav('wallet').classList.contains('active')).toBe(true);
+    expect(nav('orders').classList.contains('active')).toBe(false);
+    expect(view('wallet').hidden).toBe(false);
+    expect(view('orders').hidden).toBe(true);
+  });
+
+  it('clicking a nav button shows that app', () => {
+    phone.open();
+    nav('settings').click();
+    expect(phone.app).toBe('settings');
+  });
+
+  it('open(app) opens on that app', () => {
+    phone.open('wallet');
+    expect(phone.app).toBe('wallet');
+    phone.close();
+    phone.open();
+    expect(phone.app).toBe('orders');
+  });
+
+  it('close calls closed (once) and hides it', () => {
+    phone.open();
+    phone.close();
+    expect(phone.isOpen).toBe(false);
+    expect(calls).toEqual(['closed']);
+    phone.close();
+    expect(calls).toEqual(['closed']);
+    phone.toggle();
+    phone.toggle();
+    expect(calls).toEqual(['closed', 'closed']);
+  });
+
+  it('Esc or Tab closes it and stops the key reaching the game; other keys pass', () => {
+    phone.open();
+    const w = fakeEvent('keydown', { code: 'KeyW' });
+    dom.doc.dispatchEvent(w);
+    expect(phone.isOpen).toBe(true);
+    expect(w.propagationStopped).toBe(false);
+    const esc = fakeEvent('keydown', { code: 'Escape' });
+    dom.doc.dispatchEvent(esc);
+    expect(phone.isOpen).toBe(false);
+    expect(esc.propagationStopped).toBe(true);
+    expect(esc.defaultPrevented).toBe(true);
+    phone.open();
+    dom.doc.dispatchEvent(fakeEvent('keydown', { code: 'Tab' }));
+    expect(phone.isOpen).toBe(false);
+    expect(calls).toEqual(['closed', 'closed']);
+    // Closed: the phone leaves the keys alone (Tab opens it through the game's input).
+    const tab = fakeEvent('keydown', { code: 'Tab' });
+    dom.doc.dispatchEvent(tab);
+    expect(tab.propagationStopped).toBe(false);
+  });
+
+  it('a held close key (auto-repeat) does not close the phone it just opened', () => {
+    phone.open();
+    const rep = fakeEvent('keydown', { code: 'Tab', repeat: true });
+    dom.doc.dispatchEvent(rep);
+    expect(phone.isOpen).toBe(true);
+    expect(rep.defaultPrevented).toBe(true);
+    expect(rep.propagationStopped).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('reopening does not draw the model from the previous open (no stale offers)', () => {
+    phone.open();
+    phone.render(model({ offers: [offer('old')] }));
+    phone.close();
+    phone.open();
+    expect(view('orders').byClass('phone-offer').filter((c) => c.visible)).toHaveLength(0);
+    phone.render(model({ offers: [offer('new')] }));
+    expect(view('orders').byClass('phone-offer').map((c) => c.dataset.id)).toEqual(['new']);
+  });
+
+  it('render draws the Orders app and its buttons reach the callbacks', () => {
+    phone.open();
+    phone.render(model({ offers: [offer('x1')] }));
+    expect(view('orders').byClass('phone-offer')).toHaveLength(1);
+    view('orders').findAll((e) => e.dataset.action === 'accept')[0]!.click();
+    expect(calls).toEqual(['accept x1']);
+  });
+
+  it('switching apps re-renders with the last model', () => {
+    phone.open();
+    phone.render(model({ totals: { points: 4, coins: 44, deliveries: 2 } }));
+    phone.show('wallet');
+    expect(view('wallet').textContent).toContain('44');
+  });
+
+  it('stub apps say when they arrive; settings lists the key bindings from config', () => {
+    expect(STUB_APPS).toMatchObject({
+      garage: { sp: 4 },
+      shop: { sp: 6 },
+      wardrobe: { sp: 6 },
+      leaderboard: { sp: 7 },
+      settings: { sp: 3 },
+    });
+    phone.open('garage');
+    expect(view('garage').textContent).toContain('Garage');
+    expect(view('garage').textContent).toContain('Coming in SP4');
+    expect(view('leaderboard').textContent).toContain('Coming in SP7');
+    const settings = view('settings').textContent;
+    expect(settings).toContain('Coming in SP3');
+    expect(settings).toContain('Tab');
+    expect(settings).toContain(clientConfig.input.bindings.accept[0]!.replace('Key', ''));
+    expect(settings).toContain('Esc');
+  });
+
+  it('setMapApp replaces the Map placeholder', () => {
+    const doc = dom.doc;
+    const el = doc.createElement('div');
+    const seen: number[] = [];
+    phone.setMapApp({ el: el as unknown as HTMLElement, render: (m) => void seen.push(m.totals.coins) });
+    phone.open('map');
+    phone.render(model({ totals: { points: 0, coins: 9, deliveries: 0 } }));
+    expect(seen).toEqual([9]);
+    expect(view('map')).toBe(el);
+  });
+
+  it('forwards the player position and heading to the Map app', () => {
+    const seen: string[] = [];
+    phone.setMapApp({
+      el: dom.doc.createElement('div') as unknown as HTMLElement,
+      render: (_m, p, h) => void seen.push(`${p.x},${p.z},${h}`),
+    });
+    phone.open('map');
+    phone.render(model(), { x: 3, y: 0, z: -4 }, 1.5);
+    expect(seen).toEqual(['3,-4,1.5']);
+  });
+});

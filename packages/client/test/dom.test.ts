@@ -11,14 +11,16 @@ describe('keyLabel', () => {
     expect(keyLabel('Space')).toBe('Space');
   });
 
-  it('labels the configured interact binding (kiosk prompt)', () => {
+  it('labels the configured interact, phone and accept bindings', () => {
     expect(keyLabel(clientConfig.input.bindings.interact[0]!)).toBe('E');
+    expect(keyLabel(clientConfig.input.bindings.phone[0]!)).toBe('Tab');
+    expect(keyLabel(clientConfig.input.bindings.accept[0]!)).toBe('Y');
   });
 });
 
 describe('ui tuning', () => {
   it('is in config', () => {
-    expect(clientConfig.ui.expressUrgentSeconds).toBeGreaterThan(0);
+    expect(clientConfig.ui.timerUrgentSeconds).toBeGreaterThan(0);
     expect(clientConfig.ui.maxPopups).toBeGreaterThanOrEqual(1);
   });
 });

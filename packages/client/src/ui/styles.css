@@ -73,26 +73,9 @@ body {
 /* ---------- Shared bits ---------- */
 
 .hud,
-.popups,
-.board-overlay {
+.popups {
   font-variant-numeric: tabular-nums;
 }
-
-.chip {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--dm-ink);
-}
-
-.chip-express { background: #7a5ae0; }
-.chip-fragile { background: #d4497f; }
-.chip-heavy { background: #4a5a63; }
 
 kbd {
   display: inline-block;
@@ -115,7 +98,8 @@ kbd {
   pointer-events: none;
 }
 
-.hud-orders {
+/* Active orders, top left. */
+.hud-active {
   position: absolute;
   left: 16px;
   top: 16px;
@@ -126,7 +110,7 @@ kbd {
 }
 
 .hud-order,
-.hud-empty {
+.hud-offer {
   padding: 9px 12px 10px;
   border-radius: 10px;
   background: rgba(22, 50, 58, 0.82);
@@ -138,18 +122,9 @@ kbd {
   border-left: 6px solid var(--slot, var(--dm-teal));
 }
 
-.hud-empty {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.hud-empty span {
-  font-weight: 400;
-  opacity: 0.75;
-  font-size: 13px;
-}
-
-.hud-order-top {
+.hud-order-top,
+.hud-offer-top,
+.hud-offer-bottom {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -185,15 +160,15 @@ kbd {
   font-weight: 700;
 }
 
-.hud-timer { color: #c9b8ff; }
+.hud-timer { color: #9fe7dc; }
 .hud-timer.urgent { color: #ffd166; }
+/* Past the limit: the order still completes, only the bonus is gone. */
 .hud-timer.late,
 .hud-fragile.broken { color: #ff9a8f; }
-.hud-par { color: #9fe7dc; }
-/* Past par: dimmed, not red; the order still completes. */
-.hud-par.late { color: #fff; opacity: 0.55; }
+.hud-kg { color: #c9b8ff; }
 .hud-fragile { color: #9fe7dc; }
 
+/* Totals and load, top right. */
 .hud-totals {
   position: absolute;
   right: 16px;
@@ -224,7 +199,8 @@ kbd {
 .hud-coins .hud-stat-value { color: var(--dm-coral); }
 .hud-points .hud-stat-value { color: var(--dm-teal); }
 
-.hud-stat-label {
+.hud-stat-label,
+.hud-load-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -232,49 +208,101 @@ kbd {
   opacity: 0.7;
 }
 
-.hud-slots {
+.hud-load {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 8px;
   padding-top: 6px;
   border-top: 1px solid rgba(22, 50, 58, 0.15);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
 }
 
-.hud-slots span {
-  margin-right: 4px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-.hud-slots i {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  border: 2px solid var(--dm-teal);
-}
-
-.hud-slots i.full { background: var(--dm-teal); }
-.hud-slots b { margin-left: 4px; }
-
-.hud-prompt {
+/* Safe-zone and lockout chips, top centre. */
+.hud-chips {
   position: absolute;
   left: 50%;
-  bottom: 22%;
+  top: 16px;
   transform: translateX(-50%);
-  padding: 8px 14px;
-  border-radius: 10px;
-  background: rgba(22, 50, 58, 0.85);
-  color: var(--dm-paper);
+  display: flex;
+  gap: 8px;
+}
+
+.hud-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.hud-chip[hidden] { display: none; }
+.hud-safe { background: rgba(31, 158, 147, 0.9); }
+.hud-lockout { background: rgba(242, 113, 102, 0.92); }
+
+/* Offer toasts, bottom right; the top one takes the accept key. */
+.hud-offers {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 320px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+}
+
+.hud-offer {
+  border-left: 6px solid #8d9aa1;
+  opacity: 0.85;
+}
+
+.hud-offer.top { opacity: 1; }
+.hud-offer-food { border-left-color: #f2913d; }
+.hud-offer-package { border-left-color: #8a6cf0; }
+
+.hud-kind {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.hud-offer-time {
+  margin-left: auto;
   font-size: 15px;
+  font-weight: 800;
+}
+
+.hud-offer-text {
+  margin-top: 2px;
+  font-size: 14px;
   font-weight: 600;
 }
 
-.hud-prompt[hidden] { display: none; }
+.hud-offer-bottom { margin-top: 6px; }
+
+.hud-reward {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+.hud-offer-accept {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hud-offer-blocked {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f6b9ae;
+}
 
 /* ---------- Popups ---------- */
 
@@ -327,295 +355,203 @@ kbd {
   100% { opacity: 0; transform: translateY(-6px); }
 }
 
-/* ---------- Order Board ---------- */
+/* ---------- Phone ---------- */
 
-.board-overlay {
+/* Dimmed backdrop: the game and HUD stay visible behind the handset. */
+.phone {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(22, 50, 58, 0.45);
-  backdrop-filter: blur(2px);
+  justify-content: center; /* clear of the HUD corners (orders, totals, offers) and the top chips */
+  padding: 56px 16px 16px;
+  box-sizing: border-box;
+  background: rgba(22, 50, 58, 0.38);
+  z-index: 15;
+  font-variant-numeric: tabular-nums;
 }
 
-.board-overlay[hidden] { display: none; }
+.phone[hidden] { display: none; }
 
-.board-panel {
-  width: min(920px, 100%);
-  max-height: 100%;
-  overflow: auto;
-  padding: 18px 20px 20px;
-  border-radius: 16px;
+.phone-device {
+  display: flex;
+  flex-direction: column;
+  width: min(360px, 100%);
+  height: min(680px, 100%);
+  border-radius: 34px;
+  border: 10px solid #10262d;
   background: var(--dm-paper);
-  border-top: 6px solid var(--dm-teal);
-  box-shadow: 0 16px 50px rgba(22, 50, 58, 0.4);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
 }
 
-.board-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+.phone-title {
+  padding: 12px 18px 8px;
+  font-size: 18px;
+  font-weight: 800;
+  background: var(--dm-teal);
+  color: #fff;
 }
 
-.board-brand {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dm-teal);
+.phone-screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
 }
 
-.board-brand b { color: var(--dm-coral); }
+.phone-screen[hidden] { display: block; visibility: hidden; } /* blank until a fresh model, keeps the layout */
 
-.board-title h2 {
-  margin: 2px 0 0;
-  font-size: 28px;
+.phone-app[hidden],
+.phone-lockout[hidden],
+.phone-empty[hidden] { display: none; }
+
+.phone-nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 8px;
+  background: #e9e2d3;
+  border-top: 1px solid rgba(22, 50, 58, 0.12);
 }
 
-.board-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.board-pill {
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(31, 158, 147, 0.12);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.board-panel button {
-  font: inherit;
+.phone-nav-btn,
+.phone-btn {
+  font: 600 12px/1.2 system-ui, sans-serif;
+  border: 0;
+  border-radius: 10px;
   cursor: pointer;
 }
 
-.board-close {
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 8px;
+.phone-nav-btn {
+  padding: 8px 2px;
+  background: transparent;
+  color: var(--dm-ink);
+}
+
+.phone-nav-btn.active {
   background: var(--dm-ink);
-  color: var(--dm-paper);
-  font-size: 13px !important;
-  font-weight: 700 !important;
+  color: #fff;
 }
 
-/* Board refresh flash (R28): while Accept is guarded after a refresh, the cards and the timer pill glow. */
-.board-refreshed .board-card:not(.empty) {
-  box-shadow: 0 0 0 3px var(--dm-teal);
-  transition: box-shadow 0.2s ease-out;
+.phone-section {
+  margin: 12px 2px 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #557078;
 }
 
-.board-refreshed .board-refresh {
-  background: var(--dm-teal);
-  color: var(--dm-paper);
-}
-
-.board-notice {
-  margin-top: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(242, 113, 102, 0.14);
-  border-left: 4px solid var(--dm-coral);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.board-notice[hidden] { display: none; }
-
-.board-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-@media (max-width: 760px) {
-  .board-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-.board-card {
+.phone-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 12px;
+  gap: 8px;
+}
+
+.phone-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: #fff;
-  border: 2px solid rgba(22, 50, 58, 0.1);
+  border-left: 5px solid var(--dm-teal);
+  box-shadow: 0 2px 6px rgba(22, 50, 58, 0.12);
 }
 
-.board-card.empty {
-  align-items: center;
-  justify-content: center;
-  min-height: 150px;
-  background: transparent;
-  border-style: dashed;
-  color: rgba(22, 50, 58, 0.6);
-  text-align: center;
-}
+.phone-offer-food { border-left-color: #f2913d; }
+.phone-offer-package { border-left-color: #8a6cf0; }
 
-.board-card.empty span { font-weight: 700; }
-.board-card.empty small { font-size: 12px; }
-
-.board-card-top {
+.phone-card-top {
   display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.type-badge {
-  padding: 2px 8px;
-  border-radius: 6px;
+  justify-content: space-between;
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--dm-teal);
-}
-
-.type-pickup .type-badge,
-.board-active-row .type-badge { background: #2f7f9e; }
-.type-chain .type-badge { background: #5b6b9e; }
-
-.board-route {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 14px;
   font-weight: 700;
-  line-height: 1.35;
+  color: #557078;
 }
 
-.board-route li {
-  position: relative;
-  padding-left: 16px;
+.phone-card-text {
+  font-size: 14px;
+  font-weight: 600;
 }
 
-/* A dotted stop line: one dot per step. */
-.board-route li::before {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dm-teal);
+.phone-reward {
+  font-size: 13px;
+  font-weight: 700;
+  color: #b07a00;
 }
 
-.board-route li + li::after {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: -6px;
-  height: 11px;
-  border-left: 1px dashed rgba(22, 50, 58, 0.35);
+.phone-timers {
+  font-size: 13px;
+  color: #137a71;
 }
 
-.board-facts {
+.phone-btn {
+  align-self: flex-end;
+  margin-top: 4px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.phone-accept { background: var(--dm-teal); }
+.phone-cancel { background: var(--dm-coral); }
+.phone-skip { background: var(--dm-ink); align-self: auto; margin: 0; }
+.phone-btn:disabled { background: #b9c4c6; cursor: not-allowed; }
+
+.phone-lockout {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-}
-
-.board-facts span {
-  padding: 2px 7px;
-  border-radius: 5px;
-  background: rgba(22, 50, 58, 0.07);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.board-reward {
-  font-size: 15px;
-}
-
-.board-reward b { color: var(--dm-teal); }
-
-.board-bonus {
-  margin-top: -4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #7a5ae0;
-}
-
-.board-bonus-par { color: var(--dm-teal); }
-.board-bonus + .board-bonus { margin-top: -8px; }
-
-.board-card .accept {
-  margin-top: auto;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: var(--dm-coral);
-  color: #fff;
-  font-weight: 800;
-  font-size: 15px;
-}
-
-.board-card .accept:hover:not(:disabled) { filter: brightness(1.06); }
-
-.board-card .accept:disabled {
-  background: rgba(22, 50, 58, 0.12);
-  color: rgba(22, 50, 58, 0.7);
-  cursor: default;
-}
-
-.board-section {
-  margin: 18px 0 8px;
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-.board-active {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.board-active-row {
-  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: #fff;
-  border-left: 6px solid var(--slot, var(--dm-teal));
-}
-
-.board-active-stage {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.board-active-row .cancel {
-  margin-left: auto;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 2px solid var(--dm-coral);
-  background: transparent;
-  color: #c2463c;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(242, 113, 102, 0.16);
+  font-size: 13px;
   font-weight: 700;
 }
 
-.board-active-row .cancel:disabled {
-  border-color: rgba(22, 50, 58, 0.2);
-  color: rgba(22, 50, 58, 0.5);
-  cursor: default;
+.phone-lockout-text { flex: 1 1 100%; }
+
+.phone-devstub {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px dashed #557078;
+  font-size: 11px;
+  font-weight: 600;
+  color: #557078;
 }
 
-.board-active-empty {
-  font-size: 14px;
-  opacity: 0.7;
+.phone-empty,
+.phone-note,
+.phone-stub-when {
+  font-size: 13px;
+  color: #557078;
 }
+
+.phone-wallet-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 4px;
+  border-bottom: 1px solid rgba(22, 50, 58, 0.1);
+  font-size: 15px;
+}
+
+.phone-wallet-value { font-size: 18px; }
+.phone-wallet-row.coins .phone-wallet-value { color: var(--dm-coral); }
+.phone-wallet-row.points .phone-wallet-value { color: var(--dm-teal); }
+
+.phone-stub-title { margin: 8px 0 2px; font-size: 18px; }
+
+.phone-bindings {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.phone-bindings dt { color: #557078; }
+.phone-bindings dd { margin: 0; font-weight: 700; }
 
 .debug-overlay {
   position: absolute;
@@ -648,4 +584,14 @@ kbd {
   width: 100%;
   box-sizing: border-box;
   font: 11px ui-monospace, Menlo, Consolas, monospace;
+}
+
+.phone-map-canvas { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; }
+
+.phone-footer {
+  padding: 0 12px 8px;
+  background: #e9e2d3;
+  text-align: center;
+  font-size: 12px;
+  color: #557078;
 }

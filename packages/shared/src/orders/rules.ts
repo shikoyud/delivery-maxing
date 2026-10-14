@@ -1,48 +1,47 @@
 import type { OrdersConfig } from '../config/types';
-import type { Bonus, Modifier, Order, OrderType, Step } from './types';
+import type { Poi } from '../world/mapTypes';
+import type { Bonus, Order, OrderKind, WeightClass } from './types';
 
-export function orderSteps(type: OrderType, poiIds: string[]): Step[] {
-  const pois: Step[] = poiIds.map((poiId) => ({ kind: 'poi', poiId }));
-  return type === 'dropoff' ? pois : [...pois, { kind: 'hub' }];
+export function weightClassFor(kg: number, cfg: OrdersConfig['weightClasses']): WeightClass {
+  if (kg <= cfg.smallMax) return 'small';
+  if (kg <= cfg.mediumMax) return 'medium';
+  if (kg <= cfg.largeMax) return 'large';
+  return 'bulky';
 }
 
-export function expressLimit(routeDistance: number, baseSprintSpeed: number, cfg: OrdersConfig): number {
-  return (cfg.express.distanceFactor * routeDistance) / baseSprintSpeed + cfg.express.extraSeconds;
+/** Hot limit for food, par limit for packages (seconds from pickup). */
+export function timeLimit(kind: OrderKind, distance: number, cfg: OrdersConfig): number {
+  const rule = kind === 'food' ? cfg.hot : cfg.par;
+  return (rule.distanceFactor * distance) / cfg.referenceSpeed + rule.extraSeconds;
 }
 
-export function parLimit(routeDistance: number, baseSprintSpeed: number, cfg: OrdersConfig): number {
-  return (cfg.par.distanceFactor * routeDistance) / baseSprintSpeed + cfg.par.extraSeconds;
-}
-
-export function slotsFor(modifier: Modifier | null, cfg: OrdersConfig): number {
-  return modifier === 'heavy' ? cfg.heavy.slots : 1;
+export function expressLimit(distance: number, cfg: OrdersConfig): number {
+  return (cfg.express.distanceFactor * distance) / cfg.referenceSpeed + cfg.express.extraSeconds;
 }
 
 export function scoreOrder(
   order: Order,
-  outcome: { onTime: boolean; intact: boolean; withinPar: boolean },
+  outcome: { inTime: boolean; expressOnTime: boolean; intact: boolean },
   cfg: OrdersConfig,
 ): { points: number; coins: number; bonuses: Bonus[] } {
-  const key = order.type === 'chain' || order.band === null ? 'chain' : order.band;
-  let points = cfg.points[key];
-  let coins = cfg.coins[key];
+  const mult = order.kind === 'package' && order.weightClass ? cfg.weightMultiplier[order.weightClass] : 1;
+  let points = Math.round(cfg.points[order.band] * mult);
+  let coins = Math.round(cfg.coins[order.band] * mult);
   const bonuses: Bonus[] = [];
-  if (order.type !== 'chain') {
-    const earned =
-      (order.modifier === 'express' && outcome.onTime) ||
-      (order.modifier === 'fragile' && outcome.intact) ||
-      order.modifier === 'heavy';
-    if (earned && order.modifier) {
-      const bonusKey = order.modifier === 'express' ? 'expressOnTime' : order.modifier === 'fragile' ? 'fragileIntact' : 'heavy';
-      points += cfg.points[bonusKey];
-      coins += cfg.coins[bonusKey];
-      bonuses.push(order.modifier);
-    }
-  }
-  if (outcome.withinPar) {
-    points += cfg.points.withinPar;
-    coins += cfg.coins.withinPar;
-    bonuses.push('par');
+  const add = (b: Bonus): void => {
+    points += cfg.points[b];
+    coins += cfg.coins[b];
+    bonuses.push(b);
+  };
+  if (outcome.inTime) add(order.kind === 'food' ? 'hot' : 'par');
+  if (order.kind === 'package') {
+    if (order.modifier === 'express' && outcome.expressOnTime) add('express');
+    if (order.modifier === 'fragile' && outcome.intact) add('fragile');
   }
   return { points, coins, bonuses };
+}
+
+export function orderText(order: Order, pickup: Poi, dropoff: Poi): { pickup: string; dropoff: string } {
+  const kg = order.kind === 'package' && order.weightKg !== null ? ` (${order.weightKg} kg)` : '';
+  return { pickup: `Pick up ${order.item} from ${pickup.name}${kg}`, dropoff: `Deliver to ${dropoff.name}` };
 }

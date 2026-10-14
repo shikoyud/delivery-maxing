@@ -1,0 +1,7 @@
+{
+  "walk": { "slots": 1, "maxPackageKg": 0, "topSpeed": 8 },
+  "skateboard": { "slots": 1, "maxPackageKg": 0, "topSpeed": 12 },
+  "bicycle": { "slots": 2, "maxPackageKg": 0, "topSpeed": 16 },
+  "motorbike": { "slots": 3, "maxPackageKg": 50, "topSpeed": 22 },
+  "car": { "slots": 5, "maxPackageKg": 150, "topSpeed": 28 }
+}

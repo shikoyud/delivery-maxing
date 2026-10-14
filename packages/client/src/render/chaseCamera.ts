@@ -1,7 +1,7 @@
 import type * as THREE from 'three';
 import type { PlayerState, Vec3 } from '@dm/shared';
 import type { ChaseConfig, ClientConfig } from '../clientConfig';
-import { easeToward, fovForSpeed, rollForWallRun } from './cameraRig';
+import { easeToward, fovForSpeed } from './cameraRig';
 
 type CameraConfig = ClientConfig['camera'];
 
@@ -136,7 +136,7 @@ export function chaseCameraPose(
 
 /**
  * The chase camera: follows the pivot with a slight lag (followEaseRate), pulls the boom in at once when geometry
- * blocks it and lets it back out slowly (pushOutEaseRate), widens the FOV with speed and rolls during wall-runs.
+ * blocks it and lets it back out slowly (pushOutEaseRate), widens the FOV with speed.
  * Recovery is eased as a share of the open-ground pose (boom extent, and the rise a ceiling allowed), so mouse look on
  * open ground moves the camera at once. R10: the camera never passes the point where its collision ball touches a
  * surface; whenever that leaves the camera closer than minDistance to the courier's own pivot, `courierHidden` turns
@@ -149,7 +149,6 @@ export class ChaseCamera {
   private extent = 1;
   /** Rise above the pivot as a share of the open-ground rise (below 1 under or just after a ceiling). */
   private riseShare = 1;
-  private roll = 0;
   private toCourier = 0;
   private readonly probe: WallProbe;
   private readonly courierRadius: () => number;
@@ -185,11 +184,11 @@ export class ChaseCamera {
     this.follow = null;
   }
 
-  update(frameDt: number, target: Vec3, yaw: number, pitch: number, speed: number, state: PlayerState): void {
+  update(frameDt: number, target: Vec3, yaw: number, pitch: number, speed: number): void {
     const ch = this.cfg.chase;
     const dt = Math.max(0, frameDt);
     const snapping = this.follow === null;
-    const pivot = this.wallShifted(target, state);
+    const pivot = this.wallShifted(target);
     const follow = snapping ? { ...pivot } : this.easeFollow(this.follow!, pivot, dt, ch);
     this.follow = follow;
 
@@ -206,10 +205,8 @@ export class ChaseCamera {
     const p = add(follow, pose.direction, this.dist);
     this.camera.position.set(p.x, p.y, p.z);
     this.toCourier = Math.hypot(p.x - target.x, p.y - target.y, p.z - target.z);
-    // Roll is clockwise-positive (see rollForWallRun); three's rotation.z is counter-clockwise-positive.
-    this.roll = easeToward(this.roll, rollForWallRun(state, this.cfg), dt, this.cfg.rollEaseRate);
     const v = pose.view;
-    this.camera.rotation.set(Math.asin(Math.max(-1, Math.min(1, v.y))), Math.atan2(-v.x, -v.z), -this.roll);
+    this.camera.rotation.set(Math.asin(Math.max(-1, Math.min(1, v.y))), Math.atan2(-v.x, -v.z), 0);
     const fov = easeToward(this.camera.fov, fovForSpeed(speed, this.cfg), dt, this.cfg.fovEaseRate);
     if (Math.abs(this.camera.fov - fov) > 1e-4) {
       this.camera.fov = fov;
@@ -218,30 +215,21 @@ export class ChaseCamera {
   }
 
   /**
-   * R12/R13: the pivot moved off the courier's axis along a wall normal, so the boom has room beside the wall.
-   * - Wall-running: the normal of the wall being run (state.wallRun.normal), by the full wallPivotOffset (the run holds
-   *   the courier flush against it).
-   * - Otherwise: the nearest wall face the probe finds within capsuleRadius + wallPivotOffset, by
-   *   max(0, capsuleRadius + wallPivotOffset − d) for a face d away. About wallPivotOffset when flush and fading to 0
-   *   at the edge of the reach, so brushing past a corner never jumps the pivot sideways.
+   * R12/R13: the pivot moved off the courier's axis along a wall normal, so the boom has room beside the wall: along
+   * the nearest wall face the probe finds within capsuleRadius + wallPivotOffset, by
+   * max(0, capsuleRadius + wallPivotOffset − d) for a face d away. About wallPivotOffset when flush and fading to 0 at
+   * the edge of the reach, so brushing past a corner never jumps the pivot sideways.
    * A sphere cast from the courier's pivot limits the move (a narrow gap never pushes it into the opposite wall), and
    * the followed point eases toward the result (followEaseRate), so the shift also eases in and out.
    */
-  private wallShifted(target: Vec3, state: PlayerState): Vec3 {
+  private wallShifted(target: Vec3): Vec3 {
     const k = this.cfg.chase.wallPivotOffset;
     if (k <= 0) return target;
-    let n: Vec3;
-    let shift: number;
-    if (state.mode === 'wallrun' && state.wallRun.normal) {
-      n = state.wallRun.normal;
-      shift = k;
-    } else {
-      const reach = this.courierRadius() + k;
-      const wall = this.probe(target, reach);
-      if (!wall) return target;
-      n = wall.normal;
-      shift = Math.max(0, reach - wall.distance);
-    }
+    const reach = this.courierRadius() + k;
+    const wall = this.probe(target, reach);
+    if (!wall) return target;
+    const n = wall.normal;
+    const shift = Math.max(0, reach - wall.distance);
     if (shift <= 0) return target;
     return add(target, n, this.cast(target, n, shift) ?? shift);
   }

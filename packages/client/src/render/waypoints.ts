@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Vec3 } from '@dm/shared';
+import { vehiclesConfig, type Vec3 } from '@dm/shared';
 import { slotColors } from './palette';
 
 export interface Waypoints {
@@ -12,6 +12,9 @@ export interface Waypoints {
 const BEAM_HEIGHT = 80;
 const BEAM_RADIUS = 1.4;
 const PULSE = 0.12;
+
+/** One beam per active order: the largest carrier (the car) has the most slots. */
+export const MAX_WAYPOINTS = vehiclesConfig.car.slots;
 
 /** The colour of order slot `i` (wraps if a dev setting ever exceeds the palette). */
 export const slotColor = (i: number): number => slotColors[i % slotColors.length]!;

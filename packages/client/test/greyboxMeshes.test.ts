@@ -9,8 +9,10 @@ describe('buildGreyboxMeshes', () => {
     const map = expandGreybox(greybox as GreyboxSource);
     map.solids.push({ id: 'ramp-1', kind: 'ramp', center: vec3(0, 1, 0), size: vec3(4, 1, 8), rotationDeg: vec3(15, 0, 0) });
     const group = buildGreyboxMeshes(map);
-    const kinds = new Set(map.solids.map((s) => s.kind));
+    // Hospital blocks are drawn by buildHospitalMeshes, not here.
+    const kinds = new Set(map.solids.map((s) => s.kind).filter((k) => k !== 'hospital'));
     expect(group.children).toHaveLength(kinds.size);
+    expect(group.getObjectByName('greybox-hospital')).toBeUndefined();
     const buildings = group.children.find((c) => c.name === 'greybox-building') as THREE.Mesh;
     const count = map.solids.filter((s) => s.kind === 'building').length;
     expect(buildings.geometry.getAttribute('position').count).toBe(count * 24);

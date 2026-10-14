@@ -13,29 +13,22 @@ export const palette = {
   gridLine: 0xc4bba6,
   teal: 0x1f9e93,
   coral: 0xf27166,
-  cable: 0x4a5a63,
-  post: 0x5f7480,
-  rail: 0xe6edf0,
-  padDisc: 0x1f9e93,
-  padRing: 0xffffff,
-  padArrow: 0xfff1a8,
-  orb: 0xffd94a,
-  chuteStripe: 0xfff6ea,
-  plazaRing: 0x1f9e93,
-  dropZone: 0x9fdcd4,
-  dropZoneRing: 0xfff6ea,
-  kioskBody: 0x1f9e93,
-  kioskCounter: 0xf7f3ea,
-  kioskCanopy: 0xf27166,
-  kioskScreen: 0x16323a,
-  poiIdle: 0x7d929c,
-  poiTarget: 0xf27166,
+  /** Skateboard wheels. */
+  wheel: 0xe6edf0,
+  /** POI door markers by role: food pickup, package pickup, dropoff. */
+  poiFood: 0xf2913d,
+  poiPackage: 0x8a6cf0,
+  poiDrop: 0x8d9aa1,
+  /** Hospital block and its cross; the safe-zone ring. */
+  hospital: 0xf7f6f2,
+  hospitalCross: 0xd93a3a,
+  safeZone: 0x5fc9a8,
   /** Cardboard parcels on the courier's back. */
   parcel: 0xd8b98a,
 } as const;
 
 /**
- * One colour per active-order slot (backpack holds up to 5): waypoint beams and the HUD swatches share them.
+ * One colour per active-order slot (the car, the largest carrier, holds 5): waypoint beams and the HUD swatches share them.
  * Ordered so the first slots read best against the sky and the sand.
  */
 export const slotColors = [0xf27166, 0x8a6cf0, 0x16b3a4, 0xe25c9e, 0x3d7fe0] as const;
@@ -48,8 +41,7 @@ export const kindColor: Record<SolidKind, number> = {
   building: 0xe8e1d3,
   prop: 0x8fb8b3,
   ramp: 0x6fc2b8,
-  chute: 0xf28b80,
-  hub: 0x1f9e93,
+  hospital: 0xf7f6f2,
 };
 
 /** Facade tints mixed into buildings (cream, pale teal, pale coral, sand, stone). */

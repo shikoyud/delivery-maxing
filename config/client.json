@@ -1,5 +1,5 @@
 {
-  "camera": { "fovBase": 80, "fovMax": 96, "fovSpeedMin": 8, "fovSpeedMax": 18, "wallRunRollDeg": 8, "rollEaseRate": 10, "fovEaseRate": 6, "crouchEaseRate": 12, "near": 0.1, "far": 1000,
+  "camera": { "fovBase": 80, "fovMax": 96, "fovSpeedMin": 8, "fovSpeedMax": 18, "fovEaseRate": 6, "crouchEaseRate": 12, "near": 0.1, "far": 1000,
     "chase": { "distance": 4.5, "height": 1.6, "pivotHeight": 1.3, "crouchPivotHeight": 0.8, "lookAtHeight": 1.9,
       "pitchMinDeg": -55, "pitchMaxDeg": 35, "followEaseRate": 14, "collisionRadius": 0.3,
       "minDistance": 0.8, "pushOutEaseRate": 6, "wallPivotOffset": 0.6 } },
@@ -8,8 +8,9 @@
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
     "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "board": ["KeyQ"], "hit": ["Mouse0"],
+    "phone": ["Tab"], "accept": ["KeyY"], "mount": ["KeyF"],
     "devPanel": ["Backquote"], "debugOverlay": ["F3"] } },
-  "courier": { "height": 1.8, "turnEaseRate": 14, "facingMinSpeed": 1.0, "dismountEaseRate": 8,
+  "courier": { "height": 1.8, "turnEaseRate": 14, "facingMinSpeed": 1.0,
     "crossFade": 0.15, "runSpeedForFullRun": 8, "runMinTimeScale": 0.7,
     "idleSpeed": 0.3, "walkMaxSpeed": 4, "fallSpeed": 2, "airClip": [0.2, 0.36],
     "packages": { "size": 0.22, "gap": 0.02, "columns": 3 },
@@ -17,14 +18,6 @@
     "poses": {
       "slide": { "drop": 0, "hipDrop": 0.42, "body": [0, 0, 0],
         "bones": { "Abdomen": [55, 0, 0], "UpperLegL": [80, 0, 0], "UpperLegR": [80, 0, 0], "UpperArmL": [-20, 0, -70], "UpperArmR": [-20, 0, 70] } },
-      "wallrunL": { "drop": -0.2, "hipDrop": 0, "body": [0, 0, -32],
-        "bones": { "UpperArmR": [0, 0, 60] } },
-      "wallrunR": { "drop": -0.2, "hipDrop": 0, "body": [0, 0, 32],
-        "bones": { "UpperArmL": [0, 0, -60] } },
-      "zip": { "drop": -0.21, "hipDrop": 0, "body": [0, 0, 0],
-        "bones": { "UpperArmL": [20, 0, -145], "UpperArmR": [20, 0, 145], "UpperLegL": [20, 0, 0], "UpperLegR": [20, 0, 0], "LowerLegL": [-35, 0, 0], "LowerLegR": [-35, 0, 0] } },
-      "grind": { "drop": 0, "hipDrop": 0, "body": [0, 60, 0],
-        "bones": { "UpperArmL": [0, 0, -70], "UpperArmR": [0, 0, 70], "UpperLegL": [0, 0, -15], "UpperLegR": [0, 0, 15], "Head": [0, -50, 0] } },
       "mantle": { "drop": 0, "hipDrop": 0, "body": [0, 0, 0],
         "bones": { "Abdomen": [-30, 0, 0], "UpperArmL": [-60, 0, 0], "UpperArmR": [-60, 0, 0] } },
       "board": { "drop": 0, "hipDrop": 0, "body": [0, 90, 0],
@@ -33,5 +26,5 @@
         "bones": { "UpperArmL": [0, 0, -110], "UpperArmR": [0, 0, 110], "UpperLegL": [0, 0, -15], "UpperLegR": [0, 0, 15] } },
       "crouch": { "drop": 0, "hipDrop": 0.2, "body": [0, 0, 0],
         "bones": { "Abdomen": [-60.0, 0, 0], "UpperLegL": [80.0, 0, 0], "UpperLegR": [80.0, 0, 0], "LowerLegL": [-125.0, 0, 0], "LowerLegR": [-125.0, 0, 0], "UpperArmL": [125, 0, 0], "UpperArmR": [125, 0, 0] } } } },
-  "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "expressUrgentSeconds": 10, "boardRefreshGuardSeconds": 0.75 }
+  "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "timerUrgentSeconds": 10 }
 }

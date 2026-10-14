@@ -51,6 +51,22 @@ describe('ActionState', () => {
     expect(a.sampleTick().interact).toEqual({ held: true, pressed: true });
   });
 
+  it('Tab latches phone, Y latches accept, F latches mount', () => {
+    const a = make();
+    a.keyDown('Tab');
+    a.keyUp('Tab');
+    a.keyDown('KeyY');
+    a.keyUp('KeyY');
+    a.keyDown('KeyF');
+    a.keyUp('KeyF');
+    const f = a.sampleTick();
+    expect(f.phone).toEqual({ held: true, pressed: true });
+    expect(f.accept).toEqual({ held: true, pressed: true });
+    expect(f.mount).toEqual({ held: true, pressed: true });
+    const g = a.sampleTick();
+    for (const b of [g.phone, g.accept, g.mount]) expect(b).toEqual({ held: false, pressed: false });
+  });
+
   it('releaseAll clears held buttons and movement (Review Focus 2)', () => {
     const a = make();
     a.keyDown('KeyW');
@@ -94,7 +110,7 @@ describe('ActionState', () => {
     a.mouseDown(2);
     const f = a.sampleTick();
     expect(f.move).toEqual({ x: 0, y: 0 });
-    for (const b of [f.jump, f.crouch, f.sprint, f.interact, f.hit, f.board]) expect(b).toEqual({ held: false, pressed: false });
+    for (const b of [f.jump, f.crouch, f.sprint, f.interact, f.hit, f.board, f.phone, f.accept, f.mount]) expect(b).toEqual({ held: false, pressed: false });
     expect(onUi).not.toHaveBeenCalled();
     a.keyDown('Backquote');
     a.keyDown('F3');

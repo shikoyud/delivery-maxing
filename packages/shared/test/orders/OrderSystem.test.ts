@@ -1,335 +1,325 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import { OrderSystem } from '../../src/orders/OrderSystem';
-import type { Order } from '../../src/orders/types';
-import { mulberry32 } from '../../src/util/rng';
+import type { OrdersConfig } from '../../src/config/types';
 import { vec3 } from '../../src/math/vec3';
-import { bandFor, streetDistance, type PoiInfo } from '../../src/world/distance';
+import { OrderSystem, type OrderEvent, type OrderSystemOptions } from '../../src/orders/OrderSystem';
+import type { CarrierCapacity } from '../../src/orders/types';
+import type { Rng } from '../../src/util/rng';
+import { streetDistance } from '../../src/world/distance';
+import type { Poi } from '../../src/world/mapTypes';
 import type { PlayerZones } from '../../src/world/zones';
+import { offerPlayer, offerPois, offerRules } from './fixture';
 
-const cfg = ordersConfig;
-const pois: PoiInfo[] = Array.from({ length: 20 }, (_, i) => {
-  const d = 40 + i * 25;
-  return {
-    poi: { id: `p${i}`, position: vec3(d, 0, 0), district: 'downtown', kind: 'door' },
-    hubDistance: d,
-    band: bandFor(d, cfg.bands),
-  };
+/** rng() === 0: offer intervals are always minIntervalSeconds (8 s), food is picked first. */
+const zeroRng: Rng = () => 0;
+
+const cfgWith = (kind: 'food' | 'package', modifier: 'none' | 'express' | 'fragile' = 'none'): OrdersConfig => ({
+  ...ordersConfig,
+  mix: {
+    kindWeights: { food: kind === 'food' ? 1 : 0, package: kind === 'package' ? 1 : 0 },
+    modifierWeights: { none: modifier === 'none' ? 1 : 0, express: modifier === 'express' ? 1 : 0, fragile: modifier === 'fragile' ? 1 : 0 },
+  },
 });
 
-function make(seed: number, capacity = 1, now = 0, totals?: { points: number; coins: number; deliveries: number }) {
+/** A second food pickup/dropoff pair so a cancel or reuse does not starve the generator. */
+const twoFoodPois = (): Poi[] => [
+  ...offerPois(),
+  { id: 'fp-2', position: vec3(-50, 0, 0), district: 'downtown', kind: 'counter', name: 'Second Snacks', roles: ['foodPickup'], items: ['wrap'] },
+  { id: 'df-2', position: vec3(-200, 0, 0), district: 'downtown', kind: 'door', name: '9 West St', roles: ['dropoffFood'] },
+];
+
+/** Package senders with fixed weights and two package dropoffs. */
+const packagePois = (weights: number[]): Poi[] => [
+  ...weights.map(
+    (kg, i): Poi => ({
+      id: `ps-${kg}`,
+      position: vec3(i * 40, 0, 60),
+      district: 'downtown',
+      kind: 'counter',
+      name: `Sender ${kg}`,
+      roles: ['packagePickup'],
+      items: ['box'],
+      weightKg: [kg, kg],
+    }),
+  ),
+  ...weights.map(
+    (_, i): Poi => ({ id: `dp-${i}`, position: vec3(300, 0, i * 100), district: 'downtown', kind: 'door', name: `${i} Pkg Ave`, roles: ['dropoffPackage'] }),
+  ),
+];
+
+const MOTORBIKE: CarrierCapacity = { slots: 3, maxPackageKg: 50 };
+const CAR: CarrierCapacity = { slots: 5, maxPackageKg: 150 };
+const WALK: CarrierCapacity = { slots: 1, maxPackageKg: 0 };
+
+function makeSystem(over: Partial<OrderSystemOptions> = {}, now = 0): OrderSystem {
   return new OrderSystem(
-    {
-      pois,
-      distance: streetDistance,
-      hub: vec3(0, 0, 0),
-      cfg,
-      baseSprintSpeed: 8,
-      rng: mulberry32(seed),
-      unlocks: { express: true, chain: true },
-      backpackCapacity: capacity,
-      ...(totals ? { totals } : {}),
-    },
+    { pois: offerPois(), distance: streetDistance, rules: offerRules, cfg: cfgWith('food'), rng: zeroRng, capacity: MOTORBIKE, ...over },
     now,
   );
 }
 
-const zones = (over: { plaza?: boolean; drop?: boolean; pois?: string[] } = {}): PlayerZones => ({
-  inPlaza: over.plaza ?? false,
-  inDropZone: over.drop ?? false,
-  poiIds: new Set(over.pois ?? []),
-});
-const OUT = zones();
-const poiOf = (o: Order, i = 0): string => {
-  const s = o.steps[i];
-  if (!s || s.kind !== 'poi') throw new Error('not a poi step');
-  return s.poiId;
-};
+const zones = (...ids: string[]): PlayerZones => ({ poiIds: new Set(ids), safeZone: null });
+const nowhere = zones();
 
-function find(pred: (o: Order, board: ReadonlyArray<Order | null>) => boolean, capacity = 1) {
-  for (let seed = 1; seed < 2000; seed++) {
-    const sys = make(seed, capacity);
-    const order = sys.board.find((o): o is Order => o !== null && pred(o, sys.board));
-    if (order) return { sys, order };
-  }
-  throw new Error('no board found');
+/** Call update at each time from `from` to `to` (inclusive) in `step` increments; collect events. */
+function run(sys: OrderSystem, from: number, to: number, step = 1, z: PlayerZones = nowhere): OrderEvent[] {
+  const out: OrderEvent[] = [];
+  for (let t = from; t <= to + 1e-9; t += step) out.push(...sys.update(t, offerPlayer, z));
+  return out;
 }
-const dropoff = (m: Order['modifier'] | 'any' = null) =>
-  find((o) => o.type === 'dropoff' && (m === 'any' || o.modifier === m));
-const pickup = (m: Order['modifier'] = null) => find((o) => o.type === 'pickup' && o.modifier === m);
+
+const kinds = (events: OrderEvent[]): string[] => events.map((e) => e.kind);
 
 describe('OrderSystem', () => {
-  it('starts with a full board, empty active list, zero totals', () => {
-    const sys = make(1, 1, 5);
-    expect(sys.board).toHaveLength(cfg.board.size);
-    expect(sys.active).toHaveLength(0);
-    expect(sys.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
-    expect(sys.nextRefreshAt).toBe(5 + cfg.board.refreshSeconds);
-    expect(make(1, 1, 0, { points: 3, coins: 30, deliveries: 2 }).totals).toEqual({ points: 3, coins: 30, deliveries: 2 });
+  test('an offer appears after the first interval and expires after lifetimeSeconds', () => {
+    const sys = makeSystem();
+    expect(sys.nextOfferAt).toBe(8);
+    expect(sys.update(7.9, offerPlayer, nowhere)).toEqual([]);
+    const ev = sys.update(8, offerPlayer, nowhere);
+    expect(ev).toEqual([{ kind: 'offered', offerId: 'o1' }]);
+    expect(sys.offers).toHaveLength(1);
+    expect(sys.offers[0]!.offeredAt).toBe(8);
+    expect(sys.offers[0]!.expiresAt).toBe(8 + ordersConfig.offers.lifetimeSeconds);
+    expect(sys.update(27.9, offerPlayer, nowhere).filter((e) => e.kind === 'offerExpired')).toEqual([]);
+    expect(sys.update(28, offerPlayer, nowhere)).toContainEqual({ kind: 'offerExpired', offerId: 'o1' });
+    expect(sys.offers.find((o) => o.order.id === 'o1')).toBeUndefined();
   });
 
-  it('accept outside the HUB plaza → not_in_hub', () => {
-    const { sys, order } = dropoff();
-    expect(sys.canAccept(order.id, 0, false)).toBe('not_in_hub');
-    expect(sys.accept(order.id, 0, false)).toBe('not_in_hub');
+  test('accept after expiresAt returns expired and the offer is gone', () => {
+    const sys = makeSystem();
+    sys.update(8, offerPlayer, nowhere);
+    expect(sys.canAccept('o1', 28)).toBe('expired');
+    expect(sys.accept('o1', 28)).toBe('expired');
+    expect(sys.offers.find((o) => o.order.id === 'o1')).toBeUndefined();
+    expect(sys.offers).toHaveLength(0);
     expect(sys.active).toHaveLength(0);
-    expect(sys.board.find((o) => o?.id === order.id)).toBeDefined();
+    expect(sys.accept('o1', 28)).toBe('gone');
+    expect(sys.accept('nope', 0)).toBe('gone');
   });
 
-  it('accept without enough free slots → no_slots (second order at capacity 1; Heavy at 1 free slot)', () => {
-    const { sys, order } = dropoff('any');
-    expect(sys.accept(order.id, 0, true)).toBe('ok');
-    const other = sys.board.find((o): o is Order => o !== null);
-    if (!other) throw new Error('board empty');
-    expect(sys.accept(other.id, 0, true)).toBe('no_slots');
+  test('accept returns too_heavy when the package exceeds the remaining kg', () => {
+    // motorbike 50 kg: accept a 25 kg package, then a 30 kg package does not fit
+    const sys = makeSystem({ pois: packagePois([25, 30]), cfg: cfgWith('package') });
+    run(sys, 8, 16, 8);
+    expect(sys.offers).toHaveLength(2);
+    const light = sys.offers.find((o) => o.order.weightKg === 25)!;
+    const heavy = sys.offers.find((o) => o.order.weightKg === 30)!;
+    expect(sys.accept(light.order.id, 17)).toBe('ok');
+    expect(sys.carriedKg()).toBe(25);
+    expect(sys.canAccept(heavy.order.id, 17)).toBe('too_heavy');
+    expect(sys.accept(heavy.order.id, 17)).toBe('too_heavy');
     expect(sys.active).toHaveLength(1);
-
-    const heavy = find((o, b) => o.modifier === 'heavy' && b.some((x) => x && x.slots === 1 && x.id !== o.id), 2);
-    expect(heavy.order.slots).toBe(cfg.heavy.slots);
-    const light = heavy.sys.board.find((o): o is Order => o !== null && o.slots === 1);
-    if (!light) throw new Error('no light order');
-    expect(heavy.sys.accept(light.id, 0, true)).toBe('ok');
-    expect(heavy.sys.freeSlots()).toBe(1);
-    expect(heavy.sys.canAccept(heavy.order.id, 0, true)).toBe('no_slots');
-    expect(heavy.sys.accept(heavy.order.id, 0, true)).toBe('no_slots');
-    expect(heavy.sys.usedSlots()).toBe(1);
+    expect(sys.offers.map((o) => o.order.id)).toContain(heavy.order.id);
   });
 
-  it('an accepted order leaves its slot null until the 60 s refresh, which replaces all 6 slots', () => {
-    const { sys, order } = dropoff();
-    const before = sys.board.map((o) => o?.id);
-    const idx = before.indexOf(order.id);
-    sys.accept(order.id, 1, true);
-    expect(sys.board[idx]).toBeNull();
-    expect(sys.board.filter((o) => o === null)).toHaveLength(1);
-    expect(sys.update(59.9, OUT)).toEqual([]);
-    expect(sys.board[idx]).toBeNull();
-    const events = sys.update(60, OUT);
-    expect(events).toContainEqual({ kind: 'boardRefreshed' });
-    expect(sys.board).toHaveLength(cfg.board.size);
-    expect(sys.board.every((o) => o !== null)).toBe(true);
-    const after = new Set(sys.board.map((o) => o?.id));
-    expect(before.some((id) => id && after.has(id))).toBe(false);
-    expect(sys.nextRefreshAt).toBe(120);
-    expect(sys.active).toHaveLength(1);
-  });
-
-  it('accepting an id that a refresh replaced → gone (Review Focus 3)', () => {
-    const { sys, order } = dropoff();
-    sys.update(60, OUT);
-    expect(sys.canAccept(order.id, 60, true)).toBe('gone');
-    expect(sys.accept(order.id, 60, true)).toBe('gone');
-    expect(sys.active).toHaveLength(0);
-    expect(sys.canAccept('nope', 60, false)).toBe('gone'); // gone outranks not_in_hub
-  });
-
-  it('cancel only in the plaza; it starts a 30 s cooldown; accept during cooldown → cooldown; at +30 s → ok', () => {
-    const { sys, order } = dropoff('any');
-    sys.accept(order.id, 0, true);
-    expect(sys.cancel(order.id, 10, false)).toBe('not_in_hub');
-    expect(sys.active).toHaveLength(1);
-    expect(sys.cancel('nope', 10, true)).toBe('unknown');
-    expect(sys.cancel(order.id, 10, true)).toBe('ok');
-    expect(sys.cancelCooldownUntil).toBe(10 + cfg.board.cancelCooldownSeconds);
-    const next = sys.board.find((o): o is Order => o !== null);
-    if (!next) throw new Error('board empty');
-    expect(sys.canAccept(next.id, 39.9, true)).toBe('cooldown');
-    expect(sys.accept(next.id, 39.9, true)).toBe('cooldown');
-    expect(sys.accept(next.id, 40, true)).toBe('ok');
-  });
-
-  it('cancelling frees the slots', () => {
-    const { sys, order } = dropoff('any');
-    sys.accept(order.id, 0, true);
-    expect(sys.freeSlots()).toBe(0);
-    sys.cancel(order.id, 1, true);
-    expect(sys.usedSlots()).toBe(0);
-    expect(sys.freeSlots()).toBe(1);
-    expect(sys.active).toHaveLength(0);
-  });
-
-  it('a drop-off completes on entering its POI zone; totals add its points and coins; deliveries + 1', () => {
-    const { sys, order } = dropoff();
-    sys.accept(order.id, 0, true);
-    expect(sys.update(1, zones({ plaza: true }))).toEqual([]);
-    const key = order.band as 'short' | 'medium' | 'long';
-    const events = sys.update(2, zones({ pois: [poiOf(order)] }));
-    expect(events).toContainEqual({
-      kind: 'completed', orderId: order.id, points: cfg.points[key] + cfg.points.withinPar, coins: cfg.coins[key] + cfg.coins.withinPar,
-      bonuses: ['par'], onTime: null, withinPar: true,
-    });
-    expect(sys.totals).toEqual({ points: cfg.points[key] + cfg.points.withinPar, coins: cfg.coins[key] + cfg.coins.withinPar, deliveries: 1 });
-    expect(sys.active).toHaveLength(0);
-    expect(sys.freeSlots()).toBe(1);
-  });
-
-  it('pick-up: the POI collects (stepReached); the plaza does not complete it; the drop zone does', () => {
-    const { sys, order } = pickup();
-    sys.accept(order.id, 0, true);
-    const a = sys.active[0] as NonNullable<(typeof sys.active)[0]>;
-    expect(sys.isCarried(a)).toBe(false);
-    expect(sys.update(1, zones({ plaza: true }))).toEqual([]);
-    const ev = sys.update(2, zones({ pois: [poiOf(order)] }));
-    expect(ev).toEqual([{ kind: 'stepReached', orderId: order.id, stepIndex: 1, step: { kind: 'hub' } }]);
-    expect(sys.isCarried(sys.active[0] as NonNullable<(typeof sys.active)[0]>)).toBe(true);
-    expect(sys.currentStep(sys.active[0] as NonNullable<(typeof sys.active)[0]>)).toEqual({ kind: 'hub' });
-    expect(sys.update(3, zones({ plaza: true }))).toEqual([]);
-    expect(sys.active).toHaveLength(1);
-    const done = sys.update(4, zones({ plaza: true, drop: true }));
-    expect(done.map((e) => e.kind)).toEqual(['completed']);
-    expect(sys.totals.deliveries).toBe(1);
-  });
-
-  it('chain: B before A does nothing; A → B → drop zone completes with 4 pts / 40 coins plus par', () => {
-    const { sys, order } = find((o) => o.type === 'chain');
-    sys.accept(order.id, 0, true);
-    expect(sys.update(1, zones({ pois: [poiOf(order, 1)] }))).toEqual([]);
-    expect(sys.active[0]?.stepIndex).toBe(0);
-    expect(sys.update(2, zones({ pois: [poiOf(order, 0)] })).map((e) => e.kind)).toEqual(['stepReached']);
-    expect(sys.update(3, zones({ pois: [poiOf(order, 1)] })).map((e) => e.kind)).toEqual(['stepReached']);
-    expect(sys.update(4, zones({ plaza: true }))).toEqual([]);
-    const done = sys.update(5, zones({ plaza: true, drop: true }));
-    expect(done).toContainEqual(expect.objectContaining({ kind: 'completed', points: 5, coins: 50, bonuses: ['par'], withinPar: true }));
-    expect(sys.totals).toEqual({ points: 5, coins: 50, deliveries: 1 });
-  });
-
-  it('express: on time earns +1; late still completes without it', () => {
-    const on = dropoff('express');
-    const limit = on.order.expressLimit as number;
-    // Express is tighter than par (spec §3.2), so on time is within par too: both bonuses.
-    expect(limit).toBeLessThan(on.order.parLimit);
-    on.sys.accept(on.order.id, 100, true);
-    const ev = on.sys.update(100 + limit, zones({ pois: [poiOf(on.order)] }));
-    const key = on.order.band as 'short' | 'medium' | 'long';
-    expect(ev).toContainEqual(expect.objectContaining({
-      kind: 'completed', onTime: true, withinPar: true, bonuses: ['express', 'par'],
-      points: cfg.points[key] + cfg.points.expressOnTime + cfg.points.withinPar,
-    }));
-
-    // Just past the Express limit: no Express bonus, but still within par.
-    const late = dropoff('express');
-    late.sys.accept(late.order.id, 0, true);
-    const ev2 = late.sys.update(0.001 + (late.order.expressLimit as number), zones({ pois: [poiOf(late.order)] }));
-    expect(ev2).toContainEqual(expect.objectContaining({ kind: 'completed', onTime: false, withinPar: true, bonuses: ['par'] }));
-    expect(late.sys.totals.deliveries).toBe(1);
-
-    // Past par as well: completes with no bonus.
-    const later = dropoff('express');
-    later.sys.accept(later.order.id, 0, true);
-    const ev3 = later.sys.update(0.001 + later.order.parLimit, zones({ pois: [poiOf(later.order)] }));
-    expect(ev3).toContainEqual(expect.objectContaining({ kind: 'completed', onTime: false, withinPar: false, bonuses: [] }));
-    expect(later.sys.totals.deliveries).toBe(1);
-  });
-
-  it('completed reports withinPar from sim time since accept (par inclusive, hidden-tab pause safe)', () => {
-    const a = dropoff('any');
-    const limit = a.order.parLimit;
-    expect(limit).toBe((cfg.par.distanceFactor * a.order.routeDistance) / 8 + cfg.par.extraSeconds);
-    a.sys.accept(a.order.id, 100, true);
-    const ev = a.sys.update(100 + limit, zones({ pois: [poiOf(a.order)] }));
-    expect(ev).toContainEqual(expect.objectContaining({ kind: 'completed', withinPar: true }));
-
-    const b = dropoff('any');
-    b.sys.accept(b.order.id, 0, true);
-    const ev2 = b.sys.update(b.order.parLimit + 0.001, zones({ pois: [poiOf(b.order)] }));
-    expect(ev2).toContainEqual(expect.objectContaining({ kind: 'completed', withinPar: false }));
-    expect(b.sys.totals.deliveries).toBe(1);
-  });
-
-  it('par stacks with the modifier bonus: fragile intact within par is +2 and +1', () => {
-    const d = dropoff('fragile');
-    d.sys.accept(d.order.id, 0, true);
-    const ev = d.sys.update(1, zones({ pois: [poiOf(d.order)] }));
-    const key = d.order.band as 'short' | 'medium' | 'long';
-    expect(ev).toContainEqual(expect.objectContaining({
-      kind: 'completed', bonuses: ['fragile', 'par'], points: cfg.points[key] + 2 + 1, coins: cfg.coins[key] + 20 + 10,
-    }));
-  });
-
-  it('fragile: a 7.5 m fall while carried breaks it; 7.0 m does not; falls before pick-up collection do not count', () => {
-    const d = dropoff('fragile');
-    d.sys.accept(d.order.id, 0, true);
-    expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: cfg.fragile.maxFallMeters }])).toEqual([]);
-    expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: 7.0 }])).toEqual([]);
-    expect(d.sys.active[0]?.fragileIntact).toBe(true);
-    expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: 7.5 }])).toEqual([
-      { kind: 'fragileBroken', orderId: d.order.id, reason: 'fall' },
-    ]);
-    expect(d.sys.active[0]?.fragileIntact).toBe(false);
-    expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: 9 }])).toEqual([]); // already broken
-    const ev = d.sys.update(1, zones({ pois: [poiOf(d.order)] }));
-    expect(ev).toContainEqual(expect.objectContaining({ kind: 'completed', bonuses: ['par'] }));
-
-    const p = pickup('fragile');
-    p.sys.accept(p.order.id, 0, true);
-    expect(p.sys.onSimEvents([{ kind: 'landed', fallHeight: 20 }])).toEqual([]);
-    expect(p.sys.active[0]?.fragileIntact).toBe(true);
-    p.sys.update(1, zones({ pois: [poiOf(p.order)] }));
-    expect(p.sys.onSimEvents([{ kind: 'landed', fallHeight: 7.0 }])).toEqual([]);
-    expect(p.sys.onSimEvents([{ kind: 'landed', fallHeight: 7.5 }]).map((e) => e.kind)).toEqual(['fragileBroken']);
-    const done = p.sys.update(2, zones({ drop: true, plaza: true }));
-    expect(done).toContainEqual(expect.objectContaining({ kind: 'completed', bonuses: ['par'] }));
-  });
-
-  it('fragile: respawn while carried breaks it', () => {
-    const d = dropoff('fragile');
-    d.sys.accept(d.order.id, 0, true);
-    expect(d.sys.onSimEvents([{ kind: 'respawned', checkpointId: 'c1' }])).toEqual([
-      { kind: 'fragileBroken', orderId: d.order.id, reason: 'respawn' },
-    ]);
-    const p = pickup('fragile');
-    p.sys.accept(p.order.id, 0, true);
-    expect(p.sys.onSimEvents([{ kind: 'respawned', checkpointId: 'c1' }])).toEqual([]);
-    expect(p.sys.active[0]?.fragileIntact).toBe(true);
-  });
-
-  it('non-fragile orders ignore falls and respawns', () => {
-    const d = dropoff();
-    d.sys.accept(d.order.id, 0, true);
-    expect(d.sys.onSimEvents([{ kind: 'landed', fallHeight: 50 }, { kind: 'respawned', checkpointId: 'c' }])).toEqual([]);
-  });
-
-  it('heavy: statModifiers().jumpHeightMul is 0.9 only while a Heavy package is carried', () => {
-    const d = find((o) => o.type === 'dropoff' && o.modifier === 'heavy', 2);
-    expect(d.sys.statModifiers().jumpHeightMul).toBe(1);
-    d.sys.accept(d.order.id, 0, true);
-    expect(d.sys.statModifiers().jumpHeightMul).toBe(cfg.heavy.jumpHeightMultiplier);
-    expect(d.sys.statModifiers().jumpHeightMul).toBe(0.9);
-    d.sys.update(1, zones({ pois: [poiOf(d.order)] }));
-    expect(d.sys.statModifiers().jumpHeightMul).toBe(1);
-
-    const p = find((o) => o.type === 'pickup' && o.modifier === 'heavy', 2);
-    p.sys.accept(p.order.id, 0, true);
-    expect(p.sys.statModifiers().jumpHeightMul).toBe(1); // not yet collected
-    p.sys.update(1, zones({ pois: [poiOf(p.order)] }));
-    expect(p.sys.statModifiers().jumpHeightMul).toBe(0.9);
-    p.sys.update(2, zones({ drop: true }));
-    expect(p.sys.statModifiers().jumpHeightMul).toBe(1);
-  });
-
-  it('setBackpackCapacity changes free slots', () => {
-    const sys = make(1, 1);
-    sys.setBackpackCapacity(3);
-    expect(sys.backpackCapacity).toBe(3);
-    expect(sys.freeSlots()).toBe(3);
-  });
-
-  it('R29c: refreshBoard regenerates now (new capacity applies), resets the timer and reports boardRefreshed', () => {
-    // Capacity 1 never offers Heavy; after raising capacity a refresh can (seeded: find one that does).
-    let found = false;
-    for (let seed = 1; seed <= 200 && !found; seed++) {
-      const sys = make(seed, 1);
-      expect(sys.board.some((o) => o?.modifier === 'heavy')).toBe(false);
-      const before = new Set(sys.board.map((o) => o?.id));
-      sys.setBackpackCapacity(cfg.backpack.maxSlots);
-      const events = sys.refreshBoard(25);
-      expect(events).toEqual([{ kind: 'boardRefreshed' }]);
-      expect(sys.nextRefreshAt).toBe(25 + cfg.board.refreshSeconds);
-      expect(sys.board).toHaveLength(cfg.board.size);
-      expect(sys.board.some((o) => o && before.has(o.id))).toBe(false);
-      expect(sys.update(25 + cfg.board.refreshSeconds - 0.1, OUT)).toEqual([]);
-      found = sys.board.some((o) => o?.modifier === 'heavy');
+  test('offers too heavy for the remaining kg are not generated (reserved kg reach the generator)', () => {
+    // motorbike 50 kg: o1 = 30 kg (ps-30), o2 = 25 kg (ps-25). Accept the 25 kg, let the 30 kg expire.
+    const sys = makeSystem({ pois: packagePois([25, 30]), cfg: cfgWith('package') });
+    run(sys, 8, 16, 8);
+    const light = sys.offers.find((o) => o.order.weightKg === 25)!;
+    expect(sys.offers.find((o) => o.order.weightKg === 30)).toBeDefined();
+    expect(sys.accept(light.order.id, 17)).toBe('ok');
+    run(sys, 18, 30);
+    expect(sys.offers).toHaveLength(0);
+    // ps-25 and dp-1 are in use, so only ps-30 -> dp-0 is left; 30 kg > 25 kg remaining: never offered
+    const seen: (number | null)[] = [];
+    for (let t = 31; t <= 200; t++) {
+      for (const e of sys.update(t, offerPlayer, nowhere)) {
+        if (e.kind === 'offered') seen.push(sys.offers.find((o) => o.order.id === e.offerId)!.order.weightKg);
+      }
     }
-    expect(found).toBe(true);
+    expect(seen).not.toContain(30);
+    expect(seen).toEqual([]);
+  });
+
+  test('accept returns no_slots when slots are full', () => {
+    const sys = makeSystem({ pois: twoFoodPois(), capacity: WALK });
+    run(sys, 8, 16, 8);
+    expect(sys.offers).toHaveLength(2);
+    const [a, b] = sys.offers.map((o) => o.order.id) as [string, string];
+    expect(sys.accept(a, 17)).toBe('ok');
+    expect(sys.freeSlots()).toBe(0);
+    expect(sys.canAccept(b, 17)).toBe('no_slots');
+    expect(sys.accept(b, 17)).toBe('no_slots');
+    expect(sys.active).toHaveLength(1);
+    expect(sys.offers.map((o) => o.order.id)).toContain(b);
+    // no new offers while there is no free slot
+    expect(kinds(run(sys, 18, 60)).filter((k) => k === 'offered')).toEqual([]);
+  });
+
+  test('entering the pickup zone marks pickedUp; entering the dropoff before pickup does nothing', () => {
+    const sys = makeSystem({ capacity: WALK });
+    sys.update(8, offerPlayer, nowhere);
+    expect(sys.accept('o1', 9)).toBe('ok');
+    const a = sys.active[0]!;
+    expect(sys.currentTarget(a)).toBe('fp-near');
+    expect(sys.update(10, offerPlayer, zones('df-ok'))).toEqual([]);
+    expect(sys.isCarried(sys.active[0]!)).toBe(false);
+    expect(sys.update(11, offerPlayer, zones('fp-near'))).toEqual([{ kind: 'pickedUp', orderId: 'o1' }]);
+    expect(sys.active[0]!.pickedUpAt).toBe(11);
+    expect(sys.isCarried(sys.active[0]!)).toBe(true);
+    expect(sys.currentTarget(sys.active[0]!)).toBe('df-ok');
+    expect(sys.update(12, offerPlayer, zones('fp-near'))).toEqual([]);
+  });
+
+  test('completion within the time limit scores the bonus; late completion scores the base only', () => {
+    // food fp-near -> df-ok: 150 m, medium band, hot limit 1.3 * 150 / 8 + 20 = 44.375 s from pickup
+    const onTime = makeSystem({ capacity: WALK });
+    onTime.update(8, offerPlayer, nowhere);
+    onTime.accept('o1', 9);
+    onTime.update(10, offerPlayer, zones('fp-near'));
+    const done = onTime.update(10 + 44.375, offerPlayer, zones('df-ok'));
+    expect(done).toEqual([{ kind: 'completed', orderId: 'o1', points: 3, coins: 30, bonuses: ['hot'], inTime: true, expressOnTime: null }]);
+    expect(onTime.active).toHaveLength(0);
+    expect(onTime.totals).toEqual({ points: 3, coins: 30, deliveries: 1 });
+
+    const late = makeSystem({ capacity: WALK, totals: { points: 5, coins: 50, deliveries: 2 } });
+    late.update(8, offerPlayer, nowhere);
+    late.accept('o1', 9);
+    late.update(10, offerPlayer, zones('fp-near'));
+    const lateDone = late.update(10 + 44.5, offerPlayer, zones('df-ok'));
+    expect(lateDone).toEqual([{ kind: 'completed', orderId: 'o1', points: 2, coins: 20, bonuses: [], inTime: false, expressOnTime: null }]);
+    expect(late.totals).toEqual({ points: 7, coins: 70, deliveries: 3 });
+  });
+
+  test('express completion reports expressOnTime measured from pickup', () => {
+    // ps-30 at (0,0,60) -> dp-0 at (300,0,0): 360 m; express limit 1.1 * 360 / 8 + 10 = 59.5 s
+    const sys = makeSystem({ pois: packagePois([30]), cfg: cfgWith('package', 'express') });
+    sys.update(8, offerPlayer, nowhere);
+    const order = sys.offers[0]!.order;
+    expect(order.modifier).toBe('express');
+    sys.accept(order.id, 9);
+    sys.update(100, offerPlayer, zones('ps-30'));
+    const [done] = sys.update(100 + 59.5, offerPlayer, zones('dp-0'));
+    expect(done).toMatchObject({ kind: 'completed', inTime: true, expressOnTime: true });
+  });
+
+  test('cancel starts a 45 s lockout, no offers during it, lockoutEnded once', () => {
+    const sys = makeSystem({ pois: twoFoodPois() });
+    sys.update(8, offerPlayer, nowhere);
+    expect(sys.accept('o1', 9)).toBe('ok');
+    expect(sys.cancel('o1', 10)).toBe('ok');
+    expect(sys.cancel('o1', 10)).toBe('unknown');
+    expect(sys.lockoutUntil).toBe(10 + ordersConfig.lockout.seconds);
+    expect(sys.active).toHaveLength(0);
+    const during = run(sys, 10, 54.5, 0.5);
+    expect(kinds(during)).not.toContain('offered');
+    expect(kinds(during)).not.toContain('lockoutEnded');
+    const after = run(sys, 55, 120);
+    expect(kinds(after).filter((k) => k === 'lockoutEnded')).toHaveLength(1);
+    expect(after[0]).toEqual({ kind: 'lockoutEnded' });
+    expect(kinds(after)).toContain('offered');
+  });
+
+  test('cancel of a picked-up order removes it without points and starts one lockout', () => {
+    const sys = makeSystem({ capacity: WALK });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 9);
+    sys.update(10, offerPlayer, zones('fp-near'));
+    expect(sys.active.filter((a) => sys.isCarried(a))).toHaveLength(1);
+    expect(sys.cancel('o1', 20)).toBe('ok');
+    expect(sys.active).toHaveLength(0);
+    expect(sys.active.filter((a) => sys.isCarried(a))).toHaveLength(0);
+    expect(sys.usedSlots()).toBe(0);
+    expect(sys.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
+    expect(sys.lockoutUntil).toBe(65);
+    // walking into the dropoff now does nothing
+    const events = run(sys, 21, 100, 1, zones('df-ok'));
+    expect(kinds(events)).not.toContain('completed');
+    expect(kinds(events).filter((k) => k === 'lockoutEnded')).toHaveLength(1);
+    expect(sys.totals.points).toBe(0);
+  });
+
+  test('skipLockout clears the lockout', () => {
+    const sys = makeSystem({ pois: twoFoodPois() });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 9);
+    sys.cancel('o1', 10);
+    expect(kinds(sys.update(20, offerPlayer, nowhere))).toEqual([]);
+    sys.skipLockout();
+    expect(sys.lockoutUntil).toBe(0);
+    const ev = sys.update(21, offerPlayer, nowhere);
+    expect(kinds(ev)).toEqual(['lockoutEnded', 'offered']);
+    expect(kinds(run(sys, 22, 80))).not.toContain('lockoutEnded');
+  });
+
+  test('a respawn breaks a carried Fragile once; a second respawn emits nothing', () => {
+    const sys = makeSystem({ pois: packagePois([30]), cfg: cfgWith('package', 'fragile') });
+    sys.update(8, offerPlayer, nowhere);
+    const id = sys.offers[0]!.order.id;
+    expect(sys.offers[0]!.order.modifier).toBe('fragile');
+    sys.accept(id, 9);
+    // not carried yet: a respawn does not break it
+    expect(sys.onSimEvents([{ kind: 'respawned', hospitalId: 'h1' }])).toEqual([]);
+    expect(sys.active[0]!.fragileIntact).toBe(true);
+    sys.update(10, offerPlayer, zones('ps-30'));
+    expect(sys.onSimEvents([{ kind: 'jumped' }, { kind: 'respawned', hospitalId: 'h1' }])).toEqual([
+      { kind: 'fragileBroken', orderId: id, reason: 'respawn' },
+    ]);
+    expect(sys.onSimEvents([{ kind: 'respawned', hospitalId: 'h1' }])).toEqual([]);
+    expect(sys.active).toHaveLength(1);
+    expect(sys.active[0]!.fragileIntact).toBe(false);
+    const [done] = sys.update(11, offerPlayer, zones('dp-0'));
+    expect(done).toMatchObject({ kind: 'completed', orderId: id });
+    expect(done?.kind === 'completed' && done.bonuses).not.toContain('fragile');
+  });
+
+  test('a fall above maxFallMeters breaks a carried Fragile; a fall at the limit does not', () => {
+    const sys = makeSystem({ pois: packagePois([30]), cfg: cfgWith('package', 'fragile') });
+    sys.update(8, offerPlayer, nowhere);
+    const id = sys.offers[0]!.order.id;
+    sys.accept(id, 9);
+    sys.update(10, offerPlayer, zones('ps-30'));
+    const max = ordersConfig.fragile.maxFallMeters;
+    expect(sys.onSimEvents([{ kind: 'landed', fallHeight: max }])).toEqual([]);
+    expect(sys.onSimEvents([{ kind: 'landed', fallHeight: max + 0.1 }])).toEqual([{ kind: 'fragileBroken', orderId: id, reason: 'fall' }]);
+  });
+
+  test('generateOffer returning null just advances nextOfferAt', () => {
+    const sys = makeSystem({ pois: [] });
+    expect(sys.nextOfferAt).toBe(8);
+    expect(sys.update(8, offerPlayer, nowhere)).toEqual([]);
+    expect(sys.offers).toHaveLength(0);
+    expect(sys.nextOfferAt).toBe(16);
+  });
+
+  test('statModifiers.canSprint is false while carrying a bulky package', () => {
+    const sys = makeSystem({ pois: packagePois([100]), cfg: cfgWith('package'), capacity: CAR });
+    sys.update(8, offerPlayer, nowhere);
+    const order = sys.offers[0]!.order;
+    expect(order.weightClass).toBe('bulky');
+    sys.accept(order.id, 9);
+    expect(sys.statModifiers().canSprint).toBe(true);
+    sys.update(10, offerPlayer, zones('ps-100'));
+    expect(sys.statModifiers()).toEqual({ speedMul: 1, jumpHeightMul: 1, canSprint: false });
+    sys.update(11, offerPlayer, zones('dp-0'));
+    expect(sys.statModifiers().canSprint).toBe(true);
+  });
+
+  test('canSwitchCapacity false when active kg exceed the new capacity', () => {
+    const sys = makeSystem({ pois: packagePois([30]), cfg: cfgWith('package') });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept(sys.offers[0]!.order.id, 9);
+    expect(sys.carriedKg()).toBe(30); // reserved before pickup
+    expect(sys.canSwitchCapacity({ slots: 3, maxPackageKg: 25 })).toBe(false);
+    expect(sys.canSwitchCapacity(WALK)).toBe(false);
+    expect(sys.canSwitchCapacity({ slots: 1, maxPackageKg: 30 })).toBe(true);
+    expect(sys.canSwitchCapacity(CAR)).toBe(true);
+    sys.setCapacity(WALK); // blocked: active orders are kept and capacity stays
+    expect(sys.capacity).toEqual(MOTORBIKE);
+    expect(sys.active).toHaveLength(1);
+    sys.setCapacity(CAR);
+    expect(sys.capacity).toEqual(CAR);
+  });
+
+  test('recently used doors are not offered again within reuseSeconds', () => {
+    // base fixture has one near food pair: after accepting it, the next food offer must wait for reuse
+    const sys = makeSystem({ capacity: { slots: 3, maxPackageKg: 0 } });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 8);
+    sys.update(9, offerPlayer, zones('fp-near'));
+    sys.update(10, offerPlayer, zones('df-ok'));
+    expect(kinds(run(sys, 11, 8 + ordersConfig.spacing.reuseSeconds - 1))).not.toContain('offered');
+    expect(kinds(run(sys, 8 + ordersConfig.spacing.reuseSeconds, 8 + ordersConfig.spacing.reuseSeconds + 20))).toContain('offered');
   });
 });

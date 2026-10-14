@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { movementConfig, ordersConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
+import { vehiclesConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 import { CourierModel } from '../src/render/courier/CourierModel';
 
@@ -14,14 +14,13 @@ async function model(): Promise<CourierModel> {
   return new CourierModel(await new GLTFLoader().parseAsync(ab, ''), cfg);
 }
 
-function st(over: Partial<{ mode: MoveMode; heading: number; onBoard: boolean; crouched: boolean; vy: number; normal: Vec3 | null; v: Vec3 }> = {}): PlayerState {
+function st(over: Partial<{ mode: MoveMode; heading: number; onBoard: boolean; crouched: boolean; vy: number; v: Vec3 }> = {}): PlayerState {
   return {
     mode: over.mode ?? 'ground',
     heading: over.heading ?? 0,
     onBoard: over.onBoard ?? false,
     crouched: over.crouched ?? false,
     velocity: over.v ?? { x: 0, y: over.vy ?? 0, z: 0 },
-    wallRun: { time: 0.2, normal: over.normal ?? null, lastNormal: null },
   } as unknown as PlayerState;
 }
 
@@ -84,28 +83,14 @@ describe('CourierModel', () => {
     expect(m.root.rotation.y).toBeCloseTo(-2, 9);
   });
 
-  it('faces its travel on a zip line or in a slide, not the input (R14)', async () => {
+  it('faces its travel in a slide, not the input (R14)', async () => {
     const m = await model();
-    m.snap();
-    m.update(0, st({ mode: 'zipline', heading: Math.PI / 2, v: { x: 0, y: -1, z: 12 } }), { x: 0, y: 5, z: 0 }, 12);
-    expect(Math.abs(m.root.rotation.y)).toBeCloseTo(Math.PI, 6);
     m.snap();
     m.update(0, st({ mode: 'slide', crouched: true, heading: Math.PI / 2, v: { x: -8, y: 0, z: 0 } }), origin, 8);
     expect(m.root.rotation.y).toBeCloseTo(Math.PI / 2, 6); // −X is yaw π/2
     m.snap();
     m.update(0, st({ mode: 'slide', crouched: true, heading: 0.3, v: { x: 0, y: 0, z: 8 } }), origin, 8);
     expect(Math.abs(m.root.rotation.y)).toBeCloseTo(Math.PI, 6);
-  });
-
-  it('eases down after a zip dismount (R16), then stands on the feet', async () => {
-    const m = await model();
-    m.snap();
-    m.update(0.016, st({ mode: 'zipline' }), { x: 0, y: 9, z: 0 }, 12);
-    m.update(0.016, st(), { x: 0, y: 7.5, z: 0 }, 5);
-    expect(m.root.position.y).toBeGreaterThan(8.5);
-    m.update(2, st(), { x: 0, y: 7.5, z: 0 }, 5);
-    expect(m.root.position.y).toBeCloseTo(7.5, 5);
-    expect(bodyBox(m).min.y).toBeCloseTo(7.5, 1);
   });
 
   it('plays the clip animFor picks, and the mixer time advances', async () => {
@@ -121,7 +106,7 @@ describe('CourierModel', () => {
     expect(m.debug()).toMatchObject({ clip: 'Idle', pose: 'slide' });
   });
 
-  it('poses change the figure: slide lowers it, zip raises the arms, wall-run leans away from the wall', async () => {
+  it('poses change the figure: slide lowers it, mantle reaches the arms forward', async () => {
     const m = await model();
     const settle = (s: PlayerState, speed: number): THREE.Box3 => {
       m.snap();
@@ -133,19 +118,12 @@ describe('CourierModel', () => {
     const slide = settle(st({ mode: 'slide', crouched: true }), 9);
     expect(slide.max.y).toBeLessThan(stand.max.y - 0.5);
     expect(slide.min.y).toBeGreaterThan(-0.05); // nothing sinks into the floor
-    const hand = (): number => m.bone('Palm2L').getWorldPosition(new THREE.Vector3()).y;
-    settle(st(), 0);
-    const standHand = hand();
-    settle(st({ mode: 'zipline' }), 12);
-    expect(hand()).toBeGreaterThan(standHand + 0.5);
-    // Wall on the left (normal +X at heading 0): the head leans right (+X).
-    const head = (): THREE.Vector3 => m.bone('Head').getWorldPosition(new THREE.Vector3());
-    settle(st({ mode: 'wallrun', normal: { x: 1, y: 0, z: 0 } }), 8);
-    const left = head().x;
-    settle(st({ mode: 'wallrun', normal: { x: -1, y: 0, z: 0 } }), 8);
-    const right = head().x;
-    expect(left).toBeGreaterThan(0.15);
-    expect(right).toBeLessThan(-0.15);
+    const hand = (): THREE.Vector3 => m.bone('Palm2L').getWorldPosition(new THREE.Vector3());
+    settle(st({ mode: 'air', vy: 0 }), 0);
+    const airHand = hand();
+    settle(st({ mode: 'mantle' }), 2);
+    // Same Jump clip under both; the mantle pose swings the arms forward (−Z at heading 0).
+    expect(hand().z).toBeLessThan(airHand.z - 0.1);
   });
 
   it('in the air the jump clip holds its airborne frame without lifting the figure off the sim feet', async () => {
@@ -172,10 +150,6 @@ describe('CourierModel', () => {
     ['idle', {}, 0],
     ['run', {}, 8],
     ['slide', { mode: 'slide', crouched: true }, 9],
-    ['wallrunL', { mode: 'wallrun', normal: { x: 1, y: 0, z: 0 } }, 8],
-    ['wallrunR', { mode: 'wallrun', normal: { x: -1, y: 0, z: 0 } }, 8],
-    ['zip', { mode: 'zipline' }, 12],
-    ['grind', { mode: 'grind' }, 9],
     ['mantle', { mode: 'mantle' }, 2],
     ['board', { onBoard: true }, 10],
     ['fall', { mode: 'air', vy: -6 }, 6],
@@ -216,29 +190,13 @@ describe('CourierModel', () => {
     }
   });
 
-  it('grind: the feet stay on the rail (the sim feet)', async () => {
-    const m = await model();
-    const lows = boxesOver(m, st({ mode: 'grind' }), 9).map((b) => b.min.y);
-    expect(Math.min(...lows)).toBeGreaterThanOrEqual(-0.03);
-    expect(Math.max(...lows)).toBeLessThan(0.05);
-  });
-
-  it('zip: the hands reach the cable, hangDrop above the feet', async () => {
-    const m = await model();
-    boxesOver(m, st({ mode: 'zipline' }), 12);
-    const top = (name: string): number => new THREE.Box3().setFromObject(m.figure.getObjectByName(name)!, true).max.y;
-    for (const hand of ['HandL', 'HandR']) {
-      expect(Math.abs(top(hand) - movementConfig.zipLine.hangDrop), hand).toBeLessThan(0.08);
-    }
-  });
-
   it('poses do not accumulate frame over frame', async () => {
     const m = await model();
-    const s = st({ mode: 'zipline' });
+    const s = st({ mode: 'slide', crouched: true });
     m.snap();
-    m.update(0, s, origin, 12);
+    m.update(0, s, origin, 9);
     const a = bodyBox(m);
-    for (let i = 0; i < 30; i++) m.update(1 / 60, s, origin, 12);
+    for (let i = 0; i < 30; i++) m.update(1 / 60, s, origin, 9);
     const b = bodyBox(m);
     expect(b.max.y).toBeCloseTo(a.max.y, 1);
   });
@@ -260,7 +218,7 @@ describe('CourierModel', () => {
     expect(m.packages.visible).toBe(true);
     expect(m.packages.count).toBe(3);
     m.setPackages(99);
-    expect(m.packages.count).toBe(ordersConfig.backpack.maxSlots);
+    expect(m.packages.count).toBe(vehiclesConfig.car.slots);
     // Behind the courier (+Z at heading 0), around its back.
     m.root.updateMatrixWorld(true);
     const p = new THREE.Box3().setFromObject(m.packages);

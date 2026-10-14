@@ -6,6 +6,9 @@ import type {} from '../src/game/debugHooks';
 
 const artifacts = fileURLToPath(new URL('../e2e-artifacts/', import.meta.url));
 mkdirSync(artifacts, { recursive: true });
+/** SP3 playtest screenshots are committed (plan Global Constraints: the phone, a delivery, the hospital spawn). */
+const sp3 = fileURLToPath(new URL('../../../docs/playtest/sp3/', import.meta.url));
+mkdirSync(sp3, { recursive: true });
 
 /** Opens the game in debug mode and waits for the first frame; returns the console errors seen. */
 async function boot(page: Page, query = ''): Promise<string[]> {
@@ -39,7 +42,7 @@ const measureFps = (page: Page, ms: number): Promise<number> =>
 test('loads, renders the greybox and reports ready', async ({ page }) => {
   const errors = await boot(page);
   await expect(page.locator('canvas.game-canvas')).toBeVisible();
-  // Let the player settle onto the plaza and a few frames draw.
+  // Let the player settle at the hospital spawn and a few frames draw.
   await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 10);
   const p = await page.evaluate(() => window.__dm!.player());
   expect(p.mode).toBe('ground');
@@ -49,17 +52,16 @@ test('loads, renders the greybox and reports ready', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('holding W + Shift for 1 s runs at ~8 m/s', async ({ page }) => {
+test('W then a Shift tap runs at ~8 m/s', async ({ page }) => {
   // Timed in simulation ticks, not wall time: headless Chromium renders on the CPU and can drop below
   // 30 / maxStepsPerFrame fps, where the fixed stepper drops time by design.
   await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const { start, tick0 } = await page.evaluate(() => ({ start: window.__dm!.player().position, tick0: window.__dm!.tick }));
   await page.keyboard.down('KeyW');
-  await page.keyboard.down('ShiftLeft');
+  await page.keyboard.press('ShiftLeft'); // Shift toggles sprint on; it stays on while W is held
   await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 30, tick0); // 1 s of sim time
   const { p, ticks } = await page.evaluate((t0) => ({ p: window.__dm!.player(), ticks: window.__dm!.tick - t0 }), tick0);
-  await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   const speed = Math.hypot(p.velocity.x, p.velocity.z);
   const moved = Math.hypot(p.position.x - start.x, p.position.z - start.z);
@@ -76,28 +78,6 @@ test('draw calls stay under the budget', async ({ page }) => {
   console.log(`render: ${info.calls} draw calls, ${info.triangles} triangles`);
   expect(info.calls).toBeGreaterThan(0);
   expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
-});
-
-test('a collected orb disappears', async ({ page }) => {
-  await boot(page);
-  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
-  expect(await page.evaluate(() => window.__dm!.orbVisible('hub-orb-01'))).toBe(true);
-  // Feet 1 m below the orb centre, so the capsule centre is on it.
-  await page.evaluate(() => {
-    const o = window.__dm!.featurePosition('hub-orb-01');
-    window.__dm!.teleport({ x: o.x, y: o.y - 1, z: o.z });
-  });
-  await page.waitForFunction(() => window.__dm!.orbVisible('hub-orb-01') === false, undefined, { timeout: 10_000 });
-});
-
-test('feature screenshot', async ({ page }) => {
-  const errors = await boot(page);
-  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
-  // Stand at the plaza's east edge looking down the playground line: orbs, mantle blocks, wall-run alley.
-  await page.evaluate(() => window.__dm!.viewpoint({ x: 22, y: 0, z: 5 }, { x: 70, y: 2, z: -1 }));
-  await page.waitForTimeout(800);
-  await page.screenshot({ path: `${artifacts}sp1-features.png` });
-  expect(errors).toEqual([]);
 });
 
 /** Waits until `n` more simulation ticks have run (frames are drawn alongside them). */
@@ -126,13 +106,12 @@ async function waitCameraSettled(page: Page, eps = 1e-3, n = 3): Promise<void> {
 test('third-person view shows the courier', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  // East edge of the plaza facing down the playground line, then a short sprint so the shot has motion.
+  // Open ground east of the map centre, facing east, then a short sprint so the shot has motion.
   await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
   await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
   await page.keyboard.down('KeyW');
-  await page.keyboard.down('ShiftLeft');
+  await page.keyboard.press('ShiftLeft');
   await waitTicks(page, 12);
-  await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   await waitCameraSettled(page);
   const cam = await page.evaluate(() => window.__dm!.camera());
@@ -153,7 +132,7 @@ test('third-person view shows the courier', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('camera stays outside geometry in the crouch tunnel and against a wall', async ({ page }) => {
+test('camera stays outside geometry against a wall', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   const deg = Math.PI / 180;
@@ -173,17 +152,6 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
       }
     }
   };
-
-  // Crouch tunnel (hub-tunnel-*: roof underside 1.4 m, x 92..104). Crouch first, then go in.
-  await page.keyboard.down('KeyC');
-  await waitTicks(page, 4);
-  await page.evaluate(() => window.__dm!.teleport({ x: 98, y: 0.05, z: 0 }));
-  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
-  await sweep('tunnel');
-  await page.evaluate(() => window.__dm!.setLook(Math.PI / 2, -20 * (Math.PI / 180)));
-  await waitTicks(page, 3);
-  await page.screenshot({ path: `${artifacts}sp1-camera-tunnel.png` });
-  await page.keyboard.up('KeyC');
 
   // Back pressed against the south face (z = −56) of building b-0--2-2, facing away from it.
   await page.evaluate(() => window.__dm!.viewpoint({ x: 14.5, y: 0.3, z: -55 }, { x: 14.5, y: 1.6, z: -30 }));
@@ -226,91 +194,6 @@ test('camera stays outside geometry in the crouch tunnel and against a wall', as
   expect(errors).toEqual([]);
 });
 
-test('wall-run: the courier stays in view at look offsets from the wall, hidden only when the camera is that close (R12, R10)', async ({ page }) => {
-  const errors = await boot(page);
-  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  const deg = Math.PI / 180;
-  const { minDistance } = clientJson.camera.chase;
-  // hub-wall-01's north face (z = −2, normal +Z) runs x 68..88 along the playground alley. Each check starts a fresh
-  // run: airborne beside the face at 8 m/s toward −X (look yaw π/2 runs along it), W held.
-  const alongYaw = Math.PI / 2;
-  await page.keyboard.down('KeyW');
-  for (const offset of [0, 15, -15, 30, -30, 60, -60]) {
-    await page.evaluate((y) => {
-      window.__dm!.setLook(y, 0);
-      window.__dm!.teleport({ x: 86, y: 2, z: -1.5 }, { x: -8, y: 0, z: 0 });
-    }, alongYaw);
-    await page.waitForFunction(() => window.__dm!.player().mode === 'wallrun', undefined, { timeout: 10_000 });
-    await page.evaluate((y) => window.__dm!.setLook(y, 0), alongYaw + offset * deg);
-    await waitTicks(page, 2);
-    const { mode, cam, inside } = await page.evaluate(() => ({
-      mode: window.__dm!.player().mode,
-      cam: window.__dm!.camera(),
-      inside: window.__dm!.cameraInsideSolid(),
-    }));
-    console.log(
-      `wall-run, look ${offset}° off the wall: boom ${cam.distance.toFixed(2)} m, camera ${cam.courierDistance.toFixed(2)} m from the courier, hidden ${cam.courierHidden}`,
-    );
-    expect(mode, `offset ${offset}°`).toBe('wallrun');
-    expect(inside, `offset ${offset}°`).toBe(false);
-    // Hiding follows the camera's real distance to the courier, not the boom from the shifted pivot.
-    expect(cam.courierHidden, `offset ${offset}°`).toBe(cam.courierDistance < minDistance);
-    // Positive offsets look away from the wall, so the boom swings back toward it. At +60° the boom from the shifted
-    // pivot meets the wall beside the courier (about 0.5 m from it), so R10 hides the courier there; everywhere else
-    // it is in view.
-    if (offset === 60) expect(cam.courierHidden, 'offset 60°').toBe(true);
-    else expect(cam.courierDistance, `offset ${offset}°`).toBeGreaterThanOrEqual(minDistance);
-    const shot = { 30: 'sp1-camera-wallrun.png', [-30]: 'sp1-camera-wallrun-m30.png', 60: 'sp1-camera-wallrun-60.png', [-60]: 'sp1-camera-wallrun-m60.png' }[offset];
-    if (shot) await page.screenshot({ path: `${artifacts}${shot}` });
-  }
-  await page.keyboard.up('KeyW');
-  expect(errors).toEqual([]);
-});
-
-test('camera stays outside geometry on a zip line beside a building', async ({ page }) => {
-  const errors = await boot(page);
-  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  // downtown-zip-03 runs from (43.8, 23, −92) down to (50, 2.8, −160) and passes about 1.1 m from the east face
-  // (x = 44) of building b-0--3-3 a fifth of the way along. Hang under the top end facing down the line and press E.
-  await page.evaluate(() => {
-    const a = { x: 43.8, y: 23, z: -92 };
-    const b = { x: 50, y: 2.8, z: -160 };
-    const t = 0.02;
-    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
-    window.__dm!.viewpoint({ x: p.x, y: p.y - 2, z: p.z }, { x: b.x, y: b.y, z: b.z });
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
-  });
-  await page.waitForFunction(() => window.__dm!.player().mode === 'zipline', undefined, { timeout: 10_000 });
-  const deg = Math.PI / 180;
-  const rideYaw = Math.atan2(-(50 - 43.8), -(-160 - -92));
-  // Orbit while riding, with extra weight on yaws that swing the boom west toward the building.
-  const yaws = [rideYaw - 1.3, rideYaw - 1.6, rideYaw - 1.0, rideYaw, rideYaw - 2.2, rideYaw + 1.3];
-  let checks = 0;
-  let shot = false;
-  for (let i = 0; i < 80; i++) {
-    const p = await page.evaluate(() => window.__dm!.player());
-    if (p.mode !== 'zipline') break;
-    await page.evaluate(([y, pitch]) => window.__dm!.setLook(y, pitch), [yaws[i % yaws.length]!, (i % 3 === 0 ? -25 : 0) * deg] as const);
-    await waitTicks(page, 1);
-    const inside = await page.evaluate(() => window.__dm!.cameraInsideSolid());
-    const at = await page.evaluate(() => window.__dm!.player().position);
-    expect(inside, `zip ride at (${at.x.toFixed(1)}, ${at.y.toFixed(1)}, ${at.z.toFixed(1)}), check ${i}`).toBe(false);
-    checks++;
-    // Screenshot beside the building (its east face spans z −123..−106), boom swung toward it.
-    if (!shot && at.z < -104 && at.z > -118) {
-      await page.evaluate(([y, pitch]) => window.__dm!.setLook(y, pitch), [rideYaw - 1.3, -10 * deg] as const);
-      await waitTicks(page, 1);
-      expect(await page.evaluate(() => window.__dm!.cameraInsideSolid())).toBe(false);
-      await page.screenshot({ path: `${artifacts}sp1-camera-zip.png` });
-      shot = true;
-    }
-  }
-  console.log(`zip ride: ${checks} camera checks, screenshot beside the building: ${shot}`);
-  expect(shot).toBe(true);
-  expect(errors).toEqual([]);
-});
-
 test('courier model loads and animates (mixer time advances)', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
@@ -322,8 +205,9 @@ test('courier model loads and animates (mixer time advances)', async ({ page }) 
   expect(c1.time).toBeGreaterThan(c0.time);
   await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
   await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
-  // W + D + Shift: a diagonal sprint, so the chase camera sees the courier three-quarters from behind.
-  for (const k of ['KeyW', 'KeyD', 'ShiftLeft']) await page.keyboard.down(k);
+  // W + D, then a Shift tap: a diagonal sprint, so the chase camera sees the courier three-quarters from behind.
+  for (const k of ['KeyW', 'KeyD']) await page.keyboard.down(k);
+  await page.keyboard.press('ShiftLeft');
   await page.waitForFunction(() => window.__dm!.courier().clip === 'Running', undefined, { timeout: 10_000 });
   await waitTicks(page, 8);
   await page.screenshot({ path: `${artifacts}sp1-courier-run.png` });
@@ -333,68 +217,10 @@ test('courier model loads and animates (mixer time advances)', async ({ page }) 
   await waitTicks(page, 4);
   expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('slide');
   await page.screenshot({ path: `${artifacts}sp1-courier-slide.png` });
-  for (const k of ['KeyC', 'ShiftLeft', 'KeyD', 'KeyW']) await page.keyboard.up(k);
+  for (const k of ['KeyC', 'KeyD', 'KeyW']) await page.keyboard.up(k);
   const info = await page.evaluate(() => window.__dm!.renderInfo());
   console.log(`courier model: ${info.calls} draw calls, ${info.triangles} triangles`);
   expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
-  expect(errors).toEqual([]);
-});
-
-test('courier poses: wall-run, zip line and board', async ({ page }) => {
-  const errors = await boot(page);
-  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  const deg = Math.PI / 180;
-
-  // Wall-run along hub-wall-01's north face (as in the camera test), looking 30° off the wall toward it.
-  await page.keyboard.down('KeyW');
-  await page.evaluate(() => {
-    window.__dm!.setLook(Math.PI / 2, 0);
-    window.__dm!.teleport({ x: 86, y: 2, z: -1.5 }, { x: -8, y: 0, z: 0 });
-  });
-  await page.waitForFunction(() => window.__dm!.player().mode === 'wallrun', undefined, { timeout: 10_000 });
-  await page.evaluate((y) => window.__dm!.setLook(y, -10 * (Math.PI / 180)), Math.PI / 2 - 30 * deg);
-  await waitTicks(page, 3);
-  expect(await page.evaluate(() => window.__dm!.player().mode)).toBe('wallrun');
-  expect(await page.evaluate(() => window.__dm!.courier().pose)).toMatch(/^wallrun[LR]$/);
-  await page.screenshot({ path: `${artifacts}sp1-courier-wallrun.png` });
-  await page.keyboard.up('KeyW');
-
-  // Zip line: downtown-zip-03 from its top end, the camera swung out to the side.
-  await page.evaluate(() => {
-    const a = { x: 43.8, y: 23, z: -92 };
-    const b = { x: 50, y: 2.8, z: -160 };
-    const t = 0.02;
-    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
-    window.__dm!.viewpoint({ x: p.x, y: p.y - 2, z: p.z }, { x: b.x, y: b.y, z: b.z });
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
-  });
-  await page.waitForFunction(() => window.__dm!.player().mode === 'zipline', undefined, { timeout: 10_000 });
-  const rideYaw = Math.atan2(-(50 - 43.8), -(-160 - -92));
-  await page.evaluate((y) => window.__dm!.setLook(y, -5 * (Math.PI / 180)), rideYaw + 0.7);
-  // W held with the camera swung out turns the heading off the line; the courier still faces the ride (R14).
-  await page.keyboard.down('KeyW');
-  await waitTicks(page, 4);
-  expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('zip');
-  const zipYaw = await page.evaluate(() => ({ heading: window.__dm!.player().heading, drawn: window.__dm!.courier().yaw }));
-  expect(Math.abs(Math.sin(zipYaw.heading - rideYaw))).toBeGreaterThan(0.5);
-  expect(Math.abs(Math.sin(zipYaw.drawn - rideYaw))).toBeLessThan(0.05);
-  expect(Math.cos(zipYaw.drawn - rideYaw)).toBeGreaterThan(0.99);
-  await page.screenshot({ path: `${artifacts}sp1-courier-zip.png` });
-  await page.keyboard.up('KeyW');
-
-  // Board: back on the plaza, Q, then roll forward and a little right.
-  await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
-  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
-  await page.keyboard.press('KeyQ');
-  await page.waitForFunction(() => window.__dm!.player().onBoard === true, undefined, { timeout: 10_000 });
-  await page.keyboard.down('KeyW');
-  await waitTicks(page, 15);
-  await page.keyboard.up('KeyW');
-  await page.evaluate(() => window.__dm!.setLook(Math.PI / 2 - 0.6, -10 * (Math.PI / 180)));
-  await waitTicks(page, 3);
-  expect(await page.evaluate(() => window.__dm!.courier().pose)).toBe('board');
-  await page.screenshot({ path: `${artifacts}sp1-courier-board.png` });
   expect(errors).toEqual([]);
 });
 
@@ -451,135 +277,6 @@ test('city overview screenshot', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('playground screenshot', async ({ page }) => {
-  const errors = await boot(page);
-  await page.waitForFunction(() => (window.__dm?.tick ?? 0) > 5);
-  // Above the plaza's south-east corner, looking along the playground line toward the tower.
-  await airShot(page, { x: 40, y: 18, z: 42 }, { x: 92, y: 2, z: -2 }, 'sp1-playground.png');
-  expect(errors).toEqual([]);
-});
-
-/**
- * Board seed for the delivery tests. With the Task 18 city (21 POIs) its first board's first Drop-off is an Express
- * drop-off to harbor-poi-05, a street door. Tests assert a Drop-off is present, so a map or generator change
- * fails here deterministically instead of flaking.
- */
-const SEED = '&seed=3';
-
-/** Waits for the player to settle, then returns the first Drop-off on the board. */
-async function firstDropoff(page: Page): Promise<{ id: string; poiId: string }> {
-  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  const board = await page.evaluate(() => window.__dm!.orders.board());
-  const drop = board.find((o) => o?.type === 'dropoff');
-  expect(drop, `seed board has no drop-off: ${JSON.stringify(board.map((o) => o?.type))}`).toBeTruthy();
-  const step = drop!.steps[0]!;
-  if (step.kind !== 'poi') throw new Error('drop-off without a POI step');
-  return { id: drop!.id, poiId: step.poiId };
-}
-
-/** Teleports onto a POI's zone (feet at its ground point). */
-async function goToPoi(page: Page, poiId: string): Promise<void> {
-  await page.evaluate((id) => {
-    const p = window.__dm!.poiPosition(id);
-    window.__dm!.teleport({ x: p.x, y: p.y + 0.2, z: p.z });
-  }, poiId);
-}
-
-test('accept a drop-off at the kiosk and deliver it', async ({ page }) => {
-  const errors = await boot(page, SEED);
-  const drop = await firstDropoff(page);
-  // Stand at the kiosk and press E.
-  const kiosk = await page.evaluate(() => window.__dm!.kiosk());
-  await page.evaluate((k) => window.__dm!.viewpoint({ x: k.x, y: k.y, z: k.z + 2 }, { x: k.x, y: 1.5, z: k.z }), kiosk);
-  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
-  await page.keyboard.press('KeyE');
-  await expect(page.locator('.board-overlay')).toBeVisible();
-  await expect(page.locator(`[data-order-id="${drop.id}"] .accept`)).toBeEnabled();
-  // Every card carries its par time and the par bonus as its own line.
-  const card = page.locator(`.board-card[data-order-id="${drop.id}"]`);
-  await expect(card.locator('.board-facts')).toContainText(/Par \d+:\d{2}/);
-  // This seed's first Drop-off is Express: its own timer chip is labelled.
-  await expect(card.locator('.board-facts')).toContainText(/Express \d+:\d{2}/);
-  await expect(card.locator('.board-facts')).not.toContainText('limit');
-  await expect(card.locator('.board-bonus', { hasText: 'coins within par' })).toHaveText('+1 pt · +10 coins within par');
-  await page.screenshot({ path: `${artifacts}sp1-order-board.png` });
-
-  await page.locator(`[data-order-id="${drop.id}"] .accept`).click();
-  await expect(page.locator('.board-active-row')).toHaveCount(1);
-  // A drop-off is collected at accept: one box on the courier's back.
-  await page.waitForFunction(() => window.__dm!.courier().packages === 1);
-  await page.keyboard.press('Escape');
-  await expect(page.locator('.board-overlay')).toBeHidden();
-  expect(await page.evaluate(() => window.__dm!.boardOpen())).toBe(false);
-  expect((await page.evaluate(() => window.__dm!.orders.active())).map((a) => a.order.id)).toEqual([drop.id]);
-
-  // Walk-in stand-in: land inside the POI zone (radius 3 m), 2.5 m toward the HUB, and look down the street at eye
-  // height, about 24 degrees right of the post, so the post sits left of the popup instead of behind it.
-  await page.evaluate((id) => {
-    const p = window.__dm!.poiPosition(id);
-    const d = Math.hypot(p.x, p.z);
-    const ux = p.x / d;
-    const uz = p.z / d;
-    window.__dm!.viewpoint({ x: p.x - ux * 2.5, y: p.y, z: p.z - uz * 2.5 }, { x: p.x + ux * 20 - uz * 10, y: p.y + 1.6, z: p.z + uz * 20 + ux * 10 });
-  }, drop.poiId);
-  const popup = page.locator('.popup').filter({ hasText: /Delivered!\s+\+\d+ pts?\b/ });
-  await expect(popup).toBeVisible({ timeout: 10_000 });
-  // toBeVisible counts opacity 0; wait for the fade-in to finish before the screenshot.
-  await expect(popup).toHaveCSS('opacity', '1');
-  await expect(popup.locator('.popup-line', { hasText: /^Within par\s+\+1 pt · \+10 coins$/ })).toBeVisible();
-  const totals = await page.evaluate(() => window.__dm!.orders.totals());
-  expect(totals.points).toBeGreaterThanOrEqual(1);
-  expect(totals.deliveries).toBe(1);
-  expect(await page.evaluate(() => window.__dm!.orders.active())).toEqual([]);
-  await page.screenshot({ path: `${artifacts}sp1-delivered.png` });
-  expect(errors).toEqual([]);
-});
-
-test('progress survives a reload', async ({ page }) => {
-  await boot(page, SEED);
-  const drop = await firstDropoff(page);
-  expect(await page.evaluate((id) => window.__dm!.orders.accept(id), drop.id)).toBe('ok');
-  await goToPoi(page, drop.poiId);
-  await page.waitForFunction(() => window.__dm!.orders.totals().deliveries === 1, undefined, { timeout: 10_000 });
-  const before = await page.evaluate(() => window.__dm!.orders.totals());
-  expect(before.points).toBeGreaterThanOrEqual(1);
-  await page.reload();
-  await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
-  expect(await page.evaluate(() => window.__dm!.orders.totals())).toEqual(before);
-  await expect(page.locator('.hud-coins .hud-stat-value')).toHaveText(String(before.coins));
-});
-
-test('HUD shows the active order with distance', async ({ page }) => {
-  const errors = await boot(page, SEED);
-  const drop = await firstDropoff(page);
-  expect(await page.evaluate((id) => window.__dm!.orders.accept(id), drop.id)).toBe('ok');
-  const order = page.locator(`.hud-order[data-order-id="${drop.id}"]`);
-  await expect(order).toBeVisible();
-  await expect(order.locator('.hud-stage')).toContainText('Deliver to');
-  await expect(order.locator('.hud-distance')).toHaveText(/^\d+ m$/);
-  // Par counts down on every order; this seed's first Drop-off is Express, so its own timer shows beside it.
-  await expect(order.locator('.hud-par')).toHaveText(/^Par \d+:\d{2} left$/);
-  await expect(order.locator('.hud-timer:not(.hud-par)')).toHaveText(/^Express \d+:\d{2} left$/);
-  const shown = Number((await order.locator('.hud-distance').textContent())!.replace(' m', ''));
-  const { p, target } = await page.evaluate(
-    (id) => ({ p: window.__dm!.player().position, target: window.__dm!.poiPosition(id) }),
-    drop.poiId,
-  );
-  expect(Math.abs(shown - Math.hypot(p.x - target.x, p.y - target.y, p.z - target.z))).toBeLessThanOrEqual(2);
-  // Face the waypoint beam from the far side of the plaza for the screenshot.
-  await page.evaluate((id) => {
-    const t = window.__dm!.poiPosition(id);
-    const d = Math.hypot(t.x, t.z);
-    window.__dm!.viewpoint({ x: (-t.x / d) * 18, y: 0, z: (-t.z / d) * 18 + 4 }, { x: t.x, y: 10, z: t.z });
-  }, drop.poiId);
-  await page.waitForTimeout(500);
-  const info = await page.evaluate(() => window.__dm!.renderInfo());
-  console.log(`render with HUB, POIs and a waypoint: ${info.calls} draw calls, ${info.triangles} triangles`);
-  expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
-  await page.screenshot({ path: `${artifacts}sp1-hud.png` });
-  expect(errors).toEqual([]);
-});
-
 test('dev panel: backtick opens it, a sprintSpeed edit applies live, typing does not move the player', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
@@ -605,10 +302,9 @@ test('dev panel: backtick opens it, a sprintSpeed edit applies live, typing does
 
   const tick0 = await page.evaluate(() => window.__dm!.tick);
   await page.keyboard.down('KeyW');
-  await page.keyboard.down('ShiftLeft');
+  await page.keyboard.press('ShiftLeft');
   await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 45, tick0);
   const p = await page.evaluate(() => window.__dm!.player());
-  await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   expect(Math.hypot(p.velocity.x, p.velocity.z)).toBeGreaterThan(10);
   expect(errors).toEqual([]);
@@ -621,4 +317,335 @@ test('dev panel screenshot', async ({ page }) => {
   await page.locator('.dm-dev-panel .lil-title', { hasText: /^run$/ }).click();
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${artifacts}sp1-devpanel.png` });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// SP3: the core loop. Long sim windows run synchronously through __dm.advance (no rendering in between), so they do not
+// depend on headless frame rate. A fixed ?seed keeps the offer stream reproducible.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const TICK_RATE = 30;
+const SEED = '&seed=7';
+
+/** Runs sim ticks until an offer is on the phone (at most `maxSeconds`); returns the sim seconds it took, or -1. */
+const advanceUntilOffer = (page: Page, maxSeconds: number): Promise<number> =>
+  page.evaluate(
+    ([max, rate]) => {
+      for (let i = 0; i < max * rate; i++) {
+        if (window.__dm!.offers().length > 0) return i / rate;
+        window.__dm!.advance(1);
+      }
+      return window.__dm!.offers().length > 0 ? max : -1;
+    },
+    [maxSeconds, TICK_RATE] as const,
+  );
+
+/** Hides the ?debug overlay (F3) so the SP3 playtest shots don't show headless fps. */
+async function hideOverlay(page: Page): Promise<void> {
+  await page.keyboard.press('F3');
+  await expect(page.locator('.debug-overlay')).toBeHidden();
+}
+
+/** Waits for an offer and accepts it with Y; returns the accepted order id. */
+async function acceptWithY(page: Page): Promise<string> {
+  expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
+  const id = await page.evaluate(() => window.__dm!.offers()[0]!.order.id);
+  await page.keyboard.press('KeyY');
+  await page.waitForFunction(() => window.__dm!.active().length === 1);
+  return id;
+}
+
+/** Stands the courier on a POI's ground point (inside its zone), looking diagonally past it. */
+async function standAt(page: Page, poiId: string): Promise<void> {
+  await page.evaluate((id) => {
+    const p = window.__dm!.poiPosition(id);
+    window.__dm!.viewpoint(p, { x: p.x + 6, y: p.y + 1.2, z: p.z + 6 });
+  }, poiId);
+}
+
+test('spawns at a hospital inside its safe zone', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  const { hospitals, zone, pos } = await page.evaluate(() => ({
+    hospitals: window.__dm!.hospitals(),
+    zone: window.__dm!.safeZone(),
+    pos: window.__dm!.player().position,
+  }));
+  expect(hospitals.length).toBe(4);
+  const first = hospitals[0]!;
+  expect(zone).toBe(first.id);
+  expect(Math.hypot(pos.x - first.center.x, pos.z - first.center.z)).toBeLessThan(first.safeRadius);
+  await expect(page.locator('.hud-safe')).toBeVisible();
+  // The courier spawns facing the street (spawnYaw); turn the camera back so the shot shows the hospital block.
+  await page.evaluate(([c, p]) => window.__dm!.setLook(Math.atan2(-(c.x - p.x), -(c.z - p.z)), 0), [first.center, pos] as const);
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp3}sp3-hospital-spawn.png` });
+  expect(errors).toEqual([]);
+});
+
+test('an offer appears within 15 s of sim time and Y accepts it', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const took = await advanceUntilOffer(page, 15);
+  console.log(`first offer after ${took.toFixed(2)} s of sim`);
+  expect(took).toBeGreaterThanOrEqual(0);
+  const id = await page.evaluate(() => window.__dm!.offers()[0]!.order.id);
+  await page.keyboard.press('KeyY');
+  await page.waitForFunction(() => window.__dm!.active().length === 1);
+  expect(await page.evaluate(() => window.__dm!.active()[0]!.order.id)).toBe(id);
+  await expect(page.locator('.popup-title', { hasText: 'Offer accepted' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('teleport to the pickup then the dropoff completes the order with points', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  await acceptWithY(page);
+  const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
+  await standAt(page, order.pickupPoiId);
+  await page.evaluate(() => window.__dm!.advance(15));
+  expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
+  // Let the "accepted" and "picked up" popups expire (wall-clock, 3.5 s) so the delivery popup stands alone in the shot.
+  await expect(page.locator('.popup')).toHaveCount(0, { timeout: 10_000 });
+  // Teleport 7 m short of the dropoff (on the pickup's side), facing it, then walk in: the chase camera frames the
+  // courier in front of the marker rather than inside it.
+  await page.evaluate(([drop, pick]) => {
+    const t = window.__dm!.poiPosition(drop);
+    const p = window.__dm!.poiPosition(pick);
+    const d = Math.hypot(p.x - t.x, p.z - t.z);
+    const feet = { x: t.x + ((p.x - t.x) / d) * 7, y: t.y, z: t.z + ((p.z - t.z) / d) * 7 };
+    window.__dm!.viewpoint(feet, { x: t.x, y: t.y + 1.2, z: t.z });
+  }, [order.dropoffPoiId, order.pickupPoiId] as const);
+  await page.keyboard.down('KeyW');
+  const walked = await page.evaluate(
+    ([rate]) => {
+      for (let i = 0; i < 5 * rate; i++) {
+        window.__dm!.advance(1);
+        if (window.__dm!.totals().deliveries > 0) return i / rate;
+      }
+      return -1;
+    },
+    [TICK_RATE] as const,
+  );
+  await page.keyboard.up('KeyW');
+  console.log(`walked into the dropoff zone in ${walked.toFixed(2)} s`);
+  expect(walked).toBeGreaterThanOrEqual(0);
+  const totals = await page.evaluate(() => window.__dm!.totals());
+  console.log(`delivered ${order.kind} ${order.id}: ${totals.points} points, ${totals.coins} coins`);
+  expect(totals.deliveries).toBe(1);
+  expect(totals.points).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__dm!.active().length)).toBe(0);
+  const delivered = page.locator('.popup', { hasText: 'Delivered!' });
+  await expect(delivered).toBeVisible();
+  await expect(page.locator('.popup')).toHaveCount(1);
+  await waitTicks(page, 4);
+  // Fully faded in (the popup animation's first 8 %).
+  await expect.poll(() => delivered.evaluate((e) => getComputedStyle(e).opacity), { timeout: 3_000 }).toBe('1');
+  await page.screenshot({ path: `${sp3}sp3-delivered.png` });
+  expect(errors).toEqual([]);
+});
+
+test('cancelling starts the lockout and no offer appears for 45 s', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const id = await acceptWithY(page);
+  // The lockout runs from the sim time of the cancel; the render loop keeps ticking between evaluate calls, so the
+  // window below is anchored to the cancel's tick, not to when the check starts.
+  const cancel = await page.evaluate(
+    (o) => ({ result: window.__dm!.cancel(o), tick: window.__dm!.tick, offers: window.__dm!.offers().map((x) => x.order.id) }),
+    id,
+  );
+  expect(cancel.result).toBe('ok');
+  await expect(page.locator('.popup-title', { hasText: 'Order cancelled' })).toBeVisible();
+  await expect(page.locator('.hud-lockout')).toBeVisible();
+  const r = await page.evaluate(
+    ([rate, t0, before]) => {
+      // Offers already on the phone at the cancel may stay until they expire; anything else is new.
+      const seen = new Set(before);
+      const fresh = new Set<string>(window.__dm!.offers().filter((o) => !seen.has(o.order.id)).map((o) => o.order.id));
+      // The rest of the 45 s lockout, tick by tick (offers live 20 s, so one that came while the render loop ran the
+      // first ticks would still be on the phone above).
+      while (window.__dm!.tick < t0 + 45 * rate) {
+        window.__dm!.advance(1);
+        for (const o of window.__dm!.offers()) if (!seen.has(o.order.id)) fresh.add(o.order.id);
+      }
+      const lockedTicks = window.__dm!.tick - t0;
+      // Not vacuous: at the same spot offers do arrive once the lockout is over (within one arrival interval).
+      let resumedAfter = -1;
+      for (let i = 0; i < 20 * rate; i++) {
+        window.__dm!.advance(1);
+        if (window.__dm!.offers().some((o) => !seen.has(o.order.id))) {
+          resumedAfter = i / rate;
+          break;
+        }
+      }
+      return { fresh: fresh.size, lockedTicks, resumedAfter };
+    },
+    [TICK_RATE, cancel.tick, cancel.offers] as const,
+  );
+  console.log(`lockout: ${r.fresh} new offers in its ${r.lockedTicks} ticks, offers resumed ${r.resumedAfter.toFixed(2)} s after`);
+  expect(r.lockedTicks).toBe(45 * TICK_RATE);
+  expect(r.fresh).toBe(0);
+  expect(r.resumedAfter).toBeGreaterThanOrEqual(0);
+  await expect(page.locator('.hud-lockout')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('a package offer needs the car preset', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('walk');
+  /** Runs `seconds` of sim, never accepting; counts the distinct offers seen by kind. */
+  const watch = (seconds: number): Promise<{ food: number; package: number; firstPackageAt: number }> =>
+    page.evaluate(
+      ([s, rate]) => {
+        const seen = new Map<string, string>();
+        let firstPackageAt = -1;
+        for (let i = 0; i < s * rate; i++) {
+          window.__dm!.advance(1);
+          for (const o of window.__dm!.offers()) {
+            seen.set(o.order.id, o.order.kind);
+            if (o.order.kind === 'package' && firstPackageAt < 0) firstPackageAt = i / rate;
+          }
+        }
+        const kinds = [...seen.values()];
+        return { food: kinds.filter((k) => k === 'food').length, package: kinds.filter((k) => k === 'package').length, firstPackageAt };
+      },
+      [seconds, TICK_RATE] as const,
+    );
+  const walk = await watch(60);
+  console.log(`walk, 60 s: ${walk.food} food offers, ${walk.package} package offers`);
+  expect(walk.food).toBeGreaterThan(0); // offers did arrive, so "no packages" is not vacuous
+  expect(walk.package).toBe(0);
+  expect(await page.evaluate(() => window.__dm!.setCapacityTier('car'))).toBe(true);
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
+  const car = await watch(60);
+  console.log(`car, 60 s: ${car.food} food offers, ${car.package} package offers, first package at ${car.firstPackageAt.toFixed(2)} s`);
+  expect(car.package).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('dev panel capacity preset switches the tier and reverts when the switch is refused', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await page.keyboard.press('Backquote');
+  const select = page.locator('.dm-dev-panel .lil-controller', { hasText: 'Capacity (dev, until SP4)' }).locator('select');
+  await expect(select).toBeVisible();
+  await expect(select).toHaveValue('walk');
+  await select.selectOption('car');
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
+  // Take a package order (it only fits a motorbike or car), then ask for walking: refused, the select goes back to car.
+  const got = await page.evaluate(
+    ([rate]) => {
+      for (let i = 0; i < 120 * rate; i++) {
+        const pkg = window.__dm!.offers().find((o) => o.order.kind === 'package');
+        if (pkg) return window.__dm!.accept(pkg.order.id);
+        window.__dm!.advance(1);
+      }
+      return 'none';
+    },
+    [TICK_RATE] as const,
+  );
+  expect(got).toBe('ok');
+  await select.selectOption('walk');
+  await expect(page.locator('.popup-warn .popup-title', { hasText: "Can't switch to walking" })).toBeVisible();
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
+  await expect(select).toHaveValue('car');
+  // Reset progress puts the tier back to walking, and the select follows.
+  await page.locator('.dm-dev-panel .lil-controller', { hasText: 'Reset progress' }).locator('button').click();
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('walk');
+  await expect(select).toHaveValue('walk');
+  expect(errors).toEqual([]);
+});
+
+test('phone: Tab opens Orders, Map and Wallet render; Esc closes', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await expect(page.locator('.phone')).toBeVisible();
+  await expect(page.locator('.phone-title')).toHaveText('Orders');
+  await expect(page.locator('.hud')).toBeVisible(); // behind the dimmed backdrop
+  await expect(page.locator('.phone-offer').first()).toBeVisible();
+  // The player stands still while the phone is up.
+  const { start, tick0 } = await page.evaluate(() => ({ start: window.__dm!.player().position, tick0: window.__dm!.tick }));
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction((t0) => window.__dm!.tick - t0 >= 15, tick0);
+  await page.keyboard.up('KeyW');
+  const end = await page.evaluate(() => window.__dm!.player().position);
+  expect(Math.hypot(end.x - start.x, end.z - start.z)).toBeLessThan(0.05);
+  await page.screenshot({ path: `${sp3}sp3-phone-orders.png` });
+  // Accept from the phone: the order moves to Active and the Map shows its target.
+  await page.locator('.phone-offer').first().locator('.phone-accept').click();
+  await expect(page.locator('.phone-active-order')).toHaveCount(1);
+  await page.locator('.phone-nav-btn[data-app="map"]').click();
+  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await expect(page.locator('.phone-map-canvas')).toBeVisible();
+  await waitTicks(page, 6);
+  await page.screenshot({ path: `${sp3}sp3-phone-map.png` });
+  await page.locator('.phone-nav-btn[data-app="wallet"]').click();
+  await expect(page.locator('.phone-title')).toHaveText('Wallet');
+  await expect(page.locator('.phone-note')).toHaveText('GAME rewards arrive with the reward program (spec §9)');
+  await page.screenshot({ path: `${sp3}sp3-phone-wallet.png` });
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+  await expect(page.locator('.phone')).toBeHidden();
+  // Tab again opens it (on Orders), and Tab in the phone closes it without reopening.
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await expect(page.locator('.phone-title')).toHaveText('Orders');
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+  const t1 = await page.evaluate(() => window.__dm!.tick);
+  await page.waitForFunction((t) => window.__dm!.tick - t >= 10, t1);
+  expect(await page.evaluate(() => window.__dm!.phoneOpen())).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('HUD screenshot with an active order', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  await acceptWithY(page);
+  // Picked up, so the HUD shows the order's timer and the beam leads to the dropoff.
+  const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
+  await standAt(page, order.pickupPoiId);
+  await page.evaluate(() => window.__dm!.advance(15));
+  expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
+  // A few metres on from the pickup toward the dropoff, looking at it, so the pickup's marker is behind the camera.
+  await page.evaluate((id) => {
+    const me = window.__dm!.player().position;
+    const t = window.__dm!.poiPosition(id);
+    const d = Math.hypot(t.x - me.x, t.z - me.z);
+    const feet = { x: me.x + ((t.x - me.x) / d) * 6, y: me.y, z: me.z + ((t.z - me.z) / d) * 6 };
+    window.__dm!.viewpoint(feet, { x: t.x, y: me.y + 1.6, z: t.z });
+  }, order.dropoffPoiId);
+  expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
+  await expect(page.locator('.hud-active')).not.toBeEmpty();
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp3}sp3-hud.png` });
+  expect(errors).toEqual([]);
+});
+
+test('no parkour: speed never exceeds 12 m/s on foot over a 10 s sprint', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // Open ground east of the map centre, facing east (as the third-person test).
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: -1 }));
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  await page.keyboard.down('KeyW');
+  await page.keyboard.press('ShiftLeft');
+  // Every tick of the 10 s is sampled: one synchronous run, nothing steps in between.
+  const speeds = await page.evaluate(([rate]) => window.__dm!.advance(10 * rate), [TICK_RATE] as const);
+  await page.keyboard.up('KeyW');
+  const max = Math.max(...speeds);
+  console.log(`10 s sprint: ${speeds.length} ticks, max horizontal speed ${max.toFixed(3)} m/s`);
+  expect(speeds.length).toBe(10 * TICK_RATE);
+  expect(max).toBeGreaterThan(7); // it did run
+  expect(max).toBeLessThanOrEqual(12 + 1e-6);
+  expect(errors).toEqual([]);
 });

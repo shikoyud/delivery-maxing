@@ -1,7 +1,7 @@
 import type { MovementConfig } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
 import { horizontalLength, vec3, type Vec3 } from '../math/vec3';
-import { boostMultiplier, facing, hasMoveInput, yawOf } from './ground';
+import { facing, hasMoveInput, yawOf } from './ground';
 import type { PlayerState, StatModifiers } from './types';
 
 /** Below this horizontal speed (m/s) a velocity has no usable direction: the courier heading is used instead. */
@@ -33,9 +33,9 @@ export function toggleBoard(state: PlayerState): boolean {
   return true;
 }
 
-/** Board top speed: topSpeed × speedMul × boost (the global speedCap is applied by the step). */
-export function boardTopSpeed(state: PlayerState, cfg: MovementConfig, mods: StatModifiers): number {
-  return cfg.board.topSpeed * mods.speedMul * boostMultiplier(state, cfg);
+/** Board top speed: topSpeed × speedMul (the global speedCap is applied by the step). */
+export function boardTopSpeed(cfg: MovementConfig, mods: StatModifiers): number {
+  return cfg.board.topSpeed * mods.speedMul;
 }
 
 /** Moves `value` toward `target` by at most `maxDelta`. */
@@ -87,7 +87,7 @@ export function applyBoardVelocity(
   const sinTheta = Math.hypot(n.x, n.z);
   if (sinTheta > 0) speed += cfg.gravity * sinTheta * ((n.x * h.x + n.z * h.z) / sinTheta) * dt;
 
-  const top = boardTopSpeed(state, cfg, mods);
+  const top = boardTopSpeed(cfg, mods);
   if (braking) speed = approach(speed, 0, b.brakeDecel * magnitude * dt);
   else if (back) speed = approach(speed, 0, b.friction * dt); // turning around (R3)
   else if (hasInput) speed = speed > top ? Math.max(top, speed - b.friction * dt) : Math.min(top, speed + b.accel * magnitude * dt);

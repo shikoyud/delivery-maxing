@@ -370,7 +370,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 |---|---|---|
 | 1 | Movement + delivery loop | Done (PR #2) |
 | 2 | City map + POI system (2 × 2 km, Quaternius) | Built on branch `sp2/city-map-poi`; PR #3 was closed unmerged on 2026-10-14 because revision 2 replaces its map. Its streaming, LOD, navmesh, generator and perf tooling are reused from that branch in SP5. |
-| 3 | **Core loop rework** | HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
+| 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
 | 4 | **Vehicles** | Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
 | 5 | **City v2** | The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs, 60 fps re-proved. |
 | 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps. |

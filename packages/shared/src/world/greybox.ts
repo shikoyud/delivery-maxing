@@ -1,6 +1,6 @@
 import { mulberry32 } from '../util/rng';
 import { vec3 } from '../math/vec3';
-import type { GreyboxSource, MapData, Rect, Solid } from './mapTypes';
+import type { GreyboxSource, Hospital, MapData, Rect, Solid } from './mapTypes';
 
 const intersects = (a: Rect, b: Rect): boolean =>
   a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
@@ -8,9 +8,12 @@ const intersects = (a: Rect, b: Rect): boolean =>
 const inRect = (x: number, z: number, r: Rect): boolean =>
   x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ;
 
+/** The id of the solid block standing on a hospital's centre. */
+export const hospitalBlockId = (h: Hospital): string => `hospital-block-${h.id}`;
+
 /** Expands a greybox source (hand-placed solids + grid parameters) into the final MapData. */
 export function expandGreybox(src: GreyboxSource): MapData {
-  const { seed, grid, districts, reserved, ...map } = src;
+  const { seed, grid, districts, reserved, hospitalBlock, ...map } = src;
   const rng = mulberry32(seed);
   const { pitch, roadWidth, alleyWidth } = grid;
   const half = src.size / 2;
@@ -45,6 +48,15 @@ export function expandGreybox(src: GreyboxSource): MapData {
         });
       }
     }
+  }
+
+  for (const h of src.hospitals) {
+    solids.push({
+      id: hospitalBlockId(h),
+      kind: 'hospital',
+      center: vec3(h.center.x, h.center.y + hospitalBlock.y / 2, h.center.z),
+      size: vec3(hospitalBlock.x, hospitalBlock.y, hospitalBlock.z),
+    });
   }
 
   solids.push(...src.solids);

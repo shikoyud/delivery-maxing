@@ -29,14 +29,4 @@ describe('physics world', () => {
     const expected = 5 + (0.5 - (z - 50) * Math.sin(a)) / Math.cos(a);
     expect(50 - hit!.timeOfImpact).toBeCloseTo(expected, 4);
   });
-
-  it("surfaceOf returns 'chute' for chute solids and 'default' otherwise", () => {
-    const map = emptyMap();
-    map.solids.push({ id: 'chute', kind: 'chute', center: vec3(0, 3, 40), size: vec3(4, 1, 10), surface: 'chute' });
-    const pw = createPhysicsWorld(rapier, map);
-    const down = (x: number, z: number) =>
-      pw.world.castRay(new rapier.Ray({ x, y: 50, z }, { x: 0, y: -1, z: 0 }), 100, true)!.collider;
-    expect(pw.surfaceOf(down(0, 40))).toBe('chute');
-    expect(pw.surfaceOf(down(10, 10))).toBe('default');
-  });
 });

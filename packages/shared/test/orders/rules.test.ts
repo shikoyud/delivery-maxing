@@ -1,114 +1,86 @@
 import { describe, expect, it } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import { expressLimit, orderSteps, parLimit, scoreOrder, slotsFor } from '../../src/orders/rules';
-import type { Modifier, Order, OrderType } from '../../src/orders/types';
-import type { Band } from '../../src/world/distance';
+import { expressLimit, orderText, scoreOrder, timeLimit, weightClassFor } from '../../src/orders/rules';
+import type { Order } from '../../src/orders/types';
+import type { Poi } from '../../src/world/mapTypes';
 
-function order(type: OrderType, band: Band | null, modifier: Modifier | null = null): Order {
+const wc = ordersConfig.weightClasses;
+
+function order(over: Partial<Order> = {}): Order {
   return {
     id: 'o1',
-    type,
-    modifier,
-    steps: [],
-    band,
-    hubDistance: 100,
-    routeDistance: 100,
-    slots: slotsFor(modifier, ordersConfig),
+    kind: 'package',
+    pickupPoiId: 'a',
+    dropoffPoiId: 'b',
+    item: 'parcel',
+    weightKg: 30,
+    weightClass: 'large',
+    modifier: null,
+    band: 'short',
+    distance: 100,
+    timeLimit: 50,
     expressLimit: null,
-    parLimit: 50,
+    ...over,
   };
 }
-const ok = { onTime: true, intact: true, withinPar: false };
-const bad = { onTime: false, intact: false, withinPar: false };
+const all = { inTime: true, expressOnTime: true, intact: true };
+
+describe('weightClassFor', () => {
+  it('splits at 10, 25, 50', () => {
+    expect(weightClassFor(10, wc)).toBe('small');
+    expect(weightClassFor(10.5, wc)).toBe('medium');
+    expect(weightClassFor(25, wc)).toBe('medium');
+    expect(weightClassFor(50, wc)).toBe('large');
+    expect(weightClassFor(51, wc)).toBe('bulky');
+  });
+});
+
+describe('time limits', () => {
+  it('food hot = d/8*1.3+20, package par = d/8*1.3+10, express = d/8*1.1+10', () => {
+    expect(timeLimit('food', 400, ordersConfig)).toBeCloseTo(85, 9);
+    expect(timeLimit('package', 400, ordersConfig)).toBeCloseTo(75, 9);
+    expect(expressLimit(400, ordersConfig)).toBeCloseTo(65, 9);
+  });
+});
 
 describe('scoreOrder', () => {
-  it('base points/coins by band: short 1/10, medium 2/20, long 3/30, chain 4/40', () => {
-    const cases: [Order, number, number][] = [
-      [order('dropoff', 'short'), 1, 10],
-      [order('pickup', 'medium'), 2, 20],
-      [order('dropoff', 'long'), 3, 30],
-      [order('chain', null), 4, 40],
-    ];
-    for (const [o, points, coins] of cases) {
-      expect(scoreOrder(o, ok, ordersConfig)).toEqual({ points, coins, bonuses: [] });
-    }
-  });
-
-  it('express on time adds +1/+10; late adds nothing', () => {
-    const o = order('dropoff', 'short', 'express');
-    expect(scoreOrder(o, { onTime: true, intact: true, withinPar: false }, ordersConfig)).toEqual({ points: 2, coins: 20, bonuses: ['express'] });
-    expect(scoreOrder(o, { onTime: false, intact: true, withinPar: false }, ordersConfig)).toEqual({ points: 1, coins: 10, bonuses: [] });
-  });
-
-  it('fragile intact now adds +2/+20; broken adds nothing', () => {
-    const o = order('pickup', 'long', 'fragile');
-    expect(scoreOrder(o, { onTime: true, intact: true, withinPar: false }, ordersConfig)).toEqual({ points: 5, coins: 50, bonuses: ['fragile'] });
-    expect(scoreOrder(o, { onTime: true, intact: false, withinPar: false }, ordersConfig)).toEqual({ points: 3, coins: 30, bonuses: [] });
-  });
-
-  it('within par adds +1/+10 on every type incl. chain; late adds nothing', () => {
-    const cases: [Order, number, number][] = [
-      [order('dropoff', 'short'), 1, 10],
-      [order('pickup', 'medium'), 2, 20],
-      [order('dropoff', 'long'), 3, 30],
-      [order('chain', null), 4, 40],
-    ];
-    for (const [o, points, coins] of cases) {
-      const base = { onTime: false, intact: false };
-      expect(scoreOrder(o, { ...base, withinPar: true }, ordersConfig)).toEqual({ points: points + 1, coins: coins + 10, bonuses: ['par'] });
-      expect(scoreOrder(o, { ...base, withinPar: false }, ordersConfig)).toEqual({ points, coins, bonuses: [] });
-    }
-  });
-
-  it('express on time and within par earns both bonuses', () => {
-    const o = order('dropoff', 'short', 'express');
-    expect(scoreOrder(o, { onTime: true, intact: true, withinPar: true }, ordersConfig)).toEqual({
-      points: 3, coins: 30, bonuses: ['express', 'par'],
-    });
-    // within par but late for express: par only
-    expect(scoreOrder(o, { onTime: false, intact: true, withinPar: true }, ordersConfig)).toEqual({
-      points: 2, coins: 20, bonuses: ['par'],
+  it('medium bulky package in time: (2*3)=6 pts + 1 par = 7 pts, 60+10 coins', () => {
+    const o = order({ band: 'medium', weightClass: 'bulky', weightKg: 100 });
+    expect(scoreOrder(o, { inTime: true, expressOnTime: false, intact: false }, ordersConfig)).toEqual({
+      points: 7, coins: 70, bonuses: ['par'],
     });
   });
-
-  it('heavy always adds +1/+10', () => {
-    const o = order('dropoff', 'medium', 'heavy');
-    expect(scoreOrder(o, ok, ordersConfig)).toEqual({ points: 3, coins: 30, bonuses: ['heavy'] });
-    expect(scoreOrder(o, bad, ordersConfig)).toEqual({ points: 3, coins: 30, bonuses: ['heavy'] });
+  it('weight multiplier rounds: short medium-class package = round(1*1.5) = 2 pts', () => {
+    const o = order({ band: 'short', weightClass: 'medium', weightKg: 20 });
+    expect(scoreOrder(o, { inTime: false, expressOnTime: false, intact: false }, ordersConfig)).toEqual({
+      points: 2, coins: 15, bonuses: [],
+    });
+  });
+  it('food scores hot bonus, never express or fragile', () => {
+    const o = order({ kind: 'food', weightKg: null, weightClass: null, modifier: 'express', band: 'long' });
+    expect(scoreOrder(o, all, ordersConfig)).toEqual({ points: 4, coins: 40, bonuses: ['hot'] });
+    const late = { inTime: false, expressOnTime: false, intact: true };
+    expect(scoreOrder({ ...o, modifier: 'fragile' }, late, ordersConfig)).toEqual({ points: 3, coins: 30, bonuses: [] });
+  });
+  it('package express on time and fragile intact add their bonuses', () => {
+    const ex = order({ weightClass: 'small', modifier: 'express' });
+    expect(scoreOrder(ex, all, ordersConfig)).toEqual({ points: 3, coins: 30, bonuses: ['par', 'express'] });
+    expect(scoreOrder(ex, { ...all, expressOnTime: false }, ordersConfig).bonuses).toEqual(['par']);
+    const fr = order({ weightClass: 'small', modifier: 'fragile' });
+    expect(scoreOrder(fr, all, ordersConfig)).toEqual({ points: 4, coins: 40, bonuses: ['par', 'fragile'] });
+    expect(scoreOrder(fr, { ...all, intact: false }, ordersConfig).bonuses).toEqual(['par']);
   });
 });
 
-describe('expressLimit', () => {
-  it('uses distanceFactor x route / sprint speed + extra seconds', () => {
-    expect(expressLimit(160, 8, ordersConfig)).toBeCloseTo(32, 9); // drop-off 160 m: 1.1 x 160 / 8 + 10
-    expect(expressLimit(320, 8, ordersConfig)).toBeCloseTo(54, 9); // pick-up 160 m one-way
-  });
-});
-
-describe('parLimit', () => {
-  it('uses distanceFactor x route / sprint speed + extra seconds', () => {
-    expect(parLimit(160, 8, ordersConfig)).toBe(36); // 160 / 8 x 1.3 + 10
-    expect(parLimit(320, 8, ordersConfig)).toBe(62);
-  });
-});
-
-describe('orderSteps', () => {
-  it('dropoff [poi], pickup [poi, hub], chain [A, B, hub]', () => {
-    expect(orderSteps('dropoff', ['a'])).toEqual([{ kind: 'poi', poiId: 'a' }]);
-    expect(orderSteps('pickup', ['a'])).toEqual([{ kind: 'poi', poiId: 'a' }, { kind: 'hub' }]);
-    expect(orderSteps('chain', ['a', 'b'])).toEqual([
-      { kind: 'poi', poiId: 'a' },
-      { kind: 'poi', poiId: 'b' },
-      { kind: 'hub' },
-    ]);
-  });
-});
-
-describe('slotsFor', () => {
-  it('heavy uses 2 slots; everything else uses 1', () => {
-    expect(slotsFor('heavy', ordersConfig)).toBe(2);
-    expect(slotsFor('express', ordersConfig)).toBe(1);
-    expect(slotsFor('fragile', ordersConfig)).toBe(1);
-    expect(slotsFor(null, ordersConfig)).toBe(1);
+describe('orderText', () => {
+  it('names the item and the doors, with kg for packages', () => {
+    const a = { name: 'Corner Deli' } as Poi;
+    const b = { name: 'Harbor Books' } as Poi;
+    expect(orderText(order({ kind: 'food', item: 'noodles', weightKg: null }), a, b)).toEqual({
+      pickup: 'Pick up noodles from Corner Deli', dropoff: 'Deliver to Harbor Books',
+    });
+    expect(orderText(order({ item: 'crate', weightKg: 30 }), a, b)).toEqual({
+      pickup: 'Pick up crate from Corner Deli (30 kg)', dropoff: 'Deliver to Harbor Books',
+    });
   });
 });

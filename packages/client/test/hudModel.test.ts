@@ -1,183 +1,163 @@
 import { describe, expect, it } from 'vitest';
 import {
   OrderSystem,
-  buildPoiTable,
   expandGreybox,
-  movementConfig,
   mulberry32,
-  orderSteps,
   ordersConfig,
+  playerZones,
+  scoreOrder,
   streetDistance,
-  vec3,
+  vehiclesConfig,
   type GreyboxSource,
-  type MapData,
-  type Modifier,
-  type Order,
-  type OrderType,
-  type PlayerZones,
+  type Offer,
+  type VehicleTier,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
-import { hudModel, poiLabel } from '../src/ui/hudModel';
+import { hudModel, loadText, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
 
-const map: MapData = expandGreybox(greybox as GreyboxSource);
-const [poiA, poiB] = map.pois as [MapData['pois'][number], MapData['pois'][number]];
+const map = expandGreybox(greybox as GreyboxSource);
+const spawn = map.hospitals[0]!.spawn;
+const nowhere = { poiIds: new Set<string>(), safeZone: null };
 
-function system(capacity = 3): OrderSystem {
+function makeSystem(tier: VehicleTier = 'car', seed = 7): OrderSystem {
   return new OrderSystem(
-    {
-      pois: buildPoiTable(map, streetDistance, ordersConfig.bands),
-      distance: streetDistance,
-      hub: map.hub.center,
-      cfg: ordersConfig,
-      baseSprintSpeed: movementConfig.run.sprintSpeed,
-      rng: mulberry32(1),
-      unlocks: { express: true, chain: true },
-      backpackCapacity: capacity,
-    },
+    { pois: map.pois, distance: streetDistance, rules: map.orderRules, cfg: ordersConfig, rng: mulberry32(seed), capacity: vehiclesConfig[tier] },
     0,
   );
 }
 
-function order(id: string, type: OrderType, poiIds: string[], modifier: Modifier | null = null, expressLimit: number | null = null): Order {
-  return {
-    id,
-    type,
-    modifier,
-    steps: orderSteps(type, poiIds),
-    band: type === 'chain' ? null : 'short',
-    hubDistance: 100,
-    routeDistance: type === 'pickup' ? 200 : 100,
-    slots: 1,
-    expressLimit,
-    parLimit: 60,
-  };
+/** Runs the system at the spawn until an offer matching `want` is on the phone; returns it and the time. */
+function waitForOffer(sys: OrderSystem, want: (o: Offer) => boolean = () => true): { offer: Offer; t: number } {
+  for (let t = 0; t < 5000; t += 0.5) {
+    sys.update(t, spawn, nowhere);
+    const offer = sys.offers.find(want);
+    if (offer) return { offer, t };
+  }
+  throw new Error('no matching offer');
 }
 
-/** Puts `o` on the board and accepts it at `now` from inside the plaza. */
-function acceptOrder(s: OrderSystem, o: Order, now = 0): void {
-  s.board = [o];
-  expect(s.accept(o.id, now, true)).toBe('ok');
-}
-
-const zones = (poiIds: string[] = [], inDropZone = false): PlayerZones => ({
-  inPlaza: inDropZone,
-  inDropZone,
-  poiIds: new Set(poiIds),
+describe('pointsText', () => {
+  it('reads "1 pt" and "N pts"', () => {
+    expect(pointsText(1)).toBe('1 pt');
+    expect(pointsText(0)).toBe('0 pts');
+    expect(pointsText(4)).toBe('4 pts');
+  });
 });
 
-const hub = map.hub.center;
+describe('poiIndex', () => {
+  it('finds POIs by id and throws on an unknown one', () => {
+    const idx = poiIndex(map);
+    const p = map.pois[3]!;
+    expect(idx.get(p.id)).toBe(p);
+    expect(idx.target(p.id)).toEqual(p.position);
+    expect(poiIndex(map)).toBe(idx);
+    expect(() => idx.get('nope')).toThrow(/unknown POI/);
+  });
+});
 
-describe('poiLabel', () => {
-  it('reads "Kind · District"', () => {
-    expect(poiLabel({ id: 'x', position: vec3(0, 0, 0), kind: 'mailbox', district: 'harbor' })).toBe('Mailbox · Harbor');
-    expect(poiLabel({ id: 'y', position: vec3(0, 0, 0), kind: 'balcony', district: 'hillside' })).toBe('Balcony · Hillside');
+describe('loadText', () => {
+  it('reads "used/slots · kg/max kg", without kg for a carrier that takes no packages', () => {
+    expect(loadText({ usedSlots: 2, slots: 3, carriedKg: 25, maxPackageKg: 50 })).toBe('2/3 · 25/50 kg');
+    expect(loadText({ usedSlots: 0, slots: 1, carriedKg: 0, maxPackageKg: 0 })).toBe('0/1');
+    expect(loadText({ usedSlots: 1, slots: 5, carriedKg: 12.5, maxPackageKg: 150 })).toBe('1/5 · 12.5/150 kg');
   });
 });
 
 describe('hudModel', () => {
-  it('drop-off stage reads "Deliver to …"', () => {
-    const s = system();
-    acceptOrder(s, order('d', 'dropoff', [poiA.id]));
-    const m = hudModel(s, map, hub, 1);
-    expect(m.orders).toHaveLength(1);
-    expect(m.orders[0]!.stage).toBe(`Deliver to ${poiLabel(poiA)}`);
-    expect(m.orders[0]!.title).toBe('Drop-off');
-    expect(m.orders[0]!.target).toEqual(poiA.position);
+  it('reports totals, load, safe zone and no orders on a fresh system', () => {
+    const sys = makeSystem('motorbike');
+    const m = hudModel(sys, map, spawn, 0, 'Downtown General');
+    expect(m.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
+    expect(m.totals).not.toBe(sys.totals);
+    expect(m.load).toEqual({ usedSlots: 0, slots: 3, carriedKg: 0, maxPackageKg: 50 });
+    expect(m.lockoutLeft).toBe(0);
+    expect(m.orders).toEqual([]);
+    expect(m.offers).toEqual([]);
+    expect(m.safeZone).toBe('Downtown General');
   });
 
-  it('pick-up stage reads "Collect at …" then "Return to HUB" after collection', () => {
-    const s = system();
-    acceptOrder(s, order('p', 'pickup', [poiA.id]));
-    expect(hudModel(s, map, hub, 1).orders[0]!.stage).toBe(`Collect at ${poiLabel(poiA)}`);
-    s.update(2, zones([poiA.id]));
-    const m = hudModel(s, map, poiA.position, 2);
-    expect(m.orders[0]!.stage).toBe('Return to HUB');
-    expect(m.orders[0]!.target).toEqual(map.hub.center);
-    expect(m.orders[0]!.title).toBe('Pick-up');
+  it('offers carry their texts, seconds left and the best-case reward (every bonus)', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys, (o) => o.order.kind === 'package' && o.order.modifier !== null);
+    const m = hudModel(sys, map, spawn, t + 5, null);
+    const card = m.offers.find((o) => o.id === offer.order.id)!;
+    const pickup = poiIndex(map).get(offer.order.pickupPoiId);
+    const dropoff = poiIndex(map).get(offer.order.dropoffPoiId);
+    expect(card.kind).toBe('package');
+    expect(card.pickupText).toContain(pickup.name);
+    expect(card.pickupText).toContain(offer.order.item);
+    expect(card.dropoffText).toBe(`Deliver to ${dropoff.name}`);
+    expect(card.band).toBe(offer.order.band);
+    expect(card.weightKg).toBe(offer.order.weightKg);
+    expect(card.secondsLeft).toBeCloseTo(offer.expiresAt - (t + 5));
+    const best = scoreOrder(offer.order, { inTime: true, expressOnTime: true, intact: true }, ordersConfig);
+    expect(card.reward).toEqual({ points: best.points, coins: best.coins });
+    const base = scoreOrder(offer.order, { inTime: false, expressOnTime: false, intact: false }, ordersConfig);
+    expect(card.reward.points).toBeGreaterThan(base.points + 1); // time bonus plus the modifier bonus
   });
 
-  it('chain stages read Collect at A, Deliver to B, Return to HUB', () => {
-    const s = system();
-    acceptOrder(s, order('c', 'chain', [poiA.id, poiB.id]));
-    expect(hudModel(s, map, hub, 1).orders[0]!.stage).toBe(`Collect at ${poiLabel(poiA)}`);
-    s.update(2, zones([poiA.id]));
-    expect(hudModel(s, map, hub, 2).orders[0]!.stage).toBe(`Deliver to ${poiLabel(poiB)}`);
-    s.update(3, zones([poiB.id]));
-    expect(hudModel(s, map, hub, 3).orders[0]!.stage).toBe('Return to HUB');
+  it("offers carry the phone's accept status (OrderSystem.canAccept at that time)", () => {
+    const sys = makeSystem('motorbike');
+    const { offer, t } = waitForOffer(sys, (o) => (o.order.weightKg ?? 0) > 0);
+    const status = (): string => hudModel(sys, map, spawn, t, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus;
+    expect(status()).toBe('ok');
+    sys.setCapacity(vehiclesConfig.walk); // takes no packages
+    expect(status()).toBe('too_heavy');
+    expect(status()).toBe(sys.canAccept(offer.order.id, t));
+    expect(hudModel(sys, map, spawn, offer.expiresAt, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus).toBe('expired');
   });
 
-  it('express secondsLeft counts down; late flips after the limit', () => {
-    const s = system();
-    acceptOrder(s, order('e', 'dropoff', [poiA.id], 'express', 30), 10);
-    const at = (now: number) => hudModel(s, map, hub, now).orders[0]!.express;
-    expect(at(10)).toEqual({ secondsLeft: 30, late: false });
-    expect(at(25)).toEqual({ secondsLeft: 15, late: false });
-    expect(at(40)).toEqual({ secondsLeft: 0, late: false });
-    expect(at(41)).toEqual({ secondsLeft: 0, late: true });
-    const plain = system();
-    acceptOrder(plain, order('n', 'dropoff', [poiA.id]));
-    expect(hudModel(plain, map, hub, 5).orders[0]!.express).toBeNull();
+  it('timers are null before pickup and count down from pickup; stage text follows the order', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys, (o) => o.order.kind === 'food');
+    expect(sys.accept(offer.order.id, t)).toBe('ok');
+    const pois = poiIndex(map);
+    const pickup = pois.get(offer.order.pickupPoiId);
+    const dropoff = pois.get(offer.order.dropoffPoiId);
+
+    let m = hudModel(sys, map, spawn, t + 3, null);
+    let o = m.orders[0]!;
+    expect(o).toMatchObject({ id: offer.order.id, kind: 'food', item: offer.order.item, targetName: pickup.name, timer: null, express: null, weightKg: null, fragileIntact: null });
+    expect(o.stage).toBe(`Pick up ${offer.order.item} from ${pickup.name}`);
+    expect(o.stage).toBe(stageText(sys.active[0]!, pois));
+    expect(o.target).toEqual(pickup.position);
+    expect(o.distance).toBe(Math.round(Math.hypot(spawn.x - pickup.position.x, spawn.y - pickup.position.y, spawn.z - pickup.position.z)));
+    expect(m.load.usedSlots).toBe(1);
+
+    const tp = t + 10;
+    sys.update(tp, pickup.position, playerZones(pickup.position, map, ordersConfig.zones));
+    expect(sys.active[0]!.pickedUpAt).toBe(tp);
+    m = hudModel(sys, map, pickup.position, tp + 4, null);
+    o = m.orders[0]!;
+    expect(o.stage).toBe(`Deliver to ${dropoff.name}`);
+    expect(o.targetName).toBe(dropoff.name);
+    expect(o.target).toEqual(dropoff.position);
+    expect(o.timer!.secondsLeft).toBeCloseTo(offer.order.timeLimit - 4);
+    expect(o.timer!.late).toBe(false);
+
+    m = hudModel(sys, map, pickup.position, tp + offer.order.timeLimit + 1, null);
+    expect(m.orders[0]!.timer).toEqual({ secondsLeft: 0, late: true });
   });
 
-  it('par secondsLeft counts down from parLimit and late flips after it', () => {
-    const s = system();
-    acceptOrder(s, order('p', 'dropoff', [poiA.id]), 10); // parLimit 60
-    const at = (now: number) => hudModel(s, map, hub, now).orders[0]!.par;
-    expect(at(10)).toEqual({ secondsLeft: 60, late: false });
-    expect(at(25)).toEqual({ secondsLeft: 45, late: false });
-    expect(at(70)).toEqual({ secondsLeft: 0, late: false });
-    expect(at(71)).toEqual({ secondsLeft: 0, late: true });
+  it('an Express package shows its weight, then the par and Express timers from pickup', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys, (o) => o.order.modifier === 'express');
+    sys.accept(offer.order.id, t);
+    let o = hudModel(sys, map, spawn, t, null).orders[0]!;
+    expect(o).toMatchObject({ kind: 'package', weightKg: offer.order.weightKg, timer: null, express: null, fragileIntact: null });
+    const pickup = poiIndex(map).get(offer.order.pickupPoiId).position;
+    sys.update(t + 1, pickup, playerZones(pickup, map, ordersConfig.zones));
+    o = hudModel(sys, map, pickup, t + 3, null).orders[0]!;
+    expect(o.timer!.secondsLeft).toBeCloseTo(offer.order.timeLimit - 2);
+    expect(o.express!.secondsLeft).toBeCloseTo(offer.order.expressLimit! - 2);
   });
 
-  it('every order has a par timer, Express included (both timers, independent)', () => {
-    const s = system();
-    acceptOrder(s, order('e', 'dropoff', [poiA.id], 'express', 30), 0);
-    const m = hudModel(s, map, hub, 40).orders[0]!;
-    expect(m.express).toEqual({ secondsLeft: 0, late: true });
-    expect(m.par).toEqual({ secondsLeft: 20, late: false });
-    const chain = system();
-    acceptOrder(chain, order('c', 'chain', [poiA.id, poiB.id]));
-    expect(hudModel(chain, map, hub, 1).orders[0]!.par).toEqual({ secondsLeft: 59, late: false });
-  });
-
-  it('fragileIntact is null without the modifier and tracks breaks', () => {
-    const s = system();
-    acceptOrder(s, order('f', 'dropoff', [poiA.id], 'fragile'));
-    expect(hudModel(s, map, hub, 1).orders[0]!.fragileIntact).toBe(true);
-    s.onSimEvents([{ kind: 'respawned', checkpointId: 'cp' }]);
-    expect(hudModel(s, map, hub, 1).orders[0]!.fragileIntact).toBe(false);
-    const plain = system();
-    acceptOrder(plain, order('n', 'dropoff', [poiA.id]));
-    expect(hudModel(plain, map, hub, 1).orders[0]!.fragileIntact).toBeNull();
-  });
-
-  it('distance is the straight-line distance to the current target, rounded to 1 m', () => {
-    const s = system();
-    acceptOrder(s, order('d', 'dropoff', [poiA.id]));
-    const t = poiA.position;
-    const player = vec3(t.x + 3.36, t.y + 4.48, t.z); // 5.6 m away (3D, height included)
-    expect(hudModel(s, map, player, 1).orders[0]!.distance).toBe(6);
-    const player2 = vec3(t.x - 30, t.y, t.z + 40.2); // 50.16 m
-    expect(hudModel(s, map, player2, 1).orders[0]!.distance).toBe(50);
-  });
-
-  it('refreshIn = nextRefreshAt − now; cooldownLeft is never negative', () => {
-    const s = system();
-    const m = hudModel(s, map, hub, 12);
-    expect(m.refreshIn).toBeCloseTo(s.nextRefreshAt - 12);
-    expect(m.cooldownLeft).toBe(0);
-    acceptOrder(s, order('d', 'dropoff', [poiA.id]), 12);
-    expect(s.cancel('d', 20, true)).toBe('ok');
-    expect(hudModel(s, map, hub, 30).cooldownLeft).toBeCloseTo(s.cancelCooldownUntil - 30);
-    expect(hudModel(s, map, hub, s.cancelCooldownUntil + 5).cooldownLeft).toBe(0);
-  });
-
-  it('reports totals and slots', () => {
-    const s = system(3);
-    s.totals = { points: 5, coins: 50, deliveries: 3 };
-    acceptOrder(s, order('d', 'dropoff', [poiA.id]));
-    const m = hudModel(s, map, hub, 1);
-    expect(m.totals).toEqual({ points: 5, coins: 50, deliveries: 3 });
-    expect(m.slots).toEqual({ used: 1, capacity: 3 });
+  it('reports the offer lockout left after a cancel', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys);
+    sys.accept(offer.order.id, t);
+    sys.cancel(offer.order.id, t);
+    expect(hudModel(sys, map, spawn, t + 5, null).lockoutLeft).toBeCloseTo(ordersConfig.lockout.seconds - 5);
+    expect(hudModel(sys, map, spawn, t + 100, null).lockoutLeft).toBe(0);
   });
 });
