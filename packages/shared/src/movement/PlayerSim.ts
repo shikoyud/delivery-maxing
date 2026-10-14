@@ -110,6 +110,39 @@ export class PlayerSim {
   }
 
   /**
+   * Dev and tests: gets on the owned `tier` now, whatever else is happening. Any current ride is left first; a
+   * vehicle other than the skateboard is parked `ahead` m in front of the courier (facing the same way) and boarded
+   * there.
+   */
+  rideNow(tier: RideTier, ahead: number): SimEvent[] {
+    this.leaveRide();
+    const s = this.state;
+    if (!restsCarried(tier)) {
+      const f = facing(s.heading);
+      this.garage.parkAt(tier, vec3(s.position.x + f.x * ahead, s.position.y, s.position.z + f.z * ahead), s.heading);
+    }
+    const events: SimEvent[] = [];
+    this.mount(tier, events);
+    return events;
+  }
+
+  /**
+   * Gets off at once, whatever the speed (dev tools and respawn): the ridden vehicle is left where it is, parked on the
+   * ground (at the last grounded spot when airborne) or carried for the skateboard, and the courier is on foot. Nothing
+   * happens on foot.
+   */
+  leaveRide(): void {
+    const s = this.state;
+    const tier = s.riding;
+    if (!tier) return;
+    const v = this.garage.state(tier);
+    if (!v.grounded) v.position = vec3(s.lastGrounded.x, s.lastGrounded.y, s.lastGrounded.z);
+    this.garage.leave(tier);
+    s.riding = null;
+    this.body.setEnabled(true);
+  }
+
+  /**
    * Spec §13 "Vehicle stuck" (the Settings app): respawns on foot at the hospital nearest the last grounded position,
    * like an out-of-bounds respawn (`respawned`, so a carried Fragile breaks), but every vehicle stays where it is. A
    * ridden vehicle is left there: parked on the ground (at the last grounded spot when airborne), or carried for the
@@ -117,14 +150,7 @@ export class PlayerSim {
    */
   respawnAtHospital(): SimEvent[] {
     const s = this.state;
-    const tier = s.riding;
-    if (tier) {
-      const v = this.garage.state(tier);
-      if (!v.grounded) v.position = vec3(s.lastGrounded.x, s.lastGrounded.y, s.lastGrounded.z);
-      this.garage.leave(tier);
-      s.riding = null;
-      this.body.setEnabled(true);
-    }
+    this.leaveRide();
     return [respawn(s, this.body, this.cfg, nearestHospital(this.map, s.lastGrounded))];
   }
 

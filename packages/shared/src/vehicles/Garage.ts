@@ -171,6 +171,12 @@ export class Garage {
     else this.parkAtBay(t, startAt);
   }
 
+  /** Dev and tests: parks the owned `t` at `position`, stopped (the skateboard is carried instead). */
+  parkAt(t: RideTier, position: Vec3, heading: number): void {
+    if (restsCarried(t)) this.carry(t);
+    else this.park(t, position, heading);
+  }
+
   /** Out of bounds (Decision 6): parks the vehicle at the first free bay slot of `h`, stopped, fuel unchanged. */
   tow(t: RideTier, h: Hospital): void {
     if (restsCarried(t)) this.carry(t);
@@ -266,16 +272,15 @@ export class Garage {
     });
   }
 
-  /** Parks `t` at the lowest-numbered slot of `h` that no other owned parked vehicle occupies. */
+  /** Parks `t` at the lowest-numbered slot of `h` that no other owned parked or ridden vehicle occupies. */
   private parkAtBay(t: RideTier, h: Hospital): void {
     const taken = (pos: Vec3): boolean =>
       this.owned().some((o) => {
-        const s = this.entries[o].spot;
-        return (
-          o !== t &&
-          s.kind === 'parked' &&
-          Math.hypot(s.position.x - pos.x, s.position.z - pos.z) < this.cfg.bays.spacing * SLOT_TAKEN_FRACTION
-        );
+        const e = this.entries[o];
+        if (o === t || e.spot.kind === 'carried') return false;
+        // A ridden vehicle counts where it is now (its saved spot is only where it was parked).
+        const at = e.spot.kind === 'parked' ? e.spot.position : e.state.position;
+        return Math.hypot(at.x - pos.x, at.z - pos.z) < this.cfg.bays.spacing * SLOT_TAKEN_FRACTION;
       });
     for (let i = 0; ; i++) {
       const slot = baySlot(h, i, this.cfg);

@@ -532,21 +532,30 @@ test('a package offer needs a car (or motorbike) as the last ride', async ({ pag
   expect(errors).toEqual([]);
 });
 
-test('dev panel shows the capacity tier, which follows the last ride', async ({ page }) => {
+test('dev panel Vehicles: Owned boxes, locked while riding; debug hooks ride, vehicles, setCoins, route', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  expect(await page.evaluate(() => window.__dm!.vehicles().map((v) => v.tier))).toEqual(['skateboard', 'bicycle', 'motorbike', 'car']);
+  await page.evaluate(() => window.__dm!.ride('motorbike'));
+  expect(await page.evaluate(() => window.__dm!.player().riding)).toBe('motorbike');
+  await page.evaluate(() => window.__dm!.setCoins(40));
+  expect(await page.evaluate(() => window.__dm!.totals().coins)).toBe(40);
+  expect(await page.evaluate(() => window.__dm!.route().points)).toEqual([]);
   await page.keyboard.press('Backquote');
-  const field = page.locator('.dm-dev-panel .lil-controller', { hasText: 'Capacity (follows the ride)' }).locator('input');
-  await expect(field).toBeVisible();
-  await expect(field).toHaveValue('walk');
-  await expect(field).toBeDisabled();
-  await page.keyboard.press('Backquote');
-  await page.evaluate(() => {
-    window.__dm!.setLastRide('car');
-    window.__dm!.advance(1);
-  });
-  await page.keyboard.press('Backquote');
-  await expect(field).toHaveValue('car');
+  const box = (tier: string) => page.locator('.dm-dev-panel .lil-controller', { hasText: `Owned · ${tier}` }).locator('input');
+  await expect(box('motorbike')).toBeDisabled();
+  await expect(box('motorbike')).toBeChecked();
+  await expect(box('car')).toBeEnabled();
+  await box('car').uncheck();
+  expect(await page.evaluate(() => window.__dm!.vehicles().map((v) => v.tier))).toEqual(['skateboard', 'bicycle', 'motorbike']);
+  await box('car').check();
+  expect(await page.evaluate(() => window.__dm!.vehicles().find((v) => v.tier === 'car')?.fuel)).toBe(1);
+  await page.locator('.dm-dev-panel .lil-controller', { hasText: '+500 coins' }).locator('button, .lil-name').first().click();
+  expect(await page.evaluate(() => window.__dm!.totals().coins)).toBe(540);
+  await page.locator('.dm-dev-panel .lil-controller', { hasText: 'Reset progress' }).locator('button, .lil-name').first().click();
+  expect(await page.evaluate(() => window.__dm!.player().riding)).toBeNull();
+  expect(await page.evaluate(() => window.__dm!.totals().coins)).toBe(0);
+  expect(await page.evaluate(() => window.__dm!.vehicles().map((v) => v.spot))).toEqual(['carried', 'parked', 'parked', 'parked']);
   expect(errors).toEqual([]);
 });
 

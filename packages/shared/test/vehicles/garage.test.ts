@@ -72,6 +72,15 @@ describe('Garage', () => {
     expect(g.body('skateboard').collider.isEnabled()).toBe(false);
   });
 
+  test('setOwned(true) does not park on a vehicle being ridden over slot 0', () => {
+    const h = map.hospitals[0]!;
+    const g = new Garage(physics, map, defaultGarage(map));
+    g.ride('bicycle'); // still standing over slot 0
+    g.setOwned('car', false, h);
+    g.setOwned('car', true, h);
+    expect(g.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
+  });
+
   test('snapshot round-trips through the constructor', () => {
     const saved = defaultGarage(map);
     saved[2] = { tier: 'motorbike', spot: { kind: 'parked', position: vec3(30, 0, -12), heading: 1.1 }, fuel: 0.4 };

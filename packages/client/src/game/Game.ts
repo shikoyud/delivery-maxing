@@ -5,6 +5,7 @@ import {
   PlayerSim,
   createPhysicsWorld,
   defaultGarage,
+  RIDE_TIERS,
   expandGreybox,
   findRoadSpot,
   horizontalLength,
@@ -15,6 +16,7 @@ import {
   type GreyboxSource,
   type MapData,
   type NavRouter,
+  type RideTier,
   type SimEvent,
   type Vec3,
 } from '@dm/shared';
@@ -46,7 +48,7 @@ import {
   type DevSettings,
   type DevSettingsStore,
 } from './devSettings';
-import { browserStorage, createProgressStore } from './progress';
+import { browserStorage, createProgressStore, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
 import { interpolationStart } from './interpolation';
 import { loadNavRouter } from './navLoader';
@@ -80,7 +82,7 @@ export class Game {
   readonly delivery: DeliveryLoop;
   readonly overlay: DebugOverlay;
   readonly devPanel: DevPanel;
-  private readonly progress = createProgressStore(browserStorage());
+  private readonly progress: ProgressStore;
   readonly chase: ChaseCamera;
   /** Sphere cast of the camera's collision ball against the map (the courier's own collider excluded). */
   private readonly cameraCast: RayCast;
@@ -111,7 +113,9 @@ export class Game {
     private readonly settings: DevSettings,
     private readonly devStore: DevSettingsStore,
     model: CourierModel | null,
+    progress: ProgressStore,
   ) {
+    this.progress = progress;
     this.prevPosition = { ...sim.state.position };
     const chase = this.cfg.camera.chase;
     this.actions = new ActionState(
@@ -180,6 +184,7 @@ export class Game {
           this.vehicles.snap(); // drawn at its new spot, not swept across the map
           return result;
         },
+        snapshot: () => sim.garage.snapshot(),
         respawn: () => {
           const events = sim.respawnAtHospital();
           this.afterTeleport();
@@ -196,9 +201,16 @@ export class Game {
         this.devPanel.setOverrideCount(0);
       },
       onResetProgress: () => {
+        this.resetGarage();
         this.delivery.resetProgress();
       },
-      capacityTier: () => this.delivery.capacityTier,
+      vehicles: {
+        owned: (t) => sim.garage.owned().includes(t),
+        riding: () => sim.state.riding,
+        setOwned: (t, owned) => this.setOwned(t, owned),
+        fillTanks: () => this.fillTanks(),
+        addCoins: (n) => this.delivery.setCoins(this.delivery.orders.totals.coins + n),
+      },
       onChange: () => {
         this.saver.schedule();
         this.devPanel.setOverrideCount(countOverrides(settings));
@@ -252,9 +264,13 @@ export class Game {
     const spawn = map.hospitals[0];
     if (!spawn) throw new Error('map has no hospitals');
     // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
-    const garage = new Garage(physics, map, defaultGarage(map));
+    const progress = createProgressStore(browserStorage(), () => defaultGarage(map));
+    const saved = progress.load();
+    const garage = new Garage(physics, map, saved.garage);
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
-    const game = new Game(host, opts, map, sim, nav, settings, devStore, model);
+    // The tier last ridden (capacity and offers follow it), only while it is still owned.
+    sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress);
     if (opts.debug) installDebugHooks(game);
     return game;
   }
@@ -285,6 +301,50 @@ export class Game {
     this.courier.snap();
     this.chase.snap();
     this.vehicles.snap();
+  }
+
+  /**
+   * Dev panel: buys or removes `t`. The vehicle being ridden cannot be removed (refused, false): the courier gets off
+   * first. A bought one parks at the first free bay slot with a full tank. Saved.
+   */
+  setOwned(t: RideTier, owned: boolean): boolean {
+    if (!owned && this.sim.state.riding === t) return false;
+    this.sim.garage.setOwned(t, owned, this.map.hospitals[0]!);
+    if (!owned && this.sim.state.lastRide === t) this.sim.state.lastRide = null;
+    this.vehicles.snap();
+    this.delivery.save();
+    return true;
+  }
+
+  /** Dev panel: every owned tank full. Saved. */
+  private fillTanks(): void {
+    for (const t of this.sim.garage.owned()) this.sim.garage.state(t).fuel = 1;
+    this.delivery.save();
+  }
+
+  /**
+   * Dev panel "Reset progress": the courier gets off and every vehicle is bought afresh (the default garage: the bay
+   * slots in order, full tanks), no last ride, summon ready.
+   */
+  private resetGarage(): void {
+    this.sim.leaveRide();
+    const g = this.sim.garage;
+    const hospital = this.map.hospitals[0]!;
+    for (const t of RIDE_TIERS) g.setOwned(t, false, hospital);
+    for (const t of RIDE_TIERS) g.setOwned(t, true, hospital);
+    g.summonReadyAt = 0;
+    this.sim.state.lastRide = null;
+    this.vehicles.snap();
+  }
+
+  /** Debug API: parks `tier` next to the player (owning it first) and mounts it. */
+  rideNow(tier: RideTier): void {
+    const g = this.sim.garage;
+    if (!g.owned().includes(tier)) this.setOwned(tier, true);
+    // Park ahead of the courier by half the mount radius (leaves any current ride first).
+    this.sim.rideNow(tier, g.cfg.riding.mountRadius / 2);
+    this.afterTeleport();
+    this.delivery.save();
   }
 
   /**

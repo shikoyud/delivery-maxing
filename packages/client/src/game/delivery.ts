@@ -27,6 +27,7 @@ import {
   type Rng,
   type SimEvent,
   type StatModifiers,
+  type SavedVehicle,
   type SummonResult,
   type Totals,
   type Vec3,
@@ -96,6 +97,8 @@ export interface DeliveryDeps {
     /** A ride's live state (Game: Garage.state): refuelling fills its tank. */
     state(t: RideTier): VehicleState;
     respawn(): SimEvent[];
+    /** The owned vehicles as saved (Game: Garage.snapshot: a ridden one parked where it is). */
+    snapshot(): SavedVehicle[];
   };
 }
 
@@ -351,6 +354,7 @@ export class DeliveryLoop {
       }
       this.refueller = new Refueller();
       this.refuelTier = r.riding;
+      this.save(); // mounted or dismounted: the vehicle's spot and the last ride are saved
     }
     if (r.riding === null) return;
     const spec = ridingConfig.rides[r.riding];
@@ -430,7 +434,10 @@ export class DeliveryLoop {
     if (!v) return 'noSpot';
     const now = this.d.now();
     const result = v.summon(t, now);
-    if (result === 'ok') this.popups.show(`${RIDE_NAME[t]} is here`, [], 'info');
+    if (result === 'ok') {
+      this.popups.show(`${RIDE_NAME[t]} is here`, [], 'info');
+      this.save();
+    }
     else {
       const readyIn = v.rows(now).find((r) => r.tier === t)?.readyIn ?? 0;
       const lines = result === 'cooldown' ? [`Ready in ${Math.ceil(readyIn)} s`] : [];
@@ -457,6 +464,13 @@ export class DeliveryLoop {
     this.nextHudAt = 0;
   }
 
+  /** Dev panel and debug API: sets the Coins held, saved. */
+  setCoins(n: number): void {
+    this.sys.totals = { ...this.sys.totals, coins: Math.max(0, n) };
+    this.save();
+    this.nextHudAt = 0;
+  }
+
   /** Dev / GAME-burn stub (price Pending): end the offer lockout now. */
   skipLockout(): void {
     this.sys.skipLockout();
@@ -468,6 +482,8 @@ export class DeliveryLoop {
    * still follows the ride) — and saved.
    */
   resetProgress(): void {
+    // Any refuel in progress ends with it: its accrued cost must not be charged to the fresh balance later.
+    this.refueller = new Refueller();
     this.sys = this.makeSystem(ZERO);
     this.save();
     this.nextHudAt = 0;
@@ -527,9 +543,17 @@ export class DeliveryLoop {
     if (this.phone.isOpen) this.phone.render(m, this.d.player().position, this.d.player().heading ?? 0);
   }
 
-  /** Saves the totals (the rest of the stored record is kept as it is). */
-  private save(): void {
-    this.d.progress.save({ ...this.d.progress.load(), totals: { ...this.sys.totals } });
+  /**
+   * Saves the totals, the garage (Game: Garage.snapshot) and the last ride. Also called by Game after the dev panel
+   * changes ownership.
+   */
+  save(): void {
+    const stored = this.d.progress.load();
+    this.d.progress.save({
+      totals: { ...this.sys.totals },
+      garage: this.d.vehicles ? this.d.vehicles.snapshot() : stored.garage,
+      lastRide: this.d.rider().lastRide,
+    });
   }
 
   /** `before`: the active orders before this tick's update, so a completed order's details are still known. */

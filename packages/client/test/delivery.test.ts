@@ -116,6 +116,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
         return vehicles.result;
       },
       state: (t) => states[t],
+      snapshot: () => [{ tier: 'car', spot: { kind: 'parked', position: { x: 1, y: 0, z: 2 }, heading: 0.5 }, fuel: states.car.fuel }],
       respawn: () => {
         vehicles.calls.push('respawn');
         env.position = { ...map.hospitals[0]!.spawn };
@@ -319,13 +320,13 @@ describe('DeliveryLoop', () => {
   });
 
   it('starts from the saved totals and the last ridden tier', () => {
-    const s = setup('bicycle', { totals: { points: 5, coins: 50, deliveries: 3 }, capacityTier: 'walk' });
+    const s = setup('bicycle', { totals: { points: 5, coins: 50, deliveries: 3 }, garage: [], lastRide: null });
     expect(s.loop.orders.totals).toEqual({ points: 5, coins: 50, deliveries: 3 });
     expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
   });
 
   it('resetProgress zeroes the totals, drops the orders and saves; capacity still follows the ride', () => {
-    const s = setup('car', { totals: { points: 5, coins: 50, deliveries: 3 }, capacityTier: 'walk' });
+    const s = setup('car', { totals: { points: 5, coins: 50, deliveries: 3 }, garage: [], lastRide: null });
     const offer = s.waitForOffer();
     s.loop.accept(offer.order.id);
     s.loop.resetProgress();
@@ -571,7 +572,7 @@ describe('DeliveryLoop', () => {
   });
 
   it('holding E at a pump on the car charges coins and fills the tank; on foot nothing happens', () => {
-    const s = setup('car', { totals: { points: 0, coins: 100, deliveries: 0 }, capacityTier: 'car' });
+    const s = setup('car', { totals: { points: 0, coins: 100, deliveries: 0 }, garage: [], lastRide: null });
     const pump = map.gasStations[0]!.pumps[0]!;
     s.env.position = { ...pump };
     const hold = (ticks: number): void => {
@@ -593,7 +594,7 @@ describe('DeliveryLoop', () => {
   });
 
   it('a refuel cut short by getting off is still charged; E at a pump on a ride with no tank says so', () => {
-    const s = setup('car', { totals: { points: 0, coins: 100, deliveries: 0 }, capacityTier: 'car' });
+    const s = setup('car', { totals: { points: 0, coins: 100, deliveries: 0 }, garage: [], lastRide: null });
     s.env.position = { ...map.gasStations[0]!.pumps[0]! };
     s.rider.riding = 'car';
     s.states.car.fuel = 0.5;
@@ -609,5 +610,41 @@ describe('DeliveryLoop', () => {
     expect(s.popups.at(-1)!.text).toBe('This one runs on legs');
     expect(s.loop.orders.totals.coins).toBe(80);
   });
-});
 
+  it('saves the garage and the last ride on mount, dismount and a successful summon, not on a refused one', () => {
+    const s = setup('car', { totals: { points: 0, coins: 0, deliveries: 0 }, garage: [], lastRide: null });
+    expect(s.stored().garage).toEqual([]);
+    s.rider.riding = 'car';
+    s.tick();
+    expect(s.stored().garage).toEqual([{ tier: 'car', spot: { kind: 'parked', position: { x: 1, y: 0, z: 2 }, heading: 0.5 }, fuel: 1 }]);
+    expect(s.stored().lastRide).toBe('car');
+    s.rider.lastRide = 'bicycle';
+    s.rider.riding = null; // dismounted
+    s.tick();
+    expect(s.stored().lastRide).toBe('bicycle');
+    s.states.car.fuel = 0.3;
+    s.vehicles.result = 'cooldown';
+    s.loop.summon('car');
+    expect(s.stored().garage[0]!.fuel).toBe(1);
+    s.vehicles.result = 'ok';
+    s.loop.summon('car');
+    expect(s.stored().garage[0]!.fuel).toBe(0.3);
+  });
+
+  it('resetProgress mid-refuel ends the session: no later charge or popup', () => {
+    const s = setup('car', { totals: { points: 0, coins: 100, deliveries: 0 }, garage: [], lastRide: null });
+    s.env.position = { ...map.gasStations[0]!.pumps[0]! };
+    s.rider.riding = 'car';
+    s.states.car.fuel = 0.5;
+    const hold = (): void => s.tick(false, false, false, { interact: { held: true, pressed: false } });
+    for (let i = 0; i < 20; i++) hold();
+    expect(s.states.car.fuel).toBeGreaterThan(0.5);
+    s.loop.resetProgress();
+    s.states.car.fuel = 1; // the dev panel refills every tank
+    s.loop.orders.spendCoins(0);
+    hold();
+    s.tick(); // E released
+    expect(s.popups.filter((p) => p.text.startsWith('Refuelled'))).toEqual([]);
+    expect(s.loop.orders.totals.coins).toBe(0);
+  });
+});

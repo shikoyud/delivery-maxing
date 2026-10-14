@@ -1,5 +1,5 @@
 import GUI, { type Controller } from 'lil-gui';
-import type { VehicleTier } from '@dm/shared';
+import { RIDE_TIERS, type RideTier } from '@dm/shared';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import { el } from './dom';
 
@@ -10,9 +10,21 @@ export interface DevPanelHooks {
   onResetProgress(): void;
   /** Any value changed (the host saves, debounced). */
   onChange(): void;
-  /** The carrier capacity tier in use (it follows the ride). */
-  capacityTier(): VehicleTier;
+  /** The owned vehicles (Game: the sim's garage) and the shortcuts of the "Vehicles" folder. */
+  vehicles: {
+    owned(t: RideTier): boolean;
+    /** The ride the courier is on, or null: its Owned box is locked until the courier gets off. */
+    riding(): RideTier | null;
+    setOwned(t: RideTier, owned: boolean): void;
+    /** "Fill all tanks". */
+    fillTanks(): void;
+    /** "+500 coins" (the amount is `DEV_COINS`). */
+    addCoins(n: number): void;
+  };
 }
+
+/** What "+500 coins" adds. */
+export const DEV_COINS = 500;
 
 export interface DevPanel {
   toggle(): void;
@@ -77,13 +89,25 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     }
   }
 
-  // Capacity (read-only): the tier's slots and package weight (spec §3.3) follow the ride, or the last ride on foot.
-  const capacity = { tier: hooks.capacityTier() };
-  const syncTier = (): void => {
-    capacity.tier = hooks.capacityTier();
-    tierCtrl.updateDisplay();
+  // Vehicles: which rides are owned (a new one parks at the first free bay slot, full), tank and coin shortcuts.
+  const folder = gui.addFolder('Vehicles');
+  const owned = Object.fromEntries(RIDE_TIERS.map((t) => [t, hooks.vehicles.owned(t)])) as Record<RideTier, boolean>;
+  const boxes = RIDE_TIERS.map((t) =>
+    folder.add(owned, t).name(`Owned · ${t}`).onChange((on: boolean) => {
+      hooks.vehicles.setOwned(t, on);
+      syncVehicles();
+    }),
+  );
+  // Sync from the garage; the ridden vehicle's box is locked (getting off first keeps the state whole).
+  const syncVehicles = (): void => {
+    const riding = hooks.vehicles.riding();
+    RIDE_TIERS.forEach((t, i) => {
+      owned[t] = hooks.vehicles.owned(t);
+      boxes[i]!.updateDisplay().enable(t !== riding);
+    });
   };
-  const tierCtrl = gui.add(capacity, 'tier').name('Capacity (follows the ride)').disable();
+  folder.add({ fill: () => hooks.vehicles.fillTanks() }, 'fill').name('Fill all tanks');
+  folder.add({ coins: () => hooks.vehicles.addCoins(DEV_COINS) }, 'coins').name(`+${DEV_COINS} coins`);
 
   const refresh = (): void => gui.controllersRecursive().forEach((c: Controller) => c.updateDisplay());
   const actions = {
@@ -94,7 +118,7 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     },
     resetProgress: () => {
       hooks.onResetProgress();
-      syncTier();
+      syncVehicles();
     },
   };
   gui.add(actions, 'copy').name('Copy movement JSON');
@@ -108,7 +132,7 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     },
     toggle() {
       if (gui._hidden) {
-        syncTier(); // the tier may have changed since (debug API, a reset)
+        syncVehicles(); // ownership or the ride may have changed since (debug API, a reset)
         gui.show();
       } else gui.hide();
     },

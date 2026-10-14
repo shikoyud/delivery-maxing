@@ -268,3 +268,26 @@ describe('respawnAtHospital (spec §13 vehicle stuck)', () => {
     expect(h.sim.mountCandidate()).toBe('skateboard');
   });
 });
+
+describe('rideNow (dev and debug)', () => {
+  test('parks the tier ahead of the courier and rides it; the previous ride is left where it is', async () => {
+    const h = await makeSim({ spawn: vec3(0, 0, 0), garage: [skateboard, parked('car', vec3(0, 0, -30), 0)] });
+    h.sim.state.heading = 0;
+    expect(h.sim.rideNow('car', 1.5)).toContainEqual({ kind: 'mounted', tier: 'car' });
+    expect(h.sim.state.riding).toBe('car');
+    expect(h.sim.state.position.z).toBeCloseTo(-1.5, 3);
+    expect(h.sim.state.lastRide).toBe('car');
+    // Switch to the skateboard: the car stays parked where it was ridden, the board comes out at the feet.
+    expect(h.sim.rideNow('skateboard', 1.5)).toContainEqual({ kind: 'mounted', tier: 'skateboard' });
+    expect(h.sim.state.riding).toBe('skateboard');
+    expect(h.sim.garage.spot('car').kind).toBe('parked');
+    expect(h.sim.body.collider.isEnabled()).toBe(false);
+  });
+
+  test('leaveRide is a no-op on foot', async () => {
+    const h = await makeSim();
+    h.sim.leaveRide();
+    expect(h.sim.state.riding).toBeNull();
+    expect(h.sim.body.collider.isEnabled()).toBe(true);
+  });
+});
