@@ -370,3 +370,13 @@ describe('OrderSystem', () => {
     expect(kinds(run(sys, 8 + ordersConfig.spacing.reuseSeconds, 8 + ordersConfig.spacing.reuseSeconds + 20))).toContain('offered');
   });
 });
+
+describe('spendCoins', () => {
+  test('spendCoins refuses more than the player has', () => {
+    const os = makeSystem({ totals: { points: 0, coins: 50, deliveries: 0 } });
+    expect(os.spendCoins(51)).toBe(false);
+    expect(os.totals.coins).toBe(50);
+    expect(os.spendCoins(30)).toBe(true);
+    expect(os.totals.coins).toBe(20);
+  });
+});

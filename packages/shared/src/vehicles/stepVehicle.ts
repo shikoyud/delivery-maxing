@@ -6,6 +6,7 @@ import type { SimEvent } from '../movement/types';
 import type { MapData } from '../world/mapTypes';
 import { clipToAccess } from './accessClip';
 import { applyDrive, driveInput, vehicleTopSpeed } from './drive';
+import { burnFuel } from './fuel';
 import type { VehicleState } from './types';
 import type { VehicleBody } from './VehicleBody';
 
@@ -30,6 +31,9 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   const events: SimEvent[] = [];
   const { dt, gravity } = ctx;
   const arriving = v.velocity;
+  const startX = v.position.x;
+  const startZ = v.position.z;
+  const fuelBefore = v.fuel;
 
   // 1. Drive.
   if (v.grounded) applyDrive(v, driveInput(input), ctx.spec, vehicleTopSpeed(v), gravity, dt);
@@ -66,7 +70,9 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   // 8. Landing and apex tracking.
   resolveLanding(v, move, events);
 
-  // 9. Fuel burn — Task 7 fills this in.
+  // 9. Fuel burn by the horizontal distance actually moved; the tank running dry is announced once.
+  v.fuel = burnFuel(v.fuel, Math.hypot(v.position.x - startX, v.position.z - startZ), ctx.spec);
+  if (fuelBefore > 0 && v.fuel <= 0) events.push({ kind: 'fuelEmpty', tier: v.tier });
 
   return events;
 }

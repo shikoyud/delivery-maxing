@@ -83,7 +83,9 @@ describe('out-of-bounds respawn', () => {
     expect(h.sim.body.collider.isEnabled()).toBe(true);
     const garage = h.sim.garage;
     expect(garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(hosp, 0) });
-    expect(garage.state('car').fuel).toBe(0.6);
+    // The drive burned some of the 0.6 tank; the tow itself takes none.
+    expect(garage.state('car').fuel).toBeLessThan(0.6);
+    expect(garage.state('car').fuel).toBeGreaterThan(0.55);
     expect(garage.state('car').velocity).toEqual(vec3(0, 0, 0));
 
     // Walk over to the bay and get back in.

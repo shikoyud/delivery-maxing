@@ -127,6 +127,13 @@ export class OrderSystem {
     return 'ok';
   }
 
+  /** Pays `n` Coins (fuel); false and no change when the player holds fewer. */
+  spendCoins(n: number): boolean {
+    if (n > this.totals.coins) return false;
+    this.totals = { ...this.totals, coins: this.totals.coins - n };
+    return true;
+  }
+
   /** Dev / GAME-burn stub (price Pending): end the lockout now. */
   skipLockout(): void {
     this.lockoutUntil = 0;

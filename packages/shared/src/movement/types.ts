@@ -77,5 +77,7 @@ export type SimEvent =
   /** A ridden vehicle hit a wall faster than ordersConfig.fragile.crashSpeed (speed: into the wall, m/s). */
   | { kind: 'crashed'; speed: number }
   /** A ridden vehicle was stopped at the edge of an access zone its tier may not enter. */
-  | { kind: 'accessBlocked'; zone: AccessKind };
+  | { kind: 'accessBlocked'; zone: AccessKind }
+  /** A ridden vehicle's tank just ran dry; it now crawls at riding.emptyTankSpeed. */
+  | { kind: 'fuelEmpty'; tier: RideTier };
 
