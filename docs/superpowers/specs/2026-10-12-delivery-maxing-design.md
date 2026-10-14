@@ -32,6 +32,7 @@ Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel
 | Account | Wallet required from the start (Phantom, Solflare, OKX Wallet, plus any Wallet Standard wallet) |
 | Camera | Third-person chase camera behind a visible courier (changed from first-person after the SP1 playtest). |
 | Sprint and slide | Shift toggles sprint; starting a slide gives a speed burst with a cooldown; crouch is C only (SP1 playtest 2). |
+| **SP3 playtest tuning** | Sprint costs stamina, with a ring at the top left of the HUD (§4.1). Offers come every 18–30 s and live 25 s; after a delivery the server holds the next offer back 8–10 s; food pickups have a 6 s prep countdown (§3.4). Greybox orders reach farther (§3.4). Always-on minimap bottom right; M opens the phone's Map (§8). |
 | **Core loop (rev. 2)** | No HUB. Orders go pickup → dropoff between buildings, food or package, offered on the phone anywhere in the city (§3). |
 | **Vehicles (rev. 2)** | Walk, skateboard, bicycle, motorbike, car. Slots 1/1/2/3/5; packages only on motorbike (≤ 50 kg) and car (≤ 150 kg); top speeds 8/12/16/22/28 m/s. No truck. Each tier is strictly better than the one below (§4). |
 | **Fuel (rev. 2)** | Motorbike and car use fuel, refilled at gas stations with Coins (§4.4). |
@@ -98,11 +99,15 @@ Faster vehicles beat the timers more easily; that is intended (design goal 2).
 | Rule | Value (config) |
 |---|---|
 | Offers shown at once | Up to 3 |
-| Offer lifetime | 20 s, then it disappears |
-| New offers | Every 8–15 s while the player has a free slot |
+| Offer lifetime | 25 s, then it disappears |
+| New offers | Every 18–30 s while the player has a free slot |
+| After a delivery | The server holds the next offer back 8–10 s. Nothing shows in the UI. |
 | Pickup distance | The pickup is at most 400 m (path) from the player when offered |
 | Accepting | One tap on the phone, anywhere; while driving, a one-key accept on the notification |
 | Selection rules | Distance bands, door spacing, reuse and reachability per city map design §6.4 |
+| Dropoff windows on the greybox | Each map sets its own pickup → dropoff windows. The greybox uses food 180–520 m and package 150–650 m (`map/greybox.json`, SP3 playtest). City v2 uses city map design §6.4. |
+
+**Food prep:** arriving at a food pickup starts a prep countdown (6 s, config). The order is picked up once the food is ready and the courier is in the pickup zone; the countdown keeps running if the courier walks away. The HUD shows "Waiting for {item}" with the countdown. Packages have no prep. Hot time still counts from the actual pickup, so prep never costs the hot bonus.
 
 Players never compete for the same order: each player's offers are their own.
 
@@ -138,7 +143,7 @@ All movement and vehicle code lives in the shared package and runs on the fixed 
 
 | Move | Behavior |
 |---|---|
-| Run / sprint | Base sprint speed 8 m/s. Shift toggles sprint on and off. Sprint switches off whenever no move key is held. No stamina. The sprint state is part of the shared sim state. |
+| Run / sprint | Base sprint speed 8 m/s. Shift toggles sprint on and off. Sprint switches off whenever no move key is held. Sprint costs **stamina** (SP3 playtest): 100 max, drains 18/s while sprinting (about 5.5 s from full), regenerates 14/s otherwise. Sprint switches off when stamina runs out and can't be switched on again below 20. The sprint and stamina state is part of the shared sim state. |
 | Jump | About 1.2 m high. Coyote time 100 ms, jump buffer 100 ms. |
 | Mantle | Automatically climbs ledges up to **1.2 m** (stoops, low walls, loading docks). |
 | Crouch-slide | Pressing C while sprinting on the ground starts a slide with a +4 m/s burst (never above the on-foot cap), low friction, and speed gain downhill. The burst has a 2 s cooldown from the start of the boosted slide. |
@@ -146,7 +151,7 @@ All movement and vehicle code lives in the shared package and runs on the fixed 
 
 **Removed in revision 2:** wall-runs, wall-jumps, zip lines, jump pads, grind rails, map slide chutes, boost orbs.
 
-**Input layer:** raw input is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `mount`, `phone`, `accept`. Gameplay code only reads actions. Default keys: WASD move, mouse look, Space jump (on a vehicle: handbrake), C crouch, Shift sprint (toggle; on a vehicle: boost is not used), E interact (pick up, hand over, refuel), F mount/dismount, Tab phone, Y accept the top offer, left click hit. Crouch is C only, never Ctrl (Ctrl+W closes the tab).
+**Input layer:** raw input is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `mount`, `phone`, `accept`. Gameplay code only reads actions. Default keys: WASD move, mouse look, Space jump (on a vehicle: handbrake), C crouch, Shift sprint (toggle; on a vehicle: boost is not used), E interact (pick up, hand over, refuel), F mount/dismount, Tab phone, M phone straight to the Map app (press again to close), Y accept the top offer, left click hit. Crouch is C only, never Ctrl (Ctrl+W closes the tab).
 
 ### 4.2 Vehicles
 
@@ -285,7 +290,7 @@ The phone replaces the HUB screens. Tab raises it in the courier's hand; the ful
 | Leaderboard | Daily and weekly Delivery Points |
 | Settings | Controls, audio, graphics |
 
-**HUD (always on screen):** the next stop with distance and arrow, active order timers, the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and GAME.
+**HUD (always on screen):** a stamina ring at the top left (where character info will go), a player-centred, north-up minimap at the bottom right (buildings, hospitals, offer pickups and order targets, edge-clamped when out of range), the next stop with distance and arrow, active order timers, the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and GAME.
 
 ## 9. Reward program (Solana, Anchor) — **Pending**
 
@@ -370,7 +375,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 |---|---|---|
 | 1 | Movement + delivery loop | Done (PR #2) |
 | 2 | City map + POI system (2 × 2 km, Quaternius) | Built on branch `sp2/city-map-poi`; PR #3 was closed unmerged on 2026-10-14 because revision 2 replaces its map. Its streaming, LOD, navmesh, generator and perf tooling are reused from that branch in SP5. |
-| 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
+| 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. Playtest tuning (PR #6, #7): stamina, offer pacing, food prep, longer greybox orders, minimap and M. |
 | 4 | **Vehicles** | Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
 | 5 | **City v2** | The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs, 60 fps re-proved. |
 | 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps. |
