@@ -5,6 +5,7 @@ import { add, clampHorizontal, horizontalLength, scale, vec3, type Vec3 } from '
 import { restsCarried, type Garage } from '../vehicles/Garage';
 import { stepVehicle } from '../vehicles/stepVehicle';
 import type { VehicleState } from '../vehicles/types';
+import { nearestHospital } from '../world/hospitals';
 import type { MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
@@ -13,7 +14,7 @@ import { ageJumpBuffer, coyoteTicks, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
 import { updateSprint } from './sprint';
-import { applyTriggers, enterAir } from './triggers';
+import { applyTriggers, enterAir, respawn } from './triggers';
 import type { PlayerState, SimEvent, StatModifiers } from './types';
 
 /** Minimum blocked distance (m) before a wall or ceiling contact removes velocity. */
@@ -106,6 +107,25 @@ export class PlayerSim {
     const near = g.nearestParked(s.position, g.cfg.riding.mountRadius);
     if (near) return near;
     return g.owned().includes('skateboard') && g.spot('skateboard').kind === 'carried' ? 'skateboard' : null;
+  }
+
+  /**
+   * Spec §13 "Vehicle stuck" (the Settings app): respawns on foot at the hospital nearest the last grounded position,
+   * like an out-of-bounds respawn (`respawned`, so a carried Fragile breaks), but every vehicle stays where it is. A
+   * ridden vehicle is left there: parked on the ground (at the last grounded spot when airborne), or carried for the
+   * skateboard.
+   */
+  respawnAtHospital(): SimEvent[] {
+    const s = this.state;
+    const tier = s.riding;
+    if (tier) {
+      const v = this.garage.state(tier);
+      if (!v.grounded) v.position = vec3(s.lastGrounded.x, s.lastGrounded.y, s.lastGrounded.z);
+      this.garage.leave(tier);
+      s.riding = null;
+      this.body.setEnabled(true);
+    }
+    return [respawn(s, this.body, this.cfg, nearestHospital(this.map, s.lastGrounded))];
   }
 
   /**

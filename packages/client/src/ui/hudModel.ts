@@ -12,6 +12,7 @@ import {
   type Totals,
   type Vec3,
 } from '@dm/shared';
+import type { GarageRow } from './phone/garageApp';
 
 /** A countdown: seconds left (0 once over) and whether the limit has passed. */
 export interface HudTimer {
@@ -76,6 +77,8 @@ export interface HudModel {
   safeZone: string | null;
   /** Sprint stamina as a fraction 0..1 (the ring top left). */
   stamina: number;
+  /** The owned vehicles (the Garage app). */
+  garage: GarageRow[];
 }
 
 /** "1 pt", "N pts". */
@@ -126,7 +129,15 @@ function countdown(limit: number, elapsed: number): HudTimer {
   return { secondsLeft: Math.max(0, limit - elapsed), late: elapsed > limit };
 }
 
-export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: number, safeZone: string | null, stamina = 1): HudModel {
+export function hudModel(
+  orders: OrderSystem,
+  map: MapData,
+  player: Vec3,
+  now: number,
+  safeZone: string | null,
+  stamina = 1,
+  garage: GarageRow[] = [],
+): HudModel {
   const pois = poiIndex(map);
   return {
     totals: { ...orders.totals },
@@ -176,5 +187,6 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
     }),
     safeZone,
     stamina,
+    garage,
   };
 }

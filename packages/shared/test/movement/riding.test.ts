@@ -236,3 +236,35 @@ describe('parked vehicles', () => {
     expect(h.sim.body.fitsAt(h.sim.state.position, false)).toBe(true);
   });
 });
+
+describe('respawnAtHospital (spec §13 vehicle stuck)', () => {
+  test('riding the car: the courier respawns on foot at the hospital, the car stays parked where it stood', async () => {
+    const h = await makeSim({ spawn: vec3(2, 0, 60), garage: [skateboard, parked('car', vec3(0, 0, 60))] });
+    mount(h, 'car');
+    h.run(seconds(1), { forward: 1 });
+    h.run(seconds(3));
+    const car = { ...h.sim.garage.state('car').position };
+    const heading = h.sim.garage.state('car').heading;
+    const hospital = h.map.hospitals[0]!;
+    expect(h.sim.respawnAtHospital()).toEqual([{ kind: 'respawned', hospitalId: hospital.id }]);
+    expect(h.sim.state.riding).toBeNull();
+    expect(h.sim.body.collider.isEnabled()).toBe(true);
+    expect(h.sim.state.position.x).toBeCloseTo(hospital.spawn.x, 5);
+    expect(h.sim.state.position.z).toBeCloseTo(hospital.spawn.z, 5);
+    expect(h.sim.garage.spot('car')).toEqual({ kind: 'parked', position: car, heading });
+    expect(car.y).toBeCloseTo(0, 3);
+    // The courier walks on from there.
+    h.run(seconds(0.5));
+    expect(h.sim.state.grounded).toBe(true);
+  });
+
+  test('riding the skateboard: it is carried again', async () => {
+    const h = await makeSim({ spawn: vec3(0, 0, 60) });
+    mount(h, 'skateboard');
+    h.sim.respawnAtHospital();
+    expect(h.sim.state.riding).toBeNull();
+    expect(h.sim.garage.spot('skateboard')).toEqual({ kind: 'carried' });
+    h.run(seconds(0.5)); // lands at the spawn
+    expect(h.sim.mountCandidate()).toBe('skateboard');
+  });
+});

@@ -11,6 +11,7 @@ import {
   type PathDistance,
   type RideTier,
   type SimEvent,
+  type SummonResult,
   type Vec3,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
@@ -43,6 +44,8 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
   const env = { now: 0, position: { ...map.hospitals[0]!.spawn } as Vec3, grounded: true, lastGrounded: undefined as Vec3 | undefined };
   /** What the sim reports: the ridden and last ridden tier, and what F would mount on foot. */
   const rider = { riding: null as RideTier | null, lastRide, speed: 0, candidate: null as RideTier | null };
+  /** A recording garage: what summon answers, the cooldown left, and the calls summon and respawn got. */
+  const vehicles = { result: 'ok' as SummonResult, readyIn: 0, calls: [] as string[] };
   const actions = new ActionState(clientConfig.input, -1, 1);
   /** A recording phone: open/close state, the app, the renders, the callbacks and close keys DeliveryLoop gave it. */
   const phone = {
@@ -97,6 +100,18 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
       },
     },
     phoneChanged: (open) => void phone.changes.push(open),
+    vehicles: {
+      rows: () => [{ tier: 'car', status: 'parked', distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn }],
+      summon: (t, now) => {
+        vehicles.calls.push(`summon ${t} at ${now}`);
+        return vehicles.result;
+      },
+      respawn: () => {
+        vehicles.calls.push('respawn');
+        env.position = { ...map.hospitals[0]!.spawn };
+        return [{ kind: 'respawned', hospitalId: map.hospitals[0]!.id }];
+      },
+    },
   });
   /** The frames beforeStep handed to the sim. */
   const simFrames: ReturnType<typeof emptyInput>[] = [];
@@ -134,7 +149,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     for (let i = 0; i < Math.round(seconds / TICK); i++) tick();
   };
   const poiPos = (id: string): Vec3 => ({ ...map.pois.find((p) => p.id === id)!.position });
-  return { loop, env, rider, popups, huds, phone, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored };
+  return { loop, env, rider, popups, huds, phone, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles };
 }
 
 describe('DeliveryLoop', () => {
@@ -456,5 +471,42 @@ describe('DeliveryLoop', () => {
     s.waitForOffer();
     expect(froms.some((f) => f === ground)).toBe(true);
     expect(froms.some((f) => f === s.env.position)).toBe(false);
+  });
+
+  it('Garage Summon: "Car is here", or the refusal; the phone callback summons at sim time', () => {
+    const s = setup('car');
+    s.env.now = 12;
+    s.loop.openPhone('garage');
+    s.phone.cb!.summon('car');
+    expect(s.vehicles.calls).toEqual(['summon car at 12']);
+    expect(s.popups.at(-1)).toEqual({ text: 'Car is here', lines: [], tone: 'info' });
+    s.vehicles.result = 'noSpot';
+    expect(s.loop.summon('car')).toBe('noSpot');
+    expect(s.popups.at(-1)).toEqual({ text: 'No road nearby', lines: [], tone: 'warn' });
+    s.vehicles.result = 'cooldown';
+    s.vehicles.readyIn = 41.2;
+    s.loop.summon('car');
+    expect(s.popups.at(-1)).toEqual({ text: 'Summon cooling down', lines: ['Ready in 42 s'], tone: 'warn' });
+    s.vehicles.result = 'tooClose';
+    s.loop.summon('car');
+    expect(s.popups.at(-1)!.text).toBe('Already nearby');
+    // The Garage app's rows ride on the HUD model.
+    expect(s.loop.model(12).garage.map((r) => r.tier)).toEqual(['car']);
+  });
+
+  it('Settings Respawn: orders kept, a carried Fragile lost, the phone closed', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.modifier === 'fragile');
+    s.loop.accept(offer.order.id);
+    s.goTo(offer.order.pickupPoiId);
+    expect(s.loop.carriedCount()).toBe(1);
+    s.loop.openPhone('settings');
+    s.phone.cb!.respawn();
+    expect(s.vehicles.calls).toEqual(['respawn']);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([offer.order.id]);
+    expect(s.loop.orders.active[0]!.fragileIntact).toBe(false);
+    expect(s.popups.filter((p) => p.text === 'Fragile package damaged')).toHaveLength(1);
+    expect(s.popups.at(-1)!.text).toBe(`Respawned at ${map.hospitals[0]!.name}`);
+    expect(s.phone.isOpen).toBe(false);
   });
 });

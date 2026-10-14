@@ -2,7 +2,7 @@ import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { movementConfig } from '../config';
 import type { RideSpec } from '../config/types';
 import { vec3, type Vec3 } from '../math/vec3';
-import { KinematicMover, type BottomSphere, type MoveResult, type MoverSettings } from '../movement/kinematicMover';
+import { KinematicMover, type BottomSphere, type MoveResult, type MoverSettings, type RayHit } from '../movement/kinematicMover';
 import type { PhysicsWorld } from '../world/physicsWorld';
 
 /** Shrink applied to fitsAt's test capsule so resting contact does not count as overlap. */
@@ -144,6 +144,11 @@ export class VehicleBody {
       this.collider,
     );
     return hit === null;
+  }
+
+  /** Ray cast that ignores this vehicle's own collider. */
+  castRay(from: Vec3, dir: Vec3, maxDist: number): RayHit | null {
+    return this.mover.castRay(from, dir, maxDist);
   }
 
   /**

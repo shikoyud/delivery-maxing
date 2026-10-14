@@ -6,6 +6,7 @@ import {
   createPhysicsWorld,
   defaultGarage,
   expandGreybox,
+  findRoadSpot,
   horizontalLength,
   initRapier,
   lerpVec3,
@@ -46,6 +47,7 @@ import { browserStorage, createProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe } from './cameraQueries';
 import { interpolationStart } from './interpolation';
 import { loadNavRouter } from './navLoader';
+import { garageRows } from '../ui/phone/garageApp';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
@@ -144,6 +146,20 @@ export class Game {
       distance: (a, b) => nav.distance('walk', a, b),
       stamina: () => this.sim.state.stamina / settings.movement.stamina.max,
       phoneChanged: (open) => this.phoneChanged(open),
+      vehicles: {
+        rows: (now) => garageRows(sim.garage, sim.state.position, now),
+        // The spot is searched from the feet on the ground (an airborne courier's last grounded position).
+        summon: (t, now) => {
+          const s = sim.state;
+          const at = s.grounded ? s.position : s.lastGrounded;
+          return sim.garage.summon(t, at, now, (tier) => findRoadSpot(nav, sim.garage, tier, at, s.heading));
+        },
+        respawn: () => {
+          const events = sim.respawnAtHospital();
+          this.afterTeleport();
+          return events;
+        },
+      },
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
@@ -292,6 +308,17 @@ export class Game {
     return speeds;
   }
 
+  /**
+   * After a respawn: no camera sweep, and no turn or animation blend across it. The camera looks the way the
+   * respawned courier faces (the hospital's spawnYaw).
+   */
+  private afterTeleport(): void {
+    this.prevPosition = { ...this.sim.state.position };
+    this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
+    this.chase.snap();
+    this.courier.snap();
+  }
+
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
@@ -301,13 +328,7 @@ export class Game {
     const events = this.sim.step(frame, mods, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
-    if (events.some((e) => e.kind === 'respawned')) {
-      // A teleport: no camera sweep, and no turn or animation blend across it. The camera looks the way the
-      // respawned courier faces (the hospital's spawnYaw).
-      this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
-      this.chase.snap();
-      this.courier.snap();
-    }
+    if (events.some((e) => e.kind === 'respawned')) this.afterTeleport();
     this.tick++;
     return events;
   }

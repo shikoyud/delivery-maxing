@@ -20,6 +20,7 @@ import {
   type Rng,
   type SimEvent,
   type StatModifiers,
+  type SummonResult,
   type Totals,
   type Vec3,
   type VehicleTier,
@@ -34,6 +35,7 @@ import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/
 import { createMinimap } from '../ui/minimap';
 import { createMapApp } from '../ui/phone/mapApp';
 import { MapProjection } from '../ui/phone/mapProjection';
+import { RIDE_NAME, type GarageRow } from '../ui/phone/garageApp';
 import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
 import { Popups, type PopupSink } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
@@ -67,6 +69,16 @@ export interface DeliveryDeps {
   ui?: { hud: HudView; popups: PopupSink; phone: (cb: PhoneCallbacks, closeCodes: string[]) => PhoneView };
   /** The phone opened (true) or closed (false): Game exits or re-requests the pointer lock. */
   phoneChanged?(open: boolean): void;
+  /**
+   * The owned vehicles (Game: the sim's garage): the Garage app's rows at sim time `now`, a summon at `now`
+   * (Garage.summon with findRoadSpot), and the Settings app's respawn (PlayerSim.respawnAtHospital). Absent (tests):
+   * no rows, and summon and respawn do nothing.
+   */
+  vehicles?: {
+    rows(now: number): GarageRow[];
+    summon(t: RideTier, now: number): SummonResult;
+    respawn(): SimEvent[];
+  };
 }
 
 const BONUS_LINE: Record<Bonus, string> = { hot: 'Still hot', par: 'Within par', express: 'Express on time', fragile: 'Fragile intact' };
@@ -83,6 +95,15 @@ const ACCEPT_REFUSED: Partial<Record<AcceptResult, string>> = {
   expired: 'Offer expired',
   no_slots: 'No free slot',
   too_heavy: 'Too heavy for your ride',
+};
+
+/** The popup for a refused summon ('ok' shows "{Tier} is here"). */
+const SUMMON_REFUSED: Record<Exclude<SummonResult, 'ok'>, string> = {
+  riding: "You're riding it",
+  carried: 'It travels with you',
+  tooClose: 'Already nearby',
+  cooldown: 'Summon cooling down',
+  noSpot: 'No road nearby',
 };
 
 const ZERO: Totals = { points: 0, coins: 0, deliveries: 0 };
@@ -123,6 +144,8 @@ export class DeliveryLoop {
       accept: (id) => void this.accept(id),
       cancel: (id) => void this.cancel(id),
       skipLockout: () => this.skipLockout(),
+      summon: (t) => void this.summon(t),
+      respawn: () => this.respawn(),
       closed: () => {
         this.d.actions.releaseAll();
         this.d.phoneChanged?.(false);
@@ -306,6 +329,42 @@ export class DeliveryLoop {
     return result;
   }
 
+  /**
+   * Garage app: summons `t` (spec §4.4) at sim time `now()`: "{Tier} is here", or the refusal (a cooldown says when
+   * it ends).
+   */
+  summon(t: RideTier): SummonResult {
+    const v = this.d.vehicles;
+    if (!v) return 'noSpot';
+    const now = this.d.now();
+    const result = v.summon(t, now);
+    if (result === 'ok') this.popups.show(`${RIDE_NAME[t]} is here`, [], 'info');
+    else {
+      const readyIn = v.rows(now).find((r) => r.tier === t)?.readyIn ?? 0;
+      const lines = result === 'cooldown' ? [`Ready in ${Math.ceil(readyIn)} s`] : [];
+      this.popups.show(SUMMON_REFUSED[result], lines, 'warn');
+    }
+    this.nextHudAt = 0;
+    return result;
+  }
+
+  /**
+   * Settings app (spec §13 Vehicle stuck): respawn on foot at the nearest hospital. The orders are kept; the
+   * `respawned` event breaks a carried Fragile as an out-of-bounds respawn does. The phone closes on the hospital.
+   */
+  respawn(): void {
+    const v = this.d.vehicles;
+    if (!v) return;
+    const simEvents = v.respawn();
+    const before = [...this.sys.active];
+    for (const e of this.sys.onSimEvents(simEvents)) this.announce(e, before);
+    const r = simEvents.find((e): e is Extract<SimEvent, { kind: 'respawned' }> => e.kind === 'respawned');
+    const name = r ? this.d.map.hospitals.find((h) => h.id === r.hospitalId)?.name : undefined;
+    if (name) this.popups.show(`Respawned at ${name}`, [], 'info');
+    this.closePhone();
+    this.nextHudAt = 0;
+  }
+
   /** Dev / GAME-burn stub (price Pending): end the offer lockout now. */
   skipLockout(): void {
     this.sys.skipLockout();
@@ -325,7 +384,8 @@ export class DeliveryLoop {
   model(now: number): HudModel {
     const safe = this.zones.safeZone;
     const name = safe === null ? null : (this.d.map.hospitals.find((h) => h.id === safe)?.name ?? safe);
-    return hudModel(this.sys, this.d.map, this.d.player().position, now, name, this.d.stamina?.() ?? 1);
+    const p = this.d.player().position;
+    return hudModel(this.sys, this.d.map, p, now, name, this.d.stamina?.() ?? 1, this.d.vehicles?.rows(now) ?? []);
   }
 
   /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */

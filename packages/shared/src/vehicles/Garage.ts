@@ -5,6 +5,7 @@ import { facing } from '../movement/ground';
 import { baySlot } from '../world/access';
 import type { Hospital, MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
+import type { SummonResult } from './summon';
 import type { VehicleState } from './types';
 import { VehicleBody } from './VehicleBody';
 
@@ -67,7 +68,9 @@ const REACH_HEIGHT = 1.5;
  */
 export class Garage {
   private readonly entries: Record<RideTier, Entry>;
-  private readonly map: MapData;
+  readonly map: MapData;
+  /** Sim time (s) from which the next summon may run: one cooldown for all vehicles, started by a successful summon. */
+  summonReadyAt = 0;
   /** Held by reference: dev-panel edits apply on the next use. */
   readonly cfg: RidingConfig;
 
@@ -186,6 +189,40 @@ export class Garage {
     const e = this.entries[t];
     if (restsCarried(t)) this.carry(t);
     else this.park(t, e.state.position, e.state.heading);
+  }
+
+  /**
+   * Whether `t` could be summoned to `player` at sim time `now`, short of finding a spot: 'riding', 'carried' (the
+   * skateboard), 'tooClose' within summon.minDistance, 'cooldown' before summonReadyAt, else 'ok'.
+   */
+  summonStatus(t: RideTier, player: Vec3, now: number): SummonResult {
+    const e = this.entries[t];
+    if (e.spot.kind === 'riding') return 'riding';
+    if (e.spot.kind === 'carried') return 'carried';
+    const p = e.state.position;
+    if (Math.hypot(p.x - player.x, p.y - player.y, p.z - player.z) <= this.cfg.summon.minDistance) return 'tooClose';
+    if (now < this.summonReadyAt) return 'cooldown';
+    return 'ok';
+  }
+
+  /**
+   * Summons the parked `t` to the spot `spot(t)` finds by `player` (spec §4.4, see findRoadSpot): parked there,
+   * stopped, and the summon cooldown starts. A refusal (summonStatus, or 'noSpot' when `spot` finds none) changes
+   * nothing and never starts the cooldown.
+   */
+  summon(
+    t: RideTier,
+    player: Vec3,
+    now: number,
+    spot: (t: RideTier) => { position: Vec3; heading: number } | null,
+  ): SummonResult {
+    const status = this.summonStatus(t, player, now);
+    if (status !== 'ok') return status;
+    const to = spot(t);
+    if (!to) return 'noSpot';
+    this.park(t, to.position, to.heading);
+    this.summonReadyAt = now + this.cfg.summon.cooldownSeconds;
+    return 'ok';
   }
 
   /** The owned vehicles to save; a ridden vehicle is saved parked where it is (the skateboard carried). */

@@ -43,10 +43,10 @@ export function applyTriggers(state: PlayerState, body: PlayerBody, map: MapData
 }
 
 /**
- * Teleports to the spawn of the hospital nearest the last grounded position, facing its spawnYaw (courier heading
- * and look yaw; the client turns its camera to match on the `respawned` event).
+ * Teleports to the spawn of `hospital` (the caller picks the one nearest the last grounded position), facing its
+ * spawnYaw (courier heading and look yaw; the client turns its camera to match on the `respawned` event).
  */
-function respawn(state: PlayerState, body: PlayerBody, cfg: MovementConfig, hospital: Hospital): SimEvent {
+export function respawn(state: PlayerState, body: PlayerBody, cfg: MovementConfig, hospital: Hospital): SimEvent {
   body.setFeet(hospital.spawn);
   state.position = body.feet;
   state.velocity = vec3(0, 0, 0);

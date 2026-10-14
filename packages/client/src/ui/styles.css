@@ -579,6 +579,8 @@ kbd {
 
 .phone-empty,
 .phone-note,
+.phone-garage-note,
+.phone-settings-note,
 .phone-stub-when {
   font-size: 13px;
   color: #557078;
@@ -597,6 +599,25 @@ kbd {
 .phone-wallet-row.points .phone-wallet-value { color: var(--dm-teal); }
 
 .phone-stub-title { margin: 8px 0 2px; font-size: 18px; }
+
+.phone-garage { display: flex; flex-direction: column; gap: 10px; }
+.phone-garage-name { color: var(--dm-ink); font-size: 14px; }
+
+.phone-fuel {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(22, 50, 58, 0.12);
+  overflow: hidden;
+}
+
+.phone-fuel-bar {
+  width: var(--fuel, 100%);
+  height: 100%;
+  background: #f2913d;
+}
+
+.phone-summon { background: var(--dm-teal); }
+.phone-respawn { background: var(--dm-coral); align-self: flex-start; }
 
 .phone-bindings {
   display: grid;
