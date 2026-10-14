@@ -91,6 +91,8 @@ export class Game {
   /** Access-zone volumes, shown with the F3 overlay. */
   private readonly accessZones: THREE.Group;
   private prevPosition: Vec3;
+  /** Scratch vector for the camera's yaw (the HUD arrow). */
+  private readonly camDir = new THREE.Vector3();
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
   private lastFrameMs: number | null = null;
@@ -160,10 +162,16 @@ export class Game {
       }),
       // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
       distance: (a, b) => nav.distance('walk', a, b),
+      router: nav,
+      cameraYaw: () => {
+        const d = this.renderer.camera.getWorldDirection(this.camDir);
+        return Math.atan2(-d.x, -d.z);
+      },
       stamina: () => this.sim.state.stamina / settings.movement.stamina.max,
       phoneChanged: (open) => this.phoneChanged(open),
       vehicles: {
         rows: (now) => garageRows(sim.garage, sim.state.position, now),
+        state: (t) => sim.garage.state(t),
         // The spot is searched from the feet on the ground (an airborne courier's last grounded position).
         summon: (t, now) => {
           const s = sim.state;

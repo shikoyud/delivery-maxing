@@ -31,6 +31,7 @@ export function order(id: string, over: Partial<HudOrder> = {}): HudOrder {
     express: null,
     weightKg: 4,
     fragileIntact: null,
+    route: null,
     ...over,
   };
 }
@@ -45,6 +46,8 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     safeZone: null,
     stamina: 1,
     garage: [],
+    nextStop: null,
+    ride: null,
     ...over,
   };
 }

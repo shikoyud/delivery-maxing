@@ -10,6 +10,8 @@ import {
   vehiclesConfig,
   type GreyboxSource,
   type Offer,
+  type RouteToDoor,
+  type Vec3,
   type VehicleTier,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
@@ -170,5 +172,71 @@ describe('hudModel', () => {
     sys.cancel(offer.order.id, t);
     expect(hudModel(sys, map, spawn, t + 5, null).lockoutLeft).toBeCloseTo(ordersConfig.lockout.seconds - 5);
     expect(hudModel(sys, map, spawn, t + 100, null).lockoutLeft).toBe(0);
+  });
+
+  it('without a router (tests, no navmesh) the distance stays straight-line and there is no route', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys);
+    sys.accept(offer.order.id, t);
+    const o = hudModel(sys, map, spawn, t, null).orders[0]!;
+    expect(o.route).toBeNull();
+    const m = hudModel(sys, map, spawn, t, null);
+    expect(m.nextStop).toMatchObject({ orderId: offer.order.id, distance: o.distance });
+    expect(m.ride).toBeNull();
+  });
+});
+
+describe('hudModel next stop and ride', () => {
+  /** Two accepted orders (the first accepted is the oldest) and the time. */
+  function twoOrders(): { sys: OrderSystem; ids: [string, string]; targets: [string, string]; t: number } {
+    const sys = makeSystem('car');
+    const a = waitForOffer(sys);
+    sys.accept(a.offer.order.id, a.t);
+    for (let t = a.t + 0.5; t < a.t + 5000; t += 0.5) {
+      sys.update(t, spawn, nowhere);
+      const b = sys.offers.find((o) => o.order.pickupPoiId !== a.offer.order.pickupPoiId);
+      if (!b) continue;
+      expect(sys.accept(b.order.id, t)).toBe('ok');
+      return { sys, ids: [a.offer.order.id, b.order.id], targets: [a.offer.order.pickupPoiId, b.order.pickupPoiId], t };
+    }
+    throw new Error('no second offer');
+  }
+  const straight = (door: Vec3, length: number): RouteToDoor => ({ drive: [{ ...spawn }, { ...door }], footLeg: null, length });
+
+  it('nextStop picks the target with the shortest route for the ridden tier', () => {
+    const { sys, ids, targets, t } = twoOrders();
+    // The route function is the ridden tier's (DeliveryLoop binds tier and start): make the second order's stop shorter.
+    const lengths: Record<string, number> = { [targets[0]]: 420.4, [targets[1]]: 239.6 };
+    const m = hudModel(sys, map, spawn, t, null, 1, [], { route: (id, door) => straight(door, lengths[id]!) });
+    expect(m.nextStop).toMatchObject({ orderId: ids[1], name: poiIndex(map).get(targets[1]).name, distance: 240 });
+    // HudOrder.distance is the route length too.
+    expect(m.orders.map((o) => o.distance)).toEqual([420, 240]);
+    expect(m.orders[1]!.route!.length).toBe(239.6);
+    // A tie goes to the oldest order.
+    const tie = hudModel(sys, map, spawn, t, null, 1, [], { route: (_id, door) => straight(door, 300) });
+    expect(tie.nextStop!.orderId).toBe(ids[0]);
+    // An unreachable stop (no route) loses to a reachable one.
+    const one = hudModel(sys, map, spawn, t, null, 1, [], { route: (id, door) => (id === targets[1] ? null : straight(door, 999)) });
+    expect(one.nextStop!.orderId).toBe(ids[0]);
+  });
+
+  it('the arrow bearing points along the first route segment, not straight at the door', () => {
+    const { sys, targets, t } = twoOrders();
+    const door = poiIndex(map).target(targets[0]);
+    // Due north 30 m first, then across to the door.
+    const corner = { x: spawn.x, y: spawn.y, z: spawn.z - 30 };
+    const route = (id: string, d: Vec3): RouteToDoor | null =>
+      id === targets[0] ? { drive: [{ ...spawn }, corner, { ...d }], footLeg: null, length: 10 } : null;
+    const m = hudModel(sys, map, spawn, t, null, 1, [], { route });
+    expect(m.nextStop!.bearing).toBeCloseTo(0); // north: yaw 0 faces -Z
+    const straightAtDoor = Math.atan2(-(door.x - spawn.x), -(door.z - spawn.z));
+    expect(Math.abs(straightAtDoor)).toBeGreaterThan(0.1);
+  });
+
+  it('nextStop is null without active orders; ride carries tier, speed and fuel', () => {
+    const sys = makeSystem('car');
+    const m = hudModel(sys, map, spawn, 0, null, 1, [], { ride: { tier: 'car', speed: 21.3, fuel: 0.4 } });
+    expect(m.nextStop).toBeNull();
+    expect(m.ride).toEqual({ tier: 'car', speed: 21.3, fuel: 0.4 });
   });
 });

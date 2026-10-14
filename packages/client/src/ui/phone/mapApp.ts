@@ -2,13 +2,16 @@ import type { MapData, Vec3 } from '@dm/shared';
 import { slotColor } from '../../render/waypoints';
 import type { HudModel } from '../hudModel';
 import { el } from '../dom';
+import { drawFuelIcon } from '../minimap';
 import type { MapProjection } from './mapProjection';
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
 /**
  * The phone's Map app: a top-down canvas of the city. Buildings are drawn once to an offscreen layer; the hospitals,
- * offers, targets and player are redrawn per render. `colorIndex` gives an order's stable colour (as its 3D waypoint).
+ * gas stations (fuel icons), offers, routes, targets and player are redrawn per render. Each active order's route for
+ * the current tier is a solid line and its foot leg to the door dashed, in the order's colour (a straight line when
+ * it has no route). `colorIndex` gives an order's stable colour (as its 3D waypoint).
  * Without a 2D context (tests) it draws nothing.
  */
 export function createMapApp(
@@ -38,6 +41,18 @@ export function createMapApp(
     return c;
   }
 
+  /** Strokes the world points as one path. */
+  function polyline(points: readonly Vec3[]): void {
+    if (!ctx || points.length < 2) return;
+    ctx.beginPath();
+    points.forEach((w, i) => {
+      const p = proj.toCanvas(w);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+  }
+
   return {
     el: root,
     render(model, player, heading) {
@@ -51,6 +66,11 @@ export function createMapApp(
         const p = proj.toCanvas(h.center);
         ctx.fillRect(p.x - arm, p.y - arm / 3, arm * 2, (arm * 2) / 3);
         ctx.fillRect(p.x - arm / 3, p.y - arm, (arm * 2) / 3, arm * 2);
+      }
+
+      for (const g of map.gasStations) {
+        const p = proj.toCanvas(g.position);
+        drawFuelIcon(ctx, p.x, p.y, 12);
       }
 
       ctx.lineWidth = 2;
@@ -67,10 +87,21 @@ export function createMapApp(
         const col = hex(slotColor(colorIndex(o.id)));
         const t = proj.toCanvas(o.target);
         ctx.strokeStyle = col;
-        ctx.beginPath(); // straight line (per-vehicle routes arrive in SP4)
-        ctx.moveTo(me.x, me.y);
-        ctx.lineTo(t.x, t.y);
-        ctx.stroke();
+        ctx.lineWidth = 3;
+        if (o.route) {
+          polyline(o.route.drive);
+          if (o.route.footLeg) {
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            polyline(o.route.footLeg);
+            ctx.setLineDash([]);
+          }
+        } else {
+          ctx.beginPath(); // no route (unreachable for this tier): a straight line
+          ctx.moveTo(me.x, me.y);
+          ctx.lineTo(t.x, t.y);
+          ctx.stroke();
+        }
         ctx.fillStyle = col;
         ctx.beginPath();
         ctx.arc(t.x, t.y, 5, 0, Math.PI * 2);

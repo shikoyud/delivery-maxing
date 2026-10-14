@@ -4,6 +4,7 @@ import {
   emptyInput,
   expandGreybox,
   ordersConfig,
+  ridingConfig,
   streetDistance,
   vehiclesConfig,
   type GreyboxSource,
@@ -13,6 +14,7 @@ import {
   type SimEvent,
   type SummonResult,
   type Vec3,
+  type VehicleState,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { clientConfig } from '../src/clientConfig';
@@ -46,6 +48,13 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
   const rider = { riding: null as RideTier | null, lastRide, speed: 0, candidate: null as RideTier | null };
   /** A recording garage: what summon answers, the cooldown left, and the calls summon and respawn got. */
   const vehicles = { result: 'ok' as SummonResult, readyIn: 0, calls: [] as string[] };
+  /** Each ride's dynamic state (refuelling reads and fills `fuel`). */
+  const states = Object.fromEntries(
+    (['skateboard', 'bicycle', 'motorbike', 'car'] as RideTier[]).map((tier): [RideTier, VehicleState] => [
+      tier,
+      { tier, position: { x: 0, y: 0, z: 0 }, heading: 0, velocity: { x: 0, y: 0, z: 0 }, grounded: true, groundNormal: { x: 0, y: 1, z: 0 }, airApexY: 0, fuel: 1 },
+    ]),
+  ) as Record<RideTier, VehicleState>;
   const actions = new ActionState(clientConfig.input, -1, 1);
   /** A recording phone: open/close state, the app, the renders, the callbacks and close keys DeliveryLoop gave it. */
   const phone = {
@@ -106,6 +115,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
         vehicles.calls.push(`summon ${t} at ${now}`);
         return vehicles.result;
       },
+      state: (t) => states[t],
       respawn: () => {
         vehicles.calls.push('respawn');
         env.position = { ...map.hospitals[0]!.spawn };
@@ -119,8 +129,15 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
    * One tick as Game runs it: beforeStep, (sim), afterStep, all at the same sim time. `extra.mount` presses F;
    * `extra.events` are the sim events afterStep gets.
    */
-  const tick = (accept = false, phoneKey = false, mapKey = false, extra: { mount?: boolean; events?: SimEvent[] } = {}): void => {
+  const tick = (
+    accept = false,
+    phoneKey = false,
+    mapKey = false,
+    extra: { mount?: boolean; events?: SimEvent[]; interact?: { held: boolean; pressed: boolean }; move?: { x: number; y: number } } = {},
+  ): void => {
     const frame = emptyInput();
+    if (extra.interact) frame.interact = extra.interact;
+    if (extra.move) frame.move = extra.move;
     if (accept) frame.accept = { held: true, pressed: true };
     if (phoneKey) frame.phone = { held: true, pressed: true };
     if (mapKey) frame.map = { held: true, pressed: true };
@@ -149,7 +166,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     for (let i = 0; i < Math.round(seconds / TICK); i++) tick();
   };
   const poiPos = (id: string): Vec3 => ({ ...map.pois.find((p) => p.id === id)!.position });
-  return { loop, env, rider, popups, huds, phone, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles };
+  return { loop, env, rider, popups, huds, phone, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states };
 }
 
 describe('DeliveryLoop', () => {
@@ -509,4 +526,88 @@ describe('DeliveryLoop', () => {
     expect(s.popups.at(-1)!.text).toBe(`Respawned at ${map.hospitals[0]!.name}`);
     expect(s.phone.isOpen).toBe(false);
   });
+
+  it('Tab at 8 m/s on the car does not open the phone and shows the hint; at rest it opens and the car holds still', () => {
+    const s = setup('car');
+    s.rider.riding = 'car';
+    s.rider.speed = 8;
+    s.tick(false, true);
+    expect(s.loop.phoneOpen).toBe(false);
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Stop to use the phone' });
+    // M is refused too, and the hint waits out its cooldown.
+    s.tick(false, false, true);
+    expect(s.loop.phoneOpen).toBe(false);
+    expect(s.popups.filter((p) => p.text === 'Stop to use the phone')).toHaveLength(1);
+    s.wait(clientConfig.ui.hintCooldownSeconds);
+    s.tick(false, true);
+    expect(s.popups.filter((p) => p.text === 'Stop to use the phone')).toHaveLength(2);
+    // Stopped (at or under stoppedSpeed): Tab opens it, and the sim gets an idle input with the handbrake held.
+    s.rider.speed = ridingConfig.riding.stoppedSpeed;
+    s.tick(false, true);
+    expect(s.loop.phoneOpen).toBe(true);
+    s.tick(false, false, false, { move: { x: 0, y: 1 } });
+    const f = s.simFrames.at(-1)!;
+    expect(f.move).toEqual({ x: 0, y: 0 });
+    expect(f.jump).toEqual({ held: true, pressed: false });
+    expect(f.mount.pressed).toBe(false);
+    // On foot the phone's idle input holds nothing.
+    s.loop.closePhone();
+    s.rider.riding = null;
+    s.rider.speed = 6;
+    s.tick(false, true);
+    expect(s.loop.phoneOpen).toBe(true);
+    expect(s.simFrames.at(-1)!.jump.held).toBe(false);
+  });
+
+  it('Y accepts the top offer while riding at speed', () => {
+    const s = setup('car');
+    s.rider.riding = 'car';
+    s.rider.speed = 20;
+    s.waitForOffer();
+    const first = s.loop.orders.offers[0]!.order.id;
+    s.tick(true);
+    expect(s.loop.phoneOpen).toBe(false);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([first]);
+  });
+
+  it('holding E at a pump on the car charges coins and fills the tank; on foot nothing happens', () => {
+    const s = setup('car', { totals: { points: 0, coins: 100, deliveries: 0 }, capacityTier: 'car' });
+    const pump = map.gasStations[0]!.pumps[0]!;
+    s.env.position = { ...pump };
+    const hold = (ticks: number): void => {
+      for (let i = 0; i < ticks; i++) s.tick(false, false, false, { interact: { held: true, pressed: i === 0 } });
+    };
+    // On foot: nothing.
+    hold(5);
+    expect(s.popups).toHaveLength(0);
+    expect(s.loop.orders.totals.coins).toBe(100);
+    // On the car, stopped at the pump with half a tank: 0.25 tank/s on the 30 Hz step, 80 Coins a full tank.
+    s.rider.riding = 'car';
+    s.states.car.fuel = 0.5;
+    const ticks = Math.ceil(0.5 / (ridingConfig.refuel.tankPerSecond / 30)) + 2;
+    hold(ticks);
+    expect(s.states.car.fuel).toBe(1);
+    expect(s.loop.orders.totals.coins).toBe(60);
+    expect(s.stored().totals.coins).toBe(60);
+    expect(s.popups.filter((p) => p.text.startsWith('Refuelled'))).toEqual([{ text: 'Refuelled · −40 coins', lines: [], tone: 'info' }]);
+  });
+
+  it('a refuel cut short by getting off is still charged; E at a pump on a ride with no tank says so', () => {
+    const s = setup('car', { totals: { points: 0, coins: 100, deliveries: 0 }, capacityTier: 'car' });
+    s.env.position = { ...map.gasStations[0]!.pumps[0]! };
+    s.rider.riding = 'car';
+    s.states.car.fuel = 0.5;
+    for (let i = 0; i < 30; i++) s.tick(false, false, false, { interact: { held: true, pressed: i === 0 } });
+    expect(s.states.car.fuel).toBeCloseTo(0.75);
+    s.rider.riding = null; // dismounted with E still held
+    s.tick(false, false, false, { interact: { held: true, pressed: false } });
+    expect(s.loop.orders.totals.coins).toBe(80);
+    expect(s.popups.at(-1)!.text).toBe('Refuelled · −20 coins');
+    // The bicycle has no tank.
+    s.rider.riding = 'bicycle';
+    s.tick(false, false, false, { interact: { held: true, pressed: true } });
+    expect(s.popups.at(-1)!.text).toBe('This one runs on legs');
+    expect(s.loop.orders.totals.coins).toBe(80);
+  });
 });
+

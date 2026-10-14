@@ -61,7 +61,14 @@ export class FakeElement extends Listeners {
   innerHTML = '';
   readonly dataset: Record<string, string> = {};
   readonly attributes = new Map<string, string>();
-  readonly style = { setProperty: (): void => undefined };
+  /** Inline style: custom properties set with setProperty are recorded (getPropertyValue reads them back). */
+  readonly style = (() => {
+    const props = new Map<string, string>();
+    return {
+      setProperty: (k: string, v: string): void => void props.set(k, v),
+      getPropertyValue: (k: string): string => props.get(k) ?? '',
+    };
+  })();
   children: FakeElement[] = [];
   parentNode: FakeElement | null = null;
   private text = '';
