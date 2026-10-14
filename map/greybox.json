@@ -22,7 +22,8 @@
     {"id": "town-steep-lane", "kind": "steepLane", "rect": {"minX": -260.5, "minZ": -230.5, "maxX": -253.5, "maxZ": -193.5}, "minY": 0, "maxY": 5},
     {"id": "town-stairs", "kind": "stairs", "rect": {"minX": -240.5, "minZ": -230.5, "maxX": -235.5, "maxZ": -222.5}, "minY": 0, "maxY": 5},
     {"id": "town-park-path", "kind": "path", "rect": {"minX": -283, "minZ": -290, "maxX": -277, "maxZ": -240}, "minY": 5, "maxY": 5},
-    {"id": "town-boardwalk", "kind": "path", "rect": {"minX": -290, "minZ": -166, "maxX": -180, "maxZ": -158}, "minY": 0, "maxY": 0}
+    {"id": "town-boardwalk", "kind": "path", "rect": {"minX": -290, "minZ": -166, "maxX": -180, "maxZ": -158}, "minY": 0, "maxY": 0},
+    {"id": "town-stair-square", "kind": "path", "rect": {"minX": -253.5, "minZ": -256, "maxX": -225, "maxZ": -230.5}, "minY": 5, "maxY": 5}
   ],
   "gasStations": [
     {"id": "town-gas", "name": "Hilltop Fuel Stop", "position": {"x": -169, "y": 0, "z": -274.5}, "pumps": [{"x": -173, "y": 0, "z": -274.5}, {"x": -165, "y": 0, "z": -274.5}]},

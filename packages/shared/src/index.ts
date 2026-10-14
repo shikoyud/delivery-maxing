@@ -10,6 +10,7 @@ export * from './world/physicsWorld';
 export * from './world/distance';
 export * from './world/zones';
 export * from './world/hospitals';
+export * from './world/nav';
 export * from './movement/types';
 export * from './movement/body';
 export * from './movement/ground';
