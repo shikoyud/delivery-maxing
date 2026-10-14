@@ -326,6 +326,10 @@ test('dev panel screenshot', async ({ page }) => {
 
 const TICK_RATE = 30;
 const SEED = '&seed=7';
+/** The first offer arrives within offers.maxIntervalSeconds (30 s); a little slack on top. */
+const FIRST_OFFER_S = 35;
+/** Ticks to stand at a food pickup: the prep countdown (orders.json prep.foodSeconds, 6 s) plus a second of slack. */
+const PICKUP_TICKS = 7 * TICK_RATE;
 
 /** Runs sim ticks until an offer is on the phone (at most `maxSeconds`); returns the sim seconds it took, or -1. */
 const advanceUntilOffer = (page: Page, maxSeconds: number): Promise<number> =>
@@ -348,7 +352,7 @@ async function hideOverlay(page: Page): Promise<void> {
 
 /** Waits for an offer and accepts it with Y; returns the accepted order id. */
 async function acceptWithY(page: Page): Promise<string> {
-  expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
+  expect(await advanceUntilOffer(page, FIRST_OFFER_S)).toBeGreaterThanOrEqual(0);
   const id = await page.evaluate(() => window.__dm!.offers()[0]!.order.id);
   await page.keyboard.press('KeyY');
   await page.waitForFunction(() => window.__dm!.active().length === 1);
@@ -384,10 +388,10 @@ test('spawns at a hospital inside its safe zone', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('an offer appears within 15 s of sim time and Y accepts it', async ({ page }) => {
+test('an offer appears within one arrival interval of sim time and Y accepts it', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  const took = await advanceUntilOffer(page, 15);
+  const took = await advanceUntilOffer(page, FIRST_OFFER_S);
   console.log(`first offer after ${took.toFixed(2)} s of sim`);
   expect(took).toBeGreaterThanOrEqual(0);
   const id = await page.evaluate(() => window.__dm!.offers()[0]!.order.id);
@@ -405,7 +409,7 @@ test('teleport to the pickup then the dropoff completes the order with points', 
   await acceptWithY(page);
   const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
   await standAt(page, order.pickupPoiId);
-  await page.evaluate(() => window.__dm!.advance(15));
+  await page.evaluate((n) => window.__dm!.advance(n), PICKUP_TICKS);
   expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
   // Let the "accepted" and "picked up" popups expire (wall-clock, 3.5 s) so the delivery popup stands alone in the shot.
   await expect(page.locator('.popup')).toHaveCount(0, { timeout: 10_000 });
@@ -465,7 +469,7 @@ test('cancelling starts the lockout and no offer appears for 45 s', async ({ pag
       // Offers already on the phone at the cancel may stay until they expire; anything else is new.
       const seen = new Set(before);
       const fresh = new Set<string>(window.__dm!.offers().filter((o) => !seen.has(o.order.id)).map((o) => o.order.id));
-      // The rest of the 45 s lockout, tick by tick (offers live 20 s, so one that came while the render loop ran the
+      // The rest of the 45 s lockout, tick by tick (offers live 25 s, so one that came while the render loop ran the
       // first ticks would still be on the phone above).
       while (window.__dm!.tick < t0 + 45 * rate) {
         window.__dm!.advance(1);
@@ -564,7 +568,7 @@ test('phone: Tab opens Orders, Map and Wallet render; Esc closes', async ({ page
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   await hideOverlay(page);
-  expect(await advanceUntilOffer(page, 15)).toBeGreaterThanOrEqual(0);
+  expect(await advanceUntilOffer(page, FIRST_OFFER_S)).toBeGreaterThanOrEqual(0);
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => window.__dm!.phoneOpen());
   await expect(page.locator('.phone')).toBeVisible();
@@ -614,7 +618,7 @@ test('HUD screenshot with an active order', async ({ page }) => {
   // Picked up, so the HUD shows the order's timer and the beam leads to the dropoff.
   const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
   await standAt(page, order.pickupPoiId);
-  await page.evaluate(() => window.__dm!.advance(15));
+  await page.evaluate((n) => window.__dm!.advance(n), PICKUP_TICKS);
   expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
   // A few metres on from the pickup toward the dropoff, looking at it, so the pickup's marker is behind the camera.
   await page.evaluate((id) => {
