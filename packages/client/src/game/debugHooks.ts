@@ -41,6 +41,8 @@ export interface DebugApi {
   vehicles(): { tier: RideTier; spot: VehicleSpot['kind']; position: Vec3; fuel: number }[];
   /** Sets the Coins held (saved). */
   setCoins(n: number): void;
+  /** Sets an owned ride's tank (0..1; tests: a partial tank to refuel). */
+  setFuel(tier: RideTier, fuel: number): void;
   /** The HUD's next stop and its route's points (driving leg, then the walk to the door), empty without one. */
   route(): { nextStop: HudNextStop | null; points: Vec3[] };
   /**
@@ -127,6 +129,9 @@ export function installDebugHooks(game: Game): void {
         fuel: game.sim.garage.state(tier).fuel,
       })),
     setCoins: (n) => game.delivery.setCoins(n),
+    setFuel: (tier, fuel) => {
+      game.sim.garage.state(tier).fuel = Math.max(0, Math.min(1, fuel));
+    },
     route() {
       const m = game.delivery.model(game.time);
       const order = m.nextStop ? m.orders.find((o) => o.id === m.nextStop?.orderId) : undefined;

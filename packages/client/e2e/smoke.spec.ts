@@ -9,6 +9,9 @@ mkdirSync(artifacts, { recursive: true });
 /** SP3 playtest screenshots are committed (plan Global Constraints: the phone, a delivery, the hospital spawn). */
 const sp3 = fileURLToPath(new URL('../../../docs/playtest/sp3/', import.meta.url));
 mkdirSync(sp3, { recursive: true });
+/** SP4 playtest screenshots are committed too (the four rides, the HUD arrow and fuel, the Map routes, Garage, a pump). */
+const sp4 = fileURLToPath(new URL('../../../docs/playtest/sp4/', import.meta.url));
+mkdirSync(sp4, { recursive: true });
 
 /** Opens the game in debug mode and waits for the first frame; returns the console errors seen. */
 async function boot(page: Page, query = ''): Promise<string[]> {
@@ -497,41 +500,6 @@ test('cancelling starts the lockout and no offer appears for 45 s', async ({ pag
   expect(errors).toEqual([]);
 });
 
-test('a package offer needs a car (or motorbike) as the last ride', async ({ page }) => {
-  const errors = await boot(page, SEED);
-  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('walk');
-  /** Runs `seconds` of sim, never accepting; counts the distinct offers seen by kind. */
-  const watch = (seconds: number): Promise<{ food: number; package: number; firstPackageAt: number }> =>
-    page.evaluate(
-      ([s, rate]) => {
-        const seen = new Map<string, string>();
-        let firstPackageAt = -1;
-        for (let i = 0; i < s * rate; i++) {
-          window.__dm!.advance(1);
-          for (const o of window.__dm!.offers()) {
-            seen.set(o.order.id, o.order.kind);
-            if (o.order.kind === 'package' && firstPackageAt < 0) firstPackageAt = i / rate;
-          }
-        }
-        const kinds = [...seen.values()];
-        return { food: kinds.filter((k) => k === 'food').length, package: kinds.filter((k) => k === 'package').length, firstPackageAt };
-      },
-      [seconds, TICK_RATE] as const,
-    );
-  const walk = await watch(60);
-  console.log(`walk, 60 s: ${walk.food} food offers, ${walk.package} package offers`);
-  expect(walk.food).toBeGreaterThan(0); // offers did arrive, so "no packages" is not vacuous
-  expect(walk.package).toBe(0);
-  await page.evaluate(() => window.__dm!.setLastRide('car'));
-  await page.evaluate(() => window.__dm!.advance(1)); // capacity follows the ride on the next tick
-  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
-  const car = await watch(120);
-  console.log(`car, 120 s: ${car.food} food offers, ${car.package} package offers, first package at ${car.firstPackageAt.toFixed(2)} s`);
-  expect(car.package).toBeGreaterThan(0);
-  expect(errors).toEqual([]);
-});
-
 test('dev panel Vehicles: Owned boxes, locked while riding; debug hooks ride, vehicles, setCoins, route', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
@@ -646,5 +614,423 @@ test('no parkour: speed never exceeds 12 m/s on foot over a 10 s sprint', async 
   expect(speeds.length).toBe(10 * TICK_RATE);
   expect(max).toBeGreaterThan(7); // it did run
   expect(max).toBeLessThanOrEqual(12 + 1e-6);
+  expect(errors).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// SP4: vehicles. Driving is timed in sim ticks (__dm.advance with the keys held), never in wall time.
+// ---------------------------------------------------------------------------------------------------------------------
+
+type P = { x: number; y: number; z: number };
+/** The look yaw facing from `a` toward `b` (yaw 0 faces −Z, as the chase camera's lookDirection). */
+const yawTo = (a: P, b: P): number => Math.atan2(-(b.x - a.x), -(b.z - a.z));
+const flat = (a: P, b: P): number => Math.hypot(a.x - b.x, a.z - b.z);
+const player = (page: Page) => page.evaluate(() => window.__dm!.player());
+const vehicle = (page: Page, tier: string) =>
+  page.evaluate((t) => window.__dm!.vehicles().find((v) => v.tier === t)!, tier);
+
+/** On foot at `feet` looking at `target`, then on `tier` (parked just ahead and mounted), settled on the ground. */
+async function rideFrom(page: Page, tier: 'skateboard' | 'bicycle' | 'motorbike' | 'car', feet: P, target: P): Promise<void> {
+  await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, target] as const);
+  await page.evaluate(() => window.__dm!.advance(3)); // land on foot
+  await page.evaluate((t) => window.__dm!.ride(t), tier);
+  await page.evaluate(() => window.__dm!.advance(3)); // the ride settles on the ground
+  expect((await player(page)).riding).toBe(tier);
+}
+
+/** Holds `keys` for `ticks` sim ticks (synchronous); returns the horizontal speed after each tick. */
+async function hold(page: Page, keys: string[], ticks: number): Promise<number[]> {
+  for (const k of keys) await page.keyboard.down(k);
+  const speeds = await page.evaluate((n) => window.__dm!.advance(n), ticks);
+  for (const k of keys) await page.keyboard.up(k);
+  return speeds;
+}
+
+/** Handbrake (Space) until the ride is stopped (riding.stoppedSpeed, 0.5 m/s), at most 10 s of sim. */
+async function brakeToStop(page: Page): Promise<void> {
+  await page.keyboard.down('Space');
+  const stopped = await page.evaluate(
+    ([rate]) => {
+      for (let i = 0; i < 10 * rate; i++) {
+        window.__dm!.advance(1);
+        const v = window.__dm!.player().velocity;
+        if (Math.hypot(v.x, v.z) <= 0.05) return true;
+      }
+      return false;
+    },
+    [TICK_RATE] as const,
+  );
+  await page.keyboard.up('Space');
+  expect(stopped).toBe(true);
+}
+
+/** Presses F and waits until the courier rides `want` (null: on foot); F mounts and dismounts on the next tick. */
+async function pressF(page: Page, want: string | null): Promise<void> {
+  await page.keyboard.press('KeyF');
+  await page.waitForFunction((w) => window.__dm!.player().riding === w, want);
+}
+
+/**
+ * Runs sim until a package offer (Fragile ones only when `fragile`) is on the phone, at most `maxSeconds`; returns its
+ * id, or null.
+ */
+const advanceUntilPackageOffer = (page: Page, maxSeconds: number, fragile = false): Promise<string | null> =>
+  page.evaluate(
+    ([max, rate, onlyFragile]) => {
+      for (let i = 0; i < max * rate; i++) {
+        const hit = window.__dm!
+          .offers()
+          .find((o) => o.order.kind === 'package' && (!onlyFragile || o.order.modifier === 'fragile'));
+        if (hit) return hit.order.id;
+        window.__dm!.advance(1);
+      }
+      return null;
+    },
+    [maxSeconds, TICK_RATE, fragile] as const,
+  );
+
+/**
+ * Rides the current vehicle into a POI's zone: placed 2 m from the door on the road side (from `fromPoi`, along the
+ * street axis as the SP3 delivery test walks in), facing the door, stopped.
+ */
+async function rideInto(page: Page, poiId: string, fromPoiId: string): Promise<void> {
+  await page.evaluate(
+    ([id, from]) => {
+      const t = window.__dm!.poiPosition(id);
+      const p = window.__dm!.poiPosition(from);
+      const alongX = Math.abs(p.x - t.x) >= Math.abs(p.z - t.z);
+      const at = alongX ? { x: t.x + Math.sign(p.x - t.x) * 2, y: t.y + 0.05, z: t.z } : { x: t.x, y: t.y + 0.05, z: t.z + Math.sign(p.z - t.z) * 2 };
+      window.__dm!.teleport(at);
+    },
+    [poiId, fromPoiId] as const,
+  );
+  await page.evaluate(() => window.__dm!.advance(10));
+}
+
+test('F at the spawn bay mounts the car; 12 s of W reaches 28 m/s and never more', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  const car = await vehicle(page, 'car');
+  expect(car.spot).toBe('parked');
+  const hospital = (await page.evaluate(() => window.__dm!.hospitals()))[0]!;
+  expect(flat(car.position, hospital.center)).toBeLessThan(hospital.safeRadius + 10); // at the spawn hospital's bay
+  // On foot 2 m off the car's side (nearer the car than the motorbike in the next slot), then F.
+  const feet = { x: car.position.x, y: 0, z: car.position.z - 2 };
+  await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, { ...car.position, y: 1 }] as const);
+  await page.evaluate(() => window.__dm!.advance(3));
+  await pressF(page, 'car');
+  // Down the street (+Z: camera-relative steering, so the look points the way), 12 s of W, every tick sampled.
+  await page.evaluate((y) => window.__dm!.setLook(y, -0.2), yawTo(car.position, { x: car.position.x, y: 0, z: 300 }));
+  const speeds = await hold(page, ['KeyW'], 12 * TICK_RATE);
+  const max = Math.max(...speeds);
+  const reachedAt = speeds.findIndex((s) => s >= 28 - 1e-3) / TICK_RATE;
+  console.log(`car, 12 s of W: max ${max.toFixed(4)} m/s, 28 m/s from ${reachedAt.toFixed(2)} s, end ${speeds.at(-1)!.toFixed(3)} m/s`);
+  expect(speeds.length).toBe(12 * TICK_RATE);
+  expect(reachedAt).toBeGreaterThan(0);
+  expect(speeds.at(-1)!).toBeGreaterThanOrEqual(28 - 1e-3);
+  expect(max).toBeLessThanOrEqual(28 + 1e-6);
+  expect(errors).toEqual([]);
+});
+
+test('the car stops at an alley mouth; the motorbike rides through', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // alley-1--2-d (expandGreybox, seed 1): x 75..94, z −77..−73, buildings on both sides; its mouth (x = 94) opens on
+  // the avenue at x = 100, beside the spawn bay. Start on the avenue facing west into it.
+  const start = { x: 101, y: 0, z: -75 };
+  const west = { x: 60, y: 1.6, z: -75 };
+  // The motorbike first (the car left at the mouth would block it): through the mouth and well into the alley.
+  await rideFrom(page, 'motorbike', start, west);
+  await hold(page, ['KeyW'], 2 * TICK_RATE);
+  const bike = await player(page);
+  console.log(`motorbike after 2 s: x ${bike.position.x.toFixed(2)}, z ${bike.position.z.toFixed(2)}, speed ${Math.hypot(bike.velocity.x, bike.velocity.z).toFixed(2)} m/s`);
+  expect(bike.position.x).toBeLessThan(88);
+  expect(bike.position.x).toBeGreaterThan(75);
+  expect(Math.abs(bike.position.z + 75)).toBeLessThan(1.5);
+  await brakeToStop(page);
+  await pressF(page, null); // parked inside the alley, past the mouth
+
+  // The car from the same spot: held at the mouth by the access wall, however long W is held.
+  await rideFrom(page, 'car', start, west);
+  await hold(page, ['KeyW'], 5 * TICK_RATE);
+  const car = await player(page);
+  console.log(`car at the alley mouth: x ${car.position.x.toFixed(3)}, speed ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(3)} m/s`);
+  expect(car.position.x).toBeGreaterThanOrEqual(94);
+  expect(car.position.x).toBeLessThan(95);
+  expect(Math.hypot(car.velocity.x, car.velocity.z)).toBeLessThan(0.5);
+  expect(errors).toEqual([]);
+});
+
+test('the bicycle climbs the steep lane; the skateboard is stopped by it', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // town-steep-lane: x −260.5..−253.5, z −230.5..−193.5, rising 5 m to the terrace toward −Z.
+  const start = { x: -257, y: 0, z: -188 };
+  const up = { x: -257, y: 5, z: -240 };
+  await rideFrom(page, 'skateboard', start, up);
+  await hold(page, ['KeyW'], 5 * TICK_RATE);
+  const board = await player(page);
+  console.log(`skateboard at the lane: z ${board.position.z.toFixed(3)}, y ${board.position.y.toFixed(3)}`);
+  expect(board.position.z).toBeGreaterThan(-193.5);
+  expect(board.position.y).toBeLessThan(0.2);
+
+  await page.evaluate((s) => window.__dm!.teleport({ ...s, y: 0.05 }), start); // back to the start, still on the board
+  await page.evaluate(() => window.__dm!.advance(5));
+  await page.evaluate((t) => window.__dm!.ride(t), 'bicycle' as const);
+  await page.evaluate(() => window.__dm!.advance(3));
+  expect((await player(page)).riding).toBe('bicycle');
+  await page.keyboard.down('KeyW');
+  const took = await page.evaluate(
+    ([rate]) => {
+      for (let i = 0; i < 20 * rate; i++) {
+        window.__dm!.advance(1);
+        const p = window.__dm!.player().position;
+        if (p.z < -231 && p.y > 4.8) return i / rate;
+      }
+      return -1;
+    },
+    [TICK_RATE] as const,
+  );
+  await page.keyboard.up('KeyW');
+  const top = await player(page);
+  console.log(`bicycle up the steep lane in ${took.toFixed(2)} s: at (${top.position.x.toFixed(1)}, ${top.position.y.toFixed(2)}, ${top.position.z.toFixed(1)})`);
+  expect(took).toBeGreaterThan(0);
+  expect(top.riding).toBe('bicycle');
+  expect(errors).toEqual([]);
+});
+
+test('a package offer appears on the motorbike and is delivered on foot after getting off', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  await page.evaluate(() => window.__dm!.ride('motorbike'));
+  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('motorbike');
+  const id = await advanceUntilPackageOffer(page, 180);
+  expect(id, 'no package offer on the motorbike in 180 s').not.toBeNull();
+  expect(await page.evaluate((o) => window.__dm!.accept(o), id!)).toBe('ok');
+  const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
+  console.log(`package ${order.id}: ${order.weightKg} kg, ${order.pickupPoiId} → ${order.dropoffPoiId}`);
+
+  // The HUD while riding with an order: the next-stop arrow over the route distance, speed and the fuel gauge.
+  await page.evaluate(() => window.__dm!.setFuel('motorbike', 0.65));
+  const heading = (await player(page)).heading;
+  await page.evaluate((y) => window.__dm!.setLook(y, -0.15), heading);
+  await page.keyboard.down('KeyW');
+  await waitTicks(page, 20);
+  await expect(page.locator('.hud-next')).toBeVisible();
+  await expect(page.locator('.hud-fuel')).toBeVisible();
+  await page.screenshot({ path: `${sp4}hud-arrow-fuel.png` });
+  await page.keyboard.up('KeyW');
+  await brakeToStop(page);
+
+  // Riding into the pickup's zone picks nothing up (every delivery ends on foot) ...
+  await rideInto(page, order.pickupPoiId, order.dropoffPoiId);
+  await page.evaluate((n) => window.__dm!.advance(n), TICK_RATE);
+  expect(await page.evaluate(() => window.__dm!.active()[0]!.pickedUpAt)).toBeNull();
+  await expect(page.locator('.popup-title', { hasText: 'Get off to pick up' })).toBeVisible();
+  // ... getting off does.
+  await pressF(page, null);
+  await page.evaluate(() => window.__dm!.advance(3));
+  expect(await page.evaluate(() => window.__dm!.active()[0]!.pickedUpAt)).not.toBeNull();
+
+  // Back on (F: the motorbike is parked beside the courier) and into the dropoff's zone: no hand-over while riding.
+  await pressF(page, 'motorbike');
+  await rideInto(page, order.dropoffPoiId, order.pickupPoiId);
+  await page.evaluate((n) => window.__dm!.advance(n), TICK_RATE);
+  expect(await page.evaluate(() => window.__dm!.totals().deliveries)).toBe(0);
+  await expect(page.locator('.popup-title', { hasText: 'Get off to hand over' })).toBeVisible();
+  await pressF(page, null);
+  await page.evaluate(() => window.__dm!.advance(3));
+  const totals = await page.evaluate(() => window.__dm!.totals());
+  console.log(`delivered on foot: ${totals.points} points, ${totals.coins} coins`);
+  expect(totals.deliveries).toBe(1);
+  expect((await player(page)).riding).toBeNull();
+  expect(await page.evaluate(() => window.__dm!.active().length)).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('Fragile package: a 12 m/s wall crash shows the bonus-lost popup', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // Off the motorbike at once: package offers follow the last ride, and pickups are on foot.
+  await page.evaluate(() => window.__dm!.ride('motorbike'));
+  await pressF(page, null);
+  const id = await advanceUntilPackageOffer(page, 600, true);
+  expect(id, 'no Fragile package offer in 600 s').not.toBeNull();
+  expect(await page.evaluate((o) => window.__dm!.accept(o), id!)).toBe('ok');
+  const order = await page.evaluate(() => window.__dm!.active()[0]!.order);
+  await standAt(page, order.pickupPoiId);
+  await page.evaluate(() => window.__dm!.advance(5));
+  expect(await page.evaluate(() => window.__dm!.active()[0]!.pickedUpAt)).not.toBeNull();
+  // On the motorbike in front of the spawn hospital's block (its north face at z = −98), 12 m/s straight at it.
+  const hospital = (await page.evaluate(() => window.__dm!.hospitals()))[0]!;
+  const block = { x: hospital.center.x, y: 1, z: hospital.center.z };
+  await rideFrom(page, 'motorbike', { x: block.x, y: 0, z: block.z + 12 }, block);
+  await page.evaluate(([b]) => window.__dm!.teleport({ x: b.x, y: 0.02, z: b.z + 5 }, { x: 0, y: 0, z: -12 }), [block] as const);
+  await page.evaluate((n) => window.__dm!.advance(n), TICK_RATE);
+  const a = await page.evaluate(() => window.__dm!.active()[0]!);
+  console.log(`Fragile ${a.order.id} after the crash: intact ${a.fragileIntact}`);
+  expect(a.fragileIntact).toBe(false);
+  await expect(page.locator('.popup-title', { hasText: 'Crashed · Fragile bonus lost' })).toBeVisible();
+  expect((await player(page)).riding).toBe('motorbike'); // a crash does not knock the rider off (until SP7)
+  expect(errors).toEqual([]);
+});
+
+test('refuel at the town pump: coins drop, the fuel gauge fills', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  // Hilltop Fuel Stop: the west pump at (−173, −274.5); the car parks 2.25 m short of it, facing it.
+  await rideFrom(page, 'car', { x: -173, y: 0, z: -278 }, { x: -173, y: 1, z: -260 });
+  await page.evaluate(() => {
+    window.__dm!.setFuel('car', 0.5);
+    window.__dm!.setCoins(100);
+  });
+  await expect(page.locator('.hud-fuel')).toHaveAttribute('aria-valuenow', '50');
+  await hold(page, ['KeyE'], 3 * TICK_RATE);
+  const car = await vehicle(page, 'car');
+  const coins = await page.evaluate(() => window.__dm!.totals().coins);
+  console.log(`refuelled the car from 50 %: tank ${(car.fuel * 100).toFixed(1)} %, coins 100 → ${coins}`);
+  expect(car.fuel).toBeCloseTo(1, 6);
+  expect(coins).toBe(60); // half of the 80-coin full tank
+  await expect(page.locator('.popup-title', { hasText: 'Refuelled · −40 coins' })).toBeVisible();
+  await expect(page.locator('.hud-fuel')).toHaveAttribute('aria-valuenow', '100');
+  // Three-quarter view of the canopy, the pumps and the car.
+  await page.evaluate(() => window.__dm!.setLook(Math.PI + 0.7, -0.3));
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp4}gas-station.png` });
+  expect(errors).toEqual([]);
+});
+
+test('Garage app summons the car 200 m away to the player', async ({ page }) => {
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  const parked = await vehicle(page, 'car');
+  // On foot on the avenue at x = 100, 200 m down from the bay.
+  const feet = { x: parked.position.x - 3.6, y: 0, z: parked.position.z + 200 };
+  await page.evaluate(([f]) => window.__dm!.viewpoint(f, { x: f.x, y: 1.6, z: f.z + 20 }), [feet] as const);
+  await page.evaluate(() => window.__dm!.advance(3));
+  const me = (await player(page)).position;
+  expect(flat(me, parked.position)).toBeGreaterThan(199);
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await page.locator('.phone-nav-btn[data-app="garage"]').click();
+  await expect(page.locator('.phone-title')).toHaveText('Garage');
+  const row = page.locator('.phone-garage-row[data-tier="car"]');
+  await expect(row.locator('.phone-garage-status')).toHaveText(/Parked · 20\d m/);
+  await expect(row.locator('.phone-summon')).toBeEnabled();
+  await page.screenshot({ path: `${sp4}garage-app.png` });
+  await row.locator('.phone-summon').click();
+  await expect(page.locator('.popup-title', { hasText: 'Car is here' })).toBeVisible();
+  const car = await vehicle(page, 'car');
+  console.log(`summoned the car ${flat(parked.position, me).toFixed(1)} m: now ${flat(car.position, me).toFixed(2)} m from the player`);
+  expect(car.spot).toBe('parked');
+  expect(flat(car.position, me)).toBeLessThan(15);
+  await expect(row.locator('.phone-summon')).toBeDisabled(); // nearby, and the cooldown runs
+  expect(errors).toEqual([]);
+});
+
+test('Tab while driving shows the hint; stopped, the phone opens', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await hideOverlay(page);
+  // An order first, so the Map app has a route to show.
+  await acceptWithY(page);
+  await rideFrom(page, 'car', { x: 100, y: 0, z: -60 }, { x: 100, y: 1, z: 0 });
+  await page.keyboard.down('KeyW');
+  await page.evaluate((n) => window.__dm!.advance(n), 2 * TICK_RATE);
+  await page.keyboard.press('Tab');
+  await waitTicks(page, 3);
+  await page.keyboard.up('KeyW');
+  await expect(page.locator('.popup-title', { hasText: 'Stop to use the phone' })).toBeVisible();
+  expect(await page.evaluate(() => window.__dm!.phoneOpen())).toBe(false);
+  await brakeToStop(page);
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await expect(page.locator('.phone-title')).toHaveText('Orders');
+  // The Map app routes for the ride: by road on the car ...
+  await page.locator('.phone-nav-btn[data-app="map"]').click();
+  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await waitTicks(page, 6);
+  await page.screenshot({ path: `${sp4}map-route-car.png` });
+  const carRoute = await page.evaluate(() => window.__dm!.route().points.length);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+  // ... and on foot after getting off.
+  await pressF(page, null);
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await waitTicks(page, 6);
+  await page.screenshot({ path: `${sp4}map-route-foot.png` });
+  const footRoute = await page.evaluate(() => window.__dm!.route().points.length);
+  console.log(`route points: car ${carRoute}, on foot ${footRoute}`);
+  expect(carRoute).toBeGreaterThan(1);
+  expect(footRoute).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+test('draw calls stay under the budget with all four vehicles in view', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // On the skateboard in front of the spawn bay, looking at the bicycle, motorbike and car parked in it.
+  const bay = await page.evaluate(() => window.__dm!.vehicles().filter((v) => v.spot === 'parked').map((v) => v.position));
+  expect(bay.length).toBe(3);
+  const mid = { x: bay[1]!.x, y: 0.8, z: bay[1]!.z };
+  await rideFrom(page, 'skateboard', { x: mid.x - 4, y: 0, z: mid.z + 14 }, mid);
+  await waitCameraSettled(page);
+  const info = await page.evaluate(() => window.__dm!.renderInfo());
+  console.log(`four vehicles in view: ${info.calls} draw calls, ${info.triangles} triangles`);
+  await page.screenshot({ path: `${artifacts}sp4-four-vehicles.png` });
+  expect(info.calls).toBeGreaterThan(0);
+  expect(info.calls).toBeLessThan(clientJson.graphics.drawCallBudget);
+  // Headless frame time (software WebGL): a regression signal only; 60 fps is checked in the playtest.
+  const ms = await page.evaluate(
+    (n) =>
+      new Promise<number>((resolve) => {
+        let frames = 0;
+        let t0 = 0;
+        const count = (t: number): void => {
+          if (frames === 0) t0 = t;
+          if (frames++ < n) requestAnimationFrame(count);
+          else resolve((t - t0) / n);
+        };
+        requestAnimationFrame(count);
+      }),
+    600,
+  );
+  console.log(`average frame time over 600 headless frames: ${ms.toFixed(2)} ms (${(1000 / ms).toFixed(1)} fps)`);
+  expect(ms).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('playtest screenshots: the four rides and the test town', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await boot(page);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  // The greybox test town from above, on foot: ramp, steep lane, stairs, park path and boardwalk, with the F3 overlay's
+  // access-zone volumes.
+  await expect(page.locator('.debug-overlay')).toBeVisible();
+  await page.evaluate(() => window.__dm!.viewpoint({ x: -178, y: 42, z: -188 }, { x: -212, y: 0, z: -228 }));
+  await page.screenshot({ path: `${sp4}test-town.png` });
+  // Each ride on a fresh page (saved progress cleared), so no vehicle parked by the last shot stands in the frame.
+  // Open ground east of the map centre, facing east (as the SP1 shots): a short run, the handbrake, then the ride from
+  // its right side, a little behind, looking down on it.
+  for (const tier of ['skateboard', 'bicycle', 'motorbike', 'car'] as const) {
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+    await hideOverlay(page);
+    await rideFrom(page, tier, { x: 18, y: 0, z: 3 }, { x: 70, y: 1.6, z: 3 });
+    await hold(page, ['KeyW'], 20);
+    await brakeToStop(page);
+    const heading = (await player(page)).heading;
+    await page.evaluate((y) => window.__dm!.setLook(y, -0.3), heading + Math.PI / 2 + 0.15);
+    await waitCameraSettled(page);
+    await page.screenshot({ path: `${sp4}${tier}.png` });
+  }
   expect(errors).toEqual([]);
 });
