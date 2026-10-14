@@ -200,7 +200,7 @@ describe('parked vehicles', () => {
     expect(h.sim.mountCandidate()).toBe('skateboard');
   });
 
-  test('F is ignored while the vehicle is airborne, for the car and the skateboard', async () => {
+  test('F while the vehicle is airborne is refused (airborne), for the car and the skateboard', async () => {
     for (const tier of ['car', 'skateboard'] as const) {
       const h = await makeSim({ spawn: vec3(2, 0, -10), garage: [skateboard, parked('car', vec3(0, 0, -10))] });
       if (tier === 'skateboard') h.sim.teleport(vec3(20, 0, -10));
@@ -209,7 +209,7 @@ describe('parked vehicles', () => {
       h.sim.teleport(vec3(h.sim.state.position.x, 4, h.sim.state.position.z));
       expect(h.sim.state.grounded).toBe(false);
       const ev = h.tick({}, ['mount']);
-      expect(ev.filter((e) => e.kind === 'dismounted' || e.kind === 'mountRefused'), tier).toEqual([]);
+      expect(ev.filter((e) => e.kind === 'dismounted' || e.kind === 'mountRefused'), tier).toEqual([{ kind: 'mountRefused', reason: 'airborne' }]);
       expect(h.sim.state.riding, tier).toBe(tier);
       h.runUntil((s) => s.grounded, 60);
       h.run(10);
@@ -289,5 +289,83 @@ describe('rideNow (dev and debug)', () => {
     h.sim.leaveRide();
     expect(h.sim.state.riding).toBeNull();
     expect(h.sim.body.collider.isEnabled()).toBe(true);
+  });
+});
+
+describe('leaveRide places the courier (final review 1)', () => {
+  const near = (a: Vec3, b: Vec3, eps = 1e-6) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) <= eps;
+
+  test('after a ride, leaveRide puts the courier beside the car, and the next tick keeps them there', async () => {
+    const h = await makeSim({ spawn: vec3(2, 0, 60), garage: [skateboard, parked('car', vec3(0, 0, 60))] });
+    mount(h, 'car');
+    h.run(seconds(2), { forward: 1 });
+    h.run(seconds(4));
+    const car = { ...h.sim.garage.state('car').position };
+    expect(car.z).toBeLessThan(40);
+    h.sim.leaveRide();
+    const s = h.sim.state;
+    expect(near(h.sim.body.feet, s.position)).toBe(true);
+    const side = CAR.radius + CAPSULE + R.dismountGap;
+    expect(Math.hypot(s.position.x - car.x, s.position.z - car.z)).toBeCloseTo(side, 2);
+    h.tick({});
+    expect(Math.hypot(h.sim.state.position.x - car.x, h.sim.state.position.z - car.z)).toBeCloseTo(side, 1);
+    expect(h.sim.body.fitsAt(h.sim.state.position, false)).toBe(true);
+  });
+
+  test('skateboard: leaveRide leaves the courier where the board was', async () => {
+    const h = await makeSim({ spawn: vec3(0, 0, 60) });
+    mount(h, 'skateboard');
+    h.run(seconds(2), { forward: 1 });
+    const board = { ...h.sim.garage.state('skateboard').position };
+    h.sim.leaveRide();
+    expect(near(h.sim.body.feet, h.sim.state.position)).toBe(true);
+    expect(h.sim.state.position.z).toBeCloseTo(board.z, 3);
+    h.tick({});
+    expect(h.sim.state.position.z).toBeCloseTo(board.z, 1);
+  });
+
+  test('airborne car: leaveRide puts the courier beside the car at the last grounded spot', async () => {
+    const h = await makeSim({ spawn: vec3(2, 0, 60), garage: [skateboard, parked('car', vec3(0, 0, 60))] });
+    mount(h, 'car');
+    h.run(seconds(1), { forward: 1 });
+    const ground = { ...h.sim.state.lastGrounded };
+    h.sim.teleport(vec3(h.sim.state.position.x, 6, h.sim.state.position.z - 5));
+    h.sim.leaveRide();
+    expect(near(h.sim.body.feet, h.sim.state.position)).toBe(true);
+    expect(Math.hypot(h.sim.state.position.x - ground.x, h.sim.state.position.z - ground.z)).toBeLessThan(3);
+    expect(h.sim.state.position.y).toBeLessThan(1);
+  });
+
+  test('invariant: body.feet equals state.position after leaveRide, respawnAtHospital, tow and dismount', async () => {
+    const hosp = { id: 'h-north', name: 'North', center: vec3(0, 0, 40), safeRadius: 18, spawn: vec3(0, 0, 48), spawnYaw: 0, bay: vec3(10, 0, 56), bayYaw: 0 };
+    const make = () => makeSim({ spawn: vec3(2, 0, -80), hospitals: [hosp], garage: [skateboard, parked('car', vec3(0, 0, -80))] });
+    const check = (h: Harness, what: string) => expect(near(h.sim.body.feet, h.sim.state.position), what).toBe(true);
+
+    let h = await make();
+    mount(h, 'car');
+    h.run(seconds(1), { forward: 1 });
+    h.sim.leaveRide();
+    check(h, 'leaveRide');
+
+    h = await make();
+    mount(h, 'car');
+    h.run(seconds(1), { forward: 1 });
+    h.sim.respawnAtHospital();
+    check(h, 'respawnAtHospital');
+
+    h = await make();
+    mount(h, 'car');
+    let towed = false;
+    for (let i = 0; i < 300 && !towed; i++) towed = h.tick({ forward: 1 }).some((e) => e.kind === 'towed');
+    expect(towed).toBe(true);
+    check(h, 'tow');
+
+    h = await make();
+    mount(h, 'car');
+    h.run(seconds(1), { forward: 1 });
+    h.runUntil((s) => speed(s) <= R.dismountMaxSpeed, 120, { jump: true });
+    h.run(seconds(3));
+    expect(h.tick({}, ['mount'])).toContainEqual({ kind: 'dismounted', tier: 'car' });
+    check(h, 'dismount');
   });
 });

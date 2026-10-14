@@ -18,7 +18,7 @@ import {
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { clientConfig } from '../src/clientConfig';
-import { DeliveryLoop } from '../src/game/delivery';
+import { DeliveryLoop, simEventHint } from '../src/game/delivery';
 import { createProgressStore, type Progress } from '../src/game/progress';
 import { ActionState } from '../src/input/actionState';
 import type { HudModel } from '../src/ui/hudModel';
@@ -491,6 +491,22 @@ describe('DeliveryLoop', () => {
     expect(froms.some((f) => f === s.env.position)).toBe(false);
   });
 
+  it('riding an airborne vehicle, offers are measured from the last grounded spot too (final review 4)', () => {
+    const froms: Vec3[] = [];
+    const ground = { ...map.hospitals[0]!.spawn };
+    const s = setup('car', undefined, (a, b) => {
+      froms.push(a);
+      return streetDistance(a, b);
+    });
+    s.rider.riding = 'car';
+    s.env.grounded = false;
+    s.env.lastGrounded = ground;
+    s.env.position = { ...ground, y: ground.y + 1.5 };
+    s.waitForOffer();
+    expect(froms.some((f) => f === ground)).toBe(true);
+    expect(froms.some((f) => f === s.env.position)).toBe(false);
+  });
+
   it('Garage Summon: "Car is here", or the refusal; the phone callback summons at sim time', () => {
     const s = setup('car');
     s.env.now = 12;
@@ -646,5 +662,36 @@ describe('DeliveryLoop', () => {
     s.tick(); // E released
     expect(s.popups.filter((p) => p.text.startsWith('Refuelled'))).toEqual([]);
     expect(s.loop.orders.totals.coins).toBe(0);
+  });
+});
+
+describe('simEventHint (final review 3)', () => {
+  it('maps sim events to hints: get-off refusals, tow, empty tank, access per zone kind for the ridden tier', () => {
+    expect(simEventHint({ kind: 'mountRefused', reason: 'noRoom' }, 'car', map)).toBe('No room to get off');
+    expect(simEventHint({ kind: 'mountRefused', reason: 'tooFast' }, 'car', map)).toBe('Slow down to get off');
+    expect(simEventHint({ kind: 'mountRefused', reason: 'airborne' }, 'skateboard', map)).toBe('Land first');
+    expect(simEventHint({ kind: 'towed', tier: 'car', hospitalId: 'harbor-hospital' }, null, map)).toBe('Car towed to Harbor Clinic bay');
+    expect(simEventHint({ kind: 'fuelEmpty', tier: 'motorbike' }, 'motorbike', map)).toBe('Out of fuel');
+    expect(simEventHint({ kind: 'accessBlocked', zone: 'alley' }, 'car', map)).toBe("Cars can't go down alleys");
+    expect(simEventHint({ kind: 'accessBlocked', zone: 'steepLane' }, 'car', map)).toBe("Cars can't climb steep lanes");
+    expect(simEventHint({ kind: 'accessBlocked', zone: 'stairs' }, 'bicycle', map)).toBe("Bicycles can't take stairs");
+    expect(simEventHint({ kind: 'accessBlocked', zone: 'path' }, 'motorbike', map)).toBe("Motorbikes can't use paths");
+    expect(simEventHint({ kind: 'jumped' }, null, map)).toBeNull();
+    expect(simEventHint({ kind: 'mounted', tier: 'car' }, 'car', map)).toBeNull();
+  });
+
+  it('afterStep shows each hint once per hintCooldownSeconds', () => {
+    const s = setup('car');
+    s.rider.riding = 'car';
+    const ev: SimEvent[] = [{ kind: 'accessBlocked', zone: 'alley' }, { kind: 'mountRefused', reason: 'noRoom' }];
+    s.tick(false, false, false, { events: ev });
+    s.tick(false, false, false, { events: ev });
+    expect(s.popups.filter((p) => p.text === "Cars can't go down alleys")).toHaveLength(1);
+    expect(s.popups.filter((p) => p.text === 'No room to get off')).toHaveLength(1);
+    s.wait(clientConfig.ui.hintCooldownSeconds);
+    s.tick(false, false, false, { events: ev });
+    expect(s.popups.filter((p) => p.text === "Cars can't go down alleys")).toHaveLength(2);
+    s.tick(false, false, false, { events: [{ kind: 'fuelEmpty', tier: 'car' }] });
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Out of fuel', tone: 'info' });
   });
 });

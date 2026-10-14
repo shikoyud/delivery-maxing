@@ -37,13 +37,11 @@ To test the build exactly as it is served on GitHub Pages, also set
 
 ## Playtest
 
-The GitHub Pages build at <https://shikoyud.github.io/delivery-maxing/> is
-deployed only from `main` and `sp1/movement-delivery-loop`, so it does not
-have SP4 yet. Until SP4 (branch `sp4/vehicles-e28ary`) is merged into `main`,
-play it locally:
+Play the GitHub Pages build at <https://shikoyud.github.io/delivery-maxing/>,
+which is deployed from `main`. To play the current `main` locally instead:
 
 ```bash
-git checkout sp4/vehicles-e28ary
+git checkout main
 pnpm install && pnpm dev   # then open the URL Vite prints
 ```
 

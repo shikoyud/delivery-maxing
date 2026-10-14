@@ -51,8 +51,12 @@ export interface ClientConfig {
     timerUrgentSeconds: number;
     /** How often the route line to the active waypoint is recomputed (s). */
     routeRefreshSeconds: number;
+    /** Metres the player may drift from a cached route's start before it is recomputed early. */
+    routeDriftMeters: number;
     /** Minimum gap between repeats of the same on-screen hint (s). */
     hintCooldownSeconds: number;
+    /** The HUD fuel gauge turns to the warning colour at or below this tank share (%). */
+    fuelLowPct: number;
   };
 }
 

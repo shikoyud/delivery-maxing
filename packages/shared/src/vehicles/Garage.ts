@@ -58,8 +58,6 @@ function distanceToSegment(p: Vec3, a: Vec3, b: Vec3): number {
 
 /** A parked vehicle within this horizontal distance (m) of a bay slot takes it. */
 const SLOT_TAKEN_FRACTION = 0.5;
-/** A parked vehicle more than this far above or below the feet (m) is out of reach for nearestParked. */
-const REACH_HEIGHT = 1.5;
 
 /**
  * Every vehicle's parked state and body. All four tiers have a body; parked ones are enabled colliders (obstacles
@@ -127,7 +125,7 @@ export class Garage {
   /**
    * The owned parked vehicle nearest to `feet` within `radius` (m), measured horizontally to its capsule's axis
    * (the centre point for upright rides, the segment along the heading for lengthwise ones), and within reach
-   * vertically; null when none.
+   * vertically (riding.mountReachHeight); null when none.
    */
   nearestParked(feet: Vec3, radius: number): RideTier | null {
     let best: RideTier | null = null;
@@ -136,7 +134,7 @@ export class Garage {
       const e = this.entries[t];
       if (e.spot.kind !== 'parked') continue;
       const p = e.state.position;
-      if (Math.abs(p.y - feet.y) > REACH_HEIGHT) continue;
+      if (Math.abs(p.y - feet.y) > this.cfg.riding.mountReachHeight) continue;
       const c = this.cfg.rides[t].collider;
       const half = c.shape === 'lengthwise' ? c.halfLength : 0;
       const f = facing(e.state.heading);

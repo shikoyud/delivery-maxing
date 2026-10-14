@@ -13,9 +13,6 @@ export interface HudView {
   aim?(cameraYaw: number): void;
 }
 
-/** The fuel gauge turns to the warning colour at or below this tank share (%). */
-const FUEL_LOW_PCT = 20;
-
 /**
  * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals and load top
  * right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the next-stop
@@ -46,7 +43,7 @@ export class Hud implements HudView {
 
   constructor(
     host: HTMLElement,
-    private readonly ui: Pick<ClientConfig['ui'], 'timerUrgentSeconds'>,
+    private readonly ui: Pick<ClientConfig['ui'], 'timerUrgentSeconds' | 'fuelLowPct'>,
     /** Label of the accept key ("Y"). */
     private readonly acceptKey: string,
   ) {
@@ -137,7 +134,7 @@ export class Hud implements HudView {
         const fuelPct = Math.round(Math.min(1, Math.max(0, r.fuel)) * 100);
         this.fuel.style.setProperty('--fuel', `${fuelPct}%`);
         this.fuel.setAttribute('aria-valuenow', String(fuelPct));
-        this.fuel.classList.toggle('low', fuelPct <= FUEL_LOW_PCT);
+        this.fuel.classList.toggle('low', fuelPct <= this.ui.fuelLowPct);
       }
     }
 

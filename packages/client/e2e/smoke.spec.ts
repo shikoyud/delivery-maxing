@@ -1018,10 +1018,11 @@ test('playtest screenshots: the four rides and the test town', async ({ page }) 
   await page.screenshot({ path: `${sp4}test-town.png` });
   await hidePanel.evaluate((e) => (e as Element).remove());
   // Each ride on a fresh page (saved progress cleared), so no vehicle parked by the last shot stands in the frame.
+  // The game saves on pagehide, so storage is cleared as each new page starts (an init script), not before the reload.
   // Open ground east of the map centre, facing east (as the SP1 shots): a short run, the handbrake, then a view
   // that shows the ride.
+  await page.addInitScript(() => localStorage.clear());
   for (const tier of ['skateboard', 'bicycle', 'motorbike', 'car'] as const) {
-    await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
     await page.waitForFunction(() => window.__dm?.player().mode === 'ground');

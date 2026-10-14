@@ -48,7 +48,7 @@ import {
   type DevSettings,
   type DevSettingsStore,
 } from './devSettings';
-import { browserStorage, createProgressStore, type ProgressStore } from './progress';
+import { browserStorage, createProgressStore, saveWhenLeaving, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
 import { interpolationStart } from './interpolation';
 import { loadNavRouter } from './navLoader';
@@ -84,6 +84,8 @@ export class Game {
   readonly devPanel: DevPanel;
   private readonly progress: ProgressStore;
   readonly chase: ChaseCamera;
+  /** The colliders the camera looks through: the courier's, plus the ridden vehicle's. */
+  private readonly cameraExclude: CameraExclude;
   /** Sphere cast of the camera's collision ball against the map (the courier's own collider excluded). */
   private readonly cameraCast: RayCast;
   /** The animated courier, or the capsule when the model failed to load (Review Focus 4). */
@@ -130,6 +132,7 @@ export class Game {
       const t = sim.state.riding;
       return t ? [sim.body.collider, sim.garage.body(t).collider] : [sim.body.collider];
     };
+    this.cameraExclude = exclude;
     this.cameraCast = physicsSphereCast(sim.physics, chase.collisionRadius, exclude);
     this.chase = new ChaseCamera(
       this.renderer.camera,
@@ -174,9 +177,9 @@ export class Game {
       stamina: () => this.sim.state.stamina / settings.movement.stamina.max,
       phoneChanged: (open) => this.phoneChanged(open),
       vehicles: {
-        rows: (now) => garageRows(sim.garage, sim.state.position, now),
+        // Rows and summon both measure from the feet on the ground (an airborne courier's last grounded position).
+        rows: (now) => garageRows(sim.garage, sim.state.grounded ? sim.state.position : sim.state.lastGrounded, now),
         state: (t) => sim.garage.state(t),
-        // The spot is searched from the feet on the ground (an airborne courier's last grounded position).
         summon: (t, now) => {
           const s = sim.state;
           const at = s.grounded ? s.position : s.lastGrounded;
@@ -271,6 +274,8 @@ export class Game {
     // The tier last ridden (capacity and offers follow it), only while it is still owned.
     sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
     const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress);
+    // Closing or hiding the tab mid-ride keeps the vehicle's spot and the fuel it burnt.
+    saveWhenLeaving(window, document, () => game.delivery.save());
     if (opts.debug) installDebugHooks(game);
     return game;
   }
@@ -356,7 +361,7 @@ export class Game {
     const halfH = cam.near * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
     const r = Math.hypot(cam.near, halfH, halfH * cam.aspect);
     const p = cam.position;
-    return ballInSolid(this.sim.physics, { x: p.x, y: p.y, z: p.z }, r, this.sim.body.collider);
+    return ballInSolid(this.sim.physics, { x: p.x, y: p.y, z: p.z }, r, this.cameraExclude);
   }
 
   private frame(nowMs: number): void {

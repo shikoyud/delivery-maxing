@@ -128,18 +128,29 @@ export class PlayerSim {
 
   /**
    * Gets off at once, whatever the speed (dev tools and respawn): the ridden vehicle is left where it is, parked on the
-   * ground (at the last grounded spot when airborne) or carried for the skateboard, and the courier is on foot. Nothing
-   * happens on foot.
+   * ground (at the last grounded spot when airborne) or carried for the skateboard. The courier is on foot, at rest,
+   * where the board was (skateboard) or at the first free spot of dismountSpots (the left one when none is free),
+   * grounded when the vehicle was, else airborne. Nothing happens on foot.
    */
   leaveRide(): void {
     const s = this.state;
     const tier = s.riding;
     if (!tier) return;
     const v = this.garage.state(tier);
-    if (!v.grounded) v.position = vec3(s.lastGrounded.x, s.lastGrounded.y, s.lastGrounded.z);
+    const wasGrounded = v.grounded;
+    if (!wasGrounded) v.position = vec3(s.lastGrounded.x, s.lastGrounded.y, s.lastGrounded.z);
+    let feet = v.position;
+    if (!restsCarried(tier)) {
+      const spots = this.dismountSpots(tier, v);
+      feet = spots.find((p) => this.body.fitsAt(p, false)) ?? spots[0]!;
+    }
     this.garage.leave(tier);
     s.riding = null;
     this.body.setEnabled(true);
+    this.body.setFeet(feet);
+    s.position = this.body.feet;
+    s.velocity = vec3(0, 0, 0);
+    if (!wasGrounded) enterAir(s, this.cfg);
   }
 
   /**
@@ -173,13 +184,14 @@ export class PlayerSim {
   }
 
   /**
-   * F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding. F is ignored while the
-   * vehicle is airborne (as mountCandidate is while the courier is), so nothing is ever left parked in the air.
+   * F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding. While the vehicle is
+   * airborne F is refused (`mountRefused 'airborne'`), so nothing is ever left parked in the air.
    */
   private toggleMount(events: SimEvent[]): void {
     const tier = this.state.riding;
     if (tier) {
       if (this.garage.state(tier).grounded) this.dismount(tier, events);
+      else events.push({ kind: 'mountRefused', reason: 'airborne' });
       return;
     }
     const candidate = this.mountCandidate();

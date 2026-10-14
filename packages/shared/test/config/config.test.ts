@@ -29,6 +29,8 @@ describe('config pins spec values', () => {
     expect(ridingConfig.rides.skateboard.fuel).toBeNull();
     expect(ridingConfig.rides.bicycle.fuel).toBeNull();
     expect(ridingConfig.riding.emptyTankSpeed).toBe(3);
+    expect(ridingConfig.riding.mountReachHeight).toBe(1.5);
+    expect(ridingConfig.riding.backInputDot).toBe(-0.5);
     expect(ridingConfig.summon).toMatchObject({ minDistance: 100, cooldownSeconds: 60 });
   });
   it('access table matches spec §4.3', () => {

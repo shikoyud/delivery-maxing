@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
+import { ridingConfig } from '../../src/config';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import { baySlot } from '../../src/world/access';
 import type { MapData } from '../../src/world/mapTypes';
@@ -106,5 +107,13 @@ describe('Garage', () => {
     expect(solidAt(vec3(60, 0, 60))).toBe(false);
     g.tow('skateboard', h);
     expect(g.spot('skateboard')).toEqual({ kind: 'carried' });
+  });
+
+  test('nearestParked: the vertical reach is riding.mountReachHeight (final review 9)', () => {
+    const cfg = structuredClone(ridingConfig);
+    const saved = [{ tier: 'car' as const, spot: { kind: 'parked' as const, position: vec3(0, 2, 0), heading: 0 }, fuel: 1 }];
+    expect(new Garage(physics, map, saved, cfg).nearestParked(vec3(1, 0, 0), 2.5)).toBeNull();
+    cfg.riding.mountReachHeight = 2.5;
+    expect(new Garage(physics, map, saved, cfg).nearestParked(vec3(1, 0, 0), 2.5)).toBe('car');
   });
 });

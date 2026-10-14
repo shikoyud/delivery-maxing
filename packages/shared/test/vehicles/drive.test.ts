@@ -55,6 +55,24 @@ describe('drive model', () => {
     expect(fwdSpeed(bike)).toBeGreaterThanOrEqual(-1e-9);
   });
 
+  it('what counts as back input is riding.backInputDot (final review 9)', () => {
+    // Input 120° off the heading (dot −0.5): at the default −0.5 it is not back (it turns); at −0.4 it brakes.
+    const side: DriveInput = { wish: vec3(Math.sin((2 * Math.PI) / 3) * -1, 0, -Math.cos((2 * Math.PI) / 3)), magnitude: 1, hasInput: true, handbrake: false };
+    const a = mk('car', { velocity: vec3(0, 0, -10) });
+    step(a, side);
+    expect(a.heading).not.toBe(0);
+    const saved = ridingConfig.riding.backInputDot;
+    try {
+      ridingConfig.riding.backInputDot = -0.4;
+      const b = mk('car', { velocity: vec3(0, 0, -10) });
+      step(b, side);
+      expect(b.heading).toBe(0);
+      expect(fwdSpeed(b)).toBeLessThan(10);
+    } finally {
+      ridingConfig.riding.backInputDot = saved;
+    }
+  });
+
   it('S above stoppedSpeed brakes without turning', () => {
     const v = mk('car', { velocity: vec3(0, 0, -10) });
     step(v, BACK);
@@ -94,9 +112,26 @@ describe('drive model', () => {
     expect(vehicleTopSpeed(mk('car', { fuel: 0 }))).toBe(3);
     expect(vehicleTopSpeed(mk('car'))).toBe(28);
     expect(vehicleTopSpeed(mk('bicycle', { fuel: 0 }))).toBe(16);
-    const v = mk('car', { fuel: 0, velocity: vec3(0, 0, -20) });
+    const r = mk('car', { fuel: 0 });
+    for (let i = 0; i < 300; i++) step(r, BACK);
+    expect(fwdSpeed(r)).toBeCloseTo(-3, 9);
+  });
+
+  it('running dry at 28 m/s: speed coasts down at coastDecel (no one-tick drop) and settles at 3 m/s', () => {
+    const v = mk('car', { fuel: 0, velocity: vec3(0, 0, -28) });
+    const decel = ridingConfig.rides.car.coastDecel;
     step(v, FWD);
-    expect(fwdSpeed(v)).toBeLessThanOrEqual(3 + 1e-9);
+    expect(fwdSpeed(v)).toBeCloseTo(28 - decel * DT, 9);
+    let prev = fwdSpeed(v);
+    for (let i = 0; i < 30 * 30; i++) {
+      step(v, FWD);
+      const s = fwdSpeed(v);
+      expect(s).toBeLessThanOrEqual(prev + 1e-9);
+      expect(prev - s).toBeLessThanOrEqual(decel * DT + 1e-9);
+      expect(s).toBeLessThanOrEqual(28);
+      prev = s;
+    }
+    expect(fwdSpeed(v)).toBeCloseTo(3, 9);
   });
 
   describe('skateboard keeps the SP1 board behaviours', () => {

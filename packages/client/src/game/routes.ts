@@ -1,8 +1,5 @@
 import type { NavRouter, RouteToDoor, Vec3, VehicleTier } from '@dm/shared';
 
-/** Metres the player may drift from a cached route's start before it is recomputed early. */
-export const ROUTE_DRIFT_METERS = 5;
-
 interface Entry {
   tier: VehicleTier;
   from: Vec3;
@@ -13,7 +10,7 @@ interface Entry {
 /**
  * Per-target cache of door routes (spec §8 HUD arrow, Map app), so navmesh queries don't run every frame. A target's
  * route is recomputed when its tier changes, `refreshSeconds` after it was computed, or once the player is
- * ROUTE_DRIFT_METERS from where it started; a null (unreachable) answer is cached the same way.
+ * `driftMeters` (ui.routeDriftMeters) from where it started; a null (unreachable) answer is cached the same way.
  */
 export class RouteCache {
   private readonly entries = new Map<string, Entry>();
@@ -21,6 +18,7 @@ export class RouteCache {
   constructor(
     private readonly router: Pick<NavRouter, 'routeToDoor'>,
     private readonly refreshSeconds: number,
+    private readonly driftMeters: number,
   ) {}
 
   get(tier: VehicleTier, from: Vec3, targetId: string, door: Vec3, now: number): RouteToDoor | null {
@@ -30,7 +28,7 @@ export class RouteCache {
       e.tier === tier &&
       now >= e.at &&
       now - e.at < this.refreshSeconds &&
-      Math.hypot(from.x - e.from.x, from.y - e.from.y, from.z - e.from.z) < ROUTE_DRIFT_METERS
+      Math.hypot(from.x - e.from.x, from.y - e.from.y, from.z - e.from.z) < this.driftMeters
     ) {
       return e.route;
     }

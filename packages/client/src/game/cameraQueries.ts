@@ -9,9 +9,10 @@ export type CameraExclude = () => readonly Collider[];
 
 const NONE: CameraExclude = () => [];
 
-/** A Rapier query predicate that skips the colliders `exclude` lists right now. */
+/** A Rapier query predicate that skips the colliders `exclude` lists now: build it once per query (it reads exclude() once). */
 function notExcluded(exclude: CameraExclude): (c: Collider) => boolean {
-  return (c) => !exclude().includes(c);
+  const list = exclude();
+  return (c) => !list.includes(c);
 }
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -26,15 +27,18 @@ export function physicsSphereCast(physics: PhysicsWorld, radius: number, exclude
   const { rapier, world } = physics;
   const ball = new rapier.Ball(radius);
   const flags = rapier.QueryFilterFlags.EXCLUDE_SENSORS;
-  const keep = notExcluded(exclude);
   return (from, dir, maxDist) => {
+    const keep = notExcluded(exclude);
     const hit = world.castShape(from, IDENTITY, dir, ball, 0, maxDist, false, flags, undefined, undefined, undefined, keep);
     return hit ? hit.time_of_impact : null;
   };
 }
 
-/** Whether a ball of `radius` at `center` overlaps any map solid (`exclude`: the courier's collider; sensors ignored). */
-export function ballInSolid(physics: PhysicsWorld, center: Vec3, radius: number, exclude?: Collider): boolean {
+/**
+ * Whether a ball of `radius` at `center` overlaps any map solid (`exclude`: the courier's collider and the ridden
+ * vehicle's, as for the camera casts; sensors ignored).
+ */
+export function ballInSolid(physics: PhysicsWorld, center: Vec3, radius: number, exclude: CameraExclude = NONE): boolean {
   const { rapier, world } = physics;
   let inside = false;
   world.intersectionsWithShape(
@@ -47,7 +51,9 @@ export function ballInSolid(physics: PhysicsWorld, center: Vec3, radius: number,
     },
     rapier.QueryFilterFlags.EXCLUDE_SENSORS,
     undefined,
-    exclude,
+    undefined,
+    undefined,
+    notExcluded(exclude),
   );
   return inside;
 }
@@ -61,7 +67,6 @@ export function ballInSolid(physics: PhysicsWorld, center: Vec3, radius: number,
  */
 export function physicsWallProbe(physics: PhysicsWorld, exclude: CameraExclude = NONE): WallProbe {
   const { rapier, world } = physics;
-  const keep = notExcluded(exclude);
   let ball = new rapier.Ball(1);
   let ballRadius = 1;
   return (p, reach) => {
@@ -70,6 +75,7 @@ export function physicsWallProbe(physics: PhysicsWorld, exclude: CameraExclude =
       ballRadius = reach;
     }
     let best: { normal: Vec3; distance: number } | null = null;
+    const keep = notExcluded(exclude);
     world.intersectionsWithShape(
       p,
       IDENTITY,

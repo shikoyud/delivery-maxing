@@ -25,7 +25,10 @@ export const RIDE_NAME: Record<RideTier, string> = {
   car: 'Car',
 };
 
-/** The Garage app's rows: every owned vehicle, in RIDE_TIERS order, as seen from `player` at sim time `now`. */
+/**
+ * The Garage app's rows: every owned vehicle, in RIDE_TIERS order, as seen from `player` (the feet on the ground, as
+ * summon uses) at sim time `now`. Distances are horizontal, as findRoadSpot measures.
+ */
 export function garageRows(garage: Garage, player: Vec3, now: number): GarageRow[] {
   return garage.owned().map((tier) => {
     const spot = garage.spot(tier);
@@ -33,7 +36,7 @@ export function garageRows(garage: Garage, player: Vec3, now: number): GarageRow
     return {
       tier,
       status: spot.kind,
-      distance: spot.kind === 'parked' ? Math.round(Math.hypot(p.x - player.x, p.y - player.y, p.z - player.z)) : null,
+      distance: spot.kind === 'parked' ? Math.round(Math.hypot(p.x - player.x, p.z - player.z)) : null,
       fuel: garage.cfg.rides[tier].fuel ? garage.state(tier).fuel : null,
       summon: garage.summonStatus(tier, player, now),
       readyIn: Math.max(0, garage.summonReadyAt - now),

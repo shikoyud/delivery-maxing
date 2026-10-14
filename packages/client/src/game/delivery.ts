@@ -11,6 +11,7 @@ import {
   ridingConfig,
   vehiclesConfig,
   type AcceptResult,
+  type AccessKind,
   type ButtonState,
   type ActiveOrder,
   type Bonus,
@@ -127,6 +128,41 @@ const SUMMON_REFUSED: Record<Exclude<SummonResult, 'ok'>, string> = {
   noSpot: 'No road nearby',
 };
 
+/** accessBlocked hints: "{Tier}s can't {phrase}". */
+const ACCESS_PHRASE: Record<AccessKind, string> = {
+  alley: 'go down alleys',
+  steepLane: 'climb steep lanes',
+  stairs: 'take stairs',
+  path: 'use paths',
+};
+
+const MOUNT_REFUSED: Record<Extract<SimEvent, { kind: 'mountRefused' }>['reason'], string> = {
+  noRoom: 'No room to get off',
+  tooFast: 'Slow down to get off',
+  airborne: 'Land first',
+};
+
+/**
+ * The info hint a sim event shows (null for none): refused get-offs, a tow, an empty tank, and an access zone the
+ * ridden tier (`riding`) may not enter.
+ */
+export function simEventHint(e: SimEvent, riding: RideTier | null, map: MapData): string | null {
+  switch (e.kind) {
+    case 'mountRefused':
+      return MOUNT_REFUSED[e.reason];
+    case 'towed': {
+      const name = map.hospitals.find((h) => h.id === e.hospitalId)?.name ?? 'the hospital';
+      return `${RIDE_NAME[e.tier]} towed to ${name} bay`;
+    }
+    case 'fuelEmpty':
+      return 'Out of fuel';
+    case 'accessBlocked':
+      return riding ? `${RIDE_NAME[riding]}s can't ${ACCESS_PHRASE[e.zone]}` : null;
+    default:
+      return null;
+  }
+}
+
 const ZERO: Totals = { points: 0, coins: 0, deliveries: 0 };
 
 /** No POI zones: while riding nothing is picked up or handed over (every delivery ends on foot). */
@@ -189,7 +225,7 @@ export class DeliveryLoop {
     }
     this.minimap = d.ui ? null : createMinimap(d.host, d.map);
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
-    this.routes = d.router ? new RouteCache(d.router, d.cfg.ui.routeRefreshSeconds) : null;
+    this.routes = d.router ? new RouteCache(d.router, d.cfg.ui.routeRefreshSeconds, d.cfg.ui.routeDriftMeters) : null;
   }
 
   private makeSystem(totals: Totals): OrderSystem {
@@ -325,7 +361,12 @@ export class DeliveryLoop {
    * get-off hint instead.
    */
   afterStep(simEvents: SimEvent[], position: Vec3, now: number): void {
-    const riding = this.d.rider().riding !== null;
+    const ridden = this.d.rider().riding;
+    const riding = ridden !== null;
+    for (const e of simEvents) {
+      const text = simEventHint(e, ridden, this.d.map);
+      if (text) this.hint(text, now);
+    }
     this.sys.setCapacity(vehiclesConfig[this.capacityTier]);
     const events = this.sys.onSimEvents(simEvents);
     const before = [...this.sys.active];
@@ -333,7 +374,7 @@ export class DeliveryLoop {
     if (riding) this.getOffHints(now);
     this.refuel(position, now);
     const zones = riding ? { poiIds: NO_POIS, safeZone: this.zones.safeZone } : this.zones;
-    events.push(...this.sys.update(now, this.offerOrigin(position, riding), zones));
+    events.push(...this.sys.update(now, this.offerOrigin(position), zones));
     for (const e of events) this.announce(e, before);
   }
 
@@ -386,12 +427,12 @@ export class DeliveryLoop {
   }
 
   /**
-   * Where offers are measured from: the feet, or on foot in the air the last grounded feet (walk paths start on the
-   * ground, so a jump at the offer roll would otherwise find no pickup in reach).
+   * Where offers are measured from: the feet, or in the air (on foot or riding) the last grounded feet (walk paths
+   * start on the ground, so a jump at the offer roll would otherwise find no pickup in reach).
    */
-  private offerOrigin(position: Vec3, riding: boolean): Vec3 {
+  private offerOrigin(position: Vec3): Vec3 {
     const p = this.d.player();
-    return !riding && p.grounded === false && p.lastGrounded ? p.lastGrounded : position;
+    return p.grounded === false && p.lastGrounded ? p.lastGrounded : position;
   }
 
   /** Riding into an active order's stop: "Get off to pick up / hand over", each at most once per hintCooldownSeconds. */

@@ -69,8 +69,8 @@ export type SimEvent =
   | { kind: 'respawned'; hospitalId: string }
   | { kind: 'mounted'; tier: RideTier }
   | { kind: 'dismounted'; tier: RideTier }
-  /** F was refused: riding faster than riding.dismountMaxSpeed, or no dismount spot is free. */
-  | { kind: 'mountRefused'; reason: 'tooFast' | 'noRoom' }
+  /** F was refused: riding faster than riding.dismountMaxSpeed, no dismount spot is free, or the vehicle is in the air. */
+  | { kind: 'mountRefused'; reason: 'tooFast' | 'noRoom' | 'airborne' }
   /** Out of bounds while riding: the vehicle went back to this hospital's bay (Decision 6). */
   | { kind: 'towed'; tier: RideTier; hospitalId: string }
   | { kind: 'slideStarted'; boosted: boolean }

@@ -105,6 +105,11 @@ describe('Garage app', () => {
     expect(summonBtn('motorbike').disabled).toBe(true);
   });
 
+  it('the row distance is horizontal (final review 5): a courier 30 m above sees the flat distance', async () => {
+    const { garage } = await makeGarage([parked('motorbike', 0, -240)]);
+    expect(garageRows(garage, vec3(0, 30, 0), 0)[0]!.distance).toBe(240);
+  });
+
   it('clicking Summon calls onSummon with the tier', async () => {
     const { garage } = await makeGarage([parked('motorbike', 0, -240), parked('car', 150, 0)]);
     const calls: RideTier[] = [];

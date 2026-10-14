@@ -53,14 +53,14 @@ describe('camera physics queries (test tunnel: roof underside y 1.4, x 92..104, 
     const cast = physicsSphereCast(physics, 0.1, courier);
     // From beside the courier straight through its capsule to the far tunnel wall (inner face z = 2).
     expect(cast({ x: 98, y: 0.6, z: -1.5 }, { x: 0, y: 0, z: 1 }, 10)).toBeCloseTo(3.4, 3);
-    expect(ballInSolid(physics, { x: 98, y: 0.9, z: 0 }, 0.1, sim.body.collider)).toBe(false);
+    expect(ballInSolid(physics, { x: 98, y: 0.9, z: 0 }, 0.1, courier)).toBe(false);
     // Without the exclusion the capsule counts.
     expect(ballInSolid(physics, { x: 98, y: 0.9, z: 0 }, 0.1)).toBe(true);
   });
 
   it('ballInSolid: a ball poking into the roof is solid; one clear of it is not', () => {
-    expect(ballInSolid(physics, { x: 98, y: 1.2, z: 0 }, 0.25, sim.body.collider)).toBe(true);
-    expect(ballInSolid(physics, { x: 98, y: 1.1, z: 0 }, 0.25, sim.body.collider)).toBe(false);
+    expect(ballInSolid(physics, { x: 98, y: 1.2, z: 0 }, 0.25, courier)).toBe(true);
+    expect(ballInSolid(physics, { x: 98, y: 1.1, z: 0 }, 0.25, courier)).toBe(false);
   });
 
   it('wall probe: the horizontal normal of a wall face within reach; ceilings, floors and the courier never count', () => {
@@ -99,6 +99,27 @@ describe('camera physics queries (test tunnel: roof underside y 1.4, x 92..104, 
     const probe = physicsWallProbe(physics, exclude);
     expect(probe({ x: 121.2, y: 0.5, z: 0 }, 0.6)).toBeNull();
     expect(probe({ x: 120.8, y: 0.5, z: 3 }, 0.6)).not.toBeNull();
+    // ballInSolid (cameraInsideSolid) looks through the ridden car too, not the parked motorbike (final review 6).
+    expect(ballInSolid(physics, { x: 120, y: 0.5, z: 0 }, 0.1, exclude)).toBe(false);
+    expect(ballInSolid(physics, { x: 120, y: 0.5, z: 0 }, 0.1, courier)).toBe(true);
+    expect(ballInSolid(physics, { x: 120, y: 0.5, z: 3 }, 0.1, exclude)).toBe(true);
     for (const t of ['car', 'motorbike'] as const) garage.body(t).destroy();
+  });
+
+  it('exclude() is read once per query, not once per candidate collider (final review 6)', () => {
+    let calls = 0;
+    const counted = () => {
+      calls++;
+      return courier();
+    };
+    // A long cast and a wide probe pass many candidate colliders.
+    physicsSphereCast(physics, 0.3, counted)({ x: 0, y: 2, z: 0 }, { x: 1, y: 0, z: 0 }, 400);
+    expect(calls).toBe(1);
+    calls = 0;
+    physicsWallProbe(physics, counted)({ x: 98, y: 0.8, z: 0 }, 20);
+    expect(calls).toBe(1);
+    calls = 0;
+    ballInSolid(physics, { x: 98, y: 0.8, z: 0 }, 20, counted);
+    expect(calls).toBe(1);
   });
 });

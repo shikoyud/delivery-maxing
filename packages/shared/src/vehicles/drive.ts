@@ -5,9 +5,6 @@ import { vec3, type Vec3 } from '../math/vec3';
 import { facing, hasMoveInput, wishDirection, yawOf } from '../movement/ground';
 import type { VehicleState } from './types';
 
-/** Input whose direction has a dot product with the heading below this points back. */
-const BACK_DOT = -0.5;
-
 export interface DriveInput {
   wish: Vec3;
   magnitude: number;
@@ -46,8 +43,9 @@ const approach = (value: number, target: number, maxDelta: number): number =>
 
 /**
  * Grounded arcade drive of one ride. Rolls along the heading at a signed speed; sideways velocity decays at the
- * grip. Mutates the heading and the horizontal velocity only (vertical velocity is untouched). |speed| never
- * exceeds topSpeed, slopes included.
+ * grip. Mutates the heading and the horizontal velocity only (vertical velocity is untouched). Speed is driven toward
+ * topSpeed (above it, it coasts down at coastDecel: an empty tank slows gradually); |speed| never exceeds the tier's
+ * spec cap (`capSpeed`, vehicles.json topSpeed), slopes included.
  */
 export function applyDrive(
   v: VehicleState,
@@ -57,10 +55,11 @@ export function applyDrive(
   gravity: number,
   dt: number,
   stoppedSpeed: number = ridingConfig.riding.stoppedSpeed,
+  capSpeed: number = vehiclesConfig[v.tier].topSpeed,
 ): void {
   const h0 = facing(v.heading);
   let s = v.velocity.x * h0.x + v.velocity.z * h0.z;
-  const back = d.hasInput && d.wish.x * h0.x + d.wish.z * h0.z < BACK_DOT;
+  const back = d.hasInput && d.wish.x * h0.x + d.wish.z * h0.z < ridingConfig.riding.backInputDot;
   const braking = back && s > stoppedSpeed;
   const reversing = back && !braking && spec.reverseSpeed > 0;
 
@@ -91,11 +90,12 @@ export function applyDrive(
 
   if (d.handbrake) s = approach(s, 0, spec.handbrakeDecel * dt);
   else if (braking) s = approach(s, 0, spec.brakeDecel * d.magnitude * dt);
-  else if (reversing) s = approach(s, -spec.reverseSpeed, spec.accel * d.magnitude * dt);
+  else if (reversing) s = approach(s, -Math.min(spec.reverseSpeed, topSpeed), spec.accel * d.magnitude * dt);
   else if (back) s = approach(s, 0, spec.coastDecel * dt); // turning around in place
   else if (d.hasInput) s = s > topSpeed ? approach(s, topSpeed, spec.coastDecel * dt) : Math.min(topSpeed, s + spec.accel * d.magnitude * dt);
   else s = approach(s, 0, spec.coastDecel * dt);
 
-  s = Math.max(-topSpeed, Math.min(topSpeed, s));
+  const cap = Math.max(topSpeed, capSpeed);
+  s = Math.max(-cap, Math.min(cap, s));
   v.velocity = vec3(h.x * s + sx, v.velocity.y, h.z * s + sz);
 }

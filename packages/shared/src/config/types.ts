@@ -62,7 +62,17 @@ export interface RideSpec {
 export interface RidingConfig {
   rides: Record<RideTier, RideSpec>;
   access: Record<VehicleTier, AccessKind[]>;
-  riding: { mountRadius: number; stoppedSpeed: number; dismountMaxSpeed: number; dismountGap: number; emptyTankSpeed: number };
+  riding: {
+    mountRadius: number;
+    /** A parked vehicle more than this far above or below the feet (m) is out of reach for F. */
+    mountReachHeight: number;
+    stoppedSpeed: number;
+    dismountMaxSpeed: number;
+    dismountGap: number;
+    emptyTankSpeed: number;
+    /** Drive input whose direction has a dot product with the heading below this points back (brake / reverse). */
+    backInputDot: number;
+  };
   refuel: { pumpRadius: number; tankPerSecond: number };
   summon: { minDistance: number; cooldownSeconds: number; minClearance: number; searchRadius: number; ringSamples: number };
   bays: { spacing: number };

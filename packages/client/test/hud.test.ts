@@ -10,7 +10,7 @@ describe('Hud offer toasts', () => {
 
   beforeEach(() => {
     dom = installFakeDom();
-    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10 }, 'Y');
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
   });
   afterEach(() => dom.restore());
 
@@ -53,7 +53,7 @@ describe('Hud next stop and ride', () => {
 
   beforeEach(() => {
     dom = installFakeDom();
-    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10 }, 'Y');
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
   });
   afterEach(() => dom.restore());
 
@@ -89,6 +89,16 @@ describe('Hud next stop and ride', () => {
     expect(one('hud-ride').hidden).toBe(false);
     expect(one('hud-speed').textContent).toBe('10 m/s');
     expect(one('hud-fuel').hidden).toBe(true);
+  });
+
+  it('the fuel gauge turns low at ui.fuelLowPct (final review 7)', () => {
+    dom.restore();
+    dom = installFakeDom();
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 40 }, 'Y');
+    hud.update(model({ ride: { tier: 'car', speed: 3, fuel: 0.35 } }), () => 0);
+    expect(one('hud-fuel').className).toContain('low');
+    hud.update(model({ ride: { tier: 'car', speed: 3, fuel: 0.41 } }), () => 0);
+    expect(one('hud-fuel').className).not.toContain('low');
   });
 
   it('the load chip keeps loadText', () => {

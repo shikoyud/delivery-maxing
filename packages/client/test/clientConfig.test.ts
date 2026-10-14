@@ -52,4 +52,10 @@ describe('clientConfig', () => {
     expect([...d].sort((a, b) => a - b)).toEqual(d);
     for (const t of RIDE_TIERS) expect(c.rides[t].height).toBeGreaterThan(c.height);
   });
+
+  it('ui: route drift and the low-fuel share come from config (final review 7)', () => {
+    expect(clientConfig.ui.routeDriftMeters).toBeGreaterThan(0);
+    expect(clientConfig.ui.fuelLowPct).toBeGreaterThan(0);
+    expect(clientConfig.ui.fuelLowPct).toBeLessThan(100);
+  });
 });

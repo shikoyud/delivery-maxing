@@ -19,7 +19,7 @@ function countingRouter() {
 describe('RouteCache', () => {
   it('RouteCache recomputes after refreshSeconds or a 5 m move, not every frame', () => {
     const r = countingRouter();
-    const cache = new RouteCache(r, 0.5);
+    const cache = new RouteCache(r, 0.5, 5);
     const door = v(100, 0);
     cache.get('car', v(0, 0), 'poi-a', door, 0);
     // Every frame for 0.4 s, creeping forward under 5 m: still the first route.
@@ -37,7 +37,7 @@ describe('RouteCache', () => {
 
   it('recomputes at once when the target or the tier changes, and keeps one route per target', () => {
     const r = countingRouter();
-    const cache = new RouteCache(r, 0.5);
+    const cache = new RouteCache(r, 0.5, 5);
     cache.get('car', v(0, 0), 'poi-a', v(100, 0), 0);
     cache.get('car', v(0, 0), 'poi-b', v(0, 100), 0.1);
     expect(r.calls).toHaveLength(2);
@@ -50,7 +50,7 @@ describe('RouteCache', () => {
 
   it('caches a null (unreachable) route until the next refresh', () => {
     let calls = 0;
-    const cache = new RouteCache({ routeToDoor: () => (calls++, null) }, 0.5);
+    const cache = new RouteCache({ routeToDoor: () => (calls++, null) }, 0.5, 5);
     expect(cache.get('car', v(0, 0), 'poi-a', v(10, 0), 0)).toBeNull();
     expect(cache.get('car', v(0, 0), 'poi-a', v(10, 0), 0.1)).toBeNull();
     expect(calls).toBe(1);
@@ -72,5 +72,15 @@ describe('nextCorner and yawTo', () => {
     expect(yawTo(v(0, 0), v(0, -5))).toBeCloseTo(0);
     expect(yawTo(v(0, 0), v(-5, 0))).toBeCloseTo(Math.PI / 2);
     expect(yawTo(v(0, 0), v(5, 0))).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it('the drift distance is the driftMeters argument (config ui.routeDriftMeters, final review 7)', () => {
+    const r = countingRouter();
+    const cache = new RouteCache(r, 0.5, 10);
+    cache.get('car', v(0, 0), 'poi-a', v(100, 0), 0);
+    cache.get('car', v(7, 0), 'poi-a', v(100, 0), 0.1);
+    expect(r.calls).toHaveLength(1);
+    cache.get('car', v(10.01, 0), 'poi-a', v(100, 0), 0.2);
+    expect(r.calls).toHaveLength(2);
   });
 });

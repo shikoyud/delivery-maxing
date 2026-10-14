@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RIDE_TIERS, defaultGarage, expandGreybox, type GreyboxSource, type SavedVehicle } from '@dm/shared';
 import greyboxJson from '../../../map/greybox.json';
-import { PROGRESS_KEY, PROGRESS_KEY_V2, createProgressStore } from '../src/game/progress';
+import { PROGRESS_KEY, PROGRESS_KEY_V2, createProgressStore, saveWhenLeaving } from '../src/game/progress';
 
 const map = expandGreybox(greyboxJson as GreyboxSource);
 const garage = (): SavedVehicle[] => defaultGarage(map);
@@ -43,6 +43,15 @@ describe('createProgressStore (v3)', () => {
     const p = createProgressStore(storage, garage).load();
     expect(p).toEqual({ totals: TOTALS, garage: garage(), lastRide: null });
     expect(p).not.toHaveProperty('capacityTier');
+  });
+
+  it('a corrupt v3 record does not bring back the v2 totals (final review 8)', () => {
+    for (const bad of ['{not json', '[1,2]', '"text"', 'null']) {
+      const storage = memoryStorage();
+      storage.data.set(PROGRESS_KEY_V2, JSON.stringify({ totals: TOTALS, capacityTier: 'car' }));
+      storage.data.set(PROGRESS_KEY, bad);
+      expect(createProgressStore(storage, garage).load(), bad).toEqual({ totals: ZERO, garage: garage(), lastRide: null });
+    }
   });
 
   it('a bad vehicle entry falls back to the default for that tier only', () => {
@@ -140,5 +149,25 @@ describe('createProgressStore (v3)', () => {
     const store = createProgressStore(null, garage);
     store.load().totals.points = 99;
     expect(store.load().totals.points).toBe(0);
+  });
+});
+
+describe('saveWhenLeaving (final review 10)', () => {
+  it('saves on pagehide and when the page turns hidden, not when it turns visible; the disposer stops it', () => {
+    const win = new EventTarget();
+    const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' as DocumentVisibilityState });
+    let saves = 0;
+    const off = saveWhenLeaving(win, doc, () => void saves++);
+    win.dispatchEvent(new Event('pagehide'));
+    expect(saves).toBe(1);
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(saves).toBe(1);
+    doc.visibilityState = 'hidden';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(saves).toBe(2);
+    off();
+    win.dispatchEvent(new Event('pagehide'));
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(saves).toBe(2);
   });
 });

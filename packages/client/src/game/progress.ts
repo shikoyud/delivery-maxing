@@ -76,11 +76,13 @@ function parseJson(raw: string | null): Record<string, unknown> | null {
 
 /** Field by field: a bad value falls back to its default, the rest of the record survives. */
 function parseProgress(storage: Pick<Storage, 'getItem'>, defaults: () => SavedVehicle[]): Progress {
-  const v3 = parseJson(storage.getItem(PROGRESS_KEY));
-  if (v3) {
-    return { totals: parseTotals(v3.totals), garage: parseGarage(v3.garage, defaults()), lastRide: rideTier(v3.lastRide) };
+  const raw = storage.getItem(PROGRESS_KEY);
+  if (raw !== null) {
+    // A v3 record exists: it alone counts (a corrupt one gives defaults; it never brings back v2 totals).
+    const v3 = parseJson(raw);
+    return { totals: parseTotals(v3?.totals), garage: parseGarage(v3?.garage, defaults()), lastRide: rideTier(v3?.lastRide) };
   }
-  // First visit on v3: a v2 record keeps its totals and starts with the default garage.
+  // First visit on v3 (no v3 key at all): a v2 record keeps its totals and starts with the default garage.
   const v2 = parseJson(storage.getItem(PROGRESS_KEY_V2));
   return { totals: parseTotals(v2?.totals), garage: defaults(), lastRide: null };
 }
@@ -126,4 +128,25 @@ export function browserStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Calls `save` when the page goes away (pagehide) or is hidden (visibilitychange to hidden), so closing the tab
+ * mid-ride keeps where the vehicle is and the fuel it burnt. Returns a disposer.
+ */
+export function saveWhenLeaving(
+  win: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>,
+  doc: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> & { readonly visibilityState: DocumentVisibilityState },
+  save: () => void,
+): () => void {
+  const onHide = (): void => save();
+  const onVisibility = (): void => {
+    if (doc.visibilityState === 'hidden') save();
+  };
+  win.addEventListener('pagehide', onHide);
+  doc.addEventListener('visibilitychange', onVisibility);
+  return () => {
+    win.removeEventListener('pagehide', onHide);
+    doc.removeEventListener('visibilitychange', onVisibility);
+  };
 }
