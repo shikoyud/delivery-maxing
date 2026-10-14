@@ -30,10 +30,10 @@ export interface DebugApi {
   cancel(orderId: string): CancelResult;
   /** Delivery Points, Coins and deliveries so far. */
   totals(): Totals;
-  /** The carrier capacity tier in use (the dev panel's capacity preset until vehicles arrive in SP4). */
+  /** The carrier capacity tier in use: the ride, else the last ride, else walking. */
   capacityTier(): VehicleTier;
-  /** Switches the capacity tier as the dev panel does; false (with a warning popup) when the active orders don't fit. */
-  setCapacityTier(t: VehicleTier): boolean;
+  /** Sets the tier last ridden (capacity on foot follows it), as if the courier had just got off it. */
+  setLastRide(t: RideTier | null): void;
   /**
    * Runs `ticks` simulation ticks synchronously, with the current input, and returns the player's horizontal speed
    * (m/s) after each one: long sim windows in tests without waiting on the headless frame rate.
@@ -106,7 +106,9 @@ export function installDebugHooks(game: Game): void {
     cancel: (id) => game.delivery.cancel(id),
     totals: () => ({ ...game.delivery.orders.totals }),
     capacityTier: () => game.delivery.capacityTier,
-    setCapacityTier: (t) => game.delivery.setCapacityTier(t),
+    setLastRide: (t) => {
+      game.sim.state.lastRide = t;
+    },
     advance: (ticks) => game.advanceTicks(ticks),
     phoneOpen: () => game.delivery.phoneOpen,
     openPhone: (app) => game.delivery.openPhone(app),

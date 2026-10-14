@@ -1,5 +1,5 @@
 import GUI, { type Controller } from 'lil-gui';
-import { vehiclesConfig, type VehicleTier } from '@dm/shared';
+import type { VehicleTier } from '@dm/shared';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import { el } from './dom';
 
@@ -10,10 +10,8 @@ export interface DevPanelHooks {
   onResetProgress(): void;
   /** Any value changed (the host saves, debounced). */
   onChange(): void;
-  /** The carrier capacity tier in use. */
+  /** The carrier capacity tier in use (it follows the ride). */
   capacityTier(): VehicleTier;
-  /** Dev capacity preset (until vehicles in SP4): switch tiers; false when refused (the host shows why). */
-  setCapacityTier(t: VehicleTier): boolean;
 }
 
 export interface DevPanel {
@@ -79,19 +77,13 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     }
   }
 
-  // Capacity preset: the tier's slots and package weight (spec §3.3), switched here until vehicles exist (SP4).
+  // Capacity (read-only): the tier's slots and package weight (spec §3.3) follow the ride, or the last ride on foot.
   const capacity = { tier: hooks.capacityTier() };
   const syncTier = (): void => {
     capacity.tier = hooks.capacityTier();
     tierCtrl.updateDisplay();
   };
-  const tierCtrl = gui
-    .add(capacity, 'tier', Object.keys(vehiclesConfig) as VehicleTier[])
-    .name('Capacity (dev, until SP4)')
-    .onChange((t: VehicleTier) => {
-      // Refused (the active orders don't fit): the select goes back to the tier still in use.
-      if (!hooks.setCapacityTier(t)) syncTier();
-    });
+  const tierCtrl = gui.add(capacity, 'tier').name('Capacity (follows the ride)').disable();
 
   const refresh = (): void => gui.controllersRecursive().forEach((c: Controller) => c.updateDisplay());
   const actions = {

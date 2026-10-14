@@ -9,6 +9,9 @@ import { generateOffer } from './offers';
 import { scoreOrder } from './rules';
 import type { ActiveOrder, Bonus, CarrierCapacity, Offer } from './types';
 
+/** What broke a carried Fragile package: a fall, a respawn, or a crash into a wall on a vehicle. */
+export type FragileBreak = 'fall' | 'respawn' | 'crash';
+
 export type AcceptResult = 'ok' | 'gone' | 'expired' | 'no_slots' | 'too_heavy';
 export type CancelResult = 'ok' | 'unknown';
 
@@ -17,7 +20,7 @@ export type OrderEvent =
   | { kind: 'offerExpired'; offerId: string }
   | { kind: 'prepStarted'; orderId: string; readySeconds: number }
   | { kind: 'pickedUp'; orderId: string }
-  | { kind: 'fragileBroken'; orderId: string; reason: 'fall' | 'respawn' }
+  | { kind: 'fragileBroken'; orderId: string; reason: FragileBreak }
   | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; inTime: boolean; expressOnTime: boolean | null }
   | { kind: 'lockoutEnded' };
 
@@ -233,13 +236,17 @@ export class OrderSystem {
     return events;
   }
 
-  /** Fragile damage from the movement sim: a fall above maxFallMeters or a respawn, carried orders only. */
+  /**
+   * Fragile damage from the movement sim, carried orders only: a fall above maxFallMeters, a respawn, or a vehicle
+   * crash (the sim reports `crashed` only above fragile.crashSpeed).
+   */
   onSimEvents(simEvents: SimEvent[]): OrderEvent[] {
     const events: OrderEvent[] = [];
     for (const e of simEvents) {
-      let reason: 'fall' | 'respawn' | null = null;
+      let reason: FragileBreak | null = null;
       if (e.kind === 'landed' && e.fallHeight > this.opts.cfg.fragile.maxFallMeters) reason = 'fall';
       else if (e.kind === 'respawned') reason = 'respawn';
+      else if (e.kind === 'crashed') reason = 'crash';
       if (!reason) continue;
       for (const a of this._active) {
         if (a.order.modifier === 'fragile' && a.fragileIntact && this.isCarried(a)) {

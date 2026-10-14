@@ -13,6 +13,7 @@ import {
   vec3,
   type GreyboxSource,
   type MapData,
+  type NavRouter,
   type SimEvent,
   type Vec3,
 } from '@dm/shared';
@@ -44,6 +45,7 @@ import {
 import { browserStorage, createProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe } from './cameraQueries';
 import { interpolationStart } from './interpolation';
+import { loadNavRouter } from './navLoader';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
@@ -93,6 +95,8 @@ export class Game {
     readonly opts: GameOptions,
     readonly map: MapData,
     readonly sim: PlayerSim,
+    /** Paths on the five per-tier navmeshes. */
+    readonly nav: NavRouter,
     private readonly settings: DevSettings,
     private readonly devStore: DevSettingsStore,
     model: CourierModel | null,
@@ -130,8 +134,15 @@ export class Game {
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
       player: () => this.sim.state,
+      rider: () => ({
+        riding: this.sim.state.riding,
+        lastRide: this.sim.state.lastRide,
+        speed: horizontalLength(this.sim.state.velocity),
+        mountCandidate: () => this.sim.mountCandidate(),
+      }),
+      // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
+      distance: (a, b) => nav.distance('walk', a, b),
       stamina: () => this.sim.state.stamina / settings.movement.stamina.max,
-      capacityTier: this.progress.load().capacityTier,
       phoneChanged: (open) => this.phoneChanged(open),
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
@@ -146,7 +157,6 @@ export class Game {
         this.delivery.resetProgress();
       },
       capacityTier: () => this.delivery.capacityTier,
-      setCapacityTier: (t) => this.delivery.setCapacityTier(t),
       onChange: () => {
         this.saver.schedule();
         this.devPanel.setOverrideCount(countOverrides(settings));
@@ -185,7 +195,12 @@ export class Game {
 
   static async create(host: HTMLElement, opts: GameOptions): Promise<Game> {
     // The model loads alongside physics; a missing or broken file falls back to the capsule with one warning.
-    const [rapier, model] = await Promise.all([initRapier(), CourierModel.load(robotUrl, clientConfig.courier)]);
+    // The navmeshes (recast WASM and five binaries) load alongside too.
+    const [rapier, model, nav] = await Promise.all([
+      initRapier(),
+      CourierModel.load(robotUrl, clientConfig.courier),
+      loadNavRouter(),
+    ]);
     const map = expandGreybox(greyboxJson as GreyboxSource);
     const physics = createPhysicsWorld(rapier, map);
     // One deep-cloned movement object shared by PlayerSim and the dev panel; the shared import is never mutated.
@@ -197,7 +212,7 @@ export class Game {
     // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
     const garage = new Garage(physics, map, defaultGarage(map));
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
-    const game = new Game(host, opts, map, sim, settings, devStore, model);
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model);
     if (opts.debug) installDebugHooks(game);
     return game;
   }

@@ -413,13 +413,13 @@ test('teleport to the pickup then the dropoff completes the order with points', 
   expect(await page.evaluate(() => window.__dm!.active()[0]?.pickedUpAt ?? null)).not.toBeNull();
   // Let the "accepted" and "picked up" popups expire (wall-clock, 3.5 s) so the delivery popup stands alone in the shot.
   await expect(page.locator('.popup')).toHaveCount(0, { timeout: 10_000 });
-  // Teleport 7 m short of the dropoff (on the pickup's side), facing it, then walk in: the chase camera frames the
-  // courier in front of the marker rather than inside it.
+  // Teleport 7 m short of the dropoff (on the pickup's side, along the street axis: doors face axis-aligned streets),
+  // facing it, then walk in: the chase camera frames the courier in front of the marker rather than inside it.
   await page.evaluate(([drop, pick]) => {
     const t = window.__dm!.poiPosition(drop);
     const p = window.__dm!.poiPosition(pick);
-    const d = Math.hypot(p.x - t.x, p.z - t.z);
-    const feet = { x: t.x + ((p.x - t.x) / d) * 7, y: t.y, z: t.z + ((p.z - t.z) / d) * 7 };
+    const alongX = Math.abs(p.x - t.x) >= Math.abs(p.z - t.z);
+    const feet = alongX ? { x: t.x + Math.sign(p.x - t.x) * 7, y: t.y, z: t.z } : { x: t.x, y: t.y, z: t.z + Math.sign(p.z - t.z) * 7 };
     window.__dm!.viewpoint(feet, { x: t.x, y: t.y + 1.2, z: t.z });
   }, [order.dropoffPoiId, order.pickupPoiId] as const);
   await page.keyboard.down('KeyW');
@@ -497,7 +497,7 @@ test('cancelling starts the lockout and no offer appears for 45 s', async ({ pag
   expect(errors).toEqual([]);
 });
 
-test('a package offer needs the car preset', async ({ page }) => {
+test('a package offer needs a car (or motorbike) as the last ride', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('walk');
@@ -523,44 +523,30 @@ test('a package offer needs the car preset', async ({ page }) => {
   console.log(`walk, 60 s: ${walk.food} food offers, ${walk.package} package offers`);
   expect(walk.food).toBeGreaterThan(0); // offers did arrive, so "no packages" is not vacuous
   expect(walk.package).toBe(0);
-  expect(await page.evaluate(() => window.__dm!.setCapacityTier('car'))).toBe(true);
+  await page.evaluate(() => window.__dm!.setLastRide('car'));
+  await page.evaluate(() => window.__dm!.advance(1)); // capacity follows the ride on the next tick
   expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
-  const car = await watch(60);
-  console.log(`car, 60 s: ${car.food} food offers, ${car.package} package offers, first package at ${car.firstPackageAt.toFixed(2)} s`);
+  const car = await watch(120);
+  console.log(`car, 120 s: ${car.food} food offers, ${car.package} package offers, first package at ${car.firstPackageAt.toFixed(2)} s`);
   expect(car.package).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 
-test('dev panel capacity preset switches the tier and reverts when the switch is refused', async ({ page }) => {
+test('dev panel shows the capacity tier, which follows the last ride', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   await page.keyboard.press('Backquote');
-  const select = page.locator('.dm-dev-panel .lil-controller', { hasText: 'Capacity (dev, until SP4)' }).locator('select');
-  await expect(select).toBeVisible();
-  await expect(select).toHaveValue('walk');
-  await select.selectOption('car');
-  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
-  // Take a package order (it only fits a motorbike or car), then ask for walking: refused, the select goes back to car.
-  const got = await page.evaluate(
-    ([rate]) => {
-      for (let i = 0; i < 120 * rate; i++) {
-        const pkg = window.__dm!.offers().find((o) => o.order.kind === 'package');
-        if (pkg) return window.__dm!.accept(pkg.order.id);
-        window.__dm!.advance(1);
-      }
-      return 'none';
-    },
-    [TICK_RATE] as const,
-  );
-  expect(got).toBe('ok');
-  await select.selectOption('walk');
-  await expect(page.locator('.popup-warn .popup-title', { hasText: "Can't switch to walking" })).toBeVisible();
-  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
-  await expect(select).toHaveValue('car');
-  // Reset progress puts the tier back to walking, and the select follows.
-  await page.locator('.dm-dev-panel .lil-controller', { hasText: 'Reset progress' }).locator('button').click();
-  expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('walk');
-  await expect(select).toHaveValue('walk');
+  const field = page.locator('.dm-dev-panel .lil-controller', { hasText: 'Capacity (follows the ride)' }).locator('input');
+  await expect(field).toBeVisible();
+  await expect(field).toHaveValue('walk');
+  await expect(field).toBeDisabled();
+  await page.keyboard.press('Backquote');
+  await page.evaluate(() => {
+    window.__dm!.setLastRide('car');
+    window.__dm!.advance(1);
+  });
+  await page.keyboard.press('Backquote');
+  await expect(field).toHaveValue('car');
   expect(errors).toEqual([]);
 });
 

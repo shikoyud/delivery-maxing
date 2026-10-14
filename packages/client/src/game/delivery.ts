@@ -5,7 +5,6 @@ import {
   mulberry32,
   ordersConfig,
   playerZones,
-  streetDistance,
   vehiclesConfig,
   type AcceptResult,
   type ActiveOrder,
@@ -15,7 +14,9 @@ import {
   type MapData,
   type MoveMode,
   type OrderEvent,
+  type PathDistance,
   type PlayerZones,
+  type RideTier,
   type Rng,
   type SimEvent,
   type StatModifiers,
@@ -49,11 +50,16 @@ export interface DeliveryDeps {
   seed: number;
   /** Sim time (s) of the tick about to run, and the player's sim state. */
   now(): number;
-  player(): { position: Vec3; mode: MoveMode; heading?: number };
+  player(): { position: Vec3; mode: MoveMode; heading?: number; grounded?: boolean; lastGrounded?: Vec3 };
+  /**
+   * The courier's ride (Game: the sim state): the tier ridden and the one last ridden (capacity follows them), the
+   * speed (m/s), and what F would mount now on foot.
+   */
+  rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
+  /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
+  distance: PathDistance;
   /** Sprint stamina as a fraction 0..1 (the HUD ring); full when absent (tests). */
   stamina?(): number;
-  /** The carrier capacity tier the player has (saved progress). */
-  capacityTier: VehicleTier;
   /**
    * HUD, popups and the phone; default to the DOM ones on `host` (tests pass recorders). `phone` builds the phone
    * from the callbacks DeliveryLoop wires (accept, cancel, skip, closed) and its close keys.
@@ -81,17 +87,21 @@ const ACCEPT_REFUSED: Partial<Record<AcceptResult, string>> = {
 
 const ZERO: Totals = { points: 0, coins: 0, deliveries: 0 };
 
+/** No POI zones: while riding nothing is picked up or handed over (every delivery ends on foot). */
+const NO_POIS: ReadonlySet<string> = new Set();
+
 /**
- * The delivery loop on the client (spec §3, §8): owns the OrderSystem, the capacity tier and saved progress, POI
- * markers, waypoint beams, the HUD and popups. Game calls beforeStep → sim.step → afterStep each tick with the same
- * sim time (`now()`), and draw each frame.
+ * The delivery loop on the client (spec §3, §8): owns the OrderSystem (its capacity follows the ride) and saved
+ * progress, POI markers, waypoint beams, the HUD and popups. Game calls beforeStep → sim.step → afterStep each tick
+ * with the same sim time (`now()`), and draw each frame.
  */
 export class DeliveryLoop {
   readonly poiMeshes: PoiMeshes;
   readonly waypoints: Waypoints;
   private readonly phone: PhoneView;
   private sys: OrderSystem;
-  private tier: VehicleTier;
+  /** Sim time from which each get-off hint may show again (ui.hintCooldownSeconds). */
+  private readonly hintAt = new Map<string, number>();
   private readonly rng: Rng;
   private readonly hud: HudView;
   private readonly popups: PopupSink;
@@ -103,7 +113,6 @@ export class DeliveryLoop {
 
   constructor(private readonly d: DeliveryDeps) {
     this.rng = mulberry32(d.seed);
-    this.tier = d.capacityTier;
     this.sys = this.makeSystem(d.progress.load().totals);
     this.poiMeshes = buildPoiMeshes(d.map, ordersConfig.zones.poiRadius);
     this.waypoints = buildWaypoints(MAX_WAYPOINTS, d.cfg.ui.waypointPulseHz);
@@ -136,11 +145,11 @@ export class DeliveryLoop {
     return new OrderSystem(
       {
         pois: this.d.map.pois,
-        distance: streetDistance,
+        distance: this.d.distance,
         rules: this.d.map.orderRules,
         cfg: ordersConfig,
         rng: this.rng,
-        capacity: vehiclesConfig[this.tier],
+        capacity: vehiclesConfig[this.capacityTier],
         totals,
       },
       this.d.now(),
@@ -152,8 +161,10 @@ export class DeliveryLoop {
     return this.sys;
   }
 
+  /** The capacity tier: the ride, else the last ride, else walking. */
   get capacityTier(): VehicleTier {
-    return this.tier;
+    const r = this.d.rider();
+    return r.riding ?? r.lastRide ?? 'walk';
   }
 
   /** Id of the hospital whose safe zone the player is in (as of the last tick), or null. */
@@ -200,7 +211,8 @@ export class DeliveryLoop {
   /**
    * The input the sim sees this tick. The phone key toggles the phone. Y accepts the top offer here, before
    * afterStep's update, so an accept on an offer's expiry tick reports 'expired' (Review Focus 1). While the phone is
-   * open Y is ignored and only the look passes (the Orders app's buttons accept, between ticks at `now()`).
+   * open Y is ignored and only the look passes (the Orders app's buttons accept, between ticks at `now()`). F on foot
+   * next to a ride that can't hold the active orders is swallowed (the sim never mounts it) with the reason.
    */
   beforeStep(frame: InputFrame): InputFrame {
     if (frame.phone.pressed) this.togglePhone();
@@ -210,6 +222,7 @@ export class DeliveryLoop {
         const top = this.sys.offers[0];
         if (top) this.accept(top.order.id);
       }
+      if (frame.mount.pressed && !this.canMount()) return { ...frame, mount: { held: false, pressed: false } };
       return frame;
     }
     const idle = emptyInput();
@@ -217,13 +230,57 @@ export class DeliveryLoop {
     return idle;
   }
 
-  /** After sim.step: Fragile damage first, then zones and the order update (same tick), then popups. */
+  /**
+   * Whether F may go to the sim: always while riding (dismount) or with nothing to mount; on foot, only when the
+   * candidate ride holds the active orders (else a warning says why).
+   */
+  private canMount(): boolean {
+    const r = this.d.rider();
+    if (r.riding !== null) return true;
+    const tier = r.mountCandidate();
+    if (tier === null) return true;
+    const cap = vehiclesConfig[tier];
+    if (this.sys.canSwitchCapacity(cap)) return true;
+    const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
+    this.popups.show(`Can't ride the ${TIER_LABEL[tier]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
+    return false;
+  }
+
+  /**
+   * After sim.step: capacity follows the ride, Fragile damage, then zones and the order update (same tick), then
+   * popups. While riding the POI zones count as empty (deliveries end on foot) and an active order's stop shows a
+   * get-off hint instead.
+   */
   afterStep(simEvents: SimEvent[], position: Vec3, now: number): void {
+    const riding = this.d.rider().riding !== null;
+    this.sys.setCapacity(vehiclesConfig[this.capacityTier]);
     const events = this.sys.onSimEvents(simEvents);
     const before = [...this.sys.active];
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);
-    events.push(...this.sys.update(now, position, this.zones));
+    if (riding) this.getOffHints(now);
+    const zones = riding ? { poiIds: NO_POIS, safeZone: this.zones.safeZone } : this.zones;
+    events.push(...this.sys.update(now, this.offerOrigin(position, riding), zones));
     for (const e of events) this.announce(e, before);
+  }
+
+  /**
+   * Where offers are measured from: the feet, or on foot in the air the last grounded feet (walk paths start on the
+   * ground, so a jump at the offer roll would otherwise find no pickup in reach).
+   */
+  private offerOrigin(position: Vec3, riding: boolean): Vec3 {
+    const p = this.d.player();
+    return !riding && p.grounded === false && p.lastGrounded ? p.lastGrounded : position;
+  }
+
+  /** Riding into an active order's stop: "Get off to pick up / hand over", each at most once per hintCooldownSeconds. */
+  private getOffHints(now: number): void {
+    for (const a of this.sys.active) {
+      if (!this.zones.poiIds.has(this.sys.currentTarget(a))) continue;
+      const text = this.sys.isCarried(a) ? 'Get off to hand over' : 'Get off to pick up';
+      if (now < (this.hintAt.get(text) ?? -Infinity)) continue;
+      this.hintAt.set(text, now + this.d.cfg.ui.hintCooldownSeconds);
+      this.popups.show(text, [], 'info');
+    }
   }
 
   accept(offerId: string): AcceptResult {
@@ -255,27 +312,11 @@ export class DeliveryLoop {
     this.nextHudAt = 0;
   }
 
-  /** Switches the carrier capacity; refused (false, with a warning) while the active orders would not fit. */
-  setCapacityTier(t: VehicleTier): boolean {
-    const cap = vehiclesConfig[t];
-    if (!this.sys.canSwitchCapacity(cap)) {
-      const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
-      this.popups.show(`Can't switch to ${TIER_LABEL[t]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
-      return false;
-    }
-    this.sys.setCapacity(cap);
-    this.tier = t;
-    this.save();
-    this.nextHudAt = 0;
-    return true;
-  }
-
   /**
-   * Dev panel: back to a fresh start — zero totals, capacity tier 'walk', no offers or orders (the OrderSystem is
-   * rebuilt) — and saved.
+   * Dev panel: back to a fresh start — zero totals, no offers or orders (the OrderSystem is rebuilt; its capacity
+   * still follows the ride) — and saved.
    */
   resetProgress(): void {
-    this.tier = 'walk';
     this.sys = this.makeSystem(ZERO);
     this.save();
     this.nextHudAt = 0;
@@ -318,8 +359,9 @@ export class DeliveryLoop {
     if (this.phone.isOpen) this.phone.render(m, this.d.player().position, this.d.player().heading ?? 0);
   }
 
+  /** Saves the totals (the rest of the stored record is kept as it is). */
   private save(): void {
-    this.d.progress.save({ totals: { ...this.sys.totals }, capacityTier: this.tier });
+    this.d.progress.save({ ...this.d.progress.load(), totals: { ...this.sys.totals } });
   }
 
   /** `before`: the active orders before this tick's update, so a completed order's details are still known. */
@@ -350,7 +392,8 @@ export class DeliveryLoop {
         break;
       }
       case 'fragileBroken':
-        this.popups.show('Fragile package damaged', ['Bonus lost · the order still counts'], 'warn');
+        if (e.reason === 'crash') this.popups.show('Crashed · Fragile bonus lost', ['The order still counts'], 'warn');
+        else this.popups.show('Fragile package damaged', ['Bonus lost · the order still counts'], 'warn');
         break;
       case 'offered':
       case 'offerExpired':
