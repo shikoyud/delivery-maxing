@@ -14,7 +14,7 @@
 
 The spec is silent or ambiguous on these. Each is built as written below unless shiko says otherwise when approving the plan.
 
-1. **The skateboard is carried, not parked.** F with no parked vehicle in reach puts the board down and you ride; F again picks it up. It never stays behind, so it has no summon. This reads §4.3 "Stairs ✗ (carried)" literally and keeps today's board feel. *Alternative:* it parks like the other three; Task 6 then drops its `carried` branch.
+1. **The skateboard is carried, not parked.** *Confirmed by shiko on 2026-10-14.* F with no parked vehicle in reach puts the board down and you ride; F again picks it up. It never stays behind, so it has no summon. This reads §4.3 "Stairs ✗ (carried)" literally and keeps today's board feel.
 2. **Owned vehicles before the shop.** The shop is SP6, so in SP4 all four vehicles are owned by default and the dev panel toggles ownership. They start parked at the spawn hospital's vehicle bay.
 3. **One navmesh per tier (five), not three.** §5 says "per vehicle class (foot, two-wheeler, car)", but §4.3 gives five different access rules (the skateboard can't use steep lanes, the motorbike can't use paths), so one two-wheeler mesh can't route all three. §5 is updated in the build PR.
 4. **Steering stays camera-relative, like today's board.** W/A/S/D give a wish direction relative to the camera and the vehicle turns toward it at its turn rate (§4: "Movement is relative to the camera"). Back input brakes; when stopped, the car reverses and the other vehicles turn around.
@@ -862,7 +862,7 @@ Run the existing draw-call budget test with the vehicles in view and log the ave
 
 - [ ] **Step 4: Update the spec in the same PR**
 
-§15 row 4: "Built (PR #N)." in front of the existing text. §5 Navmeshes: one per tier (walk, skateboard, bicycle, motorbike, car). §4.2: the skateboard is carried when you get off (if Decision 1 stands). §4.1: remove nothing (Q was never in the rev. 2 key list). Record any decision shiko changed when approving this plan.
+§15 row 4: "Built (PR #N)." in front of the existing text. §5 Navmeshes: one per tier (walk, skateboard, bicycle, motorbike, car). §4.2: the skateboard is carried when you get off (Decision 1, confirmed). §4.1: remove nothing (Q was never in the rev. 2 key list). Record any decision shiko changed when approving this plan.
 
 - [ ] **Step 5: Run everything**
 
