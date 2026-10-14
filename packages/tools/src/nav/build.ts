@@ -36,18 +36,23 @@ export interface NavAgent {
  * The agent for `tier`: on foot the courier's capsule and controller (movement.json); riding, the ride's collider
  * radius (the upright capsule's or the lengthwise capsule's) and height, step height and slope limit (riding.json).
  *
- * On foot the climb is twice the step height. Recast's ledge filter rejects a cell whose neighbours' floors span more
- * than one climb, and on stairs whose tread is about one cell (the town stairs: 0.35 m treads, 0.3 m cells) a cell
- * has the step below on one side and the step above on the other: two rises. With the plain step height (0.4 m) the
- * 0.25 m-rise stairs the courier walks up get no navmesh at all. The doubled climb (0.8 m) stays under the mantle
- * height (1.2 m), so the walk mesh still never takes a ledge the courier cannot get up.
+ * On foot the climb is nav.walkClimb (0.8 m), not the step height. Recast's ledge filter rejects a cell whose
+ * neighbours' floors span more than one climb, and on stairs whose tread is about one cell (the town stairs: 0.35 m
+ * treads, 0.3 m cells) a cell has the step below on one side and the step above on the other: two rises. With the
+ * plain step height (0.4 m) the 0.25 m-rise stairs the courier walks up get no navmesh at all. The climb is clamped to
+ * the mantle height (1.2 m), so the walk mesh never takes a ledge the courier cannot get up.
  */
-export function navAgent(tier: VehicleTier, move: MovementConfig = movementConfig, ride: RidingConfig = ridingConfig): NavAgent {
+export function navAgent(
+  tier: VehicleTier,
+  move: MovementConfig = movementConfig,
+  ride: RidingConfig = ridingConfig,
+  nav: NavConfig = navConfig,
+): NavAgent {
   if (tier === 'walk') {
     return {
       radius: move.capsule.radius,
       height: move.capsule.height,
-      climb: Math.min(2 * move.controller.maxStepHeight, move.mantle.maxHeight),
+      climb: Math.min(nav.walkClimb, move.mantle.maxHeight),
       slopeDeg: move.controller.maxSlopeClimbDeg,
     };
   }
@@ -73,7 +78,7 @@ export function zoneBlockers(map: MapData, tier: VehicleTier, nav: NavConfig = n
 
 /** `tier`'s navmesh of `map`. Call `initNav()` first. Throws when recast fails. */
 export function buildTierNavMesh(map: MapData, tier: VehicleTier, nav: NavConfig = navConfig): NavMesh {
-  const agent = navAgent(tier);
+  const agent = navAgent(tier, movementConfig, ridingConfig, nav);
   const cs = nav.cellSize;
   const ch = nav.cellHeight;
   const walkableHeight = Math.ceil(agent.height / ch);

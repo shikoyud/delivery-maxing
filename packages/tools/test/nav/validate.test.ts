@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { initNav, NavRouter, vec3, type MapData } from '@dm/shared';
-import { buildTierBinaries, readGreyboxMap, readNavBinaries } from '../../src/nav/build';
+import { exportNavMesh } from 'recast-navigation';
+import { buildTierNavMesh, readGreyboxMap, readNavBinaries } from '../../src/nav/build';
 import { REPO } from '../../src/nav/files';
 import { validateGreyboxNav } from '../../src/nav/validate';
 
@@ -18,7 +19,8 @@ test('the committed greybox passes the validator with no messages', () => {
 
 test('moving a package door 60 m from any car road produces exactly one message naming it', () => {
   // A pier (walk, skateboard and bicycle only, like the boardwalk) runs 80 m south off the harbor's edge street; the
-  // package-only door downtown-poi-01 moves to 60 m out along it.
+  // package-only door downtown-poi-01 moves out along it, about 60 m on foot from the nearest car point. Only the walk
+  // mesh is rebuilt: the committed car mesh has no pier at all, which drives the same as a pier blocked for cars.
   const door = 'downtown-poi-01';
   expect(map.pois.find((p) => p.id === door)!.roles).toEqual(['packagePickup']);
   const moved: MapData = {
@@ -28,11 +30,14 @@ test('moving a package door 60 m from any car road produces exactly one message 
       ...map.accessZones,
       { id: 'test-pier', kind: 'path', rect: { minX: 146, minZ: 300, maxX: 154, maxZ: 380 }, minY: 0, maxY: 0 },
     ],
-    pois: map.pois.map((p) => (p.id === door ? { ...p, position: vec3(150, 0, 360) } : p)),
+    pois: map.pois.map((p) => (p.id === door ? { ...p, position: vec3(150, 0, 358) } : p)),
   };
-  const router = NavRouter.fromBinaries(buildTierBinaries(moved));
+  const walk = buildTierNavMesh(moved, 'walk');
+  const router = NavRouter.fromBinaries({ ...readNavBinaries(REPO), walk: exportNavMesh(walk) });
+  walk.destroy();
   routers.push(router);
   const messages = validateGreyboxNav(moved, router);
   expect(messages).toHaveLength(1);
   expect(messages[0]).toContain(door);
-}, 120_000);
+  expect(messages[0]).toMatch(/package door is \d+\.\d m on foot/);
+}, 60_000);

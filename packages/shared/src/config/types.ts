@@ -82,6 +82,16 @@ export interface NavConfig {
   blockerHeight: number;
   carRoadMaxDoorDistance: number;
   maxFoodOffCarShare: number;
+  /**
+   * The walk navmesh's climb (m), clamped to movement.mantle.maxHeight. Above the courier's step height because
+   * recast's ledge filter rejects a cell whose neighbours span more than one climb, and on stairs a cell can have
+   * the step below and the step above as neighbours (two rises).
+   */
+  walkClimb: number;
+  /** routeToDoor snaps a door to the mesh within carRoadMaxDoorDistance, doubling the search box up to this (m). */
+  doorSearchMaxRadius: number;
+  /** routeToDoor returns null when the straight foot leg from where the tier stops to the door is longer (m). */
+  maxFootLeg: number;
 }
 
 interface TimeRule { distanceFactor: number; extraSeconds: number }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { movementConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig } from '../../src/config';
+import { movementConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig } from '../../src/config';
 
 describe('config pins spec values', () => {
   it('movement', () => {
@@ -45,5 +45,12 @@ describe('config pins spec values', () => {
   });
   it('Fragile crash threshold is 10 m/s', () => {
     expect(ordersConfig.fragile.crashSpeed).toBe(10);
+  });
+  it('nav: walk climb under the mantle height, door search and foot leg limits', () => {
+    expect(navConfig).toMatchObject({ walkClimb: 0.8, doorSearchMaxRadius: 120, maxFootLeg: 60, carRoadMaxDoorDistance: 30 });
+    expect(navConfig.walkClimb).toBeGreaterThanOrEqual(movementConfig.controller.maxStepHeight);
+    expect(navConfig.walkClimb).toBeLessThanOrEqual(movementConfig.mantle.maxHeight);
+    expect(navConfig.doorSearchMaxRadius).toBeGreaterThanOrEqual(navConfig.carRoadMaxDoorDistance);
+    expect(navConfig.maxFootLeg).toBeGreaterThanOrEqual(navConfig.carRoadMaxDoorDistance);
   });
 });

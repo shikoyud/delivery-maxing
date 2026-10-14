@@ -7,7 +7,8 @@ const isPackageDoor = (p: Poi): boolean => p.roles.includes('packagePickup') || 
 
 /**
  * How far a courier walks from where a car stops to `door`: 0 when the car reaches the door, the foot path length
- * from the car mesh's closest reachable point otherwise, Infinity when no car route from `carStart` gets near.
+ * from where `routeToDoor('car', carStart, door)` stops otherwise, Infinity when that route is null. One car stop is
+ * tried (the reachable car point closest to the door), so this is conservative, not a search over every car point.
  */
 export function footFromCar(router: NavRouter, carStart: Vec3, door: Vec3): number {
   const route = router.routeToDoor('car', carStart, door);
@@ -18,7 +19,8 @@ export function footFromCar(router: NavRouter, carStart: Vec3, door: Vec3): numb
 /**
  * Every navigation problem of `map` on `router`'s meshes, one message per failure: a POI door not reachable on foot
  * from a hospital spawn, or the spawn not reachable back from it; a package door farther than
- * nav.carRoadMaxDoorDistance on foot from the car mesh; more than nav.maxFoodOffCarShare of the food dropoffs that far;
+ * nav.carRoadMaxDoorDistance on foot from where a car from the first hospital bay stops for it (`footFromCar`); more
+ * than nav.maxFoodOffCarShare of the food dropoffs that far;
  * a pump or a bay slot off the car or motorbike mesh, or not reachable on it from a hospital bay.
  */
 export function validateGreyboxNav(map: MapData, router: NavRouter, nav: NavConfig = navConfig): string[] {
@@ -44,14 +46,17 @@ export function validateGreyboxNav(map: MapData, router: NavRouter, nav: NavConf
     for (const p of map.pois.filter(isPackageDoor)) {
       const d = foot.get(p.id)!;
       if (d <= maxFoot) continue;
-      const far = Number.isFinite(d) ? `${d.toFixed(1)} m on foot from the car mesh` : 'not reachable on foot from any car stop';
+      const far = Number.isFinite(d)
+        ? `${d.toFixed(1)} m on foot from where a car from the ${bays[0]!.id} bay stops for it`
+        : `out of reach: no car route from the ${bays[0]!.id} bay stops within ${nav.maxFootLeg} m of it`;
       messages.push(`${p.id}: package door is ${far} (max ${maxFoot} m)`);
     }
     const food = map.pois.filter((p) => p.roles.includes('dropoffFood'));
     const far = food.filter((p) => foot.get(p.id)! > maxFoot);
     if (far.length > nav.maxFoodOffCarShare * food.length) {
       messages.push(
-        `food dropoffs: ${far.length} of ${food.length} are more than ${maxFoot} m on foot from the car mesh ` +
+        `food dropoffs: ${far.length} of ${food.length} are more than ${maxFoot} m on foot from where a car from the ` +
+          `${bays[0]!.id} bay stops ` +
           `(max share ${nav.maxFoodOffCarShare}): ${far.map((p) => p.id).join(', ')}`,
       );
     }

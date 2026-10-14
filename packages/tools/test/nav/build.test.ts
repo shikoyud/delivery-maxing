@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { accessAllowed, initNav, NAV_TIERS } from '@dm/shared';
+import { accessAllowed, initNav, type NAV_TIERS } from '@dm/shared';
 import { exportNavMesh, getNavMeshPositionsAndIndices, NavMeshQuery, type NavMesh } from 'recast-navigation';
 import { buildTierNavMesh, readGreyboxMap } from '../../src/nav/build';
 import { REPO } from '../../src/nav/files';
@@ -11,17 +11,19 @@ const build = (tier: (typeof NAV_TIERS)[number]): NavMesh => {
   meshes.push(m);
   return m;
 };
+/** One car mesh shared by the tests (each build of the whole greybox takes seconds). */
+let carMesh: NavMesh | undefined;
+const car = (): NavMesh => (carMesh ??= build('car'));
 
 beforeAll(initNav);
 afterAll(() => meshes.forEach((m) => m.destroy()));
 
 test('the car mesh has no polygon inside an alley, steep-lane, stairs or path zone; the walk mesh covers the stairs', () => {
-  const car = build('car');
   const kinds = new Set(map.accessZones.map((z) => z.kind));
   expect([...kinds].sort()).toEqual(['alley', 'path', 'stairs', 'steepLane']);
   for (const z of map.accessZones) expect(accessAllowed('car', z.kind)).toBe(false);
 
-  const [pos, idx] = getNavMeshPositionsAndIndices(car);
+  const [pos, idx] = getNavMeshPositionsAndIndices(car());
   expect(idx.length).toBeGreaterThan(0);
   const inside: string[] = [];
   for (let t = 0; t < idx.length; t += 3) {
@@ -49,11 +51,11 @@ test('the car mesh has no polygon inside an alley, steep-lane, stairs or path zo
   q.destroy();
 }, 60_000);
 
+// The car mesh (every blocker and fill-layer path) built twice in one process; map:check compares all five tiers
+// against the committed files, built in another process.
 test('building twice gives byte-identical binaries', () => {
-  for (const t of NAV_TIERS) {
-    const a = exportNavMesh(build(t));
-    const b = exportNavMesh(build(t));
-    expect(a.length, t).toBeGreaterThan(0);
-    expect(Buffer.from(a).equals(Buffer.from(b)), t).toBe(true);
-  }
-}, 120_000);
+  const a = exportNavMesh(car());
+  const b = exportNavMesh(build('car'));
+  expect(a.length).toBeGreaterThan(0);
+  expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+}, 60_000);

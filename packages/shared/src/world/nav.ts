@@ -14,7 +14,10 @@ let ready: Promise<void> | undefined;
 
 /** Loads the recast WASM module once; await it before building, loading or querying a navmesh. */
 export function initNav(): Promise<void> {
-  ready ??= init();
+  ready ??= init().catch((e: unknown) => {
+    ready = undefined; // a failed load can be retried
+    throw e;
+  });
   return ready;
 }
 
@@ -115,24 +118,26 @@ export class NavRouter {
 
   /**
    * `tier`'s route from `from` to `door`. The door end is snapped to the mesh's closest point to the door, searched
-   * within carRoadMaxDoorDistance on every axis and then within 2× and 4× that; when the path stops short of the door
-   * (the door is off the mesh, or its closest point is on a part the tier cannot reach from `from`), the rest is a
-   * straight foot leg. Null when `from` is not on the tier's mesh or no part of the mesh is near the door.
+   * within carRoadMaxDoorDistance on every axis, the box doubling up to doorSearchMaxRadius; when the path stops short
+   * of the door (the door is off the mesh, or its closest point is on a part the tier cannot reach from `from`), the
+   * rest is a straight foot leg. Null when `from` is not on the tier's mesh, no part of the mesh is near the door, or
+   * the foot leg would be longer than maxFootLeg (a straight line that long would cut through the city).
    */
   routeToDoor(tier: VehicleTier, from: Vec3, door: Vec3): RouteToDoor | null {
     const tol = this.nav.reachTolerance;
     const paths = this.paths[tier];
     let target: Vec3 | null = null;
-    for (let k = 1; k <= 4 && !target; k *= 2) {
-      const r = this.nav.carRoadMaxDoorDistance * k;
+    for (let r = this.nav.carRoadMaxDoorDistance; r <= this.nav.doorSearchMaxRadius && !target; r *= 2) {
       target = paths.closestPoint(door, vec3(r, r, r));
     }
     if (!target) return null;
     const drive = paths.compute(from, target);
     if (!startsAt(drive, from, tol)) return null;
     const end = drive[drive.length - 1]!;
-    if (dist(end, door) <= tol) return { drive, footLeg: null, length: pathLength(drive) };
-    return { drive, footLeg: [copy(end), copy(door)], length: pathLength(drive) + dist(end, door) };
+    const leg = dist(end, door);
+    if (leg <= tol) return { drive, footLeg: null, length: pathLength(drive) };
+    if (leg > this.nav.maxFootLeg) return null;
+    return { drive, footLeg: [copy(end), copy(door)], length: pathLength(drive) + leg };
   }
 
   destroy(): void {

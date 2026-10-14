@@ -6,6 +6,7 @@ import type { VehicleTier } from '../../src/config';
 import { distance, vec3, type Vec3 } from '../../src/math/vec3';
 import { expandGreybox } from '../../src/world/greybox';
 import type { GreyboxSource, MapData } from '../../src/world/mapTypes';
+import { navConfig } from '../../src/config';
 import { initNav, NAV_TIERS, NavRouter, pathLength } from '../../src/world/nav';
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -22,9 +23,9 @@ const zone = (id: string) => {
 };
 
 let router: NavRouter;
+const bins = {} as Record<VehicleTier, Uint8Array>;
 beforeAll(async () => {
   await initNav();
-  const bins = {} as Record<VehicleTier, Uint8Array>;
   for (const t of NAV_TIERS) bins[t] = new Uint8Array(readFileSync(`${repo}map/nav/greybox-${t}.bin`));
   router = NavRouter.fromBinaries(bins);
 });
@@ -87,5 +88,19 @@ test('distance is Infinity for a point inside a building', () => {
   for (const t of NAV_TIERS) {
     expect(router.distance(t, inside, street), t).toBe(Infinity);
     expect(router.distance(t, street, inside), t).toBe(Infinity);
+  }
+});
+
+test('routeToDoor gives no route when the foot leg would be longer than maxFootLeg', () => {
+  const pump = map.gasStations.find((g) => g.id === 'town-gas')!.pumps[0]!;
+  const door = poi('town-poi-01');
+  const leg = router.routeToDoor('car', pump, door)!.footLeg!;
+  const short = NavRouter.fromBinaries(bins, { ...navConfig, maxFootLeg: distance(leg[0], leg[1]) - 0.5 });
+  try {
+    expect(short.routeToDoor('car', pump, door)).toBeNull();
+    // A door the car reaches needs no foot leg, so the cap does not apply.
+    expect(short.routeToDoor('car', pump, poi('town-poi-02'))).not.toBeNull();
+  } finally {
+    short.destroy();
   }
 });
