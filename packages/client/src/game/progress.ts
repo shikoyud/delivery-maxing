@@ -1,58 +1,109 @@
-import type { Totals, VehicleTier } from '@dm/shared';
+import { RIDE_TIERS, type RideTier, type SavedVehicle, type Totals, type VehicleSpot } from '@dm/shared';
 
-/** What persists between visits: lifetime totals and the capacity tier the player has bought. */
+/**
+ * What persists between visits: lifetime totals, the owned vehicles (where each is parked, its fuel) and the tier
+ * last ridden (capacity and offers follow it).
+ */
 export interface Progress {
   totals: Totals;
-  capacityTier: VehicleTier;
+  garage: SavedVehicle[];
+  lastRide: RideTier | null;
 }
 
-/** localStorage key. Bumped to v2 so SP1 records (no capacity tier) are never loaded. */
-export const PROGRESS_KEY = 'dm.progress.v2';
+/** localStorage key. v3 adds the garage; v2 records are read once for their totals (the capacity tier is dropped). */
+export const PROGRESS_KEY = 'dm.progress.v3';
+/** The previous key: only its totals carry over. */
+export const PROGRESS_KEY_V2 = 'dm.progress.v2';
 
 export interface ProgressStore {
   load(): Progress;
   save(p: Progress): void;
 }
 
-const TIERS: readonly VehicleTier[] = ['walk', 'skateboard', 'bicycle', 'motorbike', 'car'];
-
-const defaults = (): Progress => ({ totals: { points: 0, coins: 0, deliveries: 0 }, capacityTier: 'walk' });
-
 const count = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/** Field by field: a bad value falls back to its default, the rest of the record survives. */
-function parseProgress(raw: string | null): Progress {
-  const out = defaults();
-  if (raw === null) return out;
-  let v: unknown;
-  try {
-    v = JSON.parse(raw);
-  } catch {
-    return out;
-  }
-  if (!isRecord(v)) return out;
-  if (isRecord(v.totals)) {
-    out.totals = { points: count(v.totals.points), coins: count(v.totals.coins), deliveries: count(v.totals.deliveries) };
-  }
-  const tier = TIERS.find((t) => t === v.capacityTier);
-  if (tier) out.capacityTier = tier;
-  return out;
+const rideTier = (v: unknown): RideTier | null => RIDE_TIERS.find((t) => t === v) ?? null;
+
+function parseTotals(v: unknown): Totals {
+  const t = isRecord(v) ? v : {};
+  return { points: count(t.points), coins: count(t.coins), deliveries: count(t.deliveries) };
+}
+
+/** A parked spot; 'riding' with a position (a vehicle saved mid-ride) loads parked where it was. */
+function parseSpot(v: unknown): VehicleSpot | null {
+  if (!isRecord(v)) return null;
+  if (v.kind === 'carried') return { kind: 'carried' };
+  if (v.kind !== 'parked' && v.kind !== 'riding') return null;
+  const p = v.position;
+  if (!isRecord(p) || !finite(p.x) || !finite(p.y) || !finite(p.z) || !finite(v.heading)) return null;
+  return { kind: 'parked', position: { x: p.x, y: p.y, z: p.z }, heading: v.heading };
 }
 
 /**
- * Local progress (v2). Never throws: blocked storage (private windows, disabled site data), quota errors
- * and malformed data all give default progress (Review Focus 5).
+ * The saved vehicles. An entry for a known tier with a bad spot or fuel takes that tier's default; an unknown tier
+ * or a duplicate is dropped; a tier left out is not owned. Not a list at all: the default garage.
  */
-export function createProgressStore(storage: Pick<Storage, 'getItem' | 'setItem'> | null): ProgressStore {
+function parseGarage(v: unknown, defaults: SavedVehicle[]): SavedVehicle[] {
+  if (!Array.isArray(v)) return defaults;
+  const out: SavedVehicle[] = [];
+  for (const raw of v) {
+    if (!isRecord(raw)) continue;
+    const tier = rideTier(raw.tier);
+    if (!tier || out.some((o) => o.tier === tier)) continue;
+    const spot = parseSpot(raw.spot);
+    const fuel = finite(raw.fuel) ? Math.min(1, Math.max(0, raw.fuel)) : null;
+    if (spot && fuel !== null) out.push({ tier, spot, fuel });
+    else {
+      const d = defaults.find((x) => x.tier === tier);
+      if (d) out.push(d);
+    }
+  }
+  return RIDE_TIERS.flatMap((t) => out.filter((o) => o.tier === t));
+}
+
+function parseJson(raw: string | null): Record<string, unknown> | null {
+  if (raw === null) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    return isRecord(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Field by field: a bad value falls back to its default, the rest of the record survives. */
+function parseProgress(storage: Pick<Storage, 'getItem'>, defaults: () => SavedVehicle[]): Progress {
+  const raw = storage.getItem(PROGRESS_KEY);
+  if (raw !== null) {
+    // A v3 record exists: it alone counts (a corrupt one gives defaults; it never brings back v2 totals).
+    const v3 = parseJson(raw);
+    return { totals: parseTotals(v3?.totals), garage: parseGarage(v3?.garage, defaults()), lastRide: rideTier(v3?.lastRide) };
+  }
+  // First visit on v3 (no v3 key at all): a v2 record keeps its totals and starts with the default garage.
+  const v2 = parseJson(storage.getItem(PROGRESS_KEY_V2));
+  return { totals: parseTotals(v2?.totals), garage: defaults(), lastRide: null };
+}
+
+/**
+ * Local progress (v3). Never throws: blocked storage (private windows, disabled site data), quota errors and
+ * malformed data all give default progress (Review Focus 5). `defaults` is the garage a new player starts with
+ * (Game: defaultGarage(map)); it is called afresh for each load.
+ */
+export function createProgressStore(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null,
+  defaults: () => SavedVehicle[] = () => [],
+): ProgressStore {
+  const fresh = (): Progress => ({ totals: { points: 0, coins: 0, deliveries: 0 }, garage: defaults(), lastRide: null });
   return {
     load() {
-      if (!storage) return defaults();
+      if (!storage) return fresh();
       try {
-        return parseProgress(storage.getItem(PROGRESS_KEY));
+        return parseProgress(storage, defaults);
       } catch {
-        return defaults();
+        return fresh();
       }
     },
     save(p) {
@@ -60,7 +111,8 @@ export function createProgressStore(storage: Pick<Storage, 'getItem' | 'setItem'
       try {
         storage.setItem(PROGRESS_KEY, JSON.stringify({
           totals: { points: p.totals.points, coins: p.totals.coins, deliveries: p.totals.deliveries },
-          capacityTier: p.capacityTier,
+          garage: p.garage,
+          lastRide: p.lastRide,
         }));
       } catch {
         // Storage full or blocked: progress for this session stays in memory only.
@@ -76,4 +128,25 @@ export function browserStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Calls `save` when the page goes away (pagehide) or is hidden (visibilitychange to hidden), so closing the tab
+ * mid-ride keeps where the vehicle is and the fuel it burnt. Returns a disposer.
+ */
+export function saveWhenLeaving(
+  win: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>,
+  doc: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> & { readonly visibilityState: DocumentVisibilityState },
+  save: () => void,
+): () => void {
+  const onHide = (): void => save();
+  const onVisibility = (): void => {
+    if (doc.visibilityState === 'hidden') save();
+  };
+  win.addEventListener('pagehide', onHide);
+  doc.addEventListener('visibilitychange', onVisibility);
+  return () => {
+    win.removeEventListener('pagehide', onHide);
+    doc.removeEventListener('visibilitychange', onVisibility);
+  };
 }

@@ -9,11 +9,15 @@ import { BAND_LABEL, KIND_LABEL, loadText, pointsText, type HudModel, type HudOr
 export interface HudView {
   /** `colorIndex`: the stable colour index of an active order (R29d). */
   update(m: HudModel, colorIndex: (orderId: string) => number): void;
+  /** Per frame: turns the next-stop arrow for the camera's yaw (cheap: one style write when it moved a degree). */
+  aim?(cameraYaw: number): void;
 }
 
 /**
  * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals and load top
- * right; offer toasts bottom right with the accept key (or the refusal) on the top one; safe-zone and lockout chips top centre.
+ * right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the next-stop
+ * arrow (name and route distance) over the safe-zone and lockout chips; bottom left while riding the speed and, on the
+ * motorbike and car, the fuel gauge.
  */
 export class Hud implements HudView {
   private readonly orders: HTMLElement;
@@ -25,10 +29,21 @@ export class Hud implements HudView {
   private readonly safe: HTMLElement;
   private readonly lockout: HTMLElement;
   private readonly stamina: HTMLElement;
+  private readonly next: HTMLElement;
+  private readonly nextArrow: HTMLElement;
+  private readonly nextName: HTMLElement;
+  private readonly nextDistance: HTMLElement;
+  private readonly ride: HTMLElement;
+  private readonly speed: HTMLElement;
+  private readonly fuel: HTMLElement;
+  /** The next stop's world yaw (null: none), the camera yaw last aimed with, and the arrow angle last written. */
+  private bearing: number | null = null;
+  private cameraYaw = 0;
+  private arrowDeg: number | null = null;
 
   constructor(
     host: HTMLElement,
-    private readonly ui: Pick<ClientConfig['ui'], 'timerUrgentSeconds'>,
+    private readonly ui: Pick<ClientConfig['ui'], 'timerUrgentSeconds' | 'fuelLowPct'>,
     /** Label of the accept key ("Y"). */
     private readonly acceptKey: string,
   ) {
@@ -52,12 +67,42 @@ export class Hud implements HudView {
     const load = el('div', 'hud-load', totals);
     el('span', 'hud-load-label', load).textContent = 'Load';
     this.load = el('b', 'hud-load-value', load);
-    const chips = el('div', 'hud-chips', root);
+    const top = el('div', 'hud-top', root);
+    this.next = el('div', 'hud-next', top);
+    this.next.hidden = true;
+    this.nextArrow = el('div', 'hud-next-arrow', this.next);
+    this.nextArrow.setAttribute('aria-hidden', 'true');
+    const nextText = el('div', 'hud-next-text', this.next);
+    this.nextName = el('span', 'hud-next-name', nextText);
+    this.nextDistance = el('span', 'hud-next-distance', nextText);
+    const chips = el('div', 'hud-chips', top);
     this.safe = el('div', 'hud-chip hud-safe', chips);
     this.lockout = el('div', 'hud-chip hud-lockout', chips);
     this.safe.hidden = true;
     this.lockout.hidden = true;
     this.offers = el('div', 'hud-offers', root);
+    this.ride = el('div', 'hud-ride', root);
+    this.ride.hidden = true;
+    this.speed = el('div', 'hud-speed', this.ride);
+    this.fuel = el('div', 'hud-fuel', this.ride);
+    this.fuel.setAttribute('role', 'meter');
+    this.fuel.setAttribute('aria-label', 'Fuel');
+    this.fuel.hidden = true;
+    el('span', 'hud-fuel-label', this.fuel).textContent = 'Fuel';
+    el('div', 'hud-fuel-bar', this.fuel);
+  }
+
+  aim(cameraYaw: number): void {
+    this.cameraYaw = cameraYaw;
+    if (this.bearing === null) return;
+    // Screen angle, clockwise from up: a stop to the camera's left (bearing > yaw) points left.
+    let deg = Math.round((-(this.bearing - cameraYaw) * 180) / Math.PI) % 360;
+    if (deg > 180) deg -= 360;
+    if (deg <= -180) deg += 360;
+    deg += 0; // no "-0deg"
+    if (deg === this.arrowDeg) return;
+    this.arrowDeg = deg;
+    this.nextArrow.style.setProperty('--arrow', `${deg}deg`);
   }
 
   update(m: HudModel, colorIndex: (orderId: string) => number): void {
@@ -70,6 +115,28 @@ export class Hud implements HudView {
     if (m.safeZone !== null) setText(this.safe, `Safe zone · ${m.safeZone}`);
     this.lockout.hidden = m.lockoutLeft <= 0;
     if (m.lockoutLeft > 0) setText(this.lockout, `No new offers · ${Math.ceil(m.lockoutLeft)} s`);
+
+    const n = m.nextStop;
+    this.next.hidden = n === null;
+    this.bearing = n === null ? null : n.bearing;
+    if (n !== null) {
+      setText(this.nextName, n.name);
+      setText(this.nextDistance, `${n.distance} m`);
+      this.aim(this.cameraYaw);
+    }
+
+    const r = m.ride;
+    this.ride.hidden = r === null;
+    if (r !== null) {
+      setText(this.speed, `${Math.round(r.speed)} m/s`);
+      this.fuel.hidden = r.fuel === null;
+      if (r.fuel !== null) {
+        const fuelPct = Math.round(Math.min(1, Math.max(0, r.fuel)) * 100);
+        this.fuel.style.setProperty('--fuel', `${fuelPct}%`);
+        this.fuel.setAttribute('aria-valuenow', String(fuelPct));
+        this.fuel.classList.toggle('low', fuelPct <= this.ui.fuelLowPct);
+      }
+    }
 
     const pct = Math.round(Math.min(1, Math.max(0, m.stamina)) * 100);
     this.stamina.style.setProperty('--stamina', `${pct}%`);

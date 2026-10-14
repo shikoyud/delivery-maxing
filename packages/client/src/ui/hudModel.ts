@@ -9,9 +9,13 @@ import {
   type OrderKind,
   type OrderSystem,
   type Poi,
+  type RideTier,
+  type RouteToDoor,
   type Totals,
   type Vec3,
 } from '@dm/shared';
+import { nextCorner, yawTo } from '../game/routes';
+import type { GarageRow } from './phone/garageApp';
 
 /** A countdown: seconds left (0 once over) and whether the limit has passed. */
 export interface HudTimer {
@@ -28,8 +32,10 @@ export interface HudOrder {
   /** Name of the current target (pickup, then dropoff). */
   targetName: string;
   target: Vec3;
-  /** Straight-line metres to the current target, rounded. */
+  /** Route length (the current tier's) to the current target, rounded; straight-line when there is no route. */
   distance: number;
+  /** The current tier's route to the current target (the Map app draws it), or null (no navmesh, unreachable). */
+  route: RouteToDoor | null;
   /** Food being prepared at the pickup: counts down to ready. Null before arrival and after pickup. */
   prep: HudTimer | null;
   /** Hot (food) or par (package) time; null before pickup (timers start at pickup, spec §3.2). */
@@ -64,6 +70,33 @@ export interface HudLoad {
   maxPackageKg: number;
 }
 
+/** The active order to head for next (the HUD arrow). */
+export interface HudNextStop {
+  orderId: string;
+  /** The current target's name. */
+  name: string;
+  /** Route length, rounded. */
+  distance: number;
+  /** World yaw (0 faces -Z, positive turns left) to the route's next corner. */
+  bearing: number;
+}
+
+/** What the courier rides (bottom left: speed, and fuel on the motorbike and car). */
+export interface HudRide {
+  tier: RideTier;
+  /** m/s. */
+  speed: number;
+  /** Tank 0..1, or null for a ride without one. */
+  fuel: number | null;
+}
+
+/** Routing and riding inputs of the model (DeliveryLoop binds the tier, start and time into `route`). */
+export interface HudNav {
+  /** The current tier's route from the player to a target's door, or null; absent (tests): straight lines. */
+  route?(targetId: string, door: Vec3): RouteToDoor | null;
+  ride?: HudRide | null;
+}
+
 export interface HudModel {
   totals: Totals;
   load: HudLoad;
@@ -76,6 +109,15 @@ export interface HudModel {
   safeZone: string | null;
   /** Sprint stamina as a fraction 0..1 (the ring top left). */
   stamina: number;
+  /** The owned vehicles (the Garage app). */
+  garage: GarageRow[];
+  /**
+   * The active order whose current target has the shortest route for the current tier (ties: the oldest order);
+   * null without active orders.
+   */
+  nextStop: HudNextStop | null;
+  /** Null on foot. */
+  ride: HudRide | null;
 }
 
 /** "1 pt", "N pts". */
@@ -126,9 +168,20 @@ function countdown(limit: number, elapsed: number): HudTimer {
   return { secondsLeft: Math.max(0, limit - elapsed), late: elapsed > limit };
 }
 
-export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: number, safeZone: string | null, stamina = 1): HudModel {
+export function hudModel(
+  orders: OrderSystem,
+  map: MapData,
+  player: Vec3,
+  now: number,
+  safeZone: string | null,
+  stamina = 1,
+  garage: GarageRow[] = [],
+  nav: HudNav = {},
+): HudModel {
   const pois = poiIndex(map);
-  return {
+  // Widened so the narrowing to null at the declaration does not survive the assignments in the map below.
+  let next = null as { stop: HudNextStop; length: number; reachable: boolean } | null;
+  const model: HudModel = {
     totals: { ...orders.totals },
     load: {
       usedSlots: orders.usedSlots(),
@@ -141,6 +194,18 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
       const { order } = a;
       const targetPoi = pois.get(orders.currentTarget(a));
       const target = targetPoi.position;
+      const route = nav.route ? nav.route(targetPoi.id, target) : null;
+      const length = route ? route.length : Math.hypot(player.x - target.x, player.y - target.y, player.z - target.z);
+      const toward = route ? nextCorner(route, player) : target;
+      // Shortest route wins, a reachable stop beats an unreachable one, ties keep the earlier (older) order.
+      const better = next === null || (route !== null && !next.reachable) || ((route !== null) === next.reachable && length < next.length);
+      if (better) {
+        next = {
+          stop: { orderId: order.id, name: targetPoi.name, distance: Math.round(length), bearing: yawTo(player, toward) },
+          length,
+          reachable: route !== null,
+        };
+      }
       const elapsed = a.pickedUpAt === null ? null : now - a.pickedUpAt;
       const readyAt = a.pickedUpAt === null ? orders.prepReadyAt(a) : null;
       return {
@@ -151,7 +216,8 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
         prep: readyAt === null ? null : { secondsLeft: Math.max(0, readyAt - now), late: false },
         targetName: targetPoi.name,
         target: { ...target },
-        distance: Math.round(Math.hypot(player.x - target.x, player.y - target.y, player.z - target.z)),
+        distance: Math.round(length),
+        route,
         timer: elapsed === null ? null : countdown(order.timeLimit, elapsed),
         express: elapsed === null || order.modifier !== 'express' || order.expressLimit === null ? null : countdown(order.expressLimit, elapsed),
         weightKg: order.weightKg,
@@ -176,5 +242,10 @@ export function hudModel(orders: OrderSystem, map: MapData, player: Vec3, now: n
     }),
     safeZone,
     stamina,
+    garage,
+    nextStop: null,
+    ride: nav.ride ?? null,
   };
+  model.nextStop = next?.stop ?? null;
+  return model;
 }

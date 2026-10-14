@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { movementConfig } from '@dm/shared';
+import { movementConfig, RIDE_TIERS } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 
 describe('clientConfig', () => {
@@ -43,5 +43,19 @@ describe('clientConfig', () => {
 
   it('the courier has no parkour poses left', () => {
     for (const p of ['wallrunL', 'wallrunR', 'zip', 'grind']) expect(Object.keys(clientConfig.courier.poses)).not.toContain(p);
+  });
+
+  it('vehicle cameras sit further back and higher than on foot, growing with the tier', () => {
+    const c = clientConfig.camera.chase;
+    const d = RIDE_TIERS.map((t) => c.rides[t].distance);
+    expect(d[0]).toBeGreaterThan(c.distance);
+    expect([...d].sort((a, b) => a - b)).toEqual(d);
+    for (const t of RIDE_TIERS) expect(c.rides[t].height).toBeGreaterThan(c.height);
+  });
+
+  it('ui: route drift and the low-fuel share come from config (final review 7)', () => {
+    expect(clientConfig.ui.routeDriftMeters).toBeGreaterThan(0);
+    expect(clientConfig.ui.fuelLowPct).toBeGreaterThan(0);
+    expect(clientConfig.ui.fuelLowPct).toBeLessThan(100);
   });
 });

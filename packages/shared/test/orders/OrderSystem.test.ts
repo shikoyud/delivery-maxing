@@ -279,6 +279,21 @@ describe('OrderSystem', () => {
     expect(sys.onSimEvents([{ kind: 'landed', fallHeight: max + 0.1 }])).toEqual([{ kind: 'fragileBroken', orderId: id, reason: 'fall' }]);
   });
 
+  test('a crashed event breaks a carried Fragile order once, not an order not yet picked up', () => {
+    const sys = makeSystem({ pois: packagePois([30]), cfg: cfgWith('package', 'fragile') });
+    sys.update(8, offerPlayer, nowhere);
+    const id = sys.offers[0]!.order.id;
+    sys.accept(id, 9);
+    // not carried yet: a crash does not break it
+    expect(sys.onSimEvents([{ kind: 'crashed', speed: 15 }])).toEqual([]);
+    expect(sys.active[0]!.fragileIntact).toBe(true);
+    sys.update(10, offerPlayer, zones('ps-30'));
+    expect(sys.onSimEvents([{ kind: 'crashed', speed: 15 }])).toEqual([{ kind: 'fragileBroken', orderId: id, reason: 'crash' }]);
+    expect(sys.onSimEvents([{ kind: 'crashed', speed: 20 }])).toEqual([]);
+    expect(sys.active).toHaveLength(1);
+    expect(sys.active[0]!.fragileIntact).toBe(false);
+  });
+
   test('generateOffer returning null just advances nextOfferAt', () => {
     const sys = makeSystem({ pois: [] });
     expect(sys.nextOfferAt).toBe(8);
@@ -368,5 +383,15 @@ describe('OrderSystem', () => {
     sys.update(10, offerPlayer, zones('df-ok'));
     expect(kinds(run(sys, 11, 8 + ordersConfig.spacing.reuseSeconds - 1))).not.toContain('offered');
     expect(kinds(run(sys, 8 + ordersConfig.spacing.reuseSeconds, 8 + ordersConfig.spacing.reuseSeconds + 20))).toContain('offered');
+  });
+});
+
+describe('spendCoins', () => {
+  test('spendCoins refuses more than the player has', () => {
+    const os = makeSystem({ totals: { points: 0, coins: 50, deliveries: 0 } });
+    expect(os.spendCoins(51)).toBe(false);
+    expect(os.totals.coins).toBe(50);
+    expect(os.spendCoins(30)).toBe(true);
+    expect(os.totals.coins).toBe(20);
   });
 });

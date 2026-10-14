@@ -255,12 +255,60 @@ kbd {
   font-size: 14px;
 }
 
-/* Safe-zone and lockout chips, top centre. */
-.hud-chips {
+/* Top centre: the next-stop arrow over the safe-zone and lockout chips. */
+.hud-top {
   position: absolute;
   left: 50%;
   top: 16px;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Next stop: an arrow turned toward the route's next corner (--arrow, set per frame), the stop and its distance. */
+.hud-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  background: rgba(22, 50, 58, 0.82);
+  color: var(--dm-paper);
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+  white-space: nowrap;
+}
+
+.hud-next[hidden] { display: none; }
+
+.hud-next-arrow {
+  width: 30px;
+  height: 30px;
+  transform: rotate(var(--arrow, 0deg));
+  background: var(--dm-teal);
+  clip-path: polygon(50% 0, 95% 85%, 50% 65%, 5% 85%);
+}
+
+.hud-next-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hud-next-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.hud-next-distance {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: #bfe3ea;
+}
+
+/* Safe-zone and lockout chips, under the next stop. */
+.hud-chips {
   display: flex;
   gap: 8px;
 }
@@ -278,6 +326,54 @@ kbd {
 .hud-chip[hidden] { display: none; }
 .hud-safe { background: rgba(31, 158, 147, 0.9); }
 .hud-lockout { background: rgba(242, 113, 102, 0.92); }
+
+/* Riding, bottom left: speed, and the fuel gauge on the motorbike and car (--fuel is the tank share). */
+.hud-ride {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 150px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(22, 50, 58, 0.82);
+  color: var(--dm-paper);
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+}
+
+.hud-ride[hidden],
+.hud-fuel[hidden] { display: none; }
+
+.hud-speed {
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-fuel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hud-fuel-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, #f2a33a var(--fuel, 100%), rgba(247, 243, 234, 0.18) 0);
+}
+
+.hud-fuel.low .hud-fuel-bar {
+  background:
+    linear-gradient(90deg, var(--dm-coral) var(--fuel, 100%), rgba(247, 243, 234, 0.18) 0);
+}
 
 /* Minimap, bottom right: a player-centred cut of the city (M opens the full Map app). */
 .minimap {
@@ -579,6 +675,8 @@ kbd {
 
 .phone-empty,
 .phone-note,
+.phone-garage-note,
+.phone-settings-note,
 .phone-stub-when {
   font-size: 13px;
   color: #557078;
@@ -597,6 +695,25 @@ kbd {
 .phone-wallet-row.points .phone-wallet-value { color: var(--dm-teal); }
 
 .phone-stub-title { margin: 8px 0 2px; font-size: 18px; }
+
+.phone-garage { display: flex; flex-direction: column; gap: 10px; }
+.phone-garage-name { color: var(--dm-ink); font-size: 14px; }
+
+.phone-fuel {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(22, 50, 58, 0.12);
+  overflow: hidden;
+}
+
+.phone-fuel-bar {
+  width: var(--fuel, 100%);
+  height: 100%;
+  background: #f2913d;
+}
+
+.phone-summon { background: var(--dm-teal); }
+.phone-respawn { background: var(--dm-coral); align-self: flex-start; }
 
 .phone-bindings {
   display: grid;

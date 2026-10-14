@@ -11,6 +11,10 @@ courier branding, spec §16) and uses its Idle, Walking, Running and Jump clips.
 
 Everything else in the SP1 greybox is built in code.
 
+SP4 adds no asset files: the skateboard, bicycle, motorbike and car, the two gas stations and the access-zone overlay
+are code-built placeholders (`packages/client/src/render/vehicles/`, `gasStationMeshes.ts`, `accessZoneMeshes.ts`)
+until the owner supplies models.
+
 ## Owner-licensed packs (not in git)
 
 | Folder | Asset | Author / store | License | Source |

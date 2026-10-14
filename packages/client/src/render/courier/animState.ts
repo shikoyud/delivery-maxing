@@ -1,4 +1,4 @@
-import { yawOf, type MoveMode, type PlayerState } from '@dm/shared';
+import { yawOf, type MoveMode, type PlayerState, type RideTier } from '@dm/shared';
 import type { CourierConfig, CourierPoseName } from '../../clientConfig';
 
 /** Clips of Robot Expressive the courier uses. */
@@ -9,6 +9,8 @@ export interface CourierAnim {
   clip: CourierClip;
   timeScale: number;
   pose: 'none' | CourierPoseName;
+  /** The courier is not drawn at all (inside the car). */
+  hidden?: true;
 }
 
 /** Modes where the courier moves on its own, not along its input: it faces its travel there (R14). */
@@ -19,7 +21,7 @@ const MANTLE_MIN_RUN = 1e-3;
 /**
  * The yaw the courier is drawn at (R14, spec §4 "the courier faces its direction of travel"). In a slide it is the yaw
  * of the horizontal velocity while that is faster than facingMinSpeed; a mantle faces along its own path (the velocity
- * is zeroed while it climbs). Otherwise, on the ground, on the board and in the air, it is state.heading, which already
+ * is zeroed while it climbs). Otherwise, on the ground, riding and in the air, it is state.heading, which already
  * follows the input.
  */
 export function displayYaw(state: PlayerState, cfg: CourierConfig): number {
@@ -43,13 +45,21 @@ function locomotion(speed: number, cfg: CourierConfig): Pick<CourierAnim, 'clip'
 
 const still = (pose: CourierAnim['pose']): CourierAnim => ({ clip: 'Idle', timeScale: 1, pose });
 
+/** How the courier rides each vehicle: standing on the skateboard deck, seated on the bikes, hidden inside the car. */
+const RIDE_ANIM: Record<RideTier, CourierAnim> = {
+  skateboard: still('board'),
+  bicycle: still('bike'),
+  motorbike: still('bike'),
+  car: { ...still('none'), hidden: true },
+};
+
 /**
- * The courier's animation for a sim state and horizontal speed (pure). Precedence: mantle, board, slide, air (fall
- * pose when dropping faster than fallSpeed), crouch, then ground locomotion.
+ * The courier's animation for a sim state and horizontal speed (pure). Precedence: riding (the ride's pose, in the
+ * air too), mantle, slide, air (fall pose when dropping faster than fallSpeed), crouch, then ground locomotion.
  */
 export function animFor(state: PlayerState, speed: number, cfg: CourierConfig): CourierAnim {
+  if (state.riding) return { ...RIDE_ANIM[state.riding] };
   if (state.mode === 'mantle') return { clip: 'Jump', timeScale: 1, pose: 'mantle' };
-  if (state.onBoard) return still('board');
   switch (state.mode) {
     case 'slide':
       return still('slide');

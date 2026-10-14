@@ -38,9 +38,26 @@ export function clampToEdge(pt: { x: number; y: number }, sizePx: number, margin
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
+/** Fill colour of the gas-station fuel icon (minimap and Map app). */
+export const FUEL_ICON_COLOR = '#f2a33a';
+
+/** A fuel-pump icon centred on (x, y), `size` px tall: an amber pump with a light window and a hose arm. */
+export function drawFuelIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const w = size * 0.6;
+  ctx.fillStyle = '#16323a'; // outline, so it reads on ground and buildings alike
+  ctx.fillRect(x - w / 2 - 1, y - size / 2 - 1, w + 2, size + 2);
+  ctx.fillStyle = FUEL_ICON_COLOR;
+  ctx.fillRect(x - w / 2, y - size / 2, w, size);
+  ctx.fillStyle = '#f7f3ea';
+  ctx.fillRect(x - w / 2 + 1.5, y - size / 2 + 1.5, w - 3, size * 0.3);
+  ctx.fillStyle = '#16323a';
+  ctx.fillRect(x + w / 2, y - size / 4, size * 0.2, 1.5);
+  ctx.fillRect(x + w / 2 + size * 0.2 - 1.5, y - size / 4, 1.5, size * 0.5);
+}
+
 /**
  * The always-on minimap, bottom right: a player-centred, north-up cut of the city. Buildings and hospital blocks are
- * boxes, hospitals a red cross, offer pickups hollow dots, each active order's current stop a dot in its waypoint
+ * boxes, hospitals a red cross, gas stations a fuel icon, offer pickups hollow dots, each active order's current stop a dot in its waypoint
  * colour (clamped to the edge when out of range). Without a 2D context (tests) it draws nothing.
  */
 export function createMinimap(
@@ -80,6 +97,11 @@ export function createMinimap(
         const arm = 7;
         ctx.fillRect(p.x - arm, p.y - arm / 3, arm * 2, (arm * 2) / 3);
         ctx.fillRect(p.x - arm / 3, p.y - arm, (arm * 2) / 3, arm * 2);
+      }
+
+      for (const g of map.gasStations) {
+        const p = clampToEdge(toMinimap(g.position, player, opts), opts.sizePx, 8);
+        if (!p.clamped) drawFuelIcon(ctx, p.x, p.y, 12); // in range only, like the hospitals
       }
 
       ctx.lineWidth = 2;

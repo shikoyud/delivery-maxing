@@ -26,7 +26,7 @@ export function acceptBlockedReason(result: AcceptResult): string {
  * Keeps `list`'s children in step with `items` by key: existing elements are updated in place (so a button under the
  * cursor is never replaced between mousedown and click), missing ones created, stale ones removed.
  */
-function syncList<T, V extends { el: HTMLElement }>(
+export function syncList<T, V extends { el: HTMLElement }>(
   list: HTMLElement,
   views: Map<string, V>,
   items: readonly T[],

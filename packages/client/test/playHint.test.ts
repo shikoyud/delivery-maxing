@@ -10,7 +10,7 @@ describe('play hint', () => {
     expect(hint).toMatch(/Mouse orbits the camera/);
     expect(hint).toMatch(/WASD move relative to the camera/);
     expect(hint).not.toMatch(/zip/i);
-    for (const key of ['Shift sprint', 'Space jump', 'C crouch', 'E interact', 'Q board', 'Tab phone', 'Y accept', 'F mount']) expect(hint).toContain(key);
+    for (const key of ['Shift sprint', 'Space jump', 'C crouch', 'E interact', 'Tab phone', 'Y accept', 'F mount']) expect(hint).toContain(key);
     expect(hint).toContain('Shift sprint (toggle)');
   });
 });

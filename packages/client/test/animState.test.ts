@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MoveMode, PlayerState, Vec3 } from '@dm/shared';
+import type { MoveMode, PlayerState, RideTier, Vec3 } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 import { animFor, displayYaw, easeYaw } from '../src/render/courier/animState';
 
@@ -7,11 +7,11 @@ const cfg = clientConfig.courier;
 
 /** A partial PlayerState: just the fields animFor reads. */
 function state(
-  over: Partial<{ mode: MoveMode; onBoard: boolean; crouched: boolean; vy: number; heading: number; v: Vec3; mantle: { from: Vec3; to: Vec3 } }> = {},
+  over: Partial<{ mode: MoveMode; riding: RideTier | null; crouched: boolean; vy: number; heading: number; v: Vec3; mantle: { from: Vec3; to: Vec3 } }> = {},
 ): PlayerState {
   return {
     mode: over.mode ?? 'ground',
-    onBoard: over.onBoard ?? false,
+    riding: over.riding ?? null,
     crouched: over.crouched ?? false,
     grounded: (over.mode ?? 'ground') === 'ground',
     velocity: over.v ?? { x: 0, y: over.vy ?? 0, z: 0 },
@@ -52,10 +52,9 @@ describe('animFor: locomotion clips', () => {
 });
 
 describe('animFor: poses', () => {
-  it('poses: slide, mantle, board, fall (air & vy < −2)', () => {
+  it('poses: slide, mantle, fall (air & vy < −2)', () => {
     expect(animFor(state({ mode: 'slide', crouched: true }), 9, cfg).pose).toBe('slide');
     expect(animFor(state({ mode: 'mantle' }), 2, cfg).pose).toBe('mantle');
-    expect(animFor(state({ onBoard: true }), 10, cfg).pose).toBe('board');
     expect(animFor(state({ mode: 'air', vy: -2.5 }), 3, cfg).pose).toBe('fall');
     expect(animFor(state({ mode: 'air', vy: -1.5 }), 3, cfg).pose).toBe('none');
   });
@@ -65,23 +64,37 @@ describe('animFor: poses', () => {
     expect(animFor(state({ crouched: true }), 2.5, cfg)).toMatchObject({ clip: 'Walking', pose: 'crouch' });
   });
 
-  it('slide and board hold a still clip under the pose', () => {
-    for (const s of [state({ mode: 'slide', crouched: true }), state({ onBoard: true })]) {
-      expect(animFor(s, 10, cfg).clip).toBe('Idle');
-    }
+  it('slide holds a still clip under the pose', () => {
+    expect(animFor(state({ mode: 'slide', crouched: true }), 10, cfg).clip).toBe('Idle');
   });
 
-  it('precedence: mantle over board, board over air, slide over crouch', () => {
-    expect(animFor(state({ mode: 'mantle', onBoard: true }), 2, cfg).pose).toBe('mantle');
-    expect(animFor(state({ mode: 'air', onBoard: true, vy: -5 }), 8, cfg).pose).toBe('board');
+  it('precedence: slide over crouch', () => {
     expect(animFor(state({ mode: 'slide', crouched: true }), 8, cfg).pose).toBe('slide');
   });
 
   it('every pose has a config entry, and no parkour pose is left', () => {
-    for (const p of ['slide', 'mantle', 'board', 'fall', 'crouch'] as const) {
+    for (const p of ['slide', 'mantle', 'board', 'bike', 'fall', 'crouch'] as const) {
       expect(cfg.poses[p], p).toBeDefined();
     }
-    expect(Object.keys(cfg.poses).sort()).toEqual(['board', 'crouch', 'fall', 'mantle', 'slide']);
+    expect(Object.keys(cfg.poses).sort()).toEqual(['bike', 'board', 'crouch', 'fall', 'mantle', 'slide']);
+  });
+});
+
+describe('animFor: riding', () => {
+  it('animFor: bicycle → bike pose, car → hidden, skateboard → board pose', () => {
+    expect(animFor(state({ riding: 'bicycle' }), 10, cfg)).toEqual({ clip: 'Idle', timeScale: 1, pose: 'bike' });
+    expect(animFor(state({ riding: 'motorbike' }), 20, cfg).pose).toBe('bike');
+    expect(animFor(state({ riding: 'skateboard' }), 8, cfg)).toEqual({ clip: 'Idle', timeScale: 1, pose: 'board' });
+    const car = animFor(state({ riding: 'car' }), 20, cfg);
+    expect(car.hidden).toBe(true);
+    // On foot and on the other rides the courier is drawn.
+    expect(animFor(state(), 0, cfg).hidden).toBeFalsy();
+    expect(animFor(state({ riding: 'bicycle' }), 0, cfg).hidden).toBeFalsy();
+  });
+
+  it('riding through the air keeps the ride pose (no Jump clip or fall pose on a vehicle)', () => {
+    expect(animFor(state({ riding: 'bicycle', mode: 'air', vy: -6 }), 10, cfg).pose).toBe('bike');
+    expect(animFor(state({ riding: 'skateboard', mode: 'air', vy: 3 }), 10, cfg)).toMatchObject({ clip: 'Idle', pose: 'board' });
   });
 });
 
@@ -106,10 +119,10 @@ describe('displayYaw (R14: the courier faces its direction of travel)', () => {
     expect(displayYaw(straightUp, cfg)).toBe(HALF_PI);
   });
 
-  it('ground and air keep the heading (the courier turns to its input)', () => {
+  it('ground, air and riding keep the heading (the courier turns to its input, or with the vehicle)', () => {
     expect(displayYaw(state({ heading: HALF_PI, v: plusZ(8) }), cfg)).toBe(HALF_PI);
     expect(displayYaw(state({ mode: 'air', heading: HALF_PI, v: plusZ(8) }), cfg)).toBe(HALF_PI);
-    expect(displayYaw(state({ onBoard: true, heading: HALF_PI, v: plusZ(8) }), cfg)).toBe(HALF_PI);
+    expect(displayYaw(state({ riding: 'car', heading: HALF_PI, v: plusZ(8) }), cfg)).toBe(HALF_PI);
   });
 });
 

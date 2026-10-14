@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { vehiclesConfig, type MoveMode, type PlayerState, type Vec3 } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
+import { riderLift } from '../src/render/vehicles/vehicleMeshes';
 import { CourierModel } from '../src/render/courier/CourierModel';
 
 const cfg = clientConfig.courier;
@@ -14,11 +15,10 @@ async function model(): Promise<CourierModel> {
   return new CourierModel(await new GLTFLoader().parseAsync(ab, ''), cfg);
 }
 
-function st(over: Partial<{ mode: MoveMode; heading: number; onBoard: boolean; crouched: boolean; vy: number; v: Vec3 }> = {}): PlayerState {
+function st(over: Partial<{ mode: MoveMode; heading: number; crouched: boolean; vy: number; v: Vec3 }> = {}): PlayerState {
   return {
     mode: over.mode ?? 'ground',
     heading: over.heading ?? 0,
-    onBoard: over.onBoard ?? false,
     crouched: over.crouched ?? false,
     velocity: over.v ?? { x: 0, y: over.vy ?? 0, z: 0 },
   } as unknown as PlayerState;
@@ -26,7 +26,7 @@ function st(over: Partial<{ mode: MoveMode; heading: number; onBoard: boolean; c
 
 const origin = { x: 0, y: 0, z: 0 };
 
-/** World box of the courier's visible meshes (skinning applied), packages and deck excluded. */
+/** World box of the courier's visible meshes (skinning applied), packages excluded. */
 function bodyBox(m: CourierModel): THREE.Box3 {
   m.root.updateMatrixWorld(true);
   return new THREE.Box3().setFromObject(m.figure, true);
@@ -151,7 +151,6 @@ describe('CourierModel', () => {
     ['run', {}, 8],
     ['slide', { mode: 'slide', crouched: true }, 9],
     ['mantle', { mode: 'mantle' }, 2],
-    ['board', { onBoard: true }, 10],
     ['fall', { mode: 'air', vy: -6 }, 6],
     ['crouch', { crouched: true }, 0],
     ['crouch-walk', { crouched: true }, 2.5],
@@ -171,23 +170,8 @@ describe('CourierModel', () => {
 
   it.each(POSED)('%s: no part of the figure goes below the surface it stands on', async (_label, over, speed) => {
     const m = await model();
-    const raise = over?.onBoard ? m.deckTop : 0;
     const low = Math.min(...boxesOver(m, st(over), speed).map((b) => b.min.y));
-    expect(low).toBeGreaterThanOrEqual(raise - 0.03);
-  });
-
-  it('board: both feet stand on the deck, inside its footprint', async () => {
-    const m = await model();
-    boxesOver(m, st({ onBoard: true }), 10);
-    const { length, width } = cfg.deck;
-    for (const side of ['L', 'R']) {
-      const foot = m.figure.getObjectByName(`Foot${side}_1`)!;
-      const b = new THREE.Box3().setFromObject(foot, true);
-      expect(b.min.y, side).toBeGreaterThanOrEqual(m.deckTop - 0.02);
-      expect(b.min.y, side).toBeLessThan(m.deckTop + 0.05); // standing on it, not floating
-      expect(Math.max(-b.min.x, b.max.x), side).toBeLessThanOrEqual(width / 2 + 0.03);
-      expect(Math.max(-b.min.z, b.max.z), side).toBeLessThanOrEqual(length / 2);
-    }
+    expect(low).toBeGreaterThanOrEqual(-0.03);
   });
 
   it('poses do not accumulate frame over frame', async () => {
@@ -209,7 +193,7 @@ describe('CourierModel', () => {
     expect(bodyBox(m).max.y).toBeLessThan(1.35);
   });
 
-  it('one box per carried package on its back; the deck only on the board', async () => {
+  it('one box per carried package on its back', async () => {
     const m = await model();
     m.snap();
     m.update(0, st(), origin, 0);
@@ -226,10 +210,22 @@ describe('CourierModel', () => {
     expect(p.min.y).toBeGreaterThan(0.4);
     m.setPackages(0);
     expect(m.packages.visible).toBe(false);
+  });
 
-    expect(m.deck.visible).toBe(false);
-    m.update(0.05, st({ onBoard: true }), origin, 10);
-    expect(m.deck.visible).toBe(true);
+  it('riding: hidden inside the car; on the skateboard it stands on the deck', async () => {
+    const m = await model();
+    const ride = (t: string): PlayerState => ({ ...st(), riding: t }) as unknown as PlayerState;
+    m.snap();
+    m.update(1 / 60, st(), origin, 0);
+    const onFoot = bodyBox(m).min.y;
+    m.snap();
+    m.update(1 / 60, ride('car'), origin, 10);
+    expect(m.root.visible).toBe(false);
+    m.snap();
+    m.update(1 / 60, ride('skateboard'), origin, 5);
+    expect(m.root.visible).toBe(true);
+    expect(m.debug().pose).toBe('board');
+    expect(bodyBox(m).min.y).toBeGreaterThan(onFoot + riderLift('skateboard') * 0.8);
   });
 
   it('hiding keeps every mesh in the shadow map', async () => {

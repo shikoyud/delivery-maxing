@@ -12,7 +12,9 @@
     "build": "pnpm --filter @dm/client build",
     "dev": "pnpm --filter @dm/client dev",
     "e2e": "pnpm --filter @dm/client e2e",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "map:build": "pnpm --filter @dm/tools map:build",
+    "map:check": "pnpm --filter @dm/tools map:check",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm map:check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

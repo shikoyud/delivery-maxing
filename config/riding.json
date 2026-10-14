@@ -1,0 +1,17 @@
+{
+  "rides": {
+    "skateboard": { "accel": 6, "brakeDecel": 12, "coastDecel": 1, "handbrakeDecel": 8, "reverseSpeed": 0, "turnRateLow": 2.5, "turnRateHigh": 2.0, "grip": 60, "handbrakeGrip": 20, "slopeGravityScale": 1,
+      "collider": { "shape": "upright", "radius": 0.35, "halfLength": 0, "height": 1.9 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": null },
+    "bicycle": { "accel": 5, "brakeDecel": 10, "coastDecel": 0.6, "handbrakeDecel": 8, "reverseSpeed": 0, "turnRateLow": 2.6, "turnRateHigh": 1.4, "grip": 50, "handbrakeGrip": 15, "slopeGravityScale": 0.6,
+      "collider": { "shape": "lengthwise", "radius": 0.4, "halfLength": 0.45, "height": 2.0 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": null },
+    "motorbike": { "accel": 9, "brakeDecel": 14, "coastDecel": 1.2, "handbrakeDecel": 10, "reverseSpeed": 0, "turnRateLow": 2.4, "turnRateHigh": 1.0, "grip": 40, "handbrakeGrip": 12, "slopeGravityScale": 0.3,
+      "collider": { "shape": "lengthwise", "radius": 0.5, "halfLength": 0.6, "height": 1.0 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": { "rangeMeters": 6000, "fullTankCoins": 40 } },
+    "car": { "accel": 8, "brakeDecel": 16, "coastDecel": 1.5, "handbrakeDecel": 12, "reverseSpeed": 6, "turnRateLow": 1.8, "turnRateHigh": 0.7, "grip": 30, "handbrakeGrip": 8, "slopeGravityScale": 0.25,
+      "collider": { "shape": "lengthwise", "radius": 0.95, "halfLength": 1.25, "height": 1.9 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": { "rangeMeters": 5000, "fullTankCoins": 80 } }
+  },
+  "access": { "walk": ["alley", "steepLane", "stairs", "path"], "skateboard": ["alley", "path"], "bicycle": ["alley", "steepLane", "path"], "motorbike": ["alley", "steepLane"], "car": [] },
+  "riding": { "mountRadius": 2.5, "mountReachHeight": 1.5, "stoppedSpeed": 0.5, "dismountMaxSpeed": 2, "dismountGap": 0.3, "emptyTankSpeed": 3, "backInputDot": -0.5 },
+  "refuel": { "pumpRadius": 3, "tankPerSecond": 0.25 },
+  "summon": { "minDistance": 100, "cooldownSeconds": 60, "minClearance": 3, "searchRadius": 60, "ringSamples": 16 },
+  "bays": { "spacing": 4 }
+}

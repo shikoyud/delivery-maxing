@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { PlayerState, Vec3 } from '@dm/shared';
+import type { PlayerState, RideTier, Vec3 } from '@dm/shared';
 import type { ChaseConfig, ClientConfig } from '../clientConfig';
 import { easeToward, fovForSpeed } from './cameraRig';
 
@@ -58,8 +58,20 @@ export function isLow(state: PlayerState): boolean {
   return state.crouched || state.mode === 'slide';
 }
 
-/** Pivot height above the feet: lower while crouched or sliding, so the boom fits under low ceilings. */
+/**
+ * The chase boom for a ride (spec §4 "Camera"): camera.chase with the ride's distance, height and pivotHeight from
+ * camera.chase.rides[tier]; on foot (null), camera.chase itself.
+ */
+export function chaseFor(chase: ChaseConfig, riding: RideTier | null): ChaseConfig {
+  return riding ? { ...chase, ...chase.rides[riding] } : chase;
+}
+
+/**
+ * Pivot height above the feet: the ride's pivotHeight while riding; on foot lower while crouched or sliding, so the
+ * boom fits under low ceilings.
+ */
 export function pivotHeightFor(state: PlayerState, chase: ChaseConfig): number {
+  if (state.riding) return chase.rides[state.riding].pivotHeight;
   return isLow(state) ? chase.crouchPivotHeight : chase.pivotHeight;
 }
 
@@ -150,6 +162,8 @@ export class ChaseCamera {
   /** Rise above the pivot as a share of the open-ground rise (below 1 under or just after a ceiling). */
   private riseShare = 1;
   private toCourier = 0;
+  /** Boom distance and height, eased (crouchEaseRate) toward the ride's or the on-foot ones on mount and dismount. */
+  private boom: { distance: number; height: number } | null = null;
   private readonly probe: WallProbe;
   private readonly courierRadius: () => number;
 
@@ -184,10 +198,14 @@ export class ChaseCamera {
     this.follow = null;
   }
 
-  update(frameDt: number, target: Vec3, yaw: number, pitch: number, speed: number): void {
-    const ch = this.cfg.chase;
+  /**
+   * One frame: `target` is the pivot (feet + pivotHeightFor), `riding` the ridden tier (its boom from
+   * camera.chase.rides, eased in on mount and out on dismount), null on foot.
+   */
+  update(frameDt: number, target: Vec3, yaw: number, pitch: number, speed: number, riding: RideTier | null = null): void {
     const dt = Math.max(0, frameDt);
     const snapping = this.follow === null;
+    const ch = this.easeBoom(chaseFor(this.cfg.chase, riding), dt, snapping);
     const pivot = this.wallShifted(target);
     const follow = snapping ? { ...pivot } : this.easeFollow(this.follow!, pivot, dt, ch);
     this.follow = follow;
@@ -212,6 +230,17 @@ export class ChaseCamera {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
+  }
+
+  /** `want` with its distance and height replaced by the eased boom (snapped to `want` on a snap). */
+  private easeBoom(want: ChaseConfig, dt: number, snap: boolean): ChaseConfig {
+    const r = this.cfg.crouchEaseRate;
+    const b = this.boom;
+    this.boom =
+      snap || !b
+        ? { distance: want.distance, height: want.height }
+        : { distance: easeToward(b.distance, want.distance, dt, r), height: easeToward(b.height, want.height, dt, r) };
+    return { ...want, ...this.boom };
   }
 
   /**

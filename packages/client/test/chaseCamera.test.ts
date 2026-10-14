@@ -6,6 +6,7 @@ import { fovForSpeed } from '../src/render/cameraRig';
 import {
   ChaseCamera,
   chaseCameraPose,
+  chaseFor,
   clampPivotHeight,
   headroom,
   isLow,
@@ -161,6 +162,20 @@ describe('pivot helpers', () => {
     expect(pivotHeightFor({ ...standing, crouched: true }, chase)).toBe(chase.crouchPivotHeight);
   });
 
+  it('pivotHeightFor uses camera.chase.rides[tier].pivotHeight while riding', () => {
+    for (const t of ['skateboard', 'bicycle', 'motorbike', 'car'] as const) {
+      expect(pivotHeightFor({ ...standing, riding: t } as PlayerState, chase), t).toBe(chase.rides[t].pivotHeight);
+    }
+    expect(pivotHeightFor({ ...standing, riding: null } as PlayerState, chase)).toBe(chase.pivotHeight);
+  });
+
+  it('chaseFor merges the ride\'s distance, height and pivot height over the on-foot boom', () => {
+    expect(chaseFor(chase, null)).toBe(chase);
+    const car = chaseFor(chase, 'car');
+    expect([car.distance, car.height, car.pivotHeight]).toEqual([chase.rides.car.distance, chase.rides.car.height, chase.rides.car.pivotHeight]);
+    expect(car.collisionRadius).toBe(chase.collisionRadius);
+  });
+
   it('clampPivotHeight keeps the collision ball under a low ceiling (pivot still easing down after a crouch)', () => {
     expect(clampPivotHeight(feet, 1.3, open, chase)).toBe(1.3);
     expect(clampPivotHeight(feet, 1.3, roofAt(feet.y + 1.4), chase)).toBeCloseTo(1.4 - R, 9);
@@ -275,6 +290,24 @@ describe('ChaseCamera', () => {
       expect(c.camera.position.x).toBeLessThanOrEqual(xOther - R + 1e-9);
       expect(c.camera.position.x).toBeGreaterThanOrEqual(xWall + R - 1e-9);
     });
+  });
+
+  it('chase camera distance while riding the car is camera.chase.rides.car.distance', () => {
+    const ride = chase.rides.car;
+    const c = make();
+    const target = pivot(feet, ride.pivotHeight);
+    c.update(1 / 60, target, 0, 0, 0, 'car');
+    // Yaw 0, level pitch: the camera sits rides.car.distance behind (+Z) and rides.car.height above the pivot.
+    expect(c.camera.position.z - feet.z).toBeCloseTo(ride.distance, 6);
+    expect(c.camera.position.y - target.y).toBeCloseTo(ride.height, 6);
+    expect(c.distance).toBeCloseTo(Math.hypot(ride.distance, ride.height), 6);
+    // Getting off eases the boom back to the on-foot one (no jump), and it settles there.
+    c.update(1 / 60, pivot(), 0, 0, 0, null);
+    const z = c.camera.position.z - feet.z;
+    expect(z).toBeLessThan(ride.distance);
+    expect(z).toBeGreaterThan(chase.distance);
+    for (let i = 0; i < 300; i++) c.update(1 / 60, pivot(), 0, 0, 0, null);
+    expect(c.camera.position.z - feet.z).toBeCloseTo(chase.distance, 4);
   });
 
   it('the first update places the camera at the pose (no sweep in from the origin)', () => {

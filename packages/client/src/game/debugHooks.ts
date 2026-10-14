@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, Totals, Vec3, VehicleTier } from '@dm/shared';
+import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, RideTier, Totals, Vec3, VehicleSpot, VehicleTier } from '@dm/shared';
+import type { HudNextStop } from '../ui/hudModel';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { PhoneApp } from '../ui/phone/Phone';
 import type { Game } from './Game';
@@ -9,7 +10,7 @@ export interface DebugApi {
   /** True once the first frame has been drawn. */
   readonly ready: boolean;
   readonly tick: number;
-  player(): { position: Vec3; velocity: Vec3; mode: MoveMode; onBoard: boolean; heading: number };
+  player(): { position: Vec3; velocity: Vec3; mode: MoveMode; riding: RideTier | null; heading: number };
   /** Moves the player into the air at `p`, optionally moving at velocity `v` (m/s). */
   teleport(p: Vec3, v?: Vec3): void;
   /** Places the player on the ground at `feet` and looks at `target`. */
@@ -30,10 +31,20 @@ export interface DebugApi {
   cancel(orderId: string): CancelResult;
   /** Delivery Points, Coins and deliveries so far. */
   totals(): Totals;
-  /** The carrier capacity tier in use (the dev panel's capacity preset until vehicles arrive in SP4). */
+  /** The carrier capacity tier in use: the ride, else the last ride, else walking. */
   capacityTier(): VehicleTier;
-  /** Switches the capacity tier as the dev panel does; false (with a warning popup) when the active orders don't fit. */
-  setCapacityTier(t: VehicleTier): boolean;
+  /** Sets the tier last ridden (capacity on foot follows it), as if the courier had just got off it. */
+  setLastRide(t: RideTier | null): void;
+  /** Parks `tier` next to the player (owning it first if need be) and mounts it; any current ride is left first. */
+  ride(tier: RideTier): void;
+  /** The owned vehicles: where each is, its world position and its tank (0..1). */
+  vehicles(): { tier: RideTier; spot: VehicleSpot['kind']; position: Vec3; fuel: number }[];
+  /** Sets the Coins held (saved). */
+  setCoins(n: number): void;
+  /** Sets an owned ride's tank (0..1; tests: a partial tank to refuel). */
+  setFuel(tier: RideTier, fuel: number): void;
+  /** The HUD's next stop and its route's points (driving leg, then the walk to the door), empty without one. */
+  route(): { nextStop: HudNextStop | null; points: Vec3[] };
   /**
    * Runs `ticks` simulation ticks synchronously, with the current input, and returns the player's horizontal speed
    * (m/s) after each one: long sim windows in tests without waiting on the headless frame rate.
@@ -82,7 +93,7 @@ export function installDebugHooks(game: Game): void {
     },
     player() {
       const s = game.sim.state;
-      return { position: { ...s.position }, velocity: { ...s.velocity }, mode: s.mode, onBoard: s.onBoard, heading: s.heading };
+      return { position: { ...s.position }, velocity: { ...s.velocity }, mode: s.mode, riding: s.riding, heading: s.heading };
     },
     teleport(p, v) {
       game.teleport(p, v);
@@ -106,7 +117,27 @@ export function installDebugHooks(game: Game): void {
     cancel: (id) => game.delivery.cancel(id),
     totals: () => ({ ...game.delivery.orders.totals }),
     capacityTier: () => game.delivery.capacityTier,
-    setCapacityTier: (t) => game.delivery.setCapacityTier(t),
+    setLastRide: (t) => {
+      game.sim.state.lastRide = t;
+    },
+    ride: (tier) => game.rideNow(tier),
+    vehicles: () =>
+      game.sim.garage.owned().map((tier) => ({
+        tier,
+        spot: game.sim.garage.spot(tier).kind,
+        position: { ...game.sim.garage.state(tier).position },
+        fuel: game.sim.garage.state(tier).fuel,
+      })),
+    setCoins: (n) => game.delivery.setCoins(n),
+    setFuel: (tier, fuel) => {
+      game.sim.garage.state(tier).fuel = Math.max(0, Math.min(1, fuel));
+    },
+    route() {
+      const m = game.delivery.model(game.time);
+      const order = m.nextStop ? m.orders.find((o) => o.id === m.nextStop?.orderId) : undefined;
+      const points = order?.route ? [...order.route.drive, ...(order.route.footLeg ?? [])] : [];
+      return { nextStop: m.nextStop ? { ...m.nextStop } : null, points: points.map((p) => ({ ...p })) };
+    },
     advance: (ticks) => game.advanceTicks(ticks),
     phoneOpen: () => game.delivery.phoneOpen,
     openPhone: (app) => game.delivery.openPhone(app),

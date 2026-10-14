@@ -130,7 +130,7 @@ Every value is a tuning value in config. Points are rounded to the nearest whole
 
 ## 4. Movement and vehicles
 
-**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). Movement is relative to the camera.
+**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). Movement is relative to the camera; on a vehicle, so is steering (W drives toward where the camera looks).
 
 All movement and vehicle code lives in the shared package and runs on the fixed **30 Hz** step on client and server; rendering interpolates between steps.
 
@@ -159,10 +159,11 @@ All movement and vehicle code lives in the shared package and runs on the fixed 
 | Price | Free | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) |
 
 - **Physics:** an arcade vehicle model in the shared package (kinematic, like the character controller), not Rapier dynamic-body cars, so server authority and client prediction stay simple. Each vehicle has acceleration, braking, turn rate, grip and slope behavior in config.
-- **Mount and dismount:** F next to an owned vehicle. A dismounted vehicle stays parked where it was left; other players can't use it.
+- **Mount and dismount:** F next to an owned vehicle. A dismounted vehicle stays parked where it was left; other players can't use it. The skateboard is the exception: it is carried when you get off (never parked), and F on foot puts it down and rides it.
 - **Summon:** from the phone's Garage, an owned vehicle more than 100 m away is moved to the nearest legal road spot next to the player. Cooldown 60 s.
 - **Speed caps:** each vehicle's top speed is its server-enforced cap (§10).
-- **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Only one vehicle of each tier is needed; a player may own several tiers and switch at any parked vehicle.
+- **Crashes:** hitting a wall above 10 m/s costs a carried Fragile bonus (§3.2). It does not knock the rider off until combat and collisions (SP7).
+- **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Only one vehicle of each tier is needed; a player may own several tiers and switch at any parked vehicle. Until the shop (SP6), all four vehicles are owned from the start, with dev-panel toggles to remove or re-add them.
 - **Models:** the skateboard, bicycle and motorbike are not in the art packs yet (placeholders until supplied); the car is chosen from the pack's cars.
 
 ### 4.3 Where each vehicle can go
@@ -193,9 +194,9 @@ The city is defined in **`2026-10-14-city-map-design.md`**: a 1.2 × 1.2 km West
 - **Building blocks:** the owner's Megatropolis and Tropical City packs, used at 1:1, listed in `map/catalog.json`. Missing types (post office, warehouse, school, courier vehicles, containers, cranes) render as placeholders until supplied.
 - **Layout data:** `map/city.layout.json` (lots, roads, connectors, POI doors), generated deterministically and then editable; swapping a model never moves a lot.
 - **Streaming and LOD (kept from SP2):** 100 m chunks; colliders paged around the player; render LOD rings (LOD0 near, simplified LOD1, placeholder boxes far) with radial fog; one merged mesh and one compound collider per block.
-- **Navmeshes:** generated at build time per vehicle class (foot, two-wheeler, car). A path counts only if it really reaches both ends (recast reports partial paths as success). Path distance is the navmesh straight-path length.
+- **Navmeshes:** generated at build time, one per tier (walk, skateboard, bicycle, motorbike, car). A path counts only if it really reaches both ends (recast reports partial paths as success). Path distance is the navmesh straight-path length.
 - **Debug view:** an overlay shows POI doors with their roles, catalog ids and distance bands, the chunk grid, physics-loaded chunks and thief states.
-- Falling into the water or out of bounds respawns the player at the nearest hospital. They keep their orders; Fragile bonuses are lost.
+- Falling into the water or out of bounds respawns the player at the nearest hospital. They keep their orders; Fragile bonuses are lost. A vehicle ridden out of bounds is towed to that hospital's vehicle bay.
 
 ## 6. Progression and economy
 
@@ -371,7 +372,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 | 1 | Movement + delivery loop | Done (PR #2) |
 | 2 | City map + POI system (2 × 2 km, Quaternius) | Built on branch `sp2/city-map-poi`; PR #3 was closed unmerged on 2026-10-14 because revision 2 replaces its map. Its streaming, LOD, navmesh, generator and perf tooling are reused from that branch in SP5. |
 | 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
-| 4 | **Vehicles** | Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
+| 4 | **Vehicles** | Built (PR #10). Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
 | 5 | **City v2** | The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs, 60 fps re-proved. |
 | 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps. |
 | 7 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation for players and vehicles, server-authoritative thieves, wallet sign-in, Postgres persistence, combat and collisions, anti-cheat, reconnects. |

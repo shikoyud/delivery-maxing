@@ -1,3 +1,4 @@
+import type { RideTier } from '@dm/shared';
 import clientJson from '../../../config/client.json';
 
 export interface ClientConfig {
@@ -48,6 +49,14 @@ export interface ClientConfig {
     waypointPulseHz: number;
     /** Below this many seconds left, an order timer (hot, par, Express) turns to its urgent colour. */
     timerUrgentSeconds: number;
+    /** How often the route line to the active waypoint is recomputed (s). */
+    routeRefreshSeconds: number;
+    /** Metres the player may drift from a cached route's start before it is recomputed early. */
+    routeDriftMeters: number;
+    /** Minimum gap between repeats of the same on-screen hint (s). */
+    hintCooldownSeconds: number;
+    /** The HUD fuel gauge turns to the warning colour at or below this tank share (%). */
+    fuelLowPct: number;
   };
 }
 
@@ -81,10 +90,12 @@ export interface ChaseConfig {
    * wall normal, so the boom has room and the courier stays in view.
    */
   wallPivotOffset: number;
+  /** Per-vehicle overrides of distance, height and pivotHeight while riding. */
+  rides: Record<RideTier, { distance: number; height: number; pivotHeight: number }>;
 }
 
 /** A procedural pose layered over the courier's clip (see render/courier). */
-export type CourierPoseName = 'slide' | 'mantle' | 'board' | 'fall' | 'crouch';
+export type CourierPoseName = 'slide' | 'mantle' | 'board' | 'bike' | 'fall' | 'crouch';
 
 /**
  * One procedural pose. Angles are degrees about the courier's own axes (+X right, +Y up, +Z back; the courier faces
@@ -124,13 +135,11 @@ export interface CourierConfig {
   airClip: number[];
   /** One box per carried package on the courier's back, in this many columns. */
   packages: { size: number; gap: number; columns: number };
-  /** The skateboard deck under the feet while on the board. */
-  deck: { length: number; width: number; thickness: number; wheelGap: number };
   poses: Record<CourierPoseName, CourierPose>;
 }
 
 export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
-  | 'interact' | 'board' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
+  | 'interact' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
 
 export const clientConfig: ClientConfig = clientJson;

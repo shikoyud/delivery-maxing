@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { vehiclesConfig, type PlayerState, type Vec3 } from '@dm/shared';
 import type { CourierConfig, CourierPoseName } from '../../clientConfig';
 import { palette } from '../palette';
+import { riderLift } from '../vehicles/vehicleMeshes';
 import { animFor, displayYaw, easeYaw, type CourierAnim, type CourierClip } from './animState';
 import type { CourierDebug, CourierView } from './CourierView';
 
@@ -67,10 +67,10 @@ function depth(o: THREE.Object3D): number {
  * convention. animFor picks a clip (cross-faded) and a procedural pose, which is layered over the clip as extra bone
  * rotations, a hip drop and a whole-body lean (blended over crossFade). The feet are separate IK bones in this rig, so
  * while a pose is on they are carried rigidly with the shins, and lifted back onto the floor if a pose swings one below
- * it. Packages ride on the back; a deck shows on the board.
+ * it. Packages ride on the back.
  *
  * Hierarchy: root (feet, eased displayYaw) → body (pose lean and drop; the frame pose angles are given in) → figure (glTF
- * scene, scaled, turned 180° because the file faces +Z), plus the packages (in body) and the deck (in root).
+ * scene, scaled, turned 180° because the file faces +Z), plus the packages (in body).
  */
 export class CourierModel implements CourierView {
   readonly root = new THREE.Group();
@@ -78,8 +78,6 @@ export class CourierModel implements CourierView {
   readonly figure: THREE.Object3D;
   /** One box per carried package. */
   readonly packages: THREE.InstancedMesh;
-  /** Skateboard deck and wheels, shown while on the board. */
-  readonly deck = new THREE.Group();
   private readonly body = new THREE.Group();
   private readonly mixer: THREE.AnimationMixer;
   private readonly actions: Record<CourierClip, THREE.AnimationAction>;
@@ -114,8 +112,6 @@ export class CourierModel implements CourierView {
   /** Torso bone → body frame at rest, inverted: carries the packages with the torso. */
   private readonly packagesRest = new THREE.Matrix4();
   private readonly materials = new Set<THREE.Material>();
-  /** Height of the deck top above the feet; the figure stands on it while on the board. */
-  readonly deckTop: number;
   private snapNext = true;
   private packageCount = 0;
 
@@ -223,8 +219,6 @@ export class CourierModel implements CourierView {
 
     this.packages = this.buildPackages();
     this.body.add(this.packages);
-    this.deckTop = this.buildDeck();
-    this.root.add(this.deck);
   }
 
   /**
@@ -278,11 +272,12 @@ export class CourierModel implements CourierView {
       const w = this.weights.get(p) ?? 0;
       this.weights.set(p, snap ? target : w < target ? Math.min(target, w + step) : Math.max(target, w - step));
     }
-    this.deck.visible = state.onBoard;
 
+    // Inside the car the courier is not drawn at all (nor its shadow); on the skateboard it stands on the deck.
+    this.root.visible = !anim.hidden;
     this.restore();
     this.mixer.update(Math.max(0, dt));
-    this.applyPose(state.onBoard ? this.deckTop : 0);
+    this.applyPose(state.riding ? riderLift(state.riding) : 0);
     this.followTorso();
   }
 
@@ -335,7 +330,7 @@ export class CourierModel implements CourierView {
     this.posedSaved = false;
   }
 
-  /** Layers the blended poses over the clip; `raise` lifts the whole body (onto the deck). */
+  /** Layers the blended poses over the clip; `raise` lifts the whole body (e.g. onto a skateboard deck). */
   private applyPose(raise: number): void {
     let drop = 0;
     let hipDrop = 0;
@@ -457,30 +452,5 @@ export class CourierModel implements CourierView {
     mesh.count = 0;
     mesh.visible = false;
     return mesh;
-  }
-
-  /** A deck on wheels along the courier's heading; returns the deck top height (the feet stand on it). */
-  private buildDeck(): number {
-    const { length, width, thickness, wheelGap } = this.cfg.deck;
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(width, thickness, length), new THREE.MeshLambertMaterial({ color: palette.coral }));
-    deck.position.y = wheelGap + thickness / 2;
-    const r = wheelGap / 2;
-    const wheels: THREE.BufferGeometry[] = [];
-    for (const x of [-1, 1]) {
-      for (const z of [-1, 1]) {
-        const w = new THREE.CylinderGeometry(r, r, r, 10).rotateZ(Math.PI / 2);
-        wheels.push(w.translate((x * (width - r)) / 2, r, z * (length / 2 - width / 2)));
-      }
-    }
-    const wheelMesh = new THREE.Mesh(mergeGeometries(wheels), new THREE.MeshLambertMaterial({ color: palette.wheel }));
-    for (const m of [deck, wheelMesh]) {
-      m.castShadow = true;
-      m.receiveShadow = false;
-      this.materials.add(m.material);
-      this.deck.add(m);
-    }
-    this.deck.name = 'courier-deck';
-    this.deck.visible = false;
-    return wheelGap + thickness;
   }
 }

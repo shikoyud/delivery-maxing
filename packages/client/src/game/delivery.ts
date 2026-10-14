@@ -1,26 +1,38 @@
 import type * as THREE from 'three';
 import {
   OrderSystem,
+  Refueller,
   emptyInput,
+  movementConfig,
   mulberry32,
   ordersConfig,
   playerZones,
-  streetDistance,
+  pumpAt,
+  ridingConfig,
   vehiclesConfig,
   type AcceptResult,
+  type AccessKind,
+  type ButtonState,
   type ActiveOrder,
   type Bonus,
   type CancelResult,
   type InputFrame,
   type MapData,
   type MoveMode,
+  type NavRouter,
   type OrderEvent,
+  type PathDistance,
   type PlayerZones,
+  type RefuelEvent,
+  type RideTier,
   type Rng,
   type SimEvent,
   type StatModifiers,
+  type SavedVehicle,
+  type SummonResult,
   type Totals,
   type Vec3,
+  type VehicleState,
   type VehicleTier,
 } from '@dm/shared';
 import type { ClientConfig } from '../clientConfig';
@@ -33,10 +45,12 @@ import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/
 import { createMinimap } from '../ui/minimap';
 import { createMapApp } from '../ui/phone/mapApp';
 import { MapProjection } from '../ui/phone/mapProjection';
+import { RIDE_NAME, type GarageRow } from '../ui/phone/garageApp';
 import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
 import { Popups, type PopupSink } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
 import type { ProgressStore } from './progress';
+import { RouteCache } from './routes';
 
 export interface DeliveryDeps {
   host: HTMLElement;
@@ -49,11 +63,23 @@ export interface DeliveryDeps {
   seed: number;
   /** Sim time (s) of the tick about to run, and the player's sim state. */
   now(): number;
-  player(): { position: Vec3; mode: MoveMode; heading?: number };
+  player(): { position: Vec3; mode: MoveMode; heading?: number; grounded?: boolean; lastGrounded?: Vec3 };
+  /**
+   * The courier's ride (Game: the sim state): the tier ridden and the one last ridden (capacity follows them), the
+   * speed (m/s), and what F would mount now on foot.
+   */
+  rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
+  /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
+  distance: PathDistance;
+  /**
+   * Door routes for the HUD arrow, the stops' distances and the Map app (Game: the NavRouter), cached for
+   * ui.routeRefreshSeconds. Absent (tests): straight lines.
+   */
+  router?: Pick<NavRouter, 'routeToDoor'>;
+  /** The rendered camera's world yaw, per frame (the next-stop arrow turns with it); 0 when absent. */
+  cameraYaw?(): number;
   /** Sprint stamina as a fraction 0..1 (the HUD ring); full when absent (tests). */
   stamina?(): number;
-  /** The carrier capacity tier the player has (saved progress). */
-  capacityTier: VehicleTier;
   /**
    * HUD, popups and the phone; default to the DOM ones on `host` (tests pass recorders). `phone` builds the phone
    * from the callbacks DeliveryLoop wires (accept, cancel, skip, closed) and its close keys.
@@ -61,6 +87,20 @@ export interface DeliveryDeps {
   ui?: { hud: HudView; popups: PopupSink; phone: (cb: PhoneCallbacks, closeCodes: string[]) => PhoneView };
   /** The phone opened (true) or closed (false): Game exits or re-requests the pointer lock. */
   phoneChanged?(open: boolean): void;
+  /**
+   * The owned vehicles (Game: the sim's garage): the Garage app's rows at sim time `now`, a summon at `now`
+   * (Garage.summon with findRoadSpot), and the Settings app's respawn (PlayerSim.respawnAtHospital). Absent (tests):
+   * no rows, and summon and respawn do nothing.
+   */
+  vehicles?: {
+    rows(now: number): GarageRow[];
+    summon(t: RideTier, now: number): SummonResult;
+    /** A ride's live state (Game: Garage.state): refuelling fills its tank. */
+    state(t: RideTier): VehicleState;
+    respawn(): SimEvent[];
+    /** The owned vehicles as saved (Game: Garage.snapshot: a ridden one parked where it is). */
+    snapshot(): SavedVehicle[];
+  };
 }
 
 const BONUS_LINE: Record<Bonus, string> = { hot: 'Still hot', par: 'Within par', express: 'Express on time', fragile: 'Fragile intact' };
@@ -79,19 +119,67 @@ const ACCEPT_REFUSED: Partial<Record<AcceptResult, string>> = {
   too_heavy: 'Too heavy for your ride',
 };
 
-const ZERO: Totals = { points: 0, coins: 0, deliveries: 0 };
+/** The popup for a refused summon ('ok' shows "{Tier} is here"). */
+const SUMMON_REFUSED: Record<Exclude<SummonResult, 'ok'>, string> = {
+  riding: "You're riding it",
+  carried: 'It travels with you',
+  tooClose: 'Already nearby',
+  cooldown: 'Summon cooling down',
+  noSpot: 'No road nearby',
+};
+
+/** accessBlocked hints: "{Tier}s can't {phrase}". */
+const ACCESS_PHRASE: Record<AccessKind, string> = {
+  alley: 'go down alleys',
+  steepLane: 'climb steep lanes',
+  stairs: 'take stairs',
+  path: 'use paths',
+};
+
+const MOUNT_REFUSED: Record<Extract<SimEvent, { kind: 'mountRefused' }>['reason'], string> = {
+  noRoom: 'No room to get off',
+  tooFast: 'Slow down to get off',
+  airborne: 'Land first',
+};
 
 /**
- * The delivery loop on the client (spec §3, §8): owns the OrderSystem, the capacity tier and saved progress, POI
- * markers, waypoint beams, the HUD and popups. Game calls beforeStep → sim.step → afterStep each tick with the same
- * sim time (`now()`), and draw each frame.
+ * The info hint a sim event shows (null for none): refused get-offs, a tow, an empty tank, and an access zone the
+ * ridden tier (`riding`) may not enter.
+ */
+export function simEventHint(e: SimEvent, riding: RideTier | null, map: MapData): string | null {
+  switch (e.kind) {
+    case 'mountRefused':
+      return MOUNT_REFUSED[e.reason];
+    case 'towed': {
+      const name = map.hospitals.find((h) => h.id === e.hospitalId)?.name ?? 'the hospital';
+      return `${RIDE_NAME[e.tier]} towed to ${name} bay`;
+    }
+    case 'fuelEmpty':
+      return 'Out of fuel';
+    case 'accessBlocked':
+      return riding ? `${RIDE_NAME[riding]}s can't ${ACCESS_PHRASE[e.zone]}` : null;
+    default:
+      return null;
+  }
+}
+
+const ZERO: Totals = { points: 0, coins: 0, deliveries: 0 };
+
+/** No POI zones: while riding nothing is picked up or handed over (every delivery ends on foot). */
+const NO_POIS: ReadonlySet<string> = new Set();
+
+/**
+ * The delivery loop on the client (spec §3, §8): owns the OrderSystem (its capacity follows the ride) and saved
+ * progress, POI markers, waypoint beams, the HUD and popups. Game calls beforeStep → sim.step → afterStep each tick
+ * with the same sim time (`now()`), and draw each frame.
  */
 export class DeliveryLoop {
   readonly poiMeshes: PoiMeshes;
   readonly waypoints: Waypoints;
   private readonly phone: PhoneView;
   private sys: OrderSystem;
-  private tier: VehicleTier;
+  /** Sim time from which each get-off hint may show again (ui.hintCooldownSeconds). */
+  private readonly hintAt = new Map<string, number>();
   private readonly rng: Rng;
   private readonly hud: HudView;
   private readonly popups: PopupSink;
@@ -100,10 +188,15 @@ export class DeliveryLoop {
   private nextHudAt = 0;
   private readonly colors = new SlotColorAssigner();
   private readonly colorIndex = (id: string): number => this.colors.indexOf(id);
+  private readonly routes: RouteCache | null;
+  /** E as the player pressed it this tick (released while the phone is open). */
+  private interact: ButtonState = { held: false, pressed: false };
+  /** One refuelling session per ridden vehicle: replaced (its session settled) when the ride changes. */
+  private refueller = new Refueller();
+  private refuelTier: RideTier | null = null;
 
   constructor(private readonly d: DeliveryDeps) {
     this.rng = mulberry32(d.seed);
-    this.tier = d.capacityTier;
     this.sys = this.makeSystem(d.progress.load().totals);
     this.poiMeshes = buildPoiMeshes(d.map, ordersConfig.zones.poiRadius);
     this.waypoints = buildWaypoints(MAX_WAYPOINTS, d.cfg.ui.waypointPulseHz);
@@ -114,6 +207,8 @@ export class DeliveryLoop {
       accept: (id) => void this.accept(id),
       cancel: (id) => void this.cancel(id),
       skipLockout: () => this.skipLockout(),
+      summon: (t) => void this.summon(t),
+      respawn: () => this.respawn(),
       closed: () => {
         this.d.actions.releaseAll();
         this.d.phoneChanged?.(false);
@@ -130,17 +225,18 @@ export class DeliveryLoop {
     }
     this.minimap = d.ui ? null : createMinimap(d.host, d.map);
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
+    this.routes = d.router ? new RouteCache(d.router, d.cfg.ui.routeRefreshSeconds, d.cfg.ui.routeDriftMeters) : null;
   }
 
   private makeSystem(totals: Totals): OrderSystem {
     return new OrderSystem(
       {
         pois: this.d.map.pois,
-        distance: streetDistance,
+        distance: this.d.distance,
         rules: this.d.map.orderRules,
         cfg: ordersConfig,
         rng: this.rng,
-        capacity: vehiclesConfig[this.tier],
+        capacity: vehiclesConfig[this.capacityTier],
         totals,
       },
       this.d.now(),
@@ -152,8 +248,10 @@ export class DeliveryLoop {
     return this.sys;
   }
 
+  /** The capacity tier: the ride, else the last ride, else walking. */
   get capacityTier(): VehicleTier {
-    return this.tier;
+    const r = this.d.rider();
+    return r.riding ?? r.lastRide ?? 'walk';
   }
 
   /** Id of the hospital whose safe zone the player is in (as of the last tick), or null. */
@@ -198,32 +296,151 @@ export class DeliveryLoop {
   }
 
   /**
-   * The input the sim sees this tick. The phone key toggles the phone. Y accepts the top offer here, before
-   * afterStep's update, so an accept on an offer's expiry tick reports 'expired' (Review Focus 1). While the phone is
-   * open Y is ignored and only the look passes (the Orders app's buttons accept, between ticks at `now()`).
+   * The input the sim sees this tick. The phone key toggles the phone and M opens the Map app, but while riding faster
+   * than ridingConfig.riding.stoppedSpeed they only say "Stop to use the phone" (spec §8: notifications only while
+   * riding). Y accepts the top offer here, riding or not, before afterStep's update, so an accept on an offer's expiry
+   * tick reports 'expired' (Review Focus 1). While the phone is open Y is ignored and only the look passes (the Orders
+   * app's buttons accept, between ticks at `now()`), with the handbrake held on a vehicle so it stays put. F on foot
+   * next to a ride that can't hold the active orders is swallowed (the sim never mounts it) with the reason.
    */
   beforeStep(frame: InputFrame): InputFrame {
-    if (frame.phone.pressed) this.togglePhone();
-    else if (frame.map.pressed && !this.phone.isOpen) this.openPhone('map');
+    this.interact = { held: false, pressed: false };
+    if (frame.phone.pressed) {
+      if (this.phone.isOpen) this.closePhone();
+      else if (this.phoneAllowed()) this.openPhone();
+    } else if (frame.map.pressed && !this.phone.isOpen && this.phoneAllowed()) this.openPhone('map');
     if (!this.phone.isOpen) {
+      this.interact = frame.interact;
       if (frame.accept.pressed) {
         const top = this.sys.offers[0];
         if (top) this.accept(top.order.id);
       }
+      if (frame.mount.pressed && !this.canMount()) return { ...frame, mount: { held: false, pressed: false } };
       return frame;
     }
     const idle = emptyInput();
     idle.look = frame.look;
+    if (this.d.rider().riding !== null) idle.jump = { held: true, pressed: false }; // Space: the handbrake
     return idle;
   }
 
-  /** After sim.step: Fragile damage first, then zones and the order update (same tick), then popups. */
+  /** The phone opens on foot or stopped on a ride; moving faster, a hint (at most once per hintCooldownSeconds). */
+  private phoneAllowed(): boolean {
+    const r = this.d.rider();
+    if (r.riding === null || r.speed <= ridingConfig.riding.stoppedSpeed) return true;
+    this.hint('Stop to use the phone', this.d.now());
+    return false;
+  }
+
+  /** An info popup, at most once per ui.hintCooldownSeconds of sim time per text. */
+  private hint(text: string, now: number): void {
+    if (now < (this.hintAt.get(text) ?? -Infinity)) return;
+    this.hintAt.set(text, now + this.d.cfg.ui.hintCooldownSeconds);
+    this.popups.show(text, [], 'info');
+  }
+
+  /**
+   * Whether F may go to the sim: always while riding (dismount) or with nothing to mount; on foot, only when the
+   * candidate ride holds the active orders (else a warning says why).
+   */
+  private canMount(): boolean {
+    const r = this.d.rider();
+    if (r.riding !== null) return true;
+    const tier = r.mountCandidate();
+    if (tier === null) return true;
+    const cap = vehiclesConfig[tier];
+    if (this.sys.canSwitchCapacity(cap)) return true;
+    const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
+    this.popups.show(`Can't ride the ${TIER_LABEL[tier]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
+    return false;
+  }
+
+  /**
+   * After sim.step: capacity follows the ride, Fragile damage, then zones and the order update (same tick), then
+   * popups. While riding the POI zones count as empty (deliveries end on foot) and an active order's stop shows a
+   * get-off hint instead.
+   */
   afterStep(simEvents: SimEvent[], position: Vec3, now: number): void {
+    const ridden = this.d.rider().riding;
+    const riding = ridden !== null;
+    for (const e of simEvents) {
+      const text = simEventHint(e, ridden, this.d.map);
+      if (text) this.hint(text, now);
+    }
+    this.sys.setCapacity(vehiclesConfig[this.capacityTier]);
     const events = this.sys.onSimEvents(simEvents);
     const before = [...this.sys.active];
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);
-    events.push(...this.sys.update(now, position, this.zones));
+    if (riding) this.getOffHints(now);
+    this.refuel(position, now);
+    const zones = riding ? { poiIds: NO_POIS, safeZone: this.zones.safeZone } : this.zones;
+    events.push(...this.sys.update(now, this.offerOrigin(position), zones));
     for (const e of events) this.announce(e, before);
+  }
+
+  /**
+   * Refuelling (spec §4.5): E held, stopped, at a pump, on the motorbike or car. Each `refuelled` event is paid
+   * (OrderSystem.spendCoins, the Refueller sees the balance before it). When the ride changes or the courier gets off,
+   * the old vehicle's session is settled first, so a fill cut short is still charged and no session carries over. E
+   * at a pump on a ride without a tank says so; on foot E does nothing here.
+   */
+  private refuel(position: Vec3, now: number): void {
+    const v = this.d.vehicles;
+    if (!v) return;
+    const r = this.d.rider();
+    if (r.riding !== this.refuelTier) {
+      if (this.refuelTier !== null) {
+        const old = this.refuelTier;
+        this.pay(this.refueller.tick(v.state(old), ridingConfig.rides[old], { holding: false, atPump: false, stopped: true, coins: this.sys.totals.coins, dt: 0 }));
+      }
+      this.refueller = new Refueller();
+      this.refuelTier = r.riding;
+      this.save(); // mounted or dismounted: the vehicle's spot and the last ride are saved
+    }
+    if (r.riding === null) return;
+    const spec = ridingConfig.rides[r.riding];
+    const atPump = pumpAt(this.d.map, position, ridingConfig.refuel.pumpRadius) !== null;
+    if (!spec.fuel) {
+      if (this.interact.pressed && atPump) this.hint('This one runs on legs', now);
+      return;
+    }
+    this.pay(
+      this.refueller.tick(v.state(r.riding), spec, {
+        holding: this.interact.held,
+        atPump,
+        stopped: r.speed <= ridingConfig.riding.stoppedSpeed,
+        coins: this.sys.totals.coins,
+        dt: 1 / movementConfig.tickRate,
+      }),
+    );
+  }
+
+  private pay(events: RefuelEvent[]): void {
+    for (const e of events) {
+      if (e.kind !== 'refuelled') continue;
+      this.nextHudAt = 0;
+      if (e.cost <= 0) continue;
+      this.sys.spendCoins(e.cost);
+      this.save();
+      this.popups.show(`Refuelled · −${e.cost} coins`, [], 'info');
+    }
+  }
+
+  /**
+   * Where offers are measured from: the feet, or in the air (on foot or riding) the last grounded feet (walk paths
+   * start on the ground, so a jump at the offer roll would otherwise find no pickup in reach).
+   */
+  private offerOrigin(position: Vec3): Vec3 {
+    const p = this.d.player();
+    return p.grounded === false && p.lastGrounded ? p.lastGrounded : position;
+  }
+
+  /** Riding into an active order's stop: "Get off to pick up / hand over", each at most once per hintCooldownSeconds. */
+  private getOffHints(now: number): void {
+    for (const a of this.sys.active) {
+      if (!this.zones.poiIds.has(this.sys.currentTarget(a))) continue;
+      this.hint(this.sys.isCarried(a) ? 'Get off to hand over' : 'Get off to pick up', now);
+    }
   }
 
   accept(offerId: string): AcceptResult {
@@ -249,42 +466,89 @@ export class DeliveryLoop {
     return result;
   }
 
+  /**
+   * Garage app: summons `t` (spec §4.4) at sim time `now()`: "{Tier} is here", or the refusal (a cooldown says when
+   * it ends).
+   */
+  summon(t: RideTier): SummonResult {
+    const v = this.d.vehicles;
+    if (!v) return 'noSpot';
+    const now = this.d.now();
+    const result = v.summon(t, now);
+    if (result === 'ok') {
+      this.popups.show(`${RIDE_NAME[t]} is here`, [], 'info');
+      this.save();
+    }
+    else {
+      const readyIn = v.rows(now).find((r) => r.tier === t)?.readyIn ?? 0;
+      const lines = result === 'cooldown' ? [`Ready in ${Math.ceil(readyIn)} s`] : [];
+      this.popups.show(SUMMON_REFUSED[result], lines, 'warn');
+    }
+    this.nextHudAt = 0;
+    return result;
+  }
+
+  /**
+   * Settings app (spec §13 Vehicle stuck): respawn on foot at the nearest hospital. The orders are kept; the
+   * `respawned` event breaks a carried Fragile as an out-of-bounds respawn does. The phone closes on the hospital.
+   */
+  respawn(): void {
+    const v = this.d.vehicles;
+    if (!v) return;
+    const simEvents = v.respawn();
+    const before = [...this.sys.active];
+    for (const e of this.sys.onSimEvents(simEvents)) this.announce(e, before);
+    const r = simEvents.find((e): e is Extract<SimEvent, { kind: 'respawned' }> => e.kind === 'respawned');
+    const name = r ? this.d.map.hospitals.find((h) => h.id === r.hospitalId)?.name : undefined;
+    if (name) this.popups.show(`Respawned at ${name}`, [], 'info');
+    this.closePhone();
+    this.nextHudAt = 0;
+  }
+
+  /** Dev panel and debug API: sets the Coins held, saved. */
+  setCoins(n: number): void {
+    this.sys.totals = { ...this.sys.totals, coins: Math.max(0, n) };
+    this.save();
+    this.nextHudAt = 0;
+  }
+
   /** Dev / GAME-burn stub (price Pending): end the offer lockout now. */
   skipLockout(): void {
     this.sys.skipLockout();
     this.nextHudAt = 0;
   }
 
-  /** Switches the carrier capacity; refused (false, with a warning) while the active orders would not fit. */
-  setCapacityTier(t: VehicleTier): boolean {
-    const cap = vehiclesConfig[t];
-    if (!this.sys.canSwitchCapacity(cap)) {
-      const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
-      this.popups.show(`Can't switch to ${TIER_LABEL[t]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
-      return false;
-    }
-    this.sys.setCapacity(cap);
-    this.tier = t;
-    this.save();
-    this.nextHudAt = 0;
-    return true;
-  }
-
   /**
-   * Dev panel: back to a fresh start — zero totals, capacity tier 'walk', no offers or orders (the OrderSystem is
-   * rebuilt) — and saved.
+   * Dev panel: back to a fresh start — zero totals, no offers or orders (the OrderSystem is rebuilt; its capacity
+   * still follows the ride) — and saved.
    */
   resetProgress(): void {
-    this.tier = 'walk';
+    // Any refuel in progress ends with it: its accrued cost must not be charged to the fresh balance later.
+    this.refueller = new Refueller();
     this.sys = this.makeSystem(ZERO);
     this.save();
     this.nextHudAt = 0;
   }
 
+  /**
+   * The HUD model at sim time `now`. Routes are for the ridden tier (walk on foot) from the feet on the ground (in the
+   * air, the last grounded feet), through the RouteCache.
+   */
   model(now: number): HudModel {
     const safe = this.zones.safeZone;
     const name = safe === null ? null : (this.d.map.hospitals.find((h) => h.id === safe)?.name ?? safe);
-    return hudModel(this.sys, this.d.map, this.d.player().position, now, name, this.d.stamina?.() ?? 1);
+    const player = this.d.player();
+    const p = player.position;
+    const r = this.d.rider();
+    const tier: VehicleTier = r.riding ?? 'walk';
+    const from = player.grounded === false && player.lastGrounded ? player.lastGrounded : p;
+    const rows = this.d.vehicles?.rows(now) ?? [];
+    const routes = this.routes;
+    if (routes) routes.retain(new Set(this.sys.active.map((a) => this.sys.currentTarget(a))));
+    return hudModel(this.sys, this.d.map, p, now, name, this.d.stamina?.() ?? 1, rows, {
+      route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
+      ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
+    });
   }
 
   /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */
@@ -310,6 +574,8 @@ export class DeliveryLoop {
       this.sys.offers.map((o) => pois.target(o.order.pickupPoiId)),
     );
 
+    this.hud.aim?.(this.d.cameraYaw?.() ?? 0);
+
     if (clockSeconds < this.nextHudAt) return;
     this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
     const now = this.d.now();
@@ -318,8 +584,17 @@ export class DeliveryLoop {
     if (this.phone.isOpen) this.phone.render(m, this.d.player().position, this.d.player().heading ?? 0);
   }
 
-  private save(): void {
-    this.d.progress.save({ totals: { ...this.sys.totals }, capacityTier: this.tier });
+  /**
+   * Saves the totals, the garage (Game: Garage.snapshot) and the last ride. Also called by Game after the dev panel
+   * changes ownership.
+   */
+  save(): void {
+    const stored = this.d.progress.load();
+    this.d.progress.save({
+      totals: { ...this.sys.totals },
+      garage: this.d.vehicles ? this.d.vehicles.snapshot() : stored.garage,
+      lastRide: this.d.rider().lastRide,
+    });
   }
 
   /** `before`: the active orders before this tick's update, so a completed order's details are still known. */
@@ -350,7 +625,8 @@ export class DeliveryLoop {
         break;
       }
       case 'fragileBroken':
-        this.popups.show('Fragile package damaged', ['Bonus lost · the order still counts'], 'warn');
+        if (e.reason === 'crash') this.popups.show('Crashed · Fragile bonus lost', ['The order still counts'], 'warn');
+        else this.popups.show('Fragile package damaged', ['Bonus lost · the order still counts'], 'warn');
         break;
       case 'offered':
       case 'offerExpired':

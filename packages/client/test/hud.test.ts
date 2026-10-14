@@ -10,7 +10,7 @@ describe('Hud offer toasts', () => {
 
   beforeEach(() => {
     dom = installFakeDom();
-    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10 }, 'Y');
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
   });
   afterEach(() => dom.restore());
 
@@ -45,3 +45,65 @@ describe('Hud offer toasts', () => {
     expect(ring().className).toContain('low');
   });
 });
+
+describe('Hud next stop and ride', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  let hud: Hud;
+  const one = (cls: string) => dom.host.byClass(cls)[0]!;
+
+  beforeEach(() => {
+    dom = installFakeDom();
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
+  });
+  afterEach(() => dom.restore());
+
+  it('shows the next stop top centre: an arrow rotated by bearing − camera yaw, the name and the distance', () => {
+    hud.update(model(), () => 0);
+    expect(one('hud-next').hidden).toBe(true);
+    hud.update(model({ nextStop: { orderId: 'a', name: 'Noodle Bar', distance: 240, bearing: Math.PI / 2 } }), () => 0);
+    expect(one('hud-next').hidden).toBe(false);
+    expect(one('hud-next-name').textContent).toBe('Noodle Bar');
+    expect(one('hud-next-distance').textContent).toBe('240 m');
+    const arrow = (): string => one('hud-next-arrow').style.getPropertyValue('--arrow');
+    hud.aim(0); // the stop is 90° to the left of the camera: the arrow points left
+    expect(arrow()).toBe('-90deg');
+    hud.aim(Math.PI / 2); // facing it: straight up
+    expect(arrow()).toBe('0deg');
+    hud.aim(Math.PI); // the stop is 90° to the right
+    expect(arrow()).toBe('90deg');
+  });
+
+  it('HUD shows the fuel gauge on the car and not on the bicycle', () => {
+    hud.update(model(), () => 0);
+    expect(one('hud-ride').hidden).toBe(true);
+    hud.update(model({ ride: { tier: 'car', speed: 21.4, fuel: 0.35 } }), () => 0);
+    expect(one('hud-ride').hidden).toBe(false);
+    expect(one('hud-speed').textContent).toBe('21 m/s');
+    expect(one('hud-fuel').hidden).toBe(false);
+    expect(one('hud-fuel').getAttribute('aria-valuenow')).toBe('35');
+    expect(one('hud-fuel').style.getPropertyValue('--fuel')).toBe('35%');
+    expect(one('hud-fuel').className).not.toContain('low');
+    hud.update(model({ ride: { tier: 'car', speed: 3, fuel: 0.1 } }), () => 0);
+    expect(one('hud-fuel').className).toContain('low');
+    hud.update(model({ ride: { tier: 'bicycle', speed: 9.6, fuel: null } }), () => 0);
+    expect(one('hud-ride').hidden).toBe(false);
+    expect(one('hud-speed').textContent).toBe('10 m/s');
+    expect(one('hud-fuel').hidden).toBe(true);
+  });
+
+  it('the fuel gauge turns low at ui.fuelLowPct (final review 7)', () => {
+    dom.restore();
+    dom = installFakeDom();
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 40 }, 'Y');
+    hud.update(model({ ride: { tier: 'car', speed: 3, fuel: 0.35 } }), () => 0);
+    expect(one('hud-fuel').className).toContain('low');
+    hud.update(model({ ride: { tier: 'car', speed: 3, fuel: 0.41 } }), () => 0);
+    expect(one('hud-fuel').className).not.toContain('low');
+  });
+
+  it('the load chip keeps loadText', () => {
+    hud.update(model({ load: { usedSlots: 2, slots: 5, carriedKg: 25, maxPackageKg: 150 }, ride: { tier: 'car', speed: 0, fuel: 1 } }), () => 0);
+    expect(one('hud-load-value').textContent).toBe('2/5 · 25/150 kg');
+  });
+});
+

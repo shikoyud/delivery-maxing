@@ -4,6 +4,7 @@ import { movementConfig } from '../../src/config';
 import { emptyInput } from '../../src/input/inputFrame';
 import { facing } from '../../src/movement/ground';
 import { PlayerSim } from '../../src/movement/PlayerSim';
+import { Garage } from '../../src/vehicles/Garage';
 import { NO_MODS } from '../../src/movement/types';
 import { expandGreybox } from '../../src/world/greybox';
 import type { GreyboxSource, MapData } from '../../src/world/mapTypes';
@@ -50,7 +51,7 @@ describe('sprinting across the real map ground', () => {
       expect(hit, `path blocked at height ${h}`).toBeNull();
     }
 
-    const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x, y: 0, z }, yaw);
+    const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x, y: 0, z }, yaw, new Garage(physics, map, []));
     const start = sim.state.position;
     let stalls = 0;
     let minFeetY = Infinity;
@@ -83,7 +84,7 @@ describe('sprinting across the real map ground', () => {
   it('sprint-jumping across open ground lands on the slab without sinking into it', () => {
     const physics = createPhysicsWorld(rapier, map);
     const yaw = -Math.PI / 2;
-    const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x: -30, y: 0, z: 2 }, yaw);
+    const sim = new PlayerSim(physics, map, structuredClone(movementConfig), { x: -30, y: 0, z: 2 }, yaw, new Garage(physics, map, []));
     let minFeetY = Infinity;
     let landings = 0;
     for (let t = 0; t < SPRINT_TICKS; t++) {

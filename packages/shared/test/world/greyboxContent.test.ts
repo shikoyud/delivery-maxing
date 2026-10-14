@@ -1,11 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import greyboxJson from '../../../../map/greybox.json';
-import { movementConfig as cfg } from '../../src/config';
+import { movementConfig as cfg, ridingConfig } from '../../src/config';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import { facing } from '../../src/movement/ground';
+import { baySlot, zoneAt } from '../../src/world/access';
 import { streetDistance } from '../../src/world/distance';
 import { expandGreybox } from '../../src/world/greybox';
-import type { District, GreyboxSource, MapData, Rect, Solid } from '../../src/world/mapTypes';
+import type { AccessZone, District, GreyboxSource, MapData, Rect, Solid } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier, type PhysicsWorld, type Rapier } from '../../src/world/physicsWorld';
 
 const src = greyboxJson as unknown as GreyboxSource;
@@ -82,6 +83,8 @@ const byId = (id: string): Solid => {
   return s;
 };
 const top = (s: Solid): number => s.center.y + s.size.y / 2;
+/** Height of the SP4 test town terrace (top of town-terrace). */
+const TERRACE_TOP = 5;
 
 describe('greybox city: hospitals', () => {
   it('has 4 hospitals with distinct names and spawns on the ground', () => {
@@ -191,7 +194,8 @@ describe('greybox city: POIs', () => {
       expect(p.roles.length, p.id).toBeGreaterThanOrEqual(1);
       expect(p.name.length, p.id).toBeGreaterThan(0);
       expect(['door', 'counter'], p.id).toContain(p.kind);
-      expect(p.position.y, `${p.id} street level`).toBeLessThanOrEqual(1.2);
+      // Town terrace doors stand on the 5 m terrace; every other POI is at street level.
+      expect(p.position.y, `${p.id} street level`).toBeLessThanOrEqual(p.id.startsWith('town-') ? 5 : 1.2);
       expect(Math.abs(p.position.x)).toBeLessThanOrEqual(half);
       expect(Math.abs(p.position.z)).toBeLessThanOrEqual(half);
     }
@@ -246,7 +250,7 @@ describe('greybox city: schema v2', () => {
   it('keeps hand-placed solid ids unique and prefixed with their area', () => {
     const ids = handPlaced.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) expect(id).toMatch(/^(downtown|harbor|hillside|suburbs)-/);
+    for (const id of ids) expect(id).toMatch(/^(downtown|harbor|hillside|suburbs|town)-/);
   });
 
   it('keeps every hand-placed solid inside the island', () => {
@@ -264,14 +268,14 @@ describe('greybox city: layout', () => {
     }
   });
 
-  it('keeps every ramp walkable, and hillside ramp streets at <= 25 degrees', () => {
+  it('keeps every ramp walkable, and hillside and town ramp streets at <= 25 degrees', () => {
     for (const s of handPlaced.filter((x) => x.kind === 'ramp')) {
       const m = rotation(s);
       const tilt = (Math.acos(Math.min(1, Math.abs(m[1]![1]!))) * 180) / Math.PI;
       expect(tilt, s.id).toBeLessThan(cfg.controller.maxSlopeClimbDeg);
-      if (s.id.startsWith('hillside-')) expect(tilt, s.id).toBeLessThanOrEqual(25.001);
+      if (/^(hillside|town)-/.test(s.id)) expect(tilt, s.id).toBeLessThanOrEqual(25.001);
     }
-    expect(top(byId('hillside-plateau'))).toBe(20);
+    expect(top(byId('town-terrace'))).toBe(TERRACE_TOP);
   });
 });
 
@@ -324,5 +328,208 @@ describe('greybox city: walkability', () => {
     };
     for (const h of map.hospitals) expect(near(h.spawn), `${h.id} spawn reachable`).toBe(true);
     for (const p of map.pois) expect(near(p.position), `${p.id} reachable`).toBe(true);
+  });
+});
+
+describe('greybox city: SP4 test town and gas stations', () => {
+  const TERRACE = TERRACE_TOP;
+  const zoneById = (id: string): AccessZone => {
+    const z = map.accessZones.find((x) => x.id === id);
+    if (!z) throw new Error(`no access zone ${id}`);
+    return z;
+  };
+  const tiltRad = (s: Solid): number => Math.acos(Math.min(1, Math.abs(rotation(s)[1]![1]!)));
+  /** A ramp tilted about one horizontal axis: grade (rise / run), width across the slope and its top-surface ends. */
+  const ramp = (s: Solid): { grade: number; width: number; low: Vec3; high: Vec3 } => {
+    const r = s.rotationDeg ?? vec3(0, 0, 0);
+    expect(r.y, s.id).toBe(0);
+    expect(r.x === 0 || r.z === 0, `${s.id} tilts about one axis`).toBe(true);
+    const aboutZ = r.z !== 0;
+    const m = rotation(s);
+    const end = (sign: number): Vec3 => {
+      const l = aboutZ ? [(sign * s.size.x) / 2, s.size.y / 2, 0] : [0, s.size.y / 2, (sign * s.size.z) / 2];
+      const w = [0, 1, 2].map((i) => m[i]![0]! * l[0]! + m[i]![1]! * l[1]! + m[i]![2]! * l[2]!);
+      return vec3(s.center.x + w[0]!, s.center.y + w[1]!, s.center.z + w[2]!);
+    };
+    const [a, b] = [end(-1), end(1)];
+    return { grade: Math.tan(tiltRad(s)), width: aboutZ ? s.size.z : s.size.x, low: a.y < b.y ? a : b, high: a.y < b.y ? b : a };
+  };
+  const rectInside = (inner: Rect, outer: Rect): boolean =>
+    inner.minX >= outer.minX && inner.maxX <= outer.maxX && inner.minZ >= outer.minZ && inner.maxZ <= outer.maxZ;
+  const dist = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  const car = ridingConfig.rides.car.collider;
+  /** Ground rect a parked car (lengthwise capsule) covers at a slot. */
+  const slotRect = (p: Vec3, heading: number): Rect => {
+    const f = facing(heading);
+    const along = car.halfLength + car.radius;
+    const ex = Math.abs(f.x) * along + Math.abs(f.z) * car.radius;
+    const ez = Math.abs(f.z) * along + Math.abs(f.x) * car.radius;
+    return { minX: p.x - ex, maxX: p.x + ex, minZ: p.z - ez, maxZ: p.z + ez };
+  };
+  const stairs = (): Solid[] =>
+    map.solids.filter((s) => /^town-stair-\d\d$/.test(s.id)).sort((a, b) => top(a) - top(b));
+  const rampTop = (): Vec3 => ramp(byId('town-ramp')).high;
+
+  it('road ramp grade is 9 % ± 0.3 % and 12 m wide', () => {
+    const r = ramp(byId('town-ramp'));
+    expect(byId('town-ramp').kind).toBe('ramp');
+    expect(Math.abs(r.grade - 0.09)).toBeLessThanOrEqual(0.003);
+    expect(r.width).toBe(12);
+    expect(r.low.y).toBeCloseTo(0, 2);
+    expect(r.high.y).toBeCloseTo(TERRACE, 2);
+    expect(top(byId('town-terrace'))).toBe(TERRACE);
+  });
+
+  it('steep lane grade is 14 % ± 0.3 %, 6 m wide, and fully inside zone town-steep-lane', () => {
+    const lane = byId('town-steep-lane');
+    const r = ramp(lane);
+    expect(lane.kind).toBe('ramp');
+    expect(Math.abs(r.grade - 0.14)).toBeLessThanOrEqual(0.003);
+    expect(r.width).toBe(6);
+    expect(r.low.y).toBeCloseTo(0, 2);
+    expect(r.high.y).toBeCloseTo(TERRACE, 2);
+    const z = zoneById('town-steep-lane');
+    expect(z.kind).toBe('steepLane');
+    expect(rectInside(rectOf(lane), z.rect)).toBe(true);
+  });
+
+  it('stairs: 20 steps of 0.25 m rise, 0.35 m tread, inside zone town-stairs', () => {
+    const steps = stairs();
+    expect(steps.map((s) => s.id).sort()).toEqual(Array.from({ length: 20 }, (_, i) => `town-stair-${String(i + 1).padStart(2, '0')}`));
+    const z = zoneById('town-stairs');
+    expect(z.kind).toBe('stairs');
+    const runX = steps[0]!.center.x !== steps[1]!.center.x;
+    steps.forEach((s, i) => {
+      expect(s.kind, s.id).toBe('prop');
+      expect(s.rotationDeg, s.id).toBeUndefined();
+      expect(top(s), s.id).toBeCloseTo(0.25 * (i + 1), 6);
+      expect(s.center.y - s.size.y / 2, s.id).toBeCloseTo(0, 6);
+      expect(runX ? s.size.x : s.size.z, `${s.id} tread`).toBeCloseTo(0.35, 6);
+      expect(runX ? s.size.z : s.size.x, `${s.id} width`).toBe(4);
+      expect(rectInside(rectOf(s), z.rect), `${s.id} in zone`).toBe(true);
+      if (i > 0) {
+        const prev = steps[i - 1]!;
+        expect(Math.hypot(s.center.x - prev.center.x, s.center.z - prev.center.z), `${s.id} tread step`).toBeCloseTo(0.35, 6);
+      }
+    });
+    expect(top(steps[19]!)).toBe(TERRACE);
+  });
+
+  it('two gas stations, each with 2 pumps on open ground (no solid within 0.5 m of a pump point)', () => {
+    expect(map.gasStations.map((g) => [g.id, g.name])).toEqual([
+      ['town-gas', 'Hilltop Fuel Stop'],
+      ['harbor-gas', 'Bayline Fuel'],
+    ]);
+    // A 0.5 m radius column from just above the ground to 3 m up around each pump.
+    const probe = new rapier.Capsule(1, 0.5);
+    for (const g of map.gasStations) {
+      const canopy = byId(`${g.id}-canopy`);
+      expect(canopy.center.y - canopy.size.y / 2, g.id).toBeCloseTo(5, 6);
+      expect(top(canopy), g.id).toBeCloseTo(5.4, 6);
+      expect(g.pumps, g.id).toHaveLength(2);
+      for (const p of g.pumps) {
+        const label = `${g.id} pump (${p.x}, ${p.z})`;
+        expect(Math.hypot(p.x - g.position.x, p.z - g.position.z), label).toBeLessThanOrEqual(9);
+        const drop = dropTo(vec3(p.x, p.y + 0.25, p.z), 10);
+        expect(drop, label).not.toBeNull();
+        expect(drop! - 0.25, label).toBeLessThanOrEqual(0.01);
+        expect(physics.world.intersectionWithShape({ x: p.x, y: p.y + 1.55, z: p.z }, { x: 0, y: 0, z: 0, w: 1 }, probe), label).toBeNull();
+        expect(zoneAt(map, p), label).toBeNull();
+      }
+    }
+  });
+
+  it('every hospital bay slot 0..3 stands on ground and fits a car capsule', () => {
+    const shape = new rapier.Capsule(car.halfLength, car.radius);
+    for (const h of map.hospitals) {
+      for (let i = 0; i < 4; i++) {
+        const { position: p, heading } = baySlot(h, i);
+        const label = `${h.id} slot ${i}`;
+        const drop = dropTo(vec3(p.x, p.y + 0.25, p.z), 10);
+        expect(drop, label).not.toBeNull();
+        expect(drop! - 0.25, label).toBeLessThanOrEqual(0.01);
+        // Capsule axis (local +Y) turned 90° about (f.z, 0, -f.x) to lie along the heading.
+        const f = facing(heading);
+        const s = Math.SQRT1_2;
+        const rot = { x: f.z * s, y: 0, z: -f.x * s, w: s };
+        const at = { x: p.x, y: p.y + car.radius + 0.05, z: p.z };
+        expect(physics.world.intersectionWithShape(at, rot, shape), label).toBeNull();
+      }
+    }
+  });
+
+  it('bay slots 0..3 stand clear of the line a courier walks from the spawn (20 m along spawnYaw)', () => {
+    const clearance = car.radius + cfg.capsule.radius + 0.5;
+    for (const h of map.hospitals) {
+      const f = facing(h.spawnYaw);
+      for (let i = 0; i < 4; i++) {
+        const { position: p, heading } = baySlot(h, i);
+        const a = facing(heading);
+        // Samples along the car capsule's axis: their sideways distance from the walk line, where they lie along it.
+        for (let k = -1; k <= 1; k += 0.25) {
+          const q = vec3(p.x + a.x * car.halfLength * k, 0, p.z + a.z * car.halfLength * k);
+          const dx = q.x - h.spawn.x;
+          const dz = q.z - h.spawn.z;
+          const along = dx * f.x + dz * f.z;
+          if (along < -clearance || along > 20 + clearance) continue;
+          expect(Math.abs(dx * f.z - dz * f.x), `${h.id} slot ${i}`).toBeGreaterThan(clearance);
+        }
+      }
+    }
+  });
+
+  it('town POIs exist and town-poi-02 is within 30 m (straight line) of the ramp top', () => {
+    const poi = (id: string) => {
+      const p = map.pois.find((x) => x.id === id);
+      if (!p) throw new Error(`no POI ${id}`);
+      return p;
+    };
+    const p1 = poi('town-poi-01');
+    const p2 = poi('town-poi-02');
+    expect(p1.roles).toEqual(['dropoffFood']);
+    expect(p1.position.y).toBe(TERRACE);
+    const stairTop = stairs()[19]!.center;
+    const stairTopPoint = vec3(stairTop.x, TERRACE, stairTop.z);
+    // The stairs are its nearest way up: closer to the stair top than to the road ramp top.
+    expect(dist(p1.position, stairTopPoint)).toBeLessThan(dist(p1.position, rampTop()));
+    expect(dist(p1.position, stairTopPoint)).toBeLessThanOrEqual(15);
+    expect(p2.roles).toEqual(expect.arrayContaining(['dropoffFood', 'dropoffPackage']));
+    expect(p2.position.y).toBe(TERRACE);
+    expect(dist(p2.position, rampTop())).toBeLessThanOrEqual(30);
+  });
+
+  it('no access zone overlaps a hospital safe zone or a bay slot', () => {
+    for (const id of ['town-steep-lane', 'town-stairs', 'town-park-path', 'town-boardwalk']) zoneById(id);
+    expect(zoneById('town-park-path').kind).toBe('path');
+    expect(zoneById('town-boardwalk').kind).toBe('path');
+    for (const z of map.accessZones) {
+      for (const h of map.hospitals) {
+        const dx = Math.max(z.rect.minX - h.center.x, 0, h.center.x - z.rect.maxX);
+        const dz = Math.max(z.rect.minZ - h.center.z, 0, h.center.z - z.rect.maxZ);
+        expect(Math.hypot(dx, dz), `${z.id} vs ${h.id} safe zone`).toBeGreaterThan(h.safeRadius);
+        for (let i = 0; i < 4; i++) {
+          const slot = baySlot(h, i);
+          expect(overlaps(z.rect, slotRect(slot.position, slot.heading)), `${z.id} vs ${h.id} slot ${i}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('the park path and boardwalk end on car-legal ground at both ends', () => {
+    for (const id of ['town-park-path', 'town-boardwalk']) {
+      const z = zoneById(id);
+      const r = z.rect;
+      const alongX = r.maxX - r.minX > r.maxZ - r.minZ;
+      const [mx, mz] = [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
+      const ends = alongX ? [vec3(r.minX - 3, z.minY, mz), vec3(r.maxX + 3, z.minY, mz)] : [vec3(mx, z.minY, r.minZ - 3), vec3(mx, z.minY, r.maxZ + 3)];
+      for (const e of ends) {
+        const label = `${id} end (${e.x}, ${e.z})`;
+        expect(zoneAt(map, e), label).toBeNull();
+        const drop = dropTo(vec3(e.x, e.y + 0.25, e.z), 10);
+        expect(drop, label).not.toBeNull();
+        expect(drop! - 0.25, label).toBeLessThanOrEqual(0.01);
+        expect(solidAt(vec3(e.x, e.y + 1.7, e.z))?.id, `${label} headroom`).toBeUndefined();
+      }
+    }
   });
 });

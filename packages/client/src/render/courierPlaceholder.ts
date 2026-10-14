@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import type { MovementConfig } from '@dm/shared';
 import type { CourierConfig } from '../clientConfig';
 import { isLow } from './chaseCamera';
-import { displayYaw, easeYaw } from './courier/animState';
+import { animFor, displayYaw, easeYaw } from './courier/animState';
 import type { CourierView } from './courier/CourierView';
 import { palette } from './palette';
+import { riderLift } from './vehicles/vehicleMeshes';
 
 type Capsule = MovementConfig['capsule'];
 
@@ -56,7 +57,7 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
   return {
     root,
     front: visor,
-    update(dt, state, feet) {
+    update(dt, state, feet, speed) {
       root.position.set(feet.x, feet.y, feet.z);
       const yaw = displayYaw(state, courier);
       root.rotation.y = snapNext ? yaw : easeYaw(root.rotation.y, yaw, dt, courier.turnEaseRate);
@@ -64,6 +65,9 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
       const h = isLow(state) ? capsule.crouchHeight : capsule.height;
       const s = capsule.radius / r0;
       body.scale.set(s, h / h0, s);
+      // Riding: hidden inside the car, standing on the skateboard deck.
+      root.visible = !animFor(state, speed, courier).hidden;
+      body.position.y = state.riding ? riderLift(state.riding) : 0;
     },
     setHidden(hidden) {
       // Not drawn into the colour or depth buffers, but still into the shadow map (which uses its own depth material).

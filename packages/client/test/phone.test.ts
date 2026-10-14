@@ -22,6 +22,8 @@ describe('Phone', () => {
         cancel: (id) => void calls.push(`cancel ${id}`),
         skipLockout: () => void calls.push('skip'),
         closed: () => void calls.push('closed'),
+        summon: (t) => void calls.push(`summon ${t}`),
+        respawn: () => void calls.push('respawn'),
       },
       ['Escape', 'Tab'],
     );
@@ -146,22 +148,46 @@ describe('Phone', () => {
   });
 
   it('stub apps say when they arrive; settings lists the key bindings from config', () => {
+    expect(STUB_APPS).not.toHaveProperty('garage');
     expect(STUB_APPS).toMatchObject({
-      garage: { sp: 4 },
       shop: { sp: 6 },
       wardrobe: { sp: 6 },
       leaderboard: { sp: 7 },
       settings: { sp: 3 },
     });
-    phone.open('garage');
-    expect(view('garage').textContent).toContain('Garage');
-    expect(view('garage').textContent).toContain('Coming in SP4');
     expect(view('leaderboard').textContent).toContain('Coming in SP7');
     const settings = view('settings').textContent;
     expect(settings).toContain('Coming in SP3');
     expect(settings).toContain('Tab');
     expect(settings).toContain(clientConfig.input.bindings.accept[0]!.replace('Key', ''));
     expect(settings).toContain('Esc');
+  });
+
+  it('the Garage app renders the garage rows and Summon reaches the callback', () => {
+    phone.open('garage');
+    expect(view('garage').textContent).not.toContain('Coming in');
+    phone.render(
+      model({
+        garage: [
+          { tier: 'car', status: 'parked', distance: 240, fuel: 0.5, summon: 'ok', readyIn: 0 },
+          { tier: 'bicycle', status: 'parked', distance: 40, fuel: null, summon: 'tooClose', readyIn: 0 },
+        ],
+      }),
+    );
+    expect(view('garage').textContent).toContain('Parked · 240 m');
+    const summon = view('garage').findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'summon');
+    expect(summon.map((b) => b.disabled)).toEqual([false, true]);
+    summon[0]!.click();
+    summon[1]!.click();
+    expect(calls).toEqual(['summon car']);
+  });
+
+  it('Settings has "Respawn at nearest hospital", reaching the respawn callback', () => {
+    phone.open('settings');
+    const b = view('settings').findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'respawn')[0]!;
+    expect(b.textContent).toBe('Respawn at nearest hospital');
+    b.click();
+    expect(calls).toEqual(['respawn']);
   });
 
   it('setMapApp replaces the Map placeholder', () => {

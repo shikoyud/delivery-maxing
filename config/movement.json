@@ -7,6 +7,5 @@
   "jump": { "height": 1.2, "coyoteTime": 0.1, "bufferTime": 0.1 },
   "mantle": { "minHeight": 0.4, "maxHeight": 1.2, "reach": 0.8, "duration": 0.3 },
   "slide": { "minEntrySpeed": 6, "friction": 1.2, "endSpeed": 3.5, "slopeGravityScale": 1, "boostSpeed": 4, "boostCooldown": 2 },
-  "board": { "topSpeed": 12, "accel": 6, "brakeDecel": 12, "brakeMinSpeed": 1.0, "friction": 1, "turnRate": 2.5 },
   "fall": { "outOfBoundsY": -3, "boundsMargin": 20 }
 }

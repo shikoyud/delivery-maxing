@@ -1,7 +1,8 @@
 import type { MovementConfig } from '../config/types';
 import { vec3 } from '../math/vec3';
 import { nearestHospital } from '../world/hospitals';
-import type { MapData } from '../world/mapTypes';
+import type { Garage } from '../vehicles/Garage';
+import type { Hospital, MapData } from '../world/mapTypes';
 import type { PlayerBody } from './body';
 import { coyoteTicks } from './jump';
 import type { PlayerState, SimEvent } from './types';
@@ -19,27 +20,38 @@ export function enterAir(state: PlayerState, cfg: MovementConfig): void {
   state.airApexY = state.position.y;
 }
 
-/** Out-of-bounds respawn. Called after the move each tick. */
-export function applyTriggers(state: PlayerState, body: PlayerBody, map: MapData, cfg: MovementConfig): SimEvent[] {
+/**
+ * Out-of-bounds respawn. Called after the move each tick. Riding, the courier also gets off and the vehicle is towed
+ * to the same hospital's bay (Decision 6): `respawned` then `towed`.
+ */
+export function applyTriggers(state: PlayerState, body: PlayerBody, map: MapData, cfg: MovementConfig, garage: Garage): SimEvent[] {
   const feet = state.position;
   const limit = map.size / 2 + cfg.fall.boundsMargin;
   if (feet.y < cfg.fall.outOfBoundsY || Math.abs(feet.x) > limit || Math.abs(feet.z) > limit) {
-    return [respawn(state, body, map, cfg)];
+    const hospital = nearestHospital(map, state.lastGrounded);
+    const tier = state.riding;
+    if (tier) {
+      garage.tow(tier, hospital);
+      state.riding = null;
+      body.setEnabled(true);
+    }
+    const events: SimEvent[] = [respawn(state, body, cfg, hospital)];
+    if (tier) events.push({ kind: 'towed', tier, hospitalId: hospital.id });
+    return events;
   }
   return [];
 }
 
 /**
- * Teleports to the spawn of the hospital nearest the last grounded position, facing its spawnYaw (courier heading,
- * board heading and look yaw; the client turns its camera to match on the `respawned` event).
+ * Teleports to the spawn of `hospital` (the caller picks the one nearest the last grounded position), facing its
+ * spawnYaw (courier heading and look yaw; the client turns its camera to match on the `respawned` event).
  */
-function respawn(state: PlayerState, body: PlayerBody, map: MapData, cfg: MovementConfig): SimEvent {
-  const hospital = nearestHospital(map, state.lastGrounded);
+export function respawn(state: PlayerState, body: PlayerBody, cfg: MovementConfig, hospital: Hospital): SimEvent {
   body.setFeet(hospital.spawn);
   state.position = body.feet;
   state.velocity = vec3(0, 0, 0);
   enterAir(state, cfg);
   state.jumpPressAge = null;
-  state.heading = state.boardHeading = state.yaw = hospital.spawnYaw;
+  state.heading = state.yaw = hospital.spawnYaw;
   return { kind: 'respawned', hospitalId: hospital.id };
 }

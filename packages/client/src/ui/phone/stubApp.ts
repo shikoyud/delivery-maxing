@@ -3,11 +3,10 @@ import { el, keyLabel } from '../dom';
 
 type ClientBindings = Record<BindingName, string[]>;
 
-export type StubAppName = 'garage' | 'shop' | 'wardrobe' | 'leaderboard' | 'settings';
+export type StubAppName = 'shop' | 'wardrobe' | 'leaderboard' | 'settings';
 
 /** Apps that are placeholders this sub-project: their name and the sub-project that brings them. */
 export const STUB_APPS: Record<StubAppName, { title: string; sp: number }> = {
-  garage: { title: 'Garage', sp: 4 },
   shop: { title: 'Shop', sp: 6 },
   wardrobe: { title: 'Wardrobe', sp: 6 },
   leaderboard: { title: 'Leaderboard', sp: 7 },
@@ -23,7 +22,6 @@ const BINDING_LABEL: Record<BindingName, string> = {
   crouch: 'Crouch',
   sprint: 'Sprint (toggle)',
   interact: 'Interact',
-  board: 'Board',
   hit: 'Hit',
   phone: 'Phone',
   map: 'Map view',
@@ -41,11 +39,26 @@ export function buildComingSoon(root: HTMLElement, title: string, sp: number): H
   return wrap;
 }
 
-/** Builds a stub app into `root`; Settings also lists the key bindings from config/client.json. */
-export function buildStubApp(root: HTMLElement, app: StubAppName, bindings: ClientBindings = clientConfig.input.bindings): void {
+/**
+ * Builds a stub app into `root`. Settings also has "Respawn at nearest hospital" (spec §13 Vehicle stuck), calling
+ * `onRespawn`, and lists the key bindings from config/client.json.
+ */
+export function buildStubApp(
+  root: HTMLElement,
+  app: StubAppName,
+  onRespawn: () => void = () => undefined,
+  bindings: ClientBindings = clientConfig.input.bindings,
+): void {
   const { title, sp } = STUB_APPS[app];
   const wrap = buildComingSoon(root, title, sp);
   if (app !== 'settings') return;
+  el('h4', 'phone-section', wrap).textContent = 'Stuck?';
+  const respawn = el('button', 'phone-btn phone-respawn', wrap);
+  respawn.type = 'button';
+  respawn.dataset.action = 'respawn';
+  respawn.textContent = 'Respawn at nearest hospital';
+  respawn.addEventListener('click', onRespawn);
+  el('p', 'phone-settings-note', wrap).textContent = 'You go on foot; your vehicles stay where they are and orders are kept';
   el('h4', 'phone-section', wrap).textContent = 'Controls';
   const list = el('dl', 'phone-bindings', wrap);
   const row = (label: string, keys: string): void => {

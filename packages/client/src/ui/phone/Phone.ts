@@ -1,6 +1,7 @@
-import type { Vec3 } from '@dm/shared';
+import type { RideTier, Vec3 } from '@dm/shared';
 import { el, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
+import { createGarageApp } from './garageApp';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
 import { buildComingSoon, buildStubApp, type StubAppName } from './stubApp';
 import { renderWalletApp } from './walletApp';
@@ -24,6 +25,10 @@ const APP_TITLE: Record<PhoneApp, string> = {
 export interface PhoneCallbacks extends OrdersCallbacks {
   /** The phone was closed (Esc / Tab in the phone, or close()). */
   closed(): void;
+  /** Garage: Summon `t` to the road next to the courier. */
+  summon(t: RideTier): void;
+  /** Settings: respawn at the nearest hospital (spec §13 Vehicle stuck). */
+  respawn(): void;
 }
 
 /** What DeliveryLoop needs from the phone (tests pass a recorder). */
@@ -171,6 +176,14 @@ export class Phone implements PhoneView {
         return { el: root, render: (m) => renderOrdersApp(root, m, this.callbacks) };
       case 'wallet':
         return { el: root, render: (m) => renderWalletApp(root, m) };
+      case 'garage': {
+        const view = createGarageApp((t) => this.callbacks.summon(t));
+        root.appendChild(view.el);
+        return { el: root, render: (m, p, h) => view.render(m, p, h) };
+      }
+      case 'settings':
+        buildStubApp(root, app, () => this.callbacks.respawn());
+        return { el: root, render: () => undefined };
       case 'map':
         buildComingSoon(root, 'Map', 3); // placeholder until Task 11's setMapApp
         return { el: root, render: () => undefined };
