@@ -2,6 +2,7 @@ import { movementConfig } from '../../src/config';
 import { emptyInput, type InputFrame } from '../../src/input/inputFrame';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import { PlayerSim } from '../../src/movement/PlayerSim';
+import { Garage, type SavedVehicle } from '../../src/vehicles/Garage';
 import { NO_MODS, type PlayerState, type SimEvent, type StatModifiers } from '../../src/movement/types';
 import type { Hospital, MapData, Solid } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier } from '../../src/world/physicsWorld';
@@ -17,7 +18,7 @@ export interface Hold {
   yaw?: number;
 }
 
-export type Press = 'jump' | 'crouch' | 'interact' | 'board';
+export type Press = 'jump' | 'crouch' | 'interact' | 'mount';
 
 export interface Harness {
   sim: PlayerSim;
@@ -36,7 +37,14 @@ export interface SimOptions {
   spawn?: Vec3;
   yaw?: number;
   hospitals?: Hospital[];
+  /** Map size and floor side (m); default 200. */
+  size?: number;
+  /** The vehicles owned at the start (a function receives the map); default: the carried skateboard only. */
+  garage?: SavedVehicle[] | ((map: MapData) => SavedVehicle[]);
 }
+
+/** The default test garage: only the carried skateboard, so no parked vehicle stands in a movement test. */
+export const SKATEBOARD_ONLY: SavedVehicle[] = [{ tier: 'skateboard', spot: { kind: 'carried' }, fuel: 1 }];
 
 export const box = (id: string, center: Vec3, size: Vec3, extra?: Partial<Solid>): Solid => ({
   id,
@@ -65,7 +73,7 @@ function makeInput(hold: Hold, press: Press[], defaultYaw: number, state: Player
 }
 
 /**
- * Builds a sim on a test map. Unless `floor: false`, a 200 x 1 x 200 slab has its top at y = 0.
+ * Builds a sim on a test map. Unless `floor: false`, a size x 1 x size slab (200 by default) has its top at y = 0.
  * The sim spawns airborne; makeSim runs idle ticks (at most 3) until it reports grounded, so tests
  * start from a settled player when the spawn is on a surface. `time` keeps counting from those ticks.
  */
@@ -73,10 +81,11 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   const rapier = await initRapier();
   const spawn = opts.spawn ?? vec3(0, 0, 0);
   const yaw = opts.yaw ?? 0;
+  const size = opts.size ?? 200;
   const map: MapData = {
-    size: 200,
+    size,
     solids: [
-      ...(opts.floor === false ? [] : [box('floor', vec3(0, -0.5, 0), vec3(200, 1, 200), { kind: 'ground' })]),
+      ...(opts.floor === false ? [] : [box('floor', vec3(0, -0.5, 0), vec3(size, 1, size), { kind: 'ground' })]),
       ...(opts.solids ?? []),
     ],
     pois: [],
@@ -86,7 +95,8 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
     orderRules: { bands: { shortMax: 150, mediumMax: 350 }, foodDropoff: { min: 80, max: 400 }, packageDropoff: { min: 100, max: 650 }, maxPickupDistance: 250 },
   };
   const physics = createPhysicsWorld(rapier, map);
-  const sim = new PlayerSim(physics, map, movementConfig, spawn, yaw);
+  const saved = typeof opts.garage === 'function' ? opts.garage(map) : (opts.garage ?? SKATEBOARD_ONLY);
+  const sim = new PlayerSim(physics, map, movementConfig, spawn, yaw, new Garage(physics, map, saved));
   const h: Harness = {
     sim,
     map,

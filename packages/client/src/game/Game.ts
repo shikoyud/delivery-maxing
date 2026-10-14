@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import {
   FixedStepper,
+  Garage,
   PlayerSim,
   createPhysicsWorld,
+  defaultGarage,
   expandGreybox,
   horizontalLength,
   initRapier,
@@ -192,7 +194,9 @@ export class Game {
     // Hospitals are the only spawn points (spec rev. 2); a fresh session starts at the first one.
     const spawn = map.hospitals[0];
     if (!spawn) throw new Error('map has no hospitals');
-    const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw);
+    // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
+    const garage = new Garage(physics, map, defaultGarage(map));
+    const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
     const game = new Game(host, opts, map, sim, settings, devStore, model);
     if (opts.debug) installDebugHooks(game);
     return game;
@@ -312,7 +316,7 @@ export class Game {
       drawCalls: this.renderer.info().calls,
       speed: horizontalLength(s.velocity),
       mode: s.mode,
-      onBoard: s.onBoard,
+      riding: s.riding,
       sprinting: s.sprinting,
       tick: this.tick,
       position: s.position,

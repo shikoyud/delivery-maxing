@@ -110,7 +110,7 @@ describe('ActionState', () => {
     a.mouseDown(2);
     const f = a.sampleTick();
     expect(f.move).toEqual({ x: 0, y: 0 });
-    for (const b of [f.jump, f.crouch, f.sprint, f.interact, f.hit, f.board, f.phone, f.accept, f.mount]) expect(b).toEqual({ held: false, pressed: false });
+    for (const b of [f.jump, f.crouch, f.sprint, f.interact, f.hit, f.phone, f.accept, f.mount]) expect(b).toEqual({ held: false, pressed: false });
     expect(onUi).not.toHaveBeenCalled();
     a.keyDown('Backquote');
     a.keyDown('F3');

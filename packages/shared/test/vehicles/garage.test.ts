@@ -1,0 +1,101 @@
+import { beforeEach, describe, expect, test } from 'vitest';
+import { vec3, type Vec3 } from '../../src/math/vec3';
+import { baySlot } from '../../src/world/access';
+import type { MapData } from '../../src/world/mapTypes';
+import { createPhysicsWorld, initRapier, type PhysicsWorld } from '../../src/world/physicsWorld';
+import { defaultGarage, Garage } from '../../src/vehicles/Garage';
+import { emptyMap } from '../world/fixtures';
+
+let map: MapData;
+let physics: PhysicsWorld;
+
+beforeEach(async () => {
+  map = emptyMap();
+  physics = createPhysicsWorld(await initRapier(), map);
+});
+
+/** Whether a small probe ball at `p` (1 m above the feet) overlaps any enabled collider. */
+function solidAt(p: Vec3): boolean {
+  const { rapier, world } = physics;
+  return world.intersectionWithShape(vec3(p.x, p.y + 1, p.z), { x: 0, y: 0, z: 0, w: 1 }, new rapier.Ball(0.2)) !== null;
+}
+
+describe('Garage', () => {
+  test('defaultGarage owns all four: skateboard carried, others in bay slots 0-2 with full tanks', () => {
+    const saved = defaultGarage(map);
+    const h = map.hospitals[0]!;
+    expect(saved).toEqual([
+      { tier: 'skateboard', spot: { kind: 'carried' }, fuel: 1 },
+      { tier: 'bicycle', spot: { kind: 'parked', ...baySlot(h, 0) }, fuel: 1 },
+      { tier: 'motorbike', spot: { kind: 'parked', ...baySlot(h, 1) }, fuel: 1 },
+      { tier: 'car', spot: { kind: 'parked', ...baySlot(h, 2) }, fuel: 1 },
+    ]);
+    const g = new Garage(physics, map, saved);
+    expect(g.owned()).toEqual(['skateboard', 'bicycle', 'motorbike', 'car']);
+    expect(g.spot('skateboard')).toEqual({ kind: 'carried' });
+    expect(g.body('skateboard').collider.isEnabled()).toBe(false);
+    for (const [i, t] of (['bicycle', 'motorbike', 'car'] as const).entries()) {
+      const slot = baySlot(h, i);
+      expect(g.state(t).position).toEqual(slot.position);
+      expect(g.state(t).heading).toBe(slot.heading);
+      expect(g.state(t).fuel).toBe(1);
+      expect(g.body(t).collider.isEnabled()).toBe(true);
+      expect(solidAt(slot.position)).toBe(true);
+    }
+    expect(g.nearestParked(baySlot(h, 2).position, 2.5)).toBe('car');
+    expect(g.nearestParked(vec3(50, 0, 50), 2.5)).toBeNull();
+  });
+
+  test('setOwned(false) removes the collider; setOwned(true) parks at the first free slot', () => {
+    const h = map.hospitals[0]!;
+    const g = new Garage(physics, map, defaultGarage(map));
+    g.setOwned('bicycle', false, h);
+    expect(g.owned()).toEqual(['skateboard', 'motorbike', 'car']);
+    expect(g.body('bicycle').collider.isEnabled()).toBe(false);
+    expect(solidAt(baySlot(h, 0).position)).toBe(false);
+    expect(g.snapshot().map((v) => v.tier)).toEqual(['skateboard', 'motorbike', 'car']);
+
+    // Slot 0 is free again: the car, disowned and re-bought, parks there.
+    g.setOwned('car', false, h);
+    g.setOwned('car', true, h);
+    expect(g.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+    expect(g.body('car').collider.isEnabled()).toBe(true);
+    expect(g.state('car').fuel).toBe(1);
+    // Slots 0 and 1 are taken: the bicycle goes to slot 2.
+    g.setOwned('bicycle', true, h);
+    expect(g.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
+    // The skateboard is carried, never parked.
+    g.setOwned('skateboard', false, h);
+    expect(g.owned()).not.toContain('skateboard');
+    g.setOwned('skateboard', true, h);
+    expect(g.spot('skateboard')).toEqual({ kind: 'carried' });
+    expect(g.body('skateboard').collider.isEnabled()).toBe(false);
+  });
+
+  test('snapshot round-trips through the constructor', () => {
+    const saved = defaultGarage(map);
+    saved[2] = { tier: 'motorbike', spot: { kind: 'parked', position: vec3(30, 0, -12), heading: 1.1 }, fuel: 0.4 };
+    saved.splice(1, 1); // no bicycle
+    const g = new Garage(physics, map, saved);
+    const snap = g.snapshot();
+    expect(snap).toEqual(saved);
+    const again = new Garage(createPhysicsWorld(physics.rapier, map), map, snap);
+    expect(again.snapshot()).toEqual(saved);
+    expect(again.owned()).toEqual(['skateboard', 'motorbike', 'car']);
+    expect(again.state('motorbike').fuel).toBe(0.4);
+  });
+
+  test('tow parks the vehicle at the first free bay slot of the hospital, fuel unchanged', () => {
+    const h = map.hospitals[0]!;
+    const saved = defaultGarage(map);
+    saved[3] = { tier: 'car', spot: { kind: 'parked', position: vec3(60, 0, 60), heading: 2 }, fuel: 0.25 };
+    const g = new Garage(physics, map, saved);
+    g.tow('car', h);
+    expect(g.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
+    expect(g.state('car').fuel).toBe(0.25);
+    expect(g.state('car').velocity).toEqual(vec3(0, 0, 0));
+    expect(solidAt(vec3(60, 0, 60))).toBe(false);
+    g.tow('skateboard', h);
+    expect(g.spot('skateboard')).toEqual({ kind: 'carried' });
+  });
+});

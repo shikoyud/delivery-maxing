@@ -146,9 +146,14 @@ export class VehicleBody {
     return hit === null;
   }
 
-  /** A parked vehicle collides; a disabled one (e.g. the carried skateboard) does not. */
+  /**
+   * A parked vehicle collides; a disabled one (e.g. the carried skateboard) does not. Steps the world so scene queries
+   * (fitsAt, casts, other movers) see the change at once.
+   */
   setEnabled(on: boolean): void {
+    if (this.collider.isEnabled() === on) return;
     this.collider.setEnabled(on);
+    this.physics.world.step();
   }
 
   destroy(): void {

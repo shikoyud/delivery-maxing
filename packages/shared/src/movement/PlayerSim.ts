@@ -1,11 +1,14 @@
-import type { MovementConfig } from '../config/types';
+import { ordersConfig } from '../config';
+import type { MovementConfig, RideTier } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
-import { clampHorizontal, horizontalLength, vec3, type Vec3 } from '../math/vec3';
+import { add, clampHorizontal, horizontalLength, scale, vec3, type Vec3 } from '../math/vec3';
+import { restsCarried, type Garage } from '../vehicles/Garage';
+import { stepVehicle } from '../vehicles/stepVehicle';
+import type { VehicleState } from '../vehicles/types';
 import type { MapData } from '../world/mapTypes';
 import type { PhysicsWorld } from '../world/physicsWorld';
 import { PlayerBody, type MoveResult } from './body';
-import { alignBoardHeading, applyBoardVelocity, toggleBoard } from './board';
-import { applyAirVelocity, applyGroundVelocity, hasMoveInput, targetGroundSpeed, wishDirection, yawOf } from './ground';
+import { applyAirVelocity, applyGroundVelocity, facing, hasMoveInput, targetGroundSpeed, wishDirection, yawOf } from './ground';
 import { ageJumpBuffer, coyoteTicks, tryJump } from './jump';
 import { findLedge, startMantle, updateMantle } from './mantle';
 import { startSlide, updateSlide } from './slide';
@@ -15,10 +18,12 @@ import type { PlayerState, SimEvent, StatModifiers } from './types';
 
 /** Minimum blocked distance (m) before a wall or ceiling contact removes velocity. */
 const BLOCK_EPS = 1e-4;
+/** Below this horizontal speed (m/s) a velocity has no usable direction: the courier heading is used instead. */
+const DIRECTION_EPS = 1e-6;
 
 /**
- * Deterministic single-player movement simulation, stepped at cfg.tickRate.
- * `cfg` is held by reference: edits (e.g. from the dev panel) apply on the next step.
+ * Deterministic single-player movement simulation, stepped at cfg.tickRate: on foot, or riding a vehicle from the
+ * garage (F mounts and dismounts). `cfg` is held by reference: edits (e.g. from the dev panel) apply on the next step.
  */
 export class PlayerSim {
   readonly state: PlayerState;
@@ -27,13 +32,16 @@ export class PlayerSim {
   readonly physics: PhysicsWorld;
   readonly map: MapData;
   readonly cfg: MovementConfig;
+  /** The owned vehicles: parked ones, the carried skateboard and the one being ridden. */
+  readonly garage: Garage;
   /** Result of the most recent body move (null before the first step). */
   lastMove: MoveResult | null = null;
 
-  constructor(physics: PhysicsWorld, map: MapData, cfg: MovementConfig, spawn: Vec3, yaw = 0) {
+  constructor(physics: PhysicsWorld, map: MapData, cfg: MovementConfig, spawn: Vec3, yaw: number, garage: Garage) {
     this.physics = physics;
     this.map = map;
     this.cfg = cfg;
+    this.garage = garage;
     this.dt = 1 / cfg.tickRate;
     this.body = new PlayerBody(physics, cfg, spawn);
     this.state = {
@@ -43,8 +51,8 @@ export class PlayerSim {
       pitch: 0,
       heading: yaw,
       mode: 'air',
-      onBoard: false,
-      boardHeading: yaw,
+      riding: null,
+      lastRide: null,
       crouched: false,
       sprinting: false,
       stamina: cfg.stamina.max,
@@ -59,14 +67,45 @@ export class PlayerSim {
     };
   }
 
-  /** Places the player at `position` (airborne, no coyote jump, no buffered press). The heading is kept. */
+  /**
+   * Places the player at `position` (airborne, no coyote jump, no buffered press). The heading is kept. Riding, the
+   * vehicle is placed there with the courier on it.
+   */
   teleport(position: Vec3, velocity: Vec3 = vec3(0, 0, 0)): void {
-    this.body.setFeet(position);
     const s = this.state;
+    s.jumpPressAge = null;
+    if (s.riding) {
+      const v = this.garage.state(s.riding);
+      const body = this.garage.body(s.riding);
+      body.place(position, v.heading);
+      Object.assign(v, {
+        position: body.feet,
+        velocity: vec3(velocity.x, velocity.y, velocity.z),
+        grounded: false,
+        groundNormal: vec3(0, 1, 0),
+        airApexY: position.y,
+      });
+      this.mirrorVehicle(v);
+      s.airTicks = coyoteTicks(this.cfg) + 1;
+      return;
+    }
+    this.body.setFeet(position);
     s.position = this.body.feet;
     s.velocity = vec3(velocity.x, velocity.y, velocity.z);
-    s.jumpPressAge = null;
     enterAir(s, this.cfg);
+  }
+
+  /**
+   * What F would mount now: the nearest owned parked vehicle within riding.mountRadius, else the carried skateboard
+   * (when owned). Null while riding, airborne, crouched, sliding or mantling.
+   */
+  mountCandidate(): RideTier | null {
+    const s = this.state;
+    if (s.riding || !s.grounded || s.mode !== 'ground' || s.crouched) return null;
+    const g = this.garage;
+    const near = g.nearestParked(s.position, g.cfg.riding.mountRadius);
+    if (near) return near;
+    return g.owned().includes('skateboard') && g.spot('skateboard').kind === 'carried' ? 'skateboard' : null;
   }
 
   /**
@@ -77,22 +116,156 @@ export class PlayerSim {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   step(input: InputFrame, mods: StatModifiers, time: number): SimEvent[] {
     this.state.slideBoostCooldown = Math.max(0, this.state.slideBoostCooldown - this.dt);
-    const events = this.stepMovement(input, mods);
-    events.push(...applyTriggers(this.state, this.body, this.map, this.cfg));
-    this.state.velocity = clampHorizontal(this.state.velocity, this.cfg.speedCap);
-    if (this.state.onBoard) this.state.heading = this.state.boardHeading;
+    const events: SimEvent[] = [];
+    // F first: a mount rides from this very tick, a dismount walks from it.
+    if (input.mount.pressed) this.toggleMount(events);
+    events.push(...(this.state.riding ? this.stepRiding(input) : this.stepMovement(input, mods)));
+    events.push(...applyTriggers(this.state, this.body, this.map, this.cfg, this.garage));
+    // On foot the courier's speed cap applies; a vehicle is held to its own top speed by the drive model.
+    if (!this.state.riding) this.state.velocity = clampHorizontal(this.state.velocity, this.cfg.speedCap);
     return events;
+  }
+
+  /** F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding. */
+  private toggleMount(events: SimEvent[]): void {
+    if (this.state.riding) {
+      this.dismount(this.state.riding, events);
+      return;
+    }
+    const tier = this.mountCandidate();
+    if (tier) this.mount(tier, events);
+  }
+
+  /**
+   * Gets on `tier`. The courier's collider is disabled (the vehicle collides instead). A parked vehicle is boarded
+   * where it stands, at rest; the carried skateboard is put down at the feet, keeping the courier's horizontal velocity
+   * and pointing along it (along the courier heading when still). Sprint switches off.
+   */
+  private mount(tier: RideTier, events: SimEvent[]): void {
+    const s = this.state;
+    const g = this.garage;
+    const v = g.state(tier);
+    this.body.setEnabled(false);
+    if (g.spot(tier).kind === 'carried') {
+      const flat = vec3(s.velocity.x, 0, s.velocity.z);
+      const heading = horizontalLength(flat) > DIRECTION_EPS ? yawOf(flat) : s.heading;
+      const body = g.body(tier);
+      body.place(s.position, heading);
+      Object.assign(v, {
+        position: body.feet,
+        heading,
+        velocity: flat,
+        grounded: s.grounded,
+        groundNormal: s.groundNormal,
+        airApexY: s.position.y,
+      });
+    }
+    g.ride(tier);
+    s.riding = tier;
+    s.lastRide = tier;
+    s.sprinting = false;
+    s.mantle = null;
+    s.jumpPressAge = null;
+    this.mirrorVehicle(v);
+    events.push({ kind: 'mounted', tier });
+  }
+
+  /**
+   * Gets off `tier` at no more than riding.dismountMaxSpeed (else `mountRefused 'tooFast'`). The skateboard is picked
+   * up and the courier stands where it was; any other vehicle stays parked where it stopped and the courier steps
+   * off at the first free spot of dismountSpots (none free: `mountRefused 'noRoom'`, still riding).
+   */
+  private dismount(tier: RideTier, events: SimEvent[]): void {
+    const s = this.state;
+    const g = this.garage;
+    const v = g.state(tier);
+    if (horizontalLength(v.velocity) > g.cfg.riding.dismountMaxSpeed) {
+      events.push({ kind: 'mountRefused', reason: 'tooFast' });
+      return;
+    }
+    let feet: Vec3 | undefined;
+    if (restsCarried(tier)) feet = v.position;
+    else feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false));
+    if (!feet) {
+      events.push({ kind: 'mountRefused', reason: 'noRoom' });
+      return;
+    }
+    g.leave(tier);
+    s.riding = null;
+    this.body.setEnabled(true);
+    this.body.setFeet(feet);
+    s.position = this.body.feet;
+    s.velocity = vec3(0, 0, 0);
+    if (!v.grounded) enterAir(s, this.cfg);
+    events.push({ kind: 'dismounted', tier });
+  }
+
+  /**
+   * Feet spots beside a vehicle, in order: its left side, its right side (collider radius + capsule radius +
+   * riding.dismountGap from its axis), then behind it (the same gap past its rear).
+   */
+  private dismountSpots(tier: RideTier, v: VehicleState): Vec3[] {
+    const c = this.garage.cfg.rides[tier].collider;
+    const extra = this.cfg.capsule.radius + this.garage.cfg.riding.dismountGap;
+    const side = c.radius + extra;
+    const back = (c.shape === 'lengthwise' ? c.halfLength : 0) + c.radius + extra;
+    const f = facing(v.heading);
+    const left = vec3(f.z, 0, -f.x);
+    return [add(v.position, scale(left, side)), add(v.position, scale(left, -side)), add(v.position, scale(f, -back))];
+  }
+
+  /**
+   * One riding tick: the camera look follows the input, sprint stays off while stamina regenerates, the vehicle steps
+   * (stepVehicle) and the courier mirrors it.
+   */
+  private stepRiding(input: InputFrame): SimEvent[] {
+    const s = this.state;
+    const tier = s.riding as RideTier;
+    const g = this.garage;
+    s.yaw = input.look.yaw;
+    s.pitch = input.look.pitch;
+    s.sprinting = false;
+    s.stamina = Math.min(this.cfg.stamina.max, s.stamina + this.cfg.stamina.regenPerSecond * this.dt);
+    s.jumpPressAge = null; // Space is the handbrake
+    const v = g.state(tier);
+    const events = stepVehicle(v, g.body(tier), input, {
+      map: this.map,
+      spec: g.cfg.rides[tier],
+      gravity: this.cfg.gravity,
+      dt: this.dt,
+      crashSpeed: ordersConfig.fragile.crashSpeed,
+    });
+    this.mirrorVehicle(v);
+    return events;
+  }
+
+  /** The courier rides along: position, velocity, heading, grounding and mode ('ground' / 'air') follow `v`. */
+  private mirrorVehicle(v: VehicleState): void {
+    const s = this.state;
+    const wasGrounded = s.grounded;
+    s.position = vec3(v.position.x, v.position.y, v.position.z);
+    s.velocity = vec3(v.velocity.x, v.velocity.y, v.velocity.z);
+    s.heading = v.heading;
+    s.grounded = v.grounded;
+    s.groundNormal = v.groundNormal;
+    s.mode = v.grounded ? 'ground' : 'air';
+    if (v.grounded) {
+      s.lastGrounded = vec3(v.position.x, v.position.y, v.position.z);
+      s.airTicks = 0;
+      s.airApexY = v.position.y;
+    } else {
+      s.airTicks = wasGrounded ? 0 : s.airTicks + 1;
+      s.airApexY = Math.max(s.airApexY, v.position.y);
+    }
   }
 
   private stepMovement(input: InputFrame, mods: StatModifiers): SimEvent[] {
     const events: SimEvent[] = [];
 
-    // 1. Look, courier heading and timers; crouch (stays crouched while standing is blocked; ignored on the board); board toggle (Q);
-    //    crouch-slide entry (never on the board).
+    // 1. Look, courier heading and timers; crouch (stays crouched while standing is blocked); crouch-slide entry.
     const wish = wishDirection(input); // camera-relative; computed once per tick
     this.updateLookAndTimers(input, wish, mods);
     this.updateCrouch(input);
-    if (input.board.pressed && toggleBoard(this.state)) events.push({ kind: 'boardToggled', onBoard: this.state.onBoard });
     const slide = startSlide(this.state, input, this.cfg); // crouch is pressed, so the capsule is already crouched
     if (slide !== 'none') events.push({ kind: 'slideStarted', boosted: slide === 'boosted' });
 
@@ -113,7 +286,7 @@ export class PlayerSim {
     this.resolveContacts(move, events);
 
     // 9. Post-move slide physics and end; triggers run after this method (step).
-    if (!this.state.onBoard) updateSlide(this.state, move, this.cfg, this.dt); // a board rolls itself
+    updateSlide(this.state, move, this.cfg, this.dt);
 
     return events;
   }
@@ -126,9 +299,9 @@ export class PlayerSim {
   private tryMantle(input: InputFrame): boolean {
     const s = this.state;
     if (s.mode !== 'mantle') {
-      // The ledge probe runs along the heading. Off the board, any movement input has already turned the heading to
-      // the wish direction this tick (updateLookAndTimers), so "input along the heading" is just "has movement input".
-      const canStart = !s.onBoard && hasMoveInput(input) && (s.mode === 'ground' || s.mode === 'air');
+      // The ledge probe runs along the heading. Any movement input has already turned the heading to the wish
+      // direction this tick (updateLookAndTimers), so "input along the heading" is just "has movement input".
+      const canStart = hasMoveInput(input) && (s.mode === 'ground' || s.mode === 'air');
       const top = canStart ? findLedge(this.body, s, this.cfg) : null;
       if (!top) return false;
       startMantle(s, top);
@@ -141,35 +314,30 @@ export class PlayerSim {
 
   /**
    * The camera yaw and pitch come from the input. The sprint toggle updates first (updateSprint), so every later
-   * step sees this tick's sprint state. Off the board, any movement input turns the courier to face its
-   * (camera-relative) wish direction; with no input the heading holds. On the board the heading mirrors boardHeading
-   * (set by the board code and at the end of the step).
+   * step sees this tick's sprint state. Any movement input turns the courier to face its (camera-relative) wish
+   * direction; with no input the heading holds.
    */
   private updateLookAndTimers(input: InputFrame, wish: Vec3, mods: StatModifiers): void {
     const s = this.state;
     s.yaw = input.look.yaw;
     s.pitch = input.look.pitch;
     updateSprint(s, input, mods, this.cfg.stamina, this.dt);
-    if (!s.onBoard && hasMoveInput(input)) s.heading = yawOf(wish);
+    if (hasMoveInput(input)) s.heading = yawOf(wish);
     ageJumpBuffer(s, input, this.cfg);
   }
 
   /**
    * The capsule is crouched while crouch is held. Releasing crouch stands up only
    * if a standing capsule fits (Review Focus 4); otherwise the player stays crouched (and a crouch-slide goes on)
-   * and tries again every tick, so they stand automatically once clear. On the board crouch is ignored.
+   * and tries again every tick, so they stand automatically once clear.
    */
   private updateCrouch(input: InputFrame): void {
-    this.body.setCrouched(input.crouch.held && !this.state.onBoard);
+    this.body.setCrouched(input.crouch.held);
     this.state.crouched = this.body.crouched;
   }
 
   private applyLocomotion(input: InputFrame, wish: Vec3, mods: StatModifiers): void {
     const s = this.state;
-    if (s.onBoard && s.grounded) {
-      applyBoardVelocity(s, input, wish, this.cfg, mods, this.dt);
-      return;
-    }
     const target = targetGroundSpeed(input, s, this.cfg, mods);
     if (s.grounded) applyGroundVelocity(s, wish, target, this.cfg, this.dt);
     else applyAirVelocity(s, wish, target, this.cfg, this.dt);
@@ -226,11 +394,9 @@ export class PlayerSim {
       // An air landing changes the mode: a slide stays a slide (mantle steps never reach here).
       // Landing on foot still crouched at slide speed (a slide off a ledge, a slide-jump) slides on (R26).
       if (s.mode === 'air') {
-        const keepsSliding = !wasGrounded && !s.onBoard && s.crouched && horizontalLength(s.velocity) >= this.cfg.slide.endSpeed;
+        const keepsSliding = !wasGrounded && s.crouched && horizontalLength(s.velocity) >= this.cfg.slide.endSpeed;
         s.mode = keepsSliding ? 'slide' : 'ground';
       }
-      // A board landing points the board along the landing travel (air control may have turned it).
-      if (!wasGrounded && s.onBoard) alignBoardHeading(s);
       s.velocity = vec3(s.velocity.x, 0, s.velocity.z);
       s.groundNormal = move.groundNormal;
       s.lastGrounded = vec3(s.position.x, s.position.y, s.position.z);

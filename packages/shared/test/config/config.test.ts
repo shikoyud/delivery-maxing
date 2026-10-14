@@ -8,7 +8,6 @@ describe('config pins spec values', () => {
     expect(movementConfig.speedCap).toBe(12);
     expect(movementConfig.jump).toMatchObject({ height: 1.2, coyoteTime: 0.1, bufferTime: 0.1 });
     expect(movementConfig.mantle.maxHeight).toBe(1.2);
-    expect(movementConfig.board.topSpeed).toBe(12);
   });
   it('orders', () => {
     expect(ordersConfig.lockout.seconds).toBe(45);

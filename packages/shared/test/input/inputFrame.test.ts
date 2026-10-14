@@ -3,7 +3,7 @@ import { ACTIONS, emptyInput } from '../../src/input/inputFrame';
 
 describe('inputFrame', () => {
   it('lists the 12 actions', () => {
-    expect(ACTIONS).toEqual(['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'board', 'phone', 'map', 'accept', 'mount']);
+    expect(ACTIONS).toEqual(['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'phone', 'map', 'accept', 'mount']);
   });
   it('emptyInput is idle and returns fresh objects', () => {
     const a = emptyInput();

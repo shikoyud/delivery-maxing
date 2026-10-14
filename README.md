@@ -55,8 +55,7 @@ pnpm install && pnpm dev   # then open the URL Vite prints
 | C | Crouch; crouch-slide while sprinting |
 | Shift | Sprint on / off (toggle); drains the stamina ring top left |
 | E | Interact |
-| F | Mount (reserved for vehicles in SP4; does nothing yet) |
-| Q | Skateboard |
+| F | Get on the nearest parked vehicle (within 2.5 m), else put the skateboard down and ride it; F again gets off |
 | Tab | Phone: Orders, Map, Wallet (Esc, Tab or M closes it) |
 | M | Map view (the phone opened straight on the Map app) |
 | Y | Accept the top offer |

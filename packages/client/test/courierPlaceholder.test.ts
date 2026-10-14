@@ -10,7 +10,7 @@ const make = () => createCourierPlaceholder(cap, courierCfg);
 
 /** A partial PlayerState with the fields the placeholder reads. */
 const st = (heading: number, crouched = false, mode: MoveMode = 'ground'): PlayerState =>
-  ({ heading, crouched, mode, onBoard: false, velocity: { x: 0, y: 0, z: 0 } }) as unknown as PlayerState;
+  ({ heading, crouched, mode, riding: null, velocity: { x: 0, y: 0, z: 0 } }) as unknown as PlayerState;
 
 /** Snaps the placeholder to `feet` and `heading`. */
 const place = (c: ReturnType<typeof make>, feet: Vec3, heading: number, crouched = false): void => {

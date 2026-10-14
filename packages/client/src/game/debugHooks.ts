@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, Totals, Vec3, VehicleTier } from '@dm/shared';
+import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, RideTier, Totals, Vec3, VehicleTier } from '@dm/shared';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { PhoneApp } from '../ui/phone/Phone';
 import type { Game } from './Game';
@@ -9,7 +9,7 @@ export interface DebugApi {
   /** True once the first frame has been drawn. */
   readonly ready: boolean;
   readonly tick: number;
-  player(): { position: Vec3; velocity: Vec3; mode: MoveMode; onBoard: boolean; heading: number };
+  player(): { position: Vec3; velocity: Vec3; mode: MoveMode; riding: RideTier | null; heading: number };
   /** Moves the player into the air at `p`, optionally moving at velocity `v` (m/s). */
   teleport(p: Vec3, v?: Vec3): void;
   /** Places the player on the ground at `feet` and looks at `target`. */
@@ -82,7 +82,7 @@ export function installDebugHooks(game: Game): void {
     },
     player() {
       const s = game.sim.state;
-      return { position: { ...s.position }, velocity: { ...s.velocity }, mode: s.mode, onBoard: s.onBoard, heading: s.heading };
+      return { position: { ...s.position }, velocity: { ...s.velocity }, mode: s.mode, riding: s.riding, heading: s.heading };
     },
     teleport(p, v) {
       game.teleport(p, v);

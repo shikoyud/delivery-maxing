@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   createPhysicsWorld,
   expandGreybox,
+  Garage,
   initRapier,
   movementConfig,
   PlayerSim,
@@ -26,7 +27,7 @@ let sim: PlayerSim;
 
 beforeAll(async () => {
   physics = createPhysicsWorld(await initRapier(), map);
-  sim = new PlayerSim(physics, map, movementConfig, { x: 98, y: 0, z: 0 }, 0);
+  sim = new PlayerSim(physics, map, movementConfig, { x: 98, y: 0, z: 0 }, 0, new Garage(physics, map, []));
 });
 
 const UP = { x: 0, y: 1, z: 0 };

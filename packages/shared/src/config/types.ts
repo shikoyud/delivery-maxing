@@ -31,15 +31,6 @@ export interface MovementConfig {
   jump: { height: number; coyoteTime: number; bufferTime: number };
   mantle: { minHeight: number; maxHeight: number; reach: number; duration: number };
   slide: { minEntrySpeed: number; friction: number; endSpeed: number; slopeGravityScale: number; boostSpeed: number; boostCooldown: number };
-  board: {
-    topSpeed: number;
-    accel: number;
-    brakeDecel: number;
-    /** Back input (dot(wish, heading) < -0.5) brakes only above this speed along the heading; at or below it, it steers (R3). */
-    brakeMinSpeed: number;
-    friction: number;
-    turnRate: number;
-  };
   fall: { outOfBoundsY: number; boundsMargin: number };
 }
 

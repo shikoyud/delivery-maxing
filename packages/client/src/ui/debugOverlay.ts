@@ -1,11 +1,11 @@
-import type { MoveMode, Vec3 } from '@dm/shared';
+import type { MoveMode, RideTier, Vec3 } from '@dm/shared';
 import { el, setText } from './dom';
 
 export interface OverlayStats {
   drawCalls: number;
   speed: number;
   mode: MoveMode;
-  onBoard: boolean;
+  riding: RideTier | null;
   sprinting: boolean;
   tick: number;
   position: Vec3;
@@ -20,7 +20,7 @@ export interface DebugOverlay {
 
 const REFRESH_MS = 250;
 
-/** F3 overlay: FPS, draw calls, speed, mode, onBoard, sprint, tick, position. DOM only (no draw calls). */
+/** F3 overlay: FPS, draw calls, speed, mode, ride, sprint, tick, position. DOM only (no draw calls). */
 export function mountDebugOverlay(host: HTMLElement, visible: boolean): DebugOverlay {
   const root = el('pre', 'debug-overlay', host);
   root.hidden = !visible;
@@ -51,7 +51,7 @@ export function mountDebugOverlay(host: HTMLElement, visible: boolean): DebugOve
           `calls  ${s.drawCalls}`,
           `speed  ${s.speed.toFixed(2)} m/s`,
           `mode   ${s.mode}`,
-          `board  ${s.onBoard}`,
+          `ride   ${s.riding ?? 'none'}`,
           `sprint ${s.sprinting ? ' on' : 'off'}`,
           `tick   ${s.tick}`,
           `pos    ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}`,

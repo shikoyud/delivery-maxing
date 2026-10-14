@@ -23,7 +23,6 @@ const BINDING_LABEL: Record<BindingName, string> = {
   crouch: 'Crouch',
   sprint: 'Sprint (toggle)',
   interact: 'Interact',
-  board: 'Board',
   hit: 'Hit',
   phone: 'Phone',
   map: 'Map view',

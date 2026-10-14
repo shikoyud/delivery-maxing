@@ -29,7 +29,7 @@ const RISE_FRACTION = 0.6;
  * 2. A ray down from hit + forward·(radius + 0.1), starting at feet.y + maxHeight + 0.1 and reaching maxHeight + 0.2,
  *    finds the top.
  * 3. The top must be in (minHeight, maxHeight] above the feet (the ground under them when grounded) and a standing capsule must fit there.
- * The caller checks the mode, the board and that the input points along the heading.
+ * The caller checks the mode, that the courier is on foot and that the input points along the heading.
  */
 export function findLedge(body: PlayerBody, state: PlayerState, cfg: MovementConfig): Vec3 | null {
   const { radius } = cfg.capsule;

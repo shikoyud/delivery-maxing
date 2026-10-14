@@ -12,14 +12,13 @@
     "waterLevel": -1.5, "waterMargin": 2000, "lights": { "hemi": 2.1, "sun": 2.4 }, "shadowBias": -0.0005, "shadowNormalBias": 0.05 },
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
-    "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "board": ["KeyQ"], "hit": ["Mouse0"],
+    "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "hit": ["Mouse0"],
     "phone": ["Tab"], "map": ["KeyM"], "accept": ["KeyY"], "mount": ["KeyF"],
     "devPanel": ["Backquote"], "debugOverlay": ["F3"] } },
   "courier": { "height": 1.8, "turnEaseRate": 14, "facingMinSpeed": 1.0,
     "crossFade": 0.15, "runSpeedForFullRun": 8, "runMinTimeScale": 0.7,
     "idleSpeed": 0.3, "walkMaxSpeed": 4, "fallSpeed": 2, "airClip": [0.2, 0.36],
     "packages": { "size": 0.22, "gap": 0.02, "columns": 3 },
-    "deck": { "length": 1.0, "width": 0.52, "thickness": 0.05, "wheelGap": 0.06 },
     "poses": {
       "slide": { "drop": 0, "hipDrop": 0.42, "body": [0, 0, 0],
         "bones": { "Abdomen": [55, 0, 0], "UpperLegL": [80, 0, 0], "UpperLegR": [80, 0, 0], "UpperArmL": [-20, 0, -70], "UpperArmR": [-20, 0, 70] } },

@@ -131,13 +131,11 @@ export interface CourierConfig {
   airClip: number[];
   /** One box per carried package on the courier's back, in this many columns. */
   packages: { size: number; gap: number; columns: number };
-  /** The skateboard deck under the feet while on the board. */
-  deck: { length: number; width: number; thickness: number; wheelGap: number };
   poses: Record<CourierPoseName, CourierPose>;
 }
 
 export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
-  | 'interact' | 'board' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
+  | 'interact' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
 
 export const clientConfig: ClientConfig = clientJson;

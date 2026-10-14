@@ -1,4 +1,4 @@
-import type { AccessKind } from '../config/types';
+import type { AccessKind, RideTier } from '../config/types';
 import type { Vec3 } from '../math/vec3';
 
 export type MoveMode = 'ground' | 'air' | 'slide' | 'mantle';
@@ -23,13 +23,15 @@ export interface PlayerState {
   pitch: number;
   /**
    * The way the courier faces, a yaw in the facing() convention: the yaw of the wish direction on every tick with
-   * movement input (unchanged otherwise), and boardHeading while on the board. Mantle probes along it.
+   * movement input (unchanged otherwise), and the vehicle's heading while riding. Mantle probes along it.
    */
   heading: number;
+  /** While riding: 'ground' or 'air', mirroring the vehicle. */
   mode: MoveMode;
-  onBoard: boolean;
-  /** Board heading as a yaw (see ground.ts facing). Set when the board comes out and on each board landing. */
-  boardHeading: number;
+  /** The vehicle being ridden, else null (on foot). */
+  riding: RideTier | null;
+  /** The tier last ridden (kept after dismounting; capacity follows it), else null. */
+  lastRide: RideTier | null;
   /** Mirrors PlayerBody.crouched: the capsule is at capsule.crouchHeight. */
   crouched: boolean;
   /** Sprint toggle (Shift): on until toggled off, stamina runs out or every move key is released. Only ever true while moving. */
@@ -65,7 +67,12 @@ export type SimEvent =
   | { kind: 'jumped' }
   | { kind: 'landed'; fallHeight: number }
   | { kind: 'respawned'; hospitalId: string }
-  | { kind: 'boardToggled'; onBoard: boolean }
+  | { kind: 'mounted'; tier: RideTier }
+  | { kind: 'dismounted'; tier: RideTier }
+  /** F was refused: riding faster than riding.dismountMaxSpeed, or no dismount spot is free. */
+  | { kind: 'mountRefused'; reason: 'tooFast' | 'noRoom' }
+  /** Out of bounds while riding: the vehicle went back to this hospital's bay (Decision 6). */
+  | { kind: 'towed'; tier: RideTier; hospitalId: string }
   | { kind: 'slideStarted'; boosted: boolean }
   /** A ridden vehicle hit a wall faster than ordersConfig.fragile.crashSpeed (speed: into the wall, m/s). */
   | { kind: 'crashed'; speed: number }

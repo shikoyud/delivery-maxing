@@ -118,6 +118,16 @@ export class PlayerBody {
     return hit === null;
   }
 
+  /**
+   * The courier's collider is disabled while riding (the vehicle collides instead). Steps the world so scene queries
+   * see the change at once.
+   */
+  setEnabled(on: boolean): void {
+    if (this.collider.isEnabled() === on) return;
+    this.collider.setEnabled(on);
+    this.physics.world.step();
+  }
+
   castRay(from: Vec3, dir: Vec3, maxDist: number): RayHit | null {
     return this.mover.castRay(from, dir, maxDist);
   }
