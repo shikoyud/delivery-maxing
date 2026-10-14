@@ -2,7 +2,12 @@
   "camera": { "fovBase": 80, "fovMax": 96, "fovSpeedMin": 8, "fovSpeedMax": 18, "fovEaseRate": 6, "crouchEaseRate": 12, "near": 0.1, "far": 1000,
     "chase": { "distance": 4.5, "height": 1.6, "pivotHeight": 1.3, "crouchPivotHeight": 0.8, "lookAtHeight": 1.9,
       "pitchMinDeg": -55, "pitchMaxDeg": 35, "followEaseRate": 14, "collisionRadius": 0.3,
-      "minDistance": 0.8, "pushOutEaseRate": 6, "wallPivotOffset": 0.6 } },
+      "minDistance": 0.8, "pushOutEaseRate": 6, "wallPivotOffset": 0.6,
+      "rides": {
+        "skateboard": { "distance": 5, "height": 1.8, "pivotHeight": 1.5 },
+        "bicycle": { "distance": 5.5, "height": 2.0, "pivotHeight": 1.6 },
+        "motorbike": { "distance": 6.5, "height": 2.2, "pivotHeight": 1.4 },
+        "car": { "distance": 8.5, "height": 2.8, "pivotHeight": 1.4 } } } },
   "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 650, "drawCallBudget": 150,
     "waterLevel": -1.5, "waterMargin": 2000, "lights": { "hemi": 2.1, "sun": 2.4 }, "shadowBias": -0.0005, "shadowNormalBias": 0.05 },
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
@@ -22,9 +27,12 @@
         "bones": { "Abdomen": [-30, 0, 0], "UpperArmL": [-60, 0, 0], "UpperArmR": [-60, 0, 0] } },
       "board": { "drop": 0, "hipDrop": 0, "body": [0, 90, 0],
         "bones": { "UpperArmL": [0, 0, -60], "UpperArmR": [0, 0, 60], "Head": [0, -70, 0] } },
+      "bike": { "drop": 0, "hipDrop": 0.35, "body": [10, 0, 0],
+        "bones": { "UpperLegL": [70, 0, 0], "UpperLegR": [70, 0, 0], "UpperArmL": [-60, 0, 0], "UpperArmR": [-60, 0, 0] } },
       "fall": { "drop": 0, "hipDrop": 0, "body": [12, 0, 0],
         "bones": { "UpperArmL": [0, 0, -110], "UpperArmR": [0, 0, 110], "UpperLegL": [0, 0, -15], "UpperLegR": [0, 0, 15] } },
       "crouch": { "drop": 0, "hipDrop": 0.2, "body": [0, 0, 0],
         "bones": { "Abdomen": [-60.0, 0, 0], "UpperLegL": [80.0, 0, 0], "UpperLegR": [80.0, 0, 0], "LowerLegL": [-125.0, 0, 0], "LowerLegR": [-125.0, 0, 0], "UpperArmL": [125, 0, 0], "UpperArmR": [125, 0, 0] } } } },
-  "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "timerUrgentSeconds": 10 }
+  "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "timerUrgentSeconds": 10,
+    "routeRefreshSeconds": 0.5, "hintCooldownSeconds": 3 }
 }

@@ -78,10 +78,10 @@ describe('animFor: poses', () => {
   });
 
   it('every pose has a config entry, and no parkour pose is left', () => {
-    for (const p of ['slide', 'mantle', 'board', 'fall', 'crouch'] as const) {
+    for (const p of ['slide', 'mantle', 'board', 'bike', 'fall', 'crouch'] as const) {
       expect(cfg.poses[p], p).toBeDefined();
     }
-    expect(Object.keys(cfg.poses).sort()).toEqual(['board', 'crouch', 'fall', 'mantle', 'slide']);
+    expect(Object.keys(cfg.poses).sort()).toEqual(['bike', 'board', 'crouch', 'fall', 'mantle', 'slide']);
   });
 });
 
