@@ -86,12 +86,53 @@ describe('sprint toggle', () => {
   });
 
   it('updateSprint flips on pressed, then clears when there is no move input', () => {
-    const state = { sprinting: false } as Parameters<typeof updateSprint>[0];
-    updateSprint(state, frame({ w: true, tap: true }), NO_MODS);
+    const dt = 1 / cfg.tickRate;
+    const state = { sprinting: false, stamina: cfg.stamina.max } as Parameters<typeof updateSprint>[0];
+    updateSprint(state, frame({ w: true, tap: true }), NO_MODS, cfg.stamina, dt);
     expect(state.sprinting).toBe(true);
-    updateSprint(state, frame({ w: true }), NO_MODS);
+    updateSprint(state, frame({ w: true }), NO_MODS, cfg.stamina, dt);
     expect(state.sprinting).toBe(true);
-    updateSprint(state, frame({ tap: true }), NO_MODS);
+    updateSprint(state, frame({ tap: true }), NO_MODS, cfg.stamina, dt);
     expect(state.sprinting).toBe(false);
+  });
+});
+
+describe('sprint stamina', () => {
+  it('starts full, drains while sprinting and regenerates while running', async () => {
+    const h = await makeSim();
+    expect(h.sim.state.stamina).toBe(cfg.stamina.max);
+    step(h, frame({ w: true, tap: true }));
+    run(h, 29, { w: true }); // 1 s of sprint in total
+    expect(h.sim.state.stamina).toBeCloseTo(cfg.stamina.max - cfg.stamina.sprintDrainPerSecond, 1);
+    step(h, frame({ w: true, tap: true })); // sprint off
+    const low = h.sim.state.stamina;
+    run(h, 30, { w: true }); // 1 s of plain running
+    expect(h.sim.state.stamina).toBeCloseTo(low + cfg.stamina.regenPerSecond, 1);
+  });
+
+  it('an empty bar shuts sprint off, and the toggle is refused until minSprintStart', async () => {
+    const h = await makeSim();
+    step(h, frame({ w: true, tap: true }));
+    const emptyTicks = Math.ceil((cfg.stamina.max / cfg.stamina.sprintDrainPerSecond) * cfg.tickRate) + 1;
+    run(h, emptyTicks, { w: true });
+    expect(h.sim.state.sprinting).toBe(false);
+    expect(h.sim.state.stamina).toBeLessThan(cfg.stamina.minSprintStart);
+    // A tap below the threshold is ignored...
+    step(h, frame({ w: true, tap: true }));
+    expect(h.sim.state.sprinting).toBe(false);
+    // ...but works again once the bar regenerates past it.
+    const regenTicks = Math.ceil((cfg.stamina.minSprintStart / cfg.stamina.regenPerSecond) * cfg.tickRate) + 1;
+    run(h, regenTicks, { w: true });
+    step(h, frame({ w: true, tap: true }));
+    expect(h.sim.state.sprinting).toBe(true);
+  });
+
+  it('never leaves 0..max', async () => {
+    const h = await makeSim();
+    run(h, 60, { w: true });
+    expect(h.sim.state.stamina).toBe(cfg.stamina.max);
+    step(h, frame({ w: true, tap: true }));
+    run(h, 400, { w: true }); // far past empty
+    expect(h.sim.state.stamina).toBeGreaterThanOrEqual(0);
   });
 });

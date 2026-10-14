@@ -4,6 +4,7 @@ import type { GreyboxSource, Hospital, MapData, OrderRules } from '../../src/wor
 export const testOrderRules = (): OrderRules => ({
   bands: { shortMax: 150, mediumMax: 350 },
   foodDropoff: { min: 80, max: 400 },
+  packageDropoff: { min: 100, max: 650 },
   maxPickupDistance: 250,
 });
 

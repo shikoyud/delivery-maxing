@@ -1,4 +1,4 @@
-export const ACTIONS = ['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'board', 'phone', 'accept', 'mount'] as const;
+export const ACTIONS = ['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'board', 'phone', 'map', 'accept', 'mount'] as const;
 export type Action = (typeof ACTIONS)[number];
 
 export interface ButtonState {
@@ -22,6 +22,8 @@ export interface InputFrame {
   board: ButtonState;
   /** Opens or closes the phone (Tab). */
   phone: ButtonState;
+  /** Opens the phone straight on the Map app (M); M also closes the phone. */
+  map: ButtonState;
   /** Accepts the highlighted offer (Y). */
   accept: ButtonState;
   /** Mounts or dismounts a vehicle (F); bound but unused until SP4. */
@@ -41,6 +43,7 @@ export function emptyInput(): InputFrame {
     hit: button(),
     board: button(),
     phone: button(),
+    map: button(),
     accept: button(),
     mount: button(),
   };

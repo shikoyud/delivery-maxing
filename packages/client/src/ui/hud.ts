@@ -24,6 +24,7 @@ export class Hud implements HudView {
   private readonly offers: HTMLElement;
   private readonly safe: HTMLElement;
   private readonly lockout: HTMLElement;
+  private readonly stamina: HTMLElement;
 
   constructor(
     host: HTMLElement,
@@ -32,6 +33,11 @@ export class Hud implements HudView {
     private readonly acceptKey: string,
   ) {
     const root = el('div', 'hud', host);
+    // Stamina ring, top left (the character info corner). A conic gradient driven by --stamina.
+    this.stamina = el('div', 'hud-stamina', root);
+    this.stamina.setAttribute('role', 'meter');
+    this.stamina.setAttribute('aria-label', 'Stamina');
+    el('span', 'hud-stamina-icon', this.stamina).textContent = '⚡';
     this.orders = el('div', 'hud-active', root);
     const totals = el('div', 'hud-totals', root);
     const stat = (label: string, cls: string): HTMLElement => {
@@ -64,6 +70,12 @@ export class Hud implements HudView {
     if (m.safeZone !== null) setText(this.safe, `Safe zone · ${m.safeZone}`);
     this.lockout.hidden = m.lockoutLeft <= 0;
     if (m.lockoutLeft > 0) setText(this.lockout, `No new offers · ${Math.ceil(m.lockoutLeft)} s`);
+
+    const pct = Math.round(Math.min(1, Math.max(0, m.stamina)) * 100);
+    this.stamina.style.setProperty('--stamina', `${pct}%`);
+    this.stamina.setAttribute('aria-valuenow', String(pct));
+    this.stamina.classList.toggle('full', pct >= 100);
+    this.stamina.classList.toggle('low', pct <= 25);
 
     setHtml(this.orders, m.orders.map((o) => this.orderRow(o, colorIndex(o.id))).join(''));
 
@@ -102,6 +114,7 @@ export class Hud implements HudView {
 
   private orderRow(o: HudOrder, color: number): string {
     const extra: string[] = [];
+    if (o.prep) extra.push(o.prep.secondsLeft > 0 ? `<span class="hud-timer">Ready ${clock(o.prep.secondsLeft)}</span>` : '<span class="hud-prep-ready">Ready for pickup</span>');
     if (o.timer) extra.push(o.kind === 'food' ? this.timer('Hot', o.timer, 'Cold · no hot bonus') : this.timer('Par', o.timer, 'Over par · no bonus'));
     if (o.express) extra.push(this.timer('Express', o.express, 'Express late · no bonus'));
     if (o.weightKg !== null) extra.push(`<span class="hud-kg">${o.weightKg} kg</span>`);

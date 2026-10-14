@@ -21,6 +21,11 @@ export interface MovementConfig {
     airAccel: number;
     overspeedDecay: number;
   };
+  /**
+   * Sprint stamina: drains while sprinting, regenerates while not. Sprint shuts off at 0 and the toggle is refused
+   * below minSprintStart (so an empty bar can't stutter sprint on and off every tick).
+   */
+  stamina: { max: number; sprintDrainPerSecond: number; regenPerSecond: number; minSprintStart: number };
   jump: { height: number; coyoteTime: number; bufferTime: number };
   mantle: { minHeight: number; maxHeight: number; reach: number; duration: number };
   slide: { minEntrySpeed: number; friction: number; endSpeed: number; slopeGravityScale: number; boostSpeed: number; boostCooldown: number };
@@ -45,6 +50,10 @@ interface Rewards { short: number; medium: number; long: number; hot: number; pa
 
 export interface OrdersConfig {
   offers: { maxShown: number; lifetimeSeconds: number; minIntervalSeconds: number; maxIntervalSeconds: number };
+  /** After a completed delivery, the next offer waits at least this long (server-side pacing; no UI). */
+  deliveryCooldown: { minSeconds: number; maxSeconds: number };
+  /** Food orders: seconds the kitchen takes once the courier arrives at the pickup, before the order can be picked up. */
+  prep: { foodSeconds: number };
   lockout: { seconds: number };
   spacing: { doorMeters: number; reuseSeconds: number };
   referenceSpeed: number;

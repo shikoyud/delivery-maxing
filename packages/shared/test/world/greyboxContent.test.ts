@@ -143,9 +143,26 @@ describe('greybox city: hospitals', () => {
   it('has the greybox order rules', () => {
     expect(map.orderRules).toEqual({
       bands: { shortMax: 150, mediumMax: 350 },
-      foodDropoff: { min: 80, max: 400 },
+      foodDropoff: { min: 180, max: 520 },
+      packageDropoff: { min: 150, max: 650 },
       maxPickupDistance: 400,
     });
+  });
+
+  it('every pickup has a few dropoff pairs inside its distance window (the longer minimums never starve offers)', () => {
+    const pairs = (pickupRole: string, dropoffRole: string, w: { min: number; max: number }): number[] =>
+      map.pois
+        .filter((p) => (p.roles as string[]).includes(pickupRole))
+        .map(
+          (p) =>
+            map.pois.filter((d) => {
+              if (d.id === p.id || !(d.roles as string[]).includes(dropoffRole)) return false;
+              const dist = streetDistance(p.position, d.position);
+              return dist >= w.min && dist <= w.max;
+            }).length,
+        );
+    for (const n of pairs('foodPickup', 'dropoffFood', map.orderRules.foodDropoff)) expect(n).toBeGreaterThanOrEqual(3);
+    for (const n of pairs('packagePickup', 'dropoffPackage', map.orderRules.packageDropoff)) expect(n).toBeGreaterThanOrEqual(3);
   });
 
   it('has at least 2 food pickups within maxPickupDistance of every hospital spawn (one used pickup never starves it)', () => {

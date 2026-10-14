@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ACTIONS, emptyInput } from '../../src/input/inputFrame';
 
 describe('inputFrame', () => {
-  it('lists the 11 actions', () => {
-    expect(ACTIONS).toEqual(['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'board', 'phone', 'accept', 'mount']);
+  it('lists the 12 actions', () => {
+    expect(ACTIONS).toEqual(['move', 'look', 'jump', 'crouch', 'sprint', 'interact', 'hit', 'board', 'phone', 'map', 'accept', 'mount']);
   });
   it('emptyInput is idle and returns fresh objects', () => {
     const a = emptyInput();

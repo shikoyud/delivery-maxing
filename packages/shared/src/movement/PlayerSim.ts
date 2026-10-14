@@ -47,6 +47,7 @@ export class PlayerSim {
       boardHeading: yaw,
       crouched: false,
       sprinting: false,
+      stamina: cfg.stamina.max,
       grounded: false,
       groundNormal: vec3(0, 1, 0),
       lastGrounded: vec3(spawn.x, spawn.y, spawn.z),
@@ -148,7 +149,7 @@ export class PlayerSim {
     const s = this.state;
     s.yaw = input.look.yaw;
     s.pitch = input.look.pitch;
-    updateSprint(s, input, mods);
+    updateSprint(s, input, mods, this.cfg.stamina, this.dt);
     if (!s.onBoard && hasMoveInput(input)) s.heading = yawOf(wish);
     ageJumpBuffer(s, input, this.cfg);
   }

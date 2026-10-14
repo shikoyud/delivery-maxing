@@ -15,6 +15,10 @@ const zeroRng: Rng = () => 0;
 
 const cfgWith = (kind: 'food' | 'package', modifier: 'none' | 'express' | 'fragile' = 'none'): OrdersConfig => ({
   ...ordersConfig,
+  // These tests pin the original pacing; the prep and cooldown tests below opt in to the live values.
+  offers: { maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15 },
+  deliveryCooldown: { minSeconds: 0, maxSeconds: 0 },
+  prep: { foodSeconds: 0 },
   mix: {
     kindWeights: { food: kind === 'food' ? 1 : 0, package: kind === 'package' ? 1 : 0 },
     modifierWeights: { none: modifier === 'none' ? 1 : 0, express: modifier === 'express' ? 1 : 0, fragile: modifier === 'fragile' ? 1 : 0 },
@@ -79,7 +83,7 @@ describe('OrderSystem', () => {
     expect(ev).toEqual([{ kind: 'offered', offerId: 'o1' }]);
     expect(sys.offers).toHaveLength(1);
     expect(sys.offers[0]!.offeredAt).toBe(8);
-    expect(sys.offers[0]!.expiresAt).toBe(8 + ordersConfig.offers.lifetimeSeconds);
+    expect(sys.offers[0]!.expiresAt).toBe(8 + 20);
     expect(sys.update(27.9, offerPlayer, nowhere).filter((e) => e.kind === 'offerExpired')).toEqual([]);
     expect(sys.update(28, offerPlayer, nowhere)).toContainEqual({ kind: 'offerExpired', offerId: 'o1' });
     expect(sys.offers.find((o) => o.order.id === 'o1')).toBeUndefined();
@@ -310,6 +314,49 @@ describe('OrderSystem', () => {
     expect(sys.active).toHaveLength(1);
     sys.setCapacity(CAR);
     expect(sys.capacity).toEqual(CAR);
+  });
+
+  test('food pickup waits for prep: first arrival starts the countdown, pickup once ready and in the zone', () => {
+    const sys = makeSystem({ capacity: WALK, cfg: { ...cfgWith('food'), prep: { foodSeconds: 6 } } });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 9);
+    const a = sys.active[0]!;
+    expect(sys.prepReadyAt(a)).toBeNull();
+    // First arrival starts prep, no pickup yet.
+    expect(sys.update(10, offerPlayer, zones('fp-near'))).toEqual([{ kind: 'prepStarted', orderId: 'o1', readySeconds: 6 }]);
+    expect(a.pickedUpAt).toBeNull();
+    expect(sys.prepReadyAt(a)).toBe(16);
+    // Still preparing: waiting at the counter does nothing, and prep runs on while the courier is away.
+    expect(sys.update(12, offerPlayer, zones('fp-near'))).toEqual([]);
+    expect(sys.update(15.9, offerPlayer, nowhere)).toEqual([]);
+    // Ready but not in the zone: nothing; back in the zone: picked up, hot timer from the pickup.
+    expect(sys.update(16, offerPlayer, nowhere)).toEqual([]);
+    expect(sys.update(18, offerPlayer, zones('fp-near'))).toEqual([{ kind: 'pickedUp', orderId: 'o1' }]);
+    expect(a.pickedUpAt).toBe(18);
+  });
+
+  test('packages skip prep: entering the pickup zone picks up at once', () => {
+    const sys = makeSystem({ pois: packagePois([30]), cfg: { ...cfgWith('package'), prep: { foodSeconds: 6 } } });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept(sys.offers[0]!.order.id, 9);
+    expect(kinds(sys.update(10, offerPlayer, zones('ps-30')))).toEqual(['pickedUp']);
+  });
+
+  test('a completed delivery holds the next offer back by the delivery cooldown', () => {
+    const cfg = { ...cfgWith('food'), deliveryCooldown: { minSeconds: 8, maxSeconds: 10 } };
+    const sys = makeSystem({ pois: twoFoodPois(), capacity: WALK, cfg });
+    sys.update(8, offerPlayer, nowhere);
+    const o = sys.offers[0]!.order;
+    sys.accept(o.id, 9);
+    sys.update(10, offerPlayer, zones(o.pickupPoiId));
+    // nextOfferAt stayed 16 (no free slot), and the delivery at t=20 pushes it to 20 + 8 (zeroRng → minSeconds).
+    expect(kinds(sys.update(20, offerPlayer, zones(o.dropoffPoiId)))).toEqual(['completed']);
+    expect(sys.nextOfferAt).toBe(28);
+    expect(kinds(run(sys, 21, 27.9, 0.5))).not.toContain('offered');
+    expect(kinds(sys.update(28, offerPlayer, nowhere))).toContain('offered');
+    // A cooldown already past a later nextOfferAt never pulls it forward.
+    const idle = makeSystem({ cfg });
+    expect(idle.nextOfferAt).toBe(8);
   });
 
   test('recently used doors are not offered again within reuseSeconds', () => {

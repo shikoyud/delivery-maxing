@@ -73,11 +73,12 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
     rng,
   );
 
+  const window = kind === 'food' ? rules.foodDropoff : rules.packageDropoff;
   for (const pickup of pickups) {
     const dropoffs = pois
       .filter((d) => d.id !== pickup.id && d.roles.includes(dropoffRole) && free(d))
       .map((d) => ({ poi: d, distance: ctx.distance(pickup.position, d.position) }))
-      .filter(({ distance }) => kind !== 'food' || (distance >= rules.foodDropoff.min && distance <= rules.foodDropoff.max));
+      .filter(({ distance }) => distance >= window.min && distance <= window.max);
     if (dropoffs.length === 0) continue;
     const { poi: dropoff, distance } = pickOne(dropoffs, rng);
 

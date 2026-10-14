@@ -81,10 +81,11 @@ function setup(capacityTier: VehicleTier = 'car', saved?: Progress) {
     phoneChanged: (open) => void phone.changes.push(open),
   });
   /** One tick as Game runs it: beforeStep, (sim), afterStep, all at the same sim time. */
-  const tick = (accept = false, phoneKey = false): void => {
+  const tick = (accept = false, phoneKey = false, mapKey = false): void => {
     const frame = emptyInput();
     if (accept) frame.accept = { held: true, pressed: true };
     if (phoneKey) frame.phone = { held: true, pressed: true };
+    if (mapKey) frame.map = { held: true, pressed: true };
     loop.beforeStep(frame);
     loop.afterStep([], env.position, env.now);
     env.now += TICK;
@@ -97,10 +98,11 @@ function setup(capacityTier: VehicleTier = 'car', saved?: Progress) {
     }
     throw new Error('no matching offer');
   };
-  /** Ticks with the player standing in a POI zone. */
+  /** Ticks with the player standing in a POI zone, long enough for a food prep wait to finish. */
   const goTo = (poiId: string): void => {
     env.position = { ...map.pois.find((p) => p.id === poiId)!.position };
-    tick();
+    const ticks = 1 + Math.ceil(ordersConfig.prep.foodSeconds / TICK);
+    for (let i = 0; i < ticks; i++) tick();
   };
   const stored = (): Progress => progress.load();
   return { loop, env, popups, huds, phone, actions, tick, waitForOffer, goTo, stored };
@@ -157,7 +159,21 @@ describe('DeliveryLoop', () => {
     expect(s.phone.app).toBe('orders');
     expect(s.phone.changes).toEqual([true]);
     expect(s.actions.sampleTick().move).toEqual({ x: 0, y: 0 }); // W was released
-    expect(s.phone.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.phone]);
+    expect(s.phone.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.phone, ...clientConfig.input.bindings.map]);
+  });
+
+  it('the map key (M) opens the phone straight on the Map app; while open it is a close key, not a toggle here', () => {
+    const s = setup();
+    s.tick(false, false, true);
+    expect(s.loop.phoneOpen).toBe(true);
+    expect(s.phone.app).toBe('map');
+    expect(s.phone.changes).toEqual([true]);
+    // While the phone is open the real M keydown is swallowed by the phone's close handler (closeCodes above);
+    // a map press reaching beforeStep anyway must not reopen or switch apps.
+    s.phone.app = 'orders';
+    s.tick(false, false, true);
+    expect(s.phone.app).toBe('orders');
+    expect(s.loop.phoneOpen).toBe(true);
   });
 
   it('closing the phone (Esc or Tab in the phone) reports it and gives the sim its input back', () => {
@@ -215,6 +231,7 @@ describe('DeliveryLoop', () => {
     expect(s.loop.carriedCount()).toBe(0);
     s.goTo(offer.order.pickupPoiId);
     expect(s.loop.carriedCount()).toBe(1);
+    expect(s.popups.some((p) => p.text === `Preparing ${offer.order.item}`)).toBe(true);
     expect(s.popups.at(-1)!.text).toBe(`Picked up ${offer.order.item}`);
     s.goTo(offer.order.dropoffPoiId);
     expect(s.loop.carriedCount()).toBe(0);

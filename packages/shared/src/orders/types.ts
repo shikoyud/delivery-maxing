@@ -32,6 +32,8 @@ export interface Offer {
 export interface ActiveOrder {
   order: Order;
   acceptedAt: number;
+  /** Food: when the courier first reached the pickup and the kitchen started preparing. Null for packages. */
+  prepStartedAt: number | null;
   pickedUpAt: number | null;
   fragileIntact: boolean;
 }

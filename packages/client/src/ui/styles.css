@@ -98,11 +98,47 @@ kbd {
   pointer-events: none;
 }
 
-/* Active orders, top left. */
-.hud-active {
+/* Stamina ring, top left (the character info corner). --stamina is the filled share, set by the HUD. */
+.hud-stamina {
   position: absolute;
   left: 16px;
   top: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at center, rgba(22, 50, 58, 0.82) 0 58%, transparent 59%),
+    conic-gradient(var(--dm-teal) var(--stamina, 100%), rgba(247, 243, 234, 0.18) 0);
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+  transition: opacity 0.3s;
+}
+
+.hud-stamina.full { opacity: 0.45; }
+.hud-stamina.low {
+  background:
+    radial-gradient(circle at center, rgba(22, 50, 58, 0.82) 0 58%, transparent 59%),
+    conic-gradient(var(--dm-coral) var(--stamina, 100%), rgba(247, 243, 234, 0.18) 0);
+}
+
+.hud-prep-ready {
+  color: var(--dm-teal);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.hud-stamina-icon {
+  font-size: 18px;
+  color: var(--dm-paper);
+}
+
+/* Active orders, top left (below the stamina ring). */
+.hud-active {
+  position: absolute;
+  left: 16px;
+  top: 84px;
   width: 300px;
   display: flex;
   flex-direction: column;
@@ -243,11 +279,31 @@ kbd {
 .hud-safe { background: rgba(31, 158, 147, 0.9); }
 .hud-lockout { background: rgba(242, 113, 102, 0.92); }
 
-/* Offer toasts, bottom right; the top one takes the accept key. */
-.hud-offers {
+/* Minimap, bottom right: a player-centred cut of the city (M opens the full Map app). */
+.minimap {
   position: absolute;
   right: 16px;
   bottom: 16px;
+  width: 176px;
+  height: 176px;
+  border-radius: 12px;
+  overflow: hidden;
+  opacity: 0.92;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+}
+
+.minimap-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Offer toasts, bottom right above the minimap; the top one takes the accept key. */
+.hud-offers {
+  position: absolute;
+  right: 16px;
+  bottom: 208px;
   width: 320px;
   display: flex;
   flex-direction: column-reverse;

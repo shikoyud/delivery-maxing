@@ -3,6 +3,7 @@
   "capsule": { "radius": 0.35, "height": 1.8, "crouchHeight": 1.1 },
   "controller": { "offset": 0.02, "maxStepHeight": 0.4, "minStepWidth": 0.2, "snapToGround": 0.3, "maxSlopeClimbDeg": 50, "minSlopeSlideDeg": 55 },
   "run": { "runSpeed": 5.5, "sprintSpeed": 8, "crouchSpeed": 3, "groundAccel": 60, "groundDecel": 40, "airAccel": 14, "overspeedDecay": 4 },
+  "stamina": { "max": 100, "sprintDrainPerSecond": 18, "regenPerSecond": 14, "minSprintStart": 20 },
   "jump": { "height": 1.2, "coyoteTime": 0.1, "bufferTime": 0.1 },
   "mantle": { "minHeight": 0.4, "maxHeight": 1.2, "reach": 0.8, "duration": 0.3 },
   "slide": { "minEntrySpeed": 6, "friction": 1.2, "endSpeed": 3.5, "slopeGravityScale": 1, "boostSpeed": 4, "boostCooldown": 2 },

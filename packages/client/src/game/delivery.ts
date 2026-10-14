@@ -30,6 +30,7 @@ import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoin
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
 import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { createMinimap } from '../ui/minimap';
 import { createMapApp } from '../ui/phone/mapApp';
 import { MapProjection } from '../ui/phone/mapProjection';
 import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
@@ -49,6 +50,8 @@ export interface DeliveryDeps {
   /** Sim time (s) of the tick about to run, and the player's sim state. */
   now(): number;
   player(): { position: Vec3; mode: MoveMode; heading?: number };
+  /** Sprint stamina as a fraction 0..1 (the HUD ring); full when absent (tests). */
+  stamina?(): number;
   /** The carrier capacity tier the player has (saved progress). */
   capacityTier: VehicleTier;
   /**
@@ -93,6 +96,7 @@ export class DeliveryLoop {
   private readonly hud: HudView;
   private readonly popups: PopupSink;
   private zones: PlayerZones;
+  private readonly minimap: ReturnType<typeof createMinimap> | null;
   private nextHudAt = 0;
   private readonly colors = new SlotColorAssigner();
   private readonly colorIndex = (id: string): number => this.colors.indexOf(id);
@@ -115,14 +119,16 @@ export class DeliveryLoop {
         this.d.phoneChanged?.(false);
       },
     };
-    // Esc and the phone key close it (spec §8; Tab opens it through the `phone` action in beforeStep).
-    const closeCodes = ['Escape', ...d.cfg.input.bindings.phone];
+    // Esc, the phone key and the map key close it (spec §8; Tab opens it through the `phone` action in beforeStep,
+    // M through `map`, so both keys toggle).
+    const closeCodes = ['Escape', ...d.cfg.input.bindings.phone, ...d.cfg.input.bindings.map];
     if (d.ui) this.phone = d.ui.phone(phoneCb, closeCodes);
     else {
       const phone = new Phone(d.host, phoneCb, closeCodes);
       phone.setMapApp(createMapApp(d.map, new MapProjection(d.map.size, 512), this.colorIndex));
       this.phone = phone;
     }
+    this.minimap = d.ui ? null : createMinimap(d.host, d.map);
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
   }
 
@@ -198,6 +204,7 @@ export class DeliveryLoop {
    */
   beforeStep(frame: InputFrame): InputFrame {
     if (frame.phone.pressed) this.togglePhone();
+    else if (frame.map.pressed && !this.phone.isOpen) this.openPhone('map');
     if (!this.phone.isOpen) {
       if (frame.accept.pressed) {
         const top = this.sys.offers[0];
@@ -277,7 +284,7 @@ export class DeliveryLoop {
   model(now: number): HudModel {
     const safe = this.zones.safeZone;
     const name = safe === null ? null : (this.d.map.hospitals.find((h) => h.id === safe)?.name ?? safe);
-    return hudModel(this.sys, this.d.map, this.d.player().position, now, name);
+    return hudModel(this.sys, this.d.map, this.d.player().position, now, name, this.d.stamina?.() ?? 1);
   }
 
   /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */
@@ -296,6 +303,12 @@ export class DeliveryLoop {
     this.waypoints.update(targets, colorIndices, clockSeconds);
     this.poiMeshes.setTargets(targetIds);
     this.poiMeshes.setHighlight(this.sys.offers[0]?.order.pickupPoiId ?? null);
+    this.minimap?.render(
+      this.d.player().position,
+      this.d.player().heading ?? 0,
+      targets.map((position, i) => ({ position, colorIndex: colorIndices[i] ?? 0 })),
+      this.sys.offers.map((o) => pois.target(o.order.pickupPoiId)),
+    );
 
     if (clockSeconds < this.nextHudAt) return;
     this.nextHudAt = clockSeconds + 1 / this.d.cfg.ui.hudUpdateHz;
@@ -313,6 +326,12 @@ export class DeliveryLoop {
   private announce(e: OrderEvent, before: readonly ActiveOrder[]): void {
     const pois = poiIndex(this.d.map);
     switch (e.kind) {
+      case 'prepStarted': {
+        const a = this.sys.active.find((x) => x.order.id === e.orderId);
+        if (a) this.popups.show(`Preparing ${a.order.item}`, [`Ready in ${Math.ceil(e.readySeconds)} s`], 'info');
+        this.nextHudAt = 0;
+        break;
+      }
       case 'pickedUp': {
         const a = this.sys.active.find((x) => x.order.id === e.orderId);
         if (a) this.popups.show(`Picked up ${a.order.item}`, [stageText(a, pois)], 'info');

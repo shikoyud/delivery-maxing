@@ -4,6 +4,7 @@ import { vec3 } from '../../src/math/vec3';
 import { generateOffer, type OfferContext } from '../../src/orders/offers';
 import { mulberry32 } from '../../src/util/rng';
 import { streetDistance } from '../../src/world/distance';
+import type { Poi } from '../../src/world/mapTypes';
 import { offerPlayer, offerPois, offerRules } from './fixture';
 
 function ctx(over: Partial<OfferContext> = {}): OfferContext {
@@ -46,6 +47,22 @@ describe('generateOffer', () => {
       expect(o!.modifier).toBeNull();
       expect(o!.expressLimit).toBeNull();
       expect(o!.timeLimit).toBeCloseTo((1.3 * 150) / 8 + 20);
+    }
+  });
+
+  it('package offer: dropoff within the package window; a too-close dropoff is never offered', () => {
+    // dp-near is 60 m from both senders, under the fixture's 100 m package minimum; dp-1 at 300 m qualifies.
+    const pois = (): Poi[] => [
+      ...offerPois(),
+      { id: 'dp-near', position: vec3(0, 0, 0), district: 'downtown', kind: 'door', name: '4 Near Ct', roles: ['dropoffPackage'] },
+    ];
+    for (let seed = 1; seed <= 20; seed++) {
+      const o = generateOffer(ctx({ pois: pois(), cfg: onlyKind('package'), rng: mulberry32(seed) }));
+      expect(o).not.toBeNull();
+      const d = o!.distance;
+      expect(d).toBeGreaterThanOrEqual(offerRules.packageDropoff.min);
+      expect(d).toBeLessThanOrEqual(offerRules.packageDropoff.max);
+      expect(o!.dropoffPoiId).not.toBe('dp-near');
     }
   });
 

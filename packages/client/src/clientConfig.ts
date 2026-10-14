@@ -131,6 +131,6 @@ export interface CourierConfig {
 
 export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
-  | 'interact' | 'board' | 'hit' | 'phone' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
+  | 'interact' | 'board' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
 
 export const clientConfig: ClientConfig = clientJson;
