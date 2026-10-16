@@ -5,7 +5,7 @@ import { Document, Logger, NodeIO, type Material, type Node, type Primitive } fr
 import { ALL_EXTENSIONS, EXTMeshoptCompression, KHRMeshQuantization, type Transform } from '@gltf-transform/extensions';
 import { cloneDocument, prune, quantize, reorder, simplify, weld } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
-import type { AssetCatalog } from '@dm/shared';
+import { hasRuntimeModel, type AssetCatalog, type Lod1Options, type PackManifest } from '@dm/shared';
 import clientJson from '../../../../config/client.json';
 
 export interface ImportReport {
@@ -15,22 +15,12 @@ export interface ImportReport {
   lod1: number;
   /** Catalog ids whose file is absent or unreadable, or has no triangles */
   skipped: string[];
+  /** Why each skipped id was skipped: `absent`, `unreadable: <error>` or `no triangles` */
+  skipReasons: Record<string, string>;
   /** Bytes written in all (models, LOD1 files, textures, manifest) */
   bytes: number;
 }
 
-/** `manifest.json` in the output folder: the ids written and whether each has a LOD1 file (the client reads it). */
-export interface PackManifest {
-  version: 1;
-  models: Record<string, { lod1: boolean }>;
-}
-
-/** LOD1 simplification (config/client.json city.lod1): toward `ratio` within `error`, kept if it drops `minDrop`. */
-export interface Lod1Options {
-  ratio: number;
-  error: number;
-  minDrop: number;
-}
 /** Material names in the runtime files: `tex:<file>` samples textures/<file>; `flat` is vertex-coloured. */
 const FLAT = 'flat';
 
@@ -236,19 +226,28 @@ export async function importPacks(
   await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready, MeshoptSimplifier.ready]);
   const io = readIo();
   const shared: Shared = { textures: new Map(), bytes: 0 };
-  const report: ImportReport = { written: 0, lod1: 0, skipped: [], bytes: 0 };
+  const report: ImportReport = { written: 0, lod1: 0, skipped: [], skipReasons: {}, bytes: 0 };
   const manifest: PackManifest = { version: 1, models: {} };
   for (const e of cat.entries) {
-    if (!e.file || e.use === 'unused') continue;
-    const src = join(folder, e.file);
+    if (!hasRuntimeModel(e)) continue;
+    const src = join(folder, e.file!);
+    const skip = (reason: string): void => {
+      report.skipped.push(e.id);
+      report.skipReasons[e.id] = reason;
+    };
+    if (!existsSync(src)) {
+      skip('absent');
+      continue;
+    }
     let doc: Document | null;
     try {
-      doc = existsSync(src) ? bake(await io.read(src), outDir, shared) : null;
-    } catch {
-      doc = null;
+      doc = bake(await io.read(src), outDir, shared);
+    } catch (err) {
+      skip(`unreadable: ${err instanceof Error ? err.message : String(err)}`);
+      continue;
     }
     if (!doc || triCount(doc) === 0) {
-      report.skipped.push(e.id);
+      skip('no triangles');
       continue;
     }
     await doc.transform(weld());

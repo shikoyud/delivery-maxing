@@ -4,12 +4,17 @@ import { clientConfig } from '../src/clientConfig';
 
 describe('clientConfig', () => {
   it('city LOD radii; the fog ends at the outermost ring; budgets', () => {
-    expect(clientConfig.city.lodRadii).toEqual([160, 370, 700]);
+    // LOD0 ≤ 160 m and LOD1 ≤ 370 m are the spec's limits; tuned down to fit the draw-call and triangle budgets with the
+    // pack models (Task 12 fix round 1: 192 calls / 630 k triangles at the worst measured view)
+    expect(clientConfig.city.lodRadii).toEqual([100, 250, 700]);
+    expect(clientConfig.city.lodRadii[0]).toBeLessThanOrEqual(160);
+    expect(clientConfig.city.lodRadii[1]).toBeLessThanOrEqual(370);
     expect(clientConfig.graphics.fogFar).toBe(clientConfig.city.lodRadii[2]);
-    expect(clientConfig.city).toMatchObject({ relodDistance: 25, renderRegion: 250, labelRadius: 80, modelsBase: 'packs/', loadAheadRadius: 420 });
+    expect(clientConfig.city).toMatchObject({ relodDistance: 25, renderRegion: 400, labelRadius: 80, modelsBase: 'packs/', loadAheadRadius: 420 });
     // models are requested before their lots enter the LOD1 ring
     expect(clientConfig.city.loadAheadRadius).toBeGreaterThan(clientConfig.city.lodRadii[1]!);
     expect(clientConfig.city.lod1).toEqual({ ratio: 0.4, error: 0.02, minDrop: 0.3 });
+    expect(clientConfig.city.lod1Fallback).toBe('box');
     expect(clientConfig.graphics.drawCallBudget).toBe(200);
     expect(clientConfig.graphics.triangleBudget).toBe(700000);
   });

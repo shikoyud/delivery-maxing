@@ -71,7 +71,7 @@ describe('ModelLoader', () => {
     expect(urls.sort()).toEqual(['packs/a.glb', 'packs/a.lod1.glb', 'packs/b.glb']);
   });
 
-  it('a model of two materials is one geometry with two groups and a material per group', async () => {
+  it('a textured model with glass is one geometry, no groups, one folded material (RGBA colours, A = 1 untextured)', async () => {
     const textures: string[] = [];
     const { loader } = fakeLoader(() => model('tex:abc.jpg', 'flat'));
     const ml = new ModelLoader('packs/', loader, {
@@ -81,11 +81,31 @@ describe('ModelLoader', () => {
       },
     });
     ml.request('glass');
+    ml.request('glass2');
     await flush();
     const m = ml.get('glass') as PieceModels;
-    expect(m.lod0.groups).toHaveLength(2);
-    expect(Array.isArray(m.material) && m.material.length).toBe(2);
+    expect(m.lod0.groups).toHaveLength(0);
+    expect(Array.isArray(m.material)).toBe(false);
+    const mat = m.material as THREE.MeshLambertMaterial;
+    expect(mat.map).toBeInstanceOf(THREE.Texture);
+    expect(mat.vertexColors).toBe(true);
+    const col = m.lod0.getAttribute('color');
+    expect(col.itemSize).toBe(4);
+    // 24 vertices per box: the textured box first (A = 0), then the glass (A = 1)
+    expect([col.getW(0), col.getW(23), col.getW(24), col.getW(47)]).toEqual([0, 0, 1, 1]);
+    expect((ml.get('glass2') as PieceModels).material).toBe(mat);
     expect(textures).toEqual(['packs/textures/abc.jpg']);
+  });
+
+  it("a folded model's LOD1 that lost its glass still carries RGBA colours", async () => {
+    const { loader } = fakeLoader((url) => (url.endsWith('.lod1.glb') ? model('tex:abc.jpg') : model('tex:abc.jpg', 'flat')));
+    const ml = new ModelLoader('packs/', loader, { manifest: { version: 1, models: { g: { lod1: true } } }, loadTexture: () => new THREE.Texture() });
+    ml.request('g');
+    await flush();
+    await flush();
+    const m = ml.get('g') as PieceModels;
+    expect(m.lod1!.getAttribute('color').itemSize).toBe(4);
+    expect(m.lod1!.getAttribute('color').getW(0)).toBe(0);
   });
 
   it('ids the manifest lacks are missing without a fetch (one warning each); no manifest at all warns once in all', async () => {
@@ -103,5 +123,42 @@ describe('ModelLoader', () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]![0])).toMatch(/not installed/);
     expect(urls).toEqual([]);
+  });
+
+  it("a LOD1 left with one of LOD0's two materials gets a group for it (else the InstancedMesh would draw nothing)", async () => {
+    // two textures (no fold): one geometry with a group per material; LOD1 kept only the second texture
+    const { loader } = fakeLoader((url) => (url.endsWith('.lod1.glb') ? model('tex:b.jpg') : model('tex:a.jpg', 'tex:b.jpg')));
+    const ml = new ModelLoader('packs/', loader, {
+      manifest: { version: 1, models: { glass: { lod1: true } } },
+      loadTexture: () => new THREE.Texture(),
+    });
+    ml.request('glass');
+    await flush();
+    await flush();
+    const m = ml.get('glass') as PieceModels;
+    expect(Array.isArray(m.material)).toBe(true);
+    const mats = m.material as THREE.Material[];
+    expect(m.lod1!.groups).toHaveLength(1);
+    const g = m.lod1!.groups[0]!;
+    expect(mats[g.materialIndex!]!.name).toBe('tex:b.jpg');
+    expect(g.start).toBe(0);
+    expect(g.count).toBeGreaterThanOrEqual(m.lod1!.index!.count);
+  });
+
+  it('a listed LOD1 that fails to load warns once and draws LOD0 in its place', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { loader } = fakeLoader((url) => {
+      if (url.endsWith('.lod1.glb')) throw new Error('HTTP 404');
+      return model('flat');
+    });
+    const ml = new ModelLoader('packs/', loader, { manifest: { version: 1, models: { a: { lod1: true } } } });
+    ml.request('a');
+    await flush();
+    await flush();
+    const m = ml.get('a') as PieceModels;
+    expect(m.lod0).toBeInstanceOf(THREE.BufferGeometry);
+    expect(m.lod1).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('model LOD1 missing: a');
   });
 });

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { chunkOf, type CatalogEntry, type CatalogIndex, type CityMap, type Lot, type Vec3 } from '@dm/shared';
+import { chunkOf, hasRuntimeModel, type CatalogIndex, type CityMap, type Lot, type Vec3 } from '@dm/shared';
 import type { CityRenderConfig } from '../../clientConfig';
 import { buildBlockMesh, lotBlockId } from './blockMeshes';
 import type { ModelLoader, PieceModels } from './modelLoader';
@@ -29,7 +29,10 @@ interface Piece {
   /** Instance indices of this id's lots (a container stack is one instance per level) */
   instances: number[];
   lod0: Slot | null;
+  /** Null when the model has no LOD1 file and city.lod1Fallback is `box` */
   lod1: Slot | null;
+  /** Its lots draw as the model out to this radius once loaded: lodRadii[1], or lodRadii[0] for a box fallback */
+  reach: number;
 }
 
 interface BlockState {
@@ -52,16 +55,15 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 /** Float slack of the bounds check (m): the sphere is computed from float32 matrices. */
 const BOUNDS_EPS = 1e-3;
 
-/** Whether `e` names a model the importer writes (a file, and used). */
-const hasModel = (e: CatalogEntry): boolean => e.file !== null && e.use !== 'unused';
 
 /**
  * The city (city design §7.2–§7.3, SP2's CityView reshaped): Task 11's code-built regions and per-block placeholder
  * boxes, with the owner's pack models swapped in near the player.
  *
  * - Lots within loadAheadRadius (beyond lodRadii[1]) request their models; each loaded id draws as one InstancedMesh
- *   per LOD ring: its LOD0 model within lodRadii[0], its LOD1 model (LOD0's without a LOD1 file) out to lodRadii[1].
- * - A lot whose model is loaded and within lodRadii[1] leaves its block's merged boxes: the block mesh is rebuilt
+ *   per LOD ring: its LOD0 model within lodRadii[0], its LOD1 model out to lodRadii[1]. A model without a LOD1 file
+ *   stays a box in the LOD1 ring (city.lod1Fallback `box`, the budget default) or draws LOD0 there (`lod0`).
+ * - A lot whose model is loaded and within its reach (above) leaves its block's merged boxes: the block mesh is rebuilt
  *   without it, at most one block per update (nearest first). Until its block is rebuilt a lot stays a box; once
  *   rebuilt it draws as a model until the block is rebuilt with it again (so a lot is never drawn twice or not at all).
  * - Blocks beyond lodRadii[2] are hidden; so are regions whose bounding sphere is (a level's ground slab is one solid
@@ -151,12 +153,12 @@ export class CityView {
       this.lotZ[i] = (lot.rect.minZ + lot.rect.maxZ) / 2;
       if (!lot.open) this.lotBlock[i] = blockIndex.get(lotBlockId(lot, blockIds)) ?? -1;
       const e = cat.get(lot.asset);
-      if (!hasModel(e)) return;
+      if (!hasRuntimeModel(e)) return;
       let k = pieceIndex.get(e.id);
       if (k === undefined) {
         k = this.pieces.length;
         pieceIndex.set(e.id, k);
-        this.pieces.push({ id: e.id, instances: [], lod0: null, lod1: null });
+        this.pieces.push({ id: e.id, instances: [], lod0: null, lod1: null, reach: 0 });
       }
       this.lotPiece[i] = k;
       for (let level = 0; level < (lot.stack ?? 1); level++) {
@@ -276,14 +278,19 @@ export class CityView {
     this.dirtyFill = true;
   }
 
-  /** Which lots should be models now: loaded and within lodRadii[1]. */
+  /** Whether lot `i` should be its model now: loaded and within its piece's reach. */
+  private isModel(i: number): boolean {
+    const k = this.lotPiece[i]!;
+    return k >= 0 && this.loaded.has(k) && this.lotDist[i]! <= this.pieces[k]!.reach;
+  }
+
+  /** Which lots should be models now (isModel), per block. */
   private retarget(): void {
-    const r1 = this.radii[1];
     for (const b of this.blocks) b.want.clear();
     const lots = this.map.layout.lots;
     for (let i = 0; i < lots.length; i++) {
       const b = this.lotBlock[i]!;
-      if (b >= 0 && this.loaded.has(this.lotPiece[i]!) && this.lotDist[i]! <= r1) this.blocks[b]!.want.add(i);
+      if (b >= 0 && this.isModel(i)) this.blocks[b]!.want.add(i);
     }
   }
 
@@ -333,8 +340,12 @@ export class CityView {
     s0.mesh.onAfterShadow = () => {
       s0.mesh.count = s0.n;
     };
-    piece.lod1 = slot(models.lod1 ?? models.lod0, `city-lod1 ${piece.id}`);
-    piece.lod1.mesh.receiveShadow = true;
+    const lod1 = models.lod1 ?? (this.cfg.lod1Fallback === 'lod0' ? models.lod0 : null);
+    piece.reach = lod1 ? this.radii[1] : this.radii[0];
+    if (lod1) {
+      piece.lod1 = slot(lod1, `city-lod1 ${piece.id}`);
+      piece.lod1.mesh.receiveShadow = true;
+    }
   }
 
   /** Rebuilds the nearest block whose swapped lots differ from the wanted ones. */
@@ -367,36 +378,43 @@ export class CityView {
     const r0 = this.radii[0];
     const draws = (lot: number): boolean => {
       const b = this.lotBlock[lot]!;
-      // a box lot draws as a model once its block left it out; an open lot (no box) whenever it is in the ring
-      return b >= 0 ? this.blocks[b]!.swapped.has(lot) : this.loaded.has(this.lotPiece[lot]!) && this.lotDist[lot]! <= this.radii[1];
+      // a box lot draws as a model once its block left it out; an open lot (no box) whenever it is within reach
+      return b >= 0 ? this.blocks[b]!.swapped.has(lot) : this.isModel(lot);
     };
     for (const k of this.loaded) {
       const piece = this.pieces[k]!;
       const s0 = piece.lod0!;
-      const s1 = piece.lod1!;
+      const s1 = piece.lod1;
+      // Instances in the LOD1 ring of a piece without a LOD1 slot are lots whose block has not been rebuilt with
+      // their box yet: they draw LOD0 until it is (never twice, never not at all).
+      const inLod0 = (lot: number): boolean => this.lotDist[lot]! <= r0 || s1 === null;
       // LOD0 inside the shadow camera first (culled with their shadow), then the rest of LOD0, and LOD1.
       for (let pass = 0; pass < 2; pass++) {
         for (const i of piece.instances) {
           const lot = this.instanceLot[i]!;
-          if (!draws(lot) || this.lotDist[lot]! > r0) continue;
+          if (!draws(lot) || !inLod0(lot)) continue;
           const inShadow = this.insideShadowCamera(i);
           if (pass === 0 && inShadow && inView(frustum, this.castSpheres, i)) s0.next[s0.n++] = i;
           else if (pass === 1 && !inShadow && inView(frustum, this.spheres, i)) s0.next[s0.n++] = i;
         }
         if (pass === 0) s0.shadowN = s0.n;
       }
-      for (const i of piece.instances) {
-        const lot = this.instanceLot[i]!;
-        if (draws(lot) && this.lotDist[lot]! > r0 && inView(frustum, this.spheres, i)) s1.next[s1.n++] = i;
+      // a mesh with nothing inside the shadow camera stays out of the shadow pass (an empty draw still costs a call)
+      s0.mesh.castShadow = s0.shadowN > 0;
+      if (s1) {
+        for (const i of piece.instances) {
+          const lot = this.instanceLot[i]!;
+          if (draws(lot) && !inLod0(lot) && inView(frustum, this.spheres, i)) s1.next[s1.n++] = i;
+        }
+        this.commit(s1);
       }
       this.commit(s0);
-      this.commit(s1);
     }
   }
 
-  /** Whether instance `i`'s sphere reaches into the sun's shadow camera (a square around the player). */
+  /** Whether instance `i`'s sphere reaches into the sun's shadow camera (a square around the player); all do without one. */
   private insideShadowCamera(i: number): boolean {
-    if (!this.shadow) return false;
+    if (!this.shadow) return true;
     const s = this.castSpheres;
     const e = this.shadow.extent + s[i * 4 + 3]!;
     return Math.abs(s[i * 4]! - this.center.x) <= e && Math.abs(s[i * 4 + 2]! - this.center.z) <= e;

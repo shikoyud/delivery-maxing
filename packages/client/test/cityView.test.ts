@@ -7,7 +7,8 @@ import { buildBlockMeshes } from '../src/render/city/blockMeshes';
 import { CityView } from '../src/render/city/CityView';
 import { ModelLoader } from '../src/render/city/modelLoader';
 
-const cfg = clientConfig.city;
+// The test city is laid out for the spec's ring radii (LOD0 160 m, LOD1 370 m), whatever config/client.json tunes them to.
+const cfg = { ...clientConfig.city, lodRadii: [160, 370, 700] };
 const [R0, R1, R2] = cfg.lodRadii as [number, number, number];
 const PIZZA = 'mega/Pizza_01';
 const OFFICE = 'mega/Office_01';
@@ -53,17 +54,18 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 const origin = vec3(0, 10, 0);
 const tris = (m: THREE.Mesh): number => (m.geometry.index ? m.geometry.index.count : (m.geometry.getAttribute('position')?.count ?? 0)) / 3;
 
-/** A loader serving `ids` as a 1 m box, every other id a 404. */
-function loaderFor(ids: string[]): ModelLoader {
+/** A loader serving `ids` as a 1 m box (with a LOD1 file for those in `lod1`), every other id a 404. */
+function loaderFor(ids: string[], lod1: string[] = []): ModelLoader {
   const gltf = {
     loadAsync: async (url: string) => {
-      if (!ids.some((id) => url === `packs/${id}.glb`)) throw new Error('HTTP 404');
+      if (!ids.some((id) => url === `packs/${id}.glb` || (lod1.includes(id) && url === `packs/${id}.lod1.glb`))) throw new Error('HTTP 404');
       return { scene: new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ name: 'flat' })) };
     },
   } as unknown as GLTFLoader;
   const quiet = console.warn;
   console.warn = () => undefined;
-  const ml = new ModelLoader('packs/', gltf);
+  const models = Object.fromEntries([PIZZA, OFFICE].map((id) => [id, { lod1: lod1.includes(id) }]));
+  const ml = new ModelLoader('packs/', gltf, ids.length || lod1.length ? { manifest: { version: 1, models } } : {});
   queueMicrotask(() => (console.warn = quiet));
   return ml;
 }
@@ -110,7 +112,7 @@ describe('CityView', () => {
 
   it('a loaded id is instanced within lodRadii[1] (LOD0 / LOD1 by distance) and its blocks are rebuilt without it', async () => {
     const meshes = buildBlockMeshes(map, cat);
-    const view = CityView.create(map, cat, meshes, cfg, loaderFor([PIZZA]));
+    const view = CityView.create(map, cat, meshes, cfg, loaderFor([PIZZA], [PIZZA]));
     await settle(view, origin);
     const near = lots.filter((l) => l.asset === PIZZA && Math.hypot((l.rect.minX + l.rect.maxX) / 2, 3.5) <= R1);
     expect(near.length).toBe(4);
@@ -118,8 +120,9 @@ describe('CityView', () => {
     const total = inst.reduce((s, m) => s + m.count, 0);
     expect(total).toBe(near.length);
     const lod0 = inst.find((m) => m.name === `city-lod0 ${PIZZA}`)!;
+    expect(inst.find((m) => m.name === `city-lod1 ${PIZZA}`)!.count).toBe(2);
     expect(lod0.count).toBe(near.filter((l) => Math.hypot((l.rect.minX + l.rect.maxX) / 2, 3.5) <= R0).length);
-    expect(lod0.castShadow).toBe(true);
+    expect(lod0.castShadow).toBe(true); // no CityShadow given: every LOD0 instance casts
     // blocks 0 and 1 hold those lots: rebuilt with the offices only; block 2 (400 m) still has its pizza boxes
     expect(tris(meshes.get('b0')!)).toBe(2 * 12);
     expect(tris(meshes.get('b1')!)).toBe(2 * 12);
@@ -135,9 +138,47 @@ describe('CityView', () => {
     expect(view.stats().instances).toBe(4);
   });
 
-  it('rebuilds at most one block per frame', async () => {
+  it('without a LOD1 file (lod1Fallback "box") a lot is its model only within lodRadii[0]; a box in the LOD1 ring', async () => {
+    expect(cfg.lod1Fallback).toBe('box');
     const meshes = buildBlockMeshes(map, cat);
     const view = CityView.create(map, cat, meshes, cfg, loaderFor([PIZZA]));
+    await settle(view, origin);
+    const inst = allInstanced(view);
+    expect(inst.map((m) => m.name)).toEqual([`city-lod0 ${PIZZA}`]); // no LOD1 slot at all
+    expect(inst[0]!.count).toBe(2); // the two pizzerias of block 0 (≤ 160 m)
+    expect(tris(meshes.get('b0')!)).toBe(2 * 12);
+    expect(tris(meshes.get('b1')!)).toBe(4 * 12); // 200 m: still boxes
+    // walking 100 m east brings block 1 within lodRadii[0] and block 0 stays within it
+    await settle(view, vec3(100, 10, 0));
+    expect(tris(meshes.get('b1')!)).toBe(2 * 12);
+    expect(view.stats().instances).toBe(4);
+  });
+
+  it('open lots (no box) follow the same rule: their model within lodRadii[0], nothing in the LOD1 ring without LOD1', async () => {
+    const open = [{ ...lot('', PIZZA, 50, 0), open: true }, { ...lot('', PIZZA, 250, 0), open: true }];
+    const openMap = { ...map, layout: { ...layout, blocks: [], lots: open }, solids: [] } as unknown as CityMap;
+    const view = CityView.create(openMap, cat, buildBlockMeshes(openMap, cat), cfg, loaderFor([PIZZA]));
+    await settle(view, origin);
+    expect(view.stats().instances).toBe(1);
+    const withLod1 = CityView.create(openMap, cat, buildBlockMeshes(openMap, cat), cfg, loaderFor([PIZZA], [PIZZA]));
+    await settle(withLod1, origin);
+    expect(withLod1.stats().instances).toBe(2);
+  });
+
+  it('lod1Fallback "lod0" draws the LOD0 model out to lodRadii[1] instead', async () => {
+    const meshes = buildBlockMeshes(map, cat);
+    const view = CityView.create(map, cat, meshes, { ...cfg, lod1Fallback: 'lod0' }, loaderFor([PIZZA]));
+    await settle(view, origin);
+    expect(view.stats().instances).toBe(4);
+    expect(tris(meshes.get('b1')!)).toBe(2 * 12);
+    expect(allInstanced(view).find((m) => m.name === `city-lod1 ${PIZZA}`)!.geometry).toBe(
+      allInstanced(view).find((m) => m.name === `city-lod0 ${PIZZA}`)!.geometry,
+    );
+  });
+
+  it('rebuilds at most one block per frame', async () => {
+    const meshes = buildBlockMeshes(map, cat);
+    const view = CityView.create(map, cat, meshes, cfg, loaderFor([PIZZA], [PIZZA]));
     view.update(origin);
     await flush();
     view.update(origin);

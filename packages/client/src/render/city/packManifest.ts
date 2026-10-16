@@ -1,4 +1,4 @@
-import type { PackManifest } from './modelLoader';
+import type { PackManifest } from '@dm/shared';
 
 /**
  * The runtime packs' manifest (`public/packs/manifest.json`, written by `pnpm assets:import`), bundled at build time

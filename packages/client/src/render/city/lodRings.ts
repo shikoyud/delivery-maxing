@@ -10,6 +10,9 @@ export interface LodRings {
 /**
  * SP2's ring sort: items by horizontal distance from `center` (height is ignored): LOD0 up to radii[0], LOD1 up to
  * radii[1], LOD2 up to radii[2] (edges inclusive). Items beyond radii[2] are in no ring (not drawn).
+ *
+ * Kept for parity with SP2 and its test: CityView applies the same horizontal, edge-inclusive distance tests per lot
+ * inline (it needs each lot's distance for block rebuilds and the LOD1 fallback, not just its ring).
  */
 export function assignLods(items: readonly { position: Vec3 }[], center: Vec3, radii: readonly [number, number, number]): LodRings {
   const out: LodRings = { lod0: [], lod1: [], lod2: [] };

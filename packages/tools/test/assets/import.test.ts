@@ -53,7 +53,7 @@ describe('importPacks', () => {
     expect(glbJson(box).extensionsRequired).toContain('EXT_meshopt_compression');
     expect(glbJson(box).meshes).toHaveLength(1);
     expect(existsSync(join(out, 'fixture/box.lod1.glb'))).toBe(false);
-    expect(r).toEqual({ written: 2, lod1: 0, skipped: ['fixture/gone'], bytes: expect.any(Number) });
+    expect(r).toEqual({ written: 2, lod1: 0, skipped: ['fixture/gone'], skipReasons: { 'fixture/gone': 'absent' }, bytes: expect.any(Number) });
     expect(r.bytes).toBe(statSync(box).size + statSync(join(out, 'fixture/offset.glb')).size + statSync(join(out, 'manifest.json')).size);
     const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
     expect(manifest).toEqual({ version: 1, models: { 'fixture/box': { lod1: false }, 'fixture/offset': { lod1: false } } });

@@ -1,4 +1,4 @@
-import type { RideTier } from '@dm/shared';
+import type { Lod1Options, RideTier } from '@dm/shared';
 import clientJson from '../../../config/client.json';
 
 export interface ClientConfig {
@@ -82,13 +82,22 @@ export interface CityRenderConfig {
    * (a share of the model's size), kept only when it drops at least `minDrop` of them (else LOD1 draws LOD0).
    */
   lod1: Lod1Config;
+  /**
+   * In the LOD1 ring (lodRadii[0]..[1]), a lot whose model has no LOD1 file stays its placeholder box (`box`) or draws
+   * its full LOD0 model (`lod0`). Most pack models simplify too little to get a LOD1 file, so `lod0` costs one
+   * InstancedMesh and every LOD0 triangle per such id out to lodRadii[1].
+   */
+  lod1Fallback: Lod1Fallback;
 }
 
-export interface Lod1Config {
-  ratio: number;
-  error: number;
-  minDrop: number;
+export type Lod1Fallback = 'box' | 'lod0';
+
+function lod1Fallback(v: string): Lod1Fallback {
+  if (v !== 'box' && v !== 'lod0') throw new Error(`config/client.json city.lod1Fallback: expected "box" or "lod0", got ${v}`);
+  return v;
 }
+
+export type Lod1Config = Lod1Options;
 
 /** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */
 export interface ChaseConfig {
@@ -172,4 +181,4 @@ export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
   | 'interact' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
 
-export const clientConfig: ClientConfig = clientJson;
+export const clientConfig: ClientConfig = { ...clientJson, city: { ...clientJson.city, lod1Fallback: lod1Fallback(clientJson.city.lod1Fallback) } };

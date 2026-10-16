@@ -18,5 +18,5 @@ const cat = parseCatalog(JSON.parse(readFileSync(join(REPO, 'map/catalog.json'),
 const t0 = performance.now();
 const r = await importPacks(folder, cat, outDir);
 console.log(`assets:import: ${r.written} models (${r.lod1} with LOD1) into ${outDir}`);
-if (r.skipped.length) console.log(`skipped (absent, unreadable or empty): ${r.skipped.join(', ')}`);
+for (const id of r.skipped) console.log(`skipped ${id}: ${r.skipReasons[id]}`);
 console.log(`total ${(r.bytes / 1e6).toFixed(1)} MB in ${((performance.now() - t0) / 1000).toFixed(0)} s`);

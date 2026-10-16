@@ -124,6 +124,27 @@ export class CatalogIndex {
   }
 }
 
+/** Whether `assets:import` writes a runtime model for `e` (it has a file and is used), so the city may draw one. */
+export function hasRuntimeModel(e: CatalogEntry): boolean {
+  return e.file !== null && e.use !== 'unused';
+}
+
+/** `public/packs/manifest.json`, written by `pnpm assets:import`: the ids it wrote and whether each has a LOD1 file. */
+export interface PackManifest {
+  version: 1;
+  models: Record<string, { lod1: boolean }>;
+}
+
+/**
+ * How `assets:import` makes LOD1 files (config/client.json `city.lod1`): meshopt simplification toward `ratio` of the
+ * triangles within `error` (a share of the model's size), kept only when it drops at least `minDrop` of them.
+ */
+export interface Lod1Options {
+  ratio: number;
+  error: number;
+  minDrop: number;
+}
+
 const up = (v: number): number => Math.ceil(v * 2 - 1e-9) / 2;
 
 /** Lot footprint of a building: w and d rounded up to 0.5 m (city design section 7.2). */
