@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseCatalog } from '@dm/shared';
 import { checkPacks, formatReport } from '../assets/check';

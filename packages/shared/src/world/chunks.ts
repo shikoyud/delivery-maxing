@@ -1,3 +1,4 @@
+import { rotationMatrixXYZ } from '../math/rotation';
 import type { Vec3 } from '../math/vec3';
 import type { Rect, Solid } from './mapTypes';
 
@@ -48,16 +49,7 @@ export function solidRect(s: Solid): Rect {
 /** Half-extents of the AABB of a box with half-extents `h` rotated by XYZ Euler degrees `r` (three.js 'XYZ' order). */
 function rotatedHalfExtents(h: Vec3, r: Vec3 | undefined): Vec3 {
   if (!r) return h;
-  const k = Math.PI / 180;
-  const [cx, sx] = [Math.cos(r.x * k), Math.sin(r.x * k)];
-  const [cy, sy] = [Math.cos(r.y * k), Math.sin(r.y * k)];
-  const [cz, sz] = [Math.cos(r.z * k), Math.sin(r.z * k)];
-  // R = Rx * Ry * Rz
-  const m = [
-    [cy * cz, -cy * sz, sy],
-    [cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy],
-    [sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy],
-  ] as const;
+  const m = rotationMatrixXYZ(r);
   const e = (row: readonly [number, number, number]) => Math.abs(row[0]) * h.x + Math.abs(row[1]) * h.y + Math.abs(row[2]) * h.z;
   return { x: e(m[0]), y: e(m[1]), z: e(m[2]) };
 }

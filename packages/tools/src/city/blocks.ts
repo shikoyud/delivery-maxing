@@ -199,10 +199,10 @@ export function fillBlock(
   if (block.open) {
     const f = cfg.blockFill;
     if (block.open === 'sports') {
-      place(cat.get('mega/FootballPlayground_01'), x0 + f.sportsInset, z0 + f.sportsInset, 'S', { open: true });
-      place(cat.get('mega/BasketballPlayground_01'), x0 + f.sportsInset + f.sportsSpacing, z0 + f.sportsInset, 'S', { open: true });
+      place(cat.get(f.sportsAssets[0]), x0 + f.sportsInset, z0 + f.sportsInset, 'S', { open: true });
+      place(cat.get(f.sportsAssets[1]), x0 + f.sportsInset + f.sportsSpacing, z0 + f.sportsInset, 'S', { open: true });
     } else if (block.open === 'parking') {
-      place(cat.get('mega/ParkingZone_01'), x0 + f.parkingInset, z0, 'S', { open: true });
+      place(cat.get(f.parkingAsset), x0 + f.parkingInset, z0, 'S', { open: true });
     }
     return { lots, roads: [], areas: [{ id: `area-${level}-${k}-${row}`, kind: block.open, rect: block.rect, y, district }] };
   }

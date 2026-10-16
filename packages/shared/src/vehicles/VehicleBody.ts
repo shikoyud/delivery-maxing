@@ -2,7 +2,7 @@ import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { movementConfig } from '../config';
 import type { RideSpec } from '../config/types';
 import { vec3, type Vec3 } from '../math/vec3';
-import { wrapAngle } from '../movement/ground';
+import { clampTurn, wrapAngle } from '../movement/ground';
 import { KinematicMover, type BottomSphere, type MoveResult, type MoverSettings, type RayHit } from '../movement/kinematicMover';
 import type { PhysicsWorld } from '../world/physicsWorld';
 
@@ -122,12 +122,10 @@ export class VehicleBody {
    * the long way. Returns the heading reached (unchanged when both overlap).
    */
   tryTurnToward(target: number, maxTurn: number): number {
-    const turn = wrapAngle(target - this.headingNow);
-    const step = Math.min(Math.abs(turn), maxTurn);
-    if (step === 0) return this.headingNow;
-    const sign = turn < 0 ? -1 : 1;
-    for (const dir of [sign, -sign]) {
-      const heading = wrapAngle(this.headingNow + dir * step);
+    const h = this.headingNow;
+    const step = Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(target - h)));
+    if (step === 0) return h;
+    for (const heading of [clampTurn(h, target, maxTurn), wrapAngle(h - step)]) {
       if (this.tryTurn(heading)) return this.headingNow;
     }
     return this.headingNow;

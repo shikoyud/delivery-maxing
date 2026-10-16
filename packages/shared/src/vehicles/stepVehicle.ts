@@ -5,7 +5,7 @@ import { vec3, type Vec3 } from '../math/vec3';
 import type { MoveResult } from '../movement/kinematicMover';
 import type { SimEvent } from '../movement/types';
 import type { MapData } from '../world/mapTypes';
-import { facing, wrapAngle } from '../movement/ground';
+import { clampTurn, facing, wrapAngle } from '../movement/ground';
 import { clipToAccess } from './accessClip';
 import { applyDrive, driveInput, vehicleTopSpeed } from './drive';
 import { burnFuel } from './fuel';
@@ -44,7 +44,7 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   //    slow two-wheeler back out for a moment instead). No turn in the air.
   if (turn && turn.wishHeading !== null) {
     const before = body.heading;
-    const shortWay = wrapAngle(before + Math.max(-turn.maxTurn, Math.min(turn.maxTurn, wrapAngle(turn.wishHeading - before))));
+    const shortWay = clampTurn(before, turn.wishHeading, turn.maxTurn);
     v.heading = body.tryTurnToward(turn.wishHeading, turn.maxTurn);
     const refused = Math.abs(wrapAngle(v.heading - shortWay)) > 1e-9;
     v.backOutTicks = refused ? Math.round(ridingConfig.riding.backOutSeconds / dt) : Math.max(0, (v.backOutTicks ?? 0) - 1);

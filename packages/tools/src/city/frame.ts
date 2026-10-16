@@ -7,7 +7,8 @@ import type { CityConfig, CityDistrict, Level, NamesConfig, Road } from '@dm/sha
 export type BuiltLevel = 'L1' | 'L2' | 'L3';
 export const BUILT_LEVELS: readonly BuiltLevel[] = ['L1', 'L2', 'L3'];
 
-const AVENUE_INDEX: Record<Level, number> = { L0: 0, L1: 1, L2: 2, L3: 3, ridge: 4 };
+/** Which of names.json `streets.avenues` names each level's avenue. */
+export const AVENUE_INDEX: Record<Level, number> = { L0: 0, L1: 1, L2: 2, L3: 3, ridge: 4 };
 
 /** Centre lines of the north-south cross streets: crossStreetFirst + crossStreetPitch * k. */
 export function crossStreetXs(cfg: CityConfig): number[] {

@@ -112,3 +112,8 @@ export function wrapAngle(a: number): number {
   const w = a - twoPi * Math.floor((a + Math.PI) / twoPi);
   return w === -Math.PI ? Math.PI : w;
 }
+
+/** The heading reached turning from `heading` toward `wish` the short way by at most `maxTurn`, wrapped to (-π, π]. */
+export function clampTurn(heading: number, wish: number, maxTurn: number): number {
+  return wrapAngle(heading + Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(wish - heading))));
+}

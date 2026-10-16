@@ -156,6 +156,7 @@ export interface OrdersConfig {
   /** Food orders: seconds the kitchen takes once the courier arrives at the pickup, before the order can be picked up. */
   prep: { foodSeconds: number };
   lockout: { seconds: number };
+  /** `doorMeters` must equal config/city.json `pois.doorSpacing` (the generator and the order picker keep the same gap). */
   spacing: { doorMeters: number; reuseSeconds: number };
   referenceSpeed: number;
   hot: TimeRule;
@@ -212,6 +213,9 @@ export interface CityConfig {
     sportsSpacing: number;
     /** Car park: x inset from the block's west side */
     parkingInset: number;
+    /** The two courts of a sports block, west to east, and the car park's model */
+    sportsAssets: [string, string];
+    parkingAsset: string;
   };
   terrain: {
     /** Thickness of every ground slab (m); its top is the level height. */
@@ -320,7 +324,8 @@ export interface CityConfig {
     yard: { x0: number; z0: number; x1: number; z1: number };
     containerCols: number;
     containerRows: number;
-    containers: { x0: number; z0: number; dx: number; dz: number; stackMax: number };
+    containers: { asset: string; x0: number; z0: number; dx: number; dz: number; stackMax: number };
+    craneAsset: string;
     cranes: { x: number; z: number }[];
     buildings: { asset: string; x: number; z: number; facing: 'N' | 'S' | 'E' | 'W' }[];
     street: { x0: number; x1: number; z0: number };
@@ -350,7 +355,7 @@ export interface CityConfig {
     pierWidth: number;
     pierZ0: number;
     breakwater: { x0: number; x1: number; z0: number; z1: number; armX0: number };
-    lighthouse: { asset: string; x: number };
+    lighthouse: { asset: string; name: string; x: number };
     marina: { x0: number; z0: number; x1: number; z1: number; y: number };
     quayStreet: { z0: number; z1: number };
     alley: { z0: number; z1: number };
@@ -371,6 +376,7 @@ export interface CityConfig {
     /** Below movement fall.outOfBoundsY, so a fall into the bay still respawns */
     water: { top: number; thickness: number; z1: number };
   };
+  /** `doorSpacing` must equal config/orders.json `spacing.doorMeters` (the generator and the order picker keep the same gap). */
   pois: { foodPickupCap: number; packagePickupCap: number; target: number; doorSpacing: number };
   /** A lot's door stands `offset` m outside the middle of its facing edge (on the sidewalk) */
   door: { offset: number };

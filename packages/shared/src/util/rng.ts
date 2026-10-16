@@ -26,3 +26,13 @@ export function pickWeighted<K extends string>(rng: Rng, weights: Record<K, numb
   const last = entries[entries.length - 1];
   return (last as [K, number])[0];
 }
+
+/** A Fisher-Yates shuffled copy of `items`. */
+export function shuffle<T>(items: readonly T[], rng: Rng): T[] {
+  const a = items.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j] as T, a[i] as T];
+  }
+  return a;
+}

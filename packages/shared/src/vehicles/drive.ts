@@ -2,7 +2,7 @@ import { ridingConfig, vehiclesConfig } from '../config';
 import type { RideSpec, RidingConfig, VehiclesConfig } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
 import { vec3, type Vec3 } from '../math/vec3';
-import { facing, hasMoveInput, wishDirection, wrapAngle, yawOf } from '../movement/ground';
+import { clampTurn, facing, hasMoveInput, wishDirection, yawOf } from '../movement/ground';
 import type { VehicleState } from './types';
 
 export interface DriveInput {
@@ -79,7 +79,7 @@ export function applyDrive(
   }
   // The speed maths rolls along the heading this step asks for (as if the turn is granted); the caller's turn may
   // be refused, and the sideways velocity that leaves then slides the vehicle off the obstacle as before.
-  const h = facing(wishHeading === null ? v.heading : wrapAngle(v.heading + Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(wishHeading - v.heading)))));
+  const h = facing(wishHeading === null ? v.heading : clampTurn(v.heading, wishHeading, maxTurn));
   s = v.velocity.x * h.x + v.velocity.z * h.z;
 
   // Sideways velocity (relative to the new heading) decays toward 0 at the grip.

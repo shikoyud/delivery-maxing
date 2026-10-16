@@ -49,7 +49,10 @@ function overlappingPairs<T extends { rect: Rect }>(items: readonly T[]): [T, T]
   return out;
 }
 
-/** Where a lot's front door belongs: centred on its `facing` edge, `offset` outside the rect, at its base height. */
+/**
+ * Where a lot's front door belongs: centred on its `facing` edge, `offset` outside the rect, at its base height. This
+ * restates the generator's door formula on purpose: an independent check, not shared code.
+ */
 function expectedDoor(lot: Lot, offset: number): Vec3 {
   const r = lot.rect;
   const cx = (r.minX + r.maxX) / 2;

@@ -16,6 +16,7 @@ import { bandConnectors } from './bands';
 import { lotPlacer } from './blocks';
 import { gasLot } from './landmarks';
 import { PALETTES, pickLot } from './palettes';
+import { AVENUE_INDEX } from './frame';
 
 // The ridge (city design sections 2 and 4): Hillcrest Drive winding along it, detached houses on 15 x 16 m plots both
 // sides of the drive, the lookout park, the Hillcrest gas station and the cliff behind, as the prototype's ridge section.
@@ -63,7 +64,7 @@ export function buildHillcrest(cfg: CityConfig, rng: Rng, cat: CatalogIndex, nam
   const h = cfg.hillcrest;
   const ridge = cfg.levels.ridge;
   const y = ridge.y;
-  const name = names.streets.avenues[4]!;
+  const name = names.streets.avenues[AVENUE_INDEX.ridge]!;
   const polyline = Array.from({ length: Math.floor(cfg.size / h.driveStep) + 1 }, (_, i) => vec3(i * h.driveStep, y, driveZ(i * h.driveStep, cfg)));
   const curvedRoad: CurvedRoad = { id: 'road-ridge-drive', polyline, width: h.driveWidth };
   const blockId = 'block-ridge-hillcrest';

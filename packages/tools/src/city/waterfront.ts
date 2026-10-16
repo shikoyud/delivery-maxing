@@ -13,7 +13,7 @@ import {
   type Road,
 } from '@dm/shared';
 import { lotPlacer, type LotPlacer } from './blocks';
-import { roadId } from './frame';
+import { AVENUE_INDEX, roadId } from './frame';
 import { gasLot } from './landmarks';
 import { PALETTES, pickLot } from './palettes';
 
@@ -91,7 +91,7 @@ export function buildWaterfront(cfg: CityConfig, rng: Rng, cat: CatalogIndex, na
   const placer = (name: string, district: CityDistrict, pal = PALETTES[district]): LotPlacer =>
     lotPlacer({ idPrefix: `lot-L0-${name}`, level: 'L0', district, block: `block-L0-${name}`, y }, pal, rng, cat, cfg);
 
-  const harborRoad: Road = { id: roadId.avenue('L0'), kind: 'avenue', rect: rect(0, roadZ, size, cfg.levels.L0.z1), y, name: names.streets.avenues[0]! };
+  const harborRoad: Road = { id: roadId.avenue('L0'), kind: 'avenue', rect: rect(0, roadZ, size, cfg.levels.L0.z1), y, name: names.streets.avenues[AVENUE_INDEX.L0]! };
   roads.push(harborRoad);
 
   // ------------------------------------------------------------------ the docks
@@ -101,14 +101,14 @@ export function buildWaterfront(cfg: CityConfig, rng: Rng, cat: CatalogIndex, na
   area('docks-quay', 'quay', rect(0, d.quayZ, b.x0, roadZ), 'docks');
   area('rail', 'rail', rect(0, d.railZ0, d.railX1, d.railZ1), 'docks');
   area('container-yard', 'containerYard', rect(d.yard.x0, d.yard.z0, d.yard.x1, d.yard.z1), 'docks');
-  const container = cat.get('missing/Container_01');
+  const container = cat.get(d.containers.asset);
   for (let i = 0; i < d.containerCols; i++) {
     for (let j = 0; j < d.containerRows; j++) {
       // lengthwise along x: a W-facing lot is its catalog depth along x
       docks.place(container, d.containers.x0 + i * d.containers.dx, d.containers.z0 + j * d.containers.dz, 'W', { stack: 1 + ((i + j) % d.containers.stackMax) });
     }
   }
-  for (const c of d.cranes) docks.place(cat.get('missing/Crane_01'), c.x, c.z, 'W');
+  for (const c of d.cranes) docks.place(cat.get(d.craneAsset), c.x, c.z, 'W');
   for (const bd of d.buildings) docks.place(cat.get(bd.asset), bd.x, bd.z, bd.facing);
   const dockRoads: Road[] = [
     { id: 'road-L0-docks-street', kind: 'street', rect: rect(d.street.x0, d.street.z0, d.street.x1, roadZ), y, name: names.streets.docks.street },
@@ -168,7 +168,7 @@ export function buildWaterfront(cfg: CityConfig, rng: Rng, cat: CatalogIndex, na
   const quay = placer('harbor-quay', 'harbor');
   const lh = cat.get(h.lighthouse.asset);
   const breakwaterRoad: Road = { id: 'breakwater', kind: 'street', rect: rect(bw.x0, bw.z0, bw.x1, bw.z1), y, name: names.streets.breakwater };
-  fronts.set(quay.place(lh, h.lighthouse.x, (bw.z0 + bw.z1) / 2 + lotSize(lh).d / 2, 'N', { name: 'Lighthouse' }).id, breakwaterRoad);
+  fronts.set(quay.place(lh, h.lighthouse.x, (bw.z0 + bw.z1) / 2 + lotSize(lh).d / 2, 'N', { name: h.lighthouse.name }).id, breakwaterRoad);
   const inner = placer('harbor', 'harbor');
   for (const row of h.rows) {
     const p = row.z <= h.quayStreet.z0 ? quay : inner;

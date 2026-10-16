@@ -1,4 +1,4 @@
-import type { Solid } from '@dm/shared';
+import { rotationMatrixXYZ, type Solid } from '@dm/shared';
 
 /** Corner k of a unit box: bit 0 → +x, bit 1 → +y, bit 2 → +z. */
 const CORNERS = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1] as const);
@@ -15,18 +15,7 @@ const TRIS = [
   [4, 5, 7], [4, 7, 6],
 ] as const;
 
-/** Row-major rotation matrix for an XYZ Euler in degrees, matching three.js 'XYZ' order (R = Rx·Ry·Rz). */
-export function rotationMatrixXYZ(r: { x: number; y: number; z: number }): number[][] {
-  const [a, b, c] = [r.x, r.y, r.z].map((d) => (d * Math.PI) / 180) as [number, number, number];
-  const [ca, sa, cb, sb, cc, sc] = [Math.cos(a), Math.sin(a), Math.cos(b), Math.sin(b), Math.cos(c), Math.sin(c)];
-  return [
-    [cb * cc, -cb * sc, sb],
-    [ca * sc + sa * sb * cc, ca * cc - sa * sb * sc, -sa * cb],
-    [sa * sc - ca * sb * cc, sa * cc + ca * sb * sc, ca * cb],
-  ];
-}
-
-/** Solid kinds whose tops nobody walks or drives on: building and hospital roofs (no parkour, spec rev. 2) and parapets. */
+/** Solid kinds whose tops nobody walks or drives on: building and hospital roofs (no parkour, spec rev. 2), parapets and water. */
 const ROOFED: ReadonlySet<Solid['kind']> = new Set(['building', 'hospital', 'parapet', 'water']);
 
 /**

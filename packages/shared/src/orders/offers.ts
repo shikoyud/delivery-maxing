@@ -1,6 +1,6 @@
 import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
-import { pickWeighted, type Rng } from '../util/rng';
+import { pickWeighted, shuffle, type Rng } from '../util/rng';
 import { bandFor, type PathDistance } from '../world/distance';
 import type { OrderRules, Poi, PoiRole } from '../world/mapTypes';
 import type { DistanceTable } from './distanceTable';
@@ -26,15 +26,6 @@ export interface OfferContext {
   /** Door ids used within reuseSeconds (reuse). */
   recentlyUsed: ReadonlySet<string>;
   nextId: () => string;
-}
-
-function shuffle<T>(items: T[], rng: Rng): T[] {
-  const a = items.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j] as T, a[i] as T];
-  }
-  return a;
 }
 
 const pickOne = <T>(items: T[], rng: Rng): T => items[Math.floor(rng() * items.length)] as T;

@@ -1,4 +1,4 @@
-import { vec3, type CatalogIndex, type CityConfig, type Lot, type PoiRole, type Rng, type Vec3 } from '@dm/shared';
+import { shuffle, vec3, type CatalogIndex, type CityConfig, type Lot, type PoiRole, type Rng, type Vec3 } from '@dm/shared';
 
 // Doors and POIs (city design section 6, the prototype's POI pass). Every building with catalog POI roles gets a
 // front door; pickPois then keeps the doors the game uses: the slope walk-ups' upper doors, pickups up to the caps,
@@ -25,15 +25,6 @@ export function assignDoors(lots: Lot[], cat: CatalogIndex, cfg: CityConfig): Lo
     const at = { S: [cx, r.minZ - off], N: [cx, r.maxZ + off], E: [r.maxX + off, cz], W: [r.minX - off, cz] }[lot.facing];
     return { ...lot, door: vec3(at[0]!, lot.y, at[1]!) };
   });
-}
-
-function shuffle<T>(items: T[], rng: Rng): T[] {
-  const a = items.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j] as T, a[i] as T];
-  }
-  return a;
 }
 
 /**

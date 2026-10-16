@@ -30,6 +30,9 @@ export function createPagedPhysicsWorld(
   chunkSize: number,
   radii: WorldConfig['physics'],
 ): PagedPhysicsWorld {
+  if (radii.unloadRadius < radii.loadRadius) {
+    throw new Error(`paged physics: unloadRadius ${radii.unloadRadius} is below loadRadius ${radii.loadRadius}`);
+  }
   const world = new rapier.World({ x: 0, y: 0, z: 0 });
 
   const solidsByChunk = new Map<ChunkKey, number[]>();

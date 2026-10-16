@@ -51,6 +51,10 @@ function inputEast(sprintTap: boolean): InputFrame {
 }
 
 describe('collider pager', () => {
+  it('refuses an unloadRadius below loadRadius (chunks would load and unload on the same step)', () => {
+    expect(() => createPagedPhysicsWorld(rapier, stripMap(), chunkSize, { loadRadius: 200, unloadRadius: 150 })).toThrow(/unloadRadius/);
+  });
+
   it('a ray at the far wall misses until update() near it, then hits', () => {
     const pw = paged(stripMap());
     pw.update(vec3(50, 1, STRIP_Z));

@@ -33,7 +33,9 @@
     "openDistricts": ["industrial", "rowhouses", "apartments", "uptown"],
     "sportsInset": 6,
     "sportsSpacing": 20,
-    "parkingInset": 3
+    "parkingInset": 3,
+    "sportsAssets": ["mega/FootballPlayground_01", "mega/BasketballPlayground_01"],
+    "parkingAsset": "mega/ParkingZone_01"
   },
   "terrain": {
     "slabThickness": 1,
@@ -99,7 +101,8 @@
     "yard": { "x0": 20, "z0": 120, "x1": 200, "z1": 184 },
     "containerCols": 8,
     "containerRows": 4,
-    "containers": { "x0": 26, "z0": 126, "dx": 21, "dz": 15, "stackMax": 3 },
+    "containers": { "asset": "missing/Container_01", "x0": 26, "z0": 126, "dx": 21, "dz": 15, "stackMax": 3 },
+    "craneAsset": "missing/Crane_01",
     "cranes": [{ "x": 40, "z": 98 }, { "x": 120, "z": 98 }],
     "buildings": [
       { "asset": "missing/Warehouse_01", "x": 215, "z": 130, "facing": "W" },
@@ -138,7 +141,7 @@
     "pierWidth": 12,
     "pierZ0": 30,
     "breakwater": { "x0": 1120, "x1": 1200, "z0": 60, "z1": 72, "armX0": 1188 },
-    "lighthouse": { "asset": "trop/Lighthouse_01", "x": 1150 },
+    "lighthouse": { "asset": "trop/Lighthouse_01", "name": "Lighthouse", "x": 1150 },
     "marina": { "x0": 840, "z0": 70, "x1": 980, "z1": 118, "y": 0 },
     "quayStreet": { "z0": 170, "z1": 182 },
     "alley": { "z0": 210, "z1": 214 },
