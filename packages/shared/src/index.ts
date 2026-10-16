@@ -26,6 +26,7 @@ export * from './vehicles/stepVehicle';
 export * from './vehicles/Garage';
 export * from './orders/types';
 export * from './orders/rules';
+export * from './orders/orderText';
 export * from './orders/offers';
 export * from './orders/OrderSystem';
 export * from './vehicles/summon';

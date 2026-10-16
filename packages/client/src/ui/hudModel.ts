@@ -1,6 +1,8 @@
 import {
+  dropoffText,
   ordersConfig,
   orderText,
+  pickupText,
   scoreOrder,
   type AcceptResult,
   type ActiveOrder,
@@ -28,7 +30,7 @@ export interface HudOrder {
   id: string;
   kind: OrderKind;
   item: string;
-  /** "Pick up {item} from {pickup}" before pickup, "Deliver to {dropoff}" after. */
+  /** "Pick up {item} from {pickup name}, {address}." before pickup, "Deliver to {dropoff address}" after. */
   stage: string;
   /** Name of the current target (pickup, then dropoff). */
   targetName: string;
@@ -54,6 +56,9 @@ export interface HudOffer {
   pickupText: string;
   /** Where the pickup is (the Map app's hollow dot). */
   pickup: Vec3;
+  /** The dropoff's household or business name, shown above `dropoffText`; null when the door has no address (greybox). */
+  dropoffName: string | null;
+  /** "Deliver to {address}" (the name when there is no address). */
   dropoffText: string;
   band: Band;
   weightKg: number | null;
@@ -189,9 +194,10 @@ export function poiIndex(map: MapData): PoiIndex {
 
 /** The instruction for an order's current stop. */
 export function stageText(a: ActiveOrder, pois: PoiIndex): string {
+  const { order } = a;
   return a.pickedUpAt === null
-    ? `Pick up ${a.order.item} from ${pois.get(a.order.pickupPoiId).name}`
-    : `Deliver to ${pois.get(a.order.dropoffPoiId).name}`;
+    ? pickupText(pois.get(order.pickupPoiId), order.item, order.kind === 'package' ? order.weightKg : null)
+    : dropoffText(pois.get(order.dropoffPoiId));
 }
 
 function countdown(limit: number, elapsed: number): HudTimer {
@@ -255,13 +261,15 @@ export function hudModel(
       };
     }),
     offers: orders.offers.map(({ order, expiresAt }): HudOffer => {
-      const text = orderText(order, pois.get(order.pickupPoiId), pois.get(order.dropoffPoiId));
+      const dropoff = pois.get(order.dropoffPoiId);
+      const text = orderText(order, pois.get(order.pickupPoiId), dropoff);
       const best = scoreOrder(order, { inTime: true, expressOnTime: true, intact: true }, ordersConfig);
       return {
         id: order.id,
         kind: order.kind,
         pickupText: text.pickup,
         pickup: pois.target(order.pickupPoiId),
+        dropoffName: dropoff.address ? dropoff.name : null,
         dropoffText: text.dropoff,
         band: order.band,
         weightKg: order.weightKg,

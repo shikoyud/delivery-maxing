@@ -63,3 +63,30 @@ test('residential blocks over 2 floors get an apartment number', () => {
   expect(n.address(lot, road, cat.get('mega/House_09'))).toMatch(/^\d+ Market St$/);
   expect(n.address(lot, road, cat.get('mega/Bakery_01'))).toMatch(/^\d+ Market St$/);
 });
+
+test('the first-word share, retries and household initials come from names.json', () => {
+  expect(namesConfig.firstWordShare).toBe(0.6);
+  expect(namesConfig.tries).toBe(40);
+  expect(namesConfig.initials).toBe('ABCDEFGHIJKLMNOPRSTVW');
+  const first = new Set(namesConfig.first);
+  const allFirst = new Namer({ ...namesConfig, firstWordShare: 1 }, mulberry32(1));
+  const allSurname = new Namer({ ...namesConfig, firstWordShare: 0 }, mulberry32(1));
+  const bakery = cat.get('mega/Bakery_01');
+  const lead = (s: string) => namesConfig.first.find((w) => s.startsWith(`${w} `));
+  for (let i = 0; i < 30; i++) {
+    expect(lead(allFirst.business(bakery))).toBeDefined();
+    expect(first.has(allSurname.business(bakery).split(' ')[0]!)).toBe(false);
+  }
+  const q = new Namer({ ...namesConfig, initials: 'Q' }, mulberry32(1));
+  for (let i = 0; i < 30; i++) expect(q.household()).toMatch(/^Q\. /);
+});
+
+test('no surname makes a famous person or a near-brand name', () => {
+  for (const s of ['Orwell', 'Huxley', 'Beckett', 'Thackeray', 'Nash', 'Wren']) expect(namesConfig.surnames).not.toContain(s);
+  const n = namer(8);
+  const ids = cat.placedBuildings().map((e) => e.id);
+  for (let i = 0; i < 2000; i++) {
+    const name = n.business(cat.get(ids[i % ids.length]!));
+    expect(name).not.toMatch(/^Nash Motors$|^Wren\b.*Kitchen/);
+  }
+});

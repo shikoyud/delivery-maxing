@@ -112,7 +112,8 @@ export function bandBlock(band: BandId, i: number, seg: Span, cfg: CityConfig): 
  * The walk-ups built into a band (`slopeLots.bands`: B and C), as the prototype: 8 m slots from the west, skipping
  * slots within `clearance` of a connector extent, `chance` of a walk-up from the `slope` palette in each free slot.
  * A walk-up stands on the lower street (front at z0, base at y0) with its roofline at the upper level and an upper door
- * on its back wall at y1. Names, addresses and front doors are left empty (generate.ts and the POI pass give them).
+ * on its back wall at y1. Successive walk-ups are `pois.doorSpacing` apart (centre to centre) or more, so every upper
+ * door survives the POI pass. Names, addresses and front doors are left empty (generate.ts and the POI pass give them).
  */
 export function slopeLots(band: BandId, used: Span[], rng: Rng, cat: CatalogIndex, cfg: CityConfig): Lot[] {
   const sl = cfg.slopeBands.slopeLots;
@@ -152,7 +153,8 @@ export function slopeLots(band: BandId, used: Span[], rng: Rng, cat: CatalogInde
       prop: false,
       open: false,
     });
-    x += w + sl.spacing;
+    // walk-ups stand at least doorSpacing apart centre to centre, so both their doors keep the POI spacing
+    x += Math.max(w + sl.spacing, cfg.pois.doorSpacing);
   }
   return lots;
 }

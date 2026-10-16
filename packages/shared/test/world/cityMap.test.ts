@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { vec3 } from '../../src/math/vec3';
 import { cityConfig, worldConfig } from '../../src/config';
 import { zoneAt } from '../../src/world/access';
+import { parseCityLayout } from '../../src/world/cityLayout';
 import { layoutToMap } from '../../src/world/cityMap';
 import { steepLaneGeometry } from '../../src/world/terrainSolids';
 import { cityCatalogFixture, cityLayoutFixture } from './cityFixtures';
@@ -109,6 +110,17 @@ describe('layoutToMap', () => {
     expect(upper.roles).toEqual(['dropoffFood']);
     expect(upper.upper).toBe(true);
     expect(upper.position.y).toBe(24);
+  });
+
+  it("a lot's own roles (a restaurant past the pickup cap) replace the catalog's", () => {
+    const l = cityLayoutFixture();
+    l.lots = l.lots.map((x) => (x.id === 'lot-bakery' ? { ...x, roles: ['dropoffPackage'] } : x));
+    expect(() => parseCityLayout(JSON.parse(JSON.stringify(l)))).not.toThrow();
+    const p = layoutToMap(l, cityCatalogFixture()).pois.find((x) => x.id === 'lot-bakery')!;
+    expect(p.roles).toEqual(['dropoffPackage']);
+    const bad = JSON.parse(JSON.stringify(l));
+    bad.lots.find((x: { id: string }) => x.id === 'lot-bakery').roles = ['teleport'];
+    expect(() => parseCityLayout(bad)).toThrow(/lot-bakery/);
   });
 
   it('an upper door gives a food-only POI even when the asset has no poi roles', () => {

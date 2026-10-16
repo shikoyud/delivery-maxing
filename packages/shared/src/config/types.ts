@@ -338,6 +338,8 @@ export interface CityConfig {
     water: { top: number; thickness: number; z1: number };
   };
   pois: { foodPickupCap: number; packagePickupCap: number; target: number; doorSpacing: number };
+  /** A lot's door stands `offset` m outside the middle of its facing edge (on the sidewalk) */
+  door: { offset: number };
   orderRules: OrderRules;
 }
 
@@ -348,6 +350,12 @@ export interface NamesConfig {
   /** Suffixes by catalog kind word ("bakery") or, failing that, by catalog category ("food") */
   kinds: Record<string, string[]>;
   surnames: string[];
+  /** Share of business names that lead with a `first` word (the rest lead with a surname) */
+  firstWordShare: number;
+  /** Random draws a name pattern gets before the Namer moves on to the longer one */
+  tries: number;
+  /** Household initials ("J. Hartley"), one letter each */
+  initials: string;
   streets: {
     /** L0, L1, L2, L3, ridge */
     avenues: string[];
@@ -375,4 +383,13 @@ export interface NamesConfig {
     /** Street-name words shortened in addresses ("Street" -> "St") */
     abbreviations: Record<string, string>;
   };
+  /** Order text: a catalog `poi.items` phrase ("bread and pastries") -> concrete things ("2 baguettes and a sourdough") */
+  items: ItemsConfig;
+}
+
+export interface ItemsConfig {
+  /** Chance an order names a second, different thing ("... and a sourdough") */
+  secondChance: number;
+  /** Per catalog phrase: up to `max` of each thing, each thing as [singular, plural] */
+  phrases: Record<string, { max: number; things: string[][] }>;
 }

@@ -646,6 +646,13 @@ kbd {
   font-weight: 600;
 }
 
+/* the dropoff's household or business name, its address line under it */
+.phone-card-name {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #557078;
+}
+
 .phone-reward {
   font-size: 13px;
   font-weight: 700;

@@ -22,13 +22,14 @@ import { BUILT_LEVELS, levelRoads, roadId } from './frame';
 import { buildHillcrest } from './hillcrest';
 import { specialBlocks } from './landmarks';
 import { Namer } from './names';
+import { assignDoors, pickPois } from './pois';
 import { PALETTES } from './palettes';
 import { buildWaterfront } from './waterfront';
 
 // The deterministic city generator (city design section 7.1; the prototype city-map-prototype/layout.py is its
 // starting point). Part 1: the frame, the blocks and their lots, names and addresses. Part 2: the slope bands (their
-// connectors, gaps and walk-ups). Part 3: the landmarks (special blocks), the waterfront and Hillcrest. Task 9 adds
-// the doors.
+// connectors, gaps and walk-ups). Part 3: the landmarks (special blocks), the waterfront and Hillcrest. Last, the
+// doors and the POI selection (pois.ts).
 
 /** FNV-1a of a stream name mixed with the seed: each district (and the namer) has its own random stream. */
 export function districtSeed(seed: number, name: string): number {
@@ -122,6 +123,7 @@ export function generateLayout(cfg: CityConfig, names: NamesConfig, cat: Catalog
     if (!front) throw new Error(`generate: lot ${lot.id} has no road for its address`);
     return { ...lot, name: lot.name || namer.lotName(entry), address: namer.address(lot, front, entry) };
   });
+  const withPois = pickPois(assignDoors(lots, cat, cfg), cat, cfg, mulberry32(districtSeed(cfg.seed, 'pois')));
 
   return {
     version: 1,
@@ -130,7 +132,7 @@ export function generateLayout(cfg: CityConfig, names: NamesConfig, cat: Catalog
     levels: cfg.levels,
     bands: cfg.bands,
     blocks,
-    lots,
+    lots: withPois,
     roads,
     curvedRoads: [hc.curvedRoad],
     connectors,

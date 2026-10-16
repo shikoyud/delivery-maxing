@@ -173,6 +173,7 @@
     "water": { "top": -6, "thickness": 1, "z1": 200 }
   },
   "pois": { "foodPickupCap": 100, "packagePickupCap": 60, "target": 800, "doorSpacing": 12 },
+  "door": { "offset": 0.5 },
   "orderRules": {
     "bands": { "shortMax": 350, "mediumMax": 800 },
     "foodDropoff": { "min": 150, "max": 800 },

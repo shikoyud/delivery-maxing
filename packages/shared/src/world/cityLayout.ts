@@ -1,5 +1,5 @@
 import type { Vec3 } from '../math/vec3';
-import type { CityDistrict, GasStation, Hospital, OrderRules, Rect } from './mapTypes';
+import type { CityDistrict, GasStation, Hospital, OrderRules, PoiRole, Rect } from './mapTypes';
 
 export type { CityDistrict } from './mapTypes';
 
@@ -21,6 +21,11 @@ export interface Lot {
   name: string;
   address: string;
   door: Vec3 | null;
+  /**
+   * The door's roles when fewer than the catalog's: a restaurant or shop past the pickup cap keeps only its dropoff
+   * roles. Absent: the catalog's `poi.roles`.
+   */
+  roles?: PoiRole[];
   upperDoor: { position: Vec3; y: number } | null;
   /** Rendered and collided as a prop instead of a building */
   prop: boolean;
@@ -115,6 +120,7 @@ const FACINGS: readonly string[] = ['N', 'S', 'E', 'W'];
 const DISTRICTS: readonly string[] = [
   'docks', 'beach', 'harbor', 'industrial', 'downtown', 'market', 'rowhouses', 'highstreet', 'apartments', 'uptown', 'hillcrest', 'slope',
 ];
+const POI_ROLES: readonly string[] = ['foodPickup', 'packagePickup', 'dropoffFood', 'dropoffPackage'];
 const ROAD_KINDS: readonly string[] = ['avenue', 'street', 'lane', 'dockLane', 'alley'];
 const CONNECTOR_KINDS: readonly string[] = ['switchback', 'steepLane', 'stairs'];
 const AREA_KINDS: readonly string[] = [
@@ -180,6 +186,9 @@ export function parseCityLayout(json: unknown): CityLayout {
     oneOf('lot', id, 'district', l.district, DISTRICTS);
     for (const f of ['block', 'name', 'address'] as const) if (typeof l[f] !== 'string') fail('lot', id, `${f} must be a string`);
     if (l.door !== null && !isVec(l.door)) fail('lot', id, 'door must be a Vec3 or null');
+    if (l.roles !== undefined && !(Array.isArray(l.roles) && l.roles.every((r) => typeof r === 'string' && POI_ROLES.includes(r)))) {
+      fail('lot', id, `roles must be a list of ${POI_ROLES.join('/')}`);
+    }
     if (l.upperDoor !== null && !(isObj(l.upperDoor) && isVec(l.upperDoor.position) && isNum(l.upperDoor.y))) fail('lot', id, 'upperDoor must be { position, y } or null');
     if (typeof l.prop !== 'boolean' || typeof l.open !== 'boolean') fail('lot', id, 'prop and open must be booleans');
     if (l.stack !== undefined && !(isNum(l.stack) && Number.isInteger(l.stack) && l.stack >= 1)) fail('lot', id, 'stack must be a whole number from 1');

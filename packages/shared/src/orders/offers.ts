@@ -3,6 +3,7 @@ import type { Vec3 } from '../math/vec3';
 import { pickWeighted, type Rng } from '../util/rng';
 import { bandFor, type PathDistance } from '../world/distance';
 import type { OrderRules, Poi, PoiRole } from '../world/mapTypes';
+import { itemPhrase } from './orderText';
 import { expressLimit, timeLimit, weightClassFor } from './rules';
 import type { CarrierCapacity, Modifier, Order, OrderKind } from './types';
 
@@ -82,7 +83,8 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
     if (dropoffs.length === 0) continue;
     const { poi: dropoff, distance } = pickOne(dropoffs, rng);
 
-    const item = pickup.items && pickup.items.length > 0 ? pickOne(pickup.items, rng) : pickup.name;
+    // a quantity and concrete things for the catalog phrase ("2 baguettes and a sourdough"); the greybox's own words as they are
+    const item = pickup.items && pickup.items.length > 0 ? itemPhrase(pickOne(pickup.items, rng), rng) : pickup.name;
     let weightKg: number | null = null;
     let modifier: Modifier | null = null;
     if (kind === 'package') {

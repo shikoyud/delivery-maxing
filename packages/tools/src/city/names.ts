@@ -3,9 +3,6 @@ import type { CatalogEntry, Lot, NamesConfig, Rng, Road } from '@dm/shared';
 // Fictional business, household and street names (city design section 6.2, config/names.json). Every name a Namer
 // gives is unique for its run.
 
-const INITIALS = 'ABCDEFGHIJKLMNOPRSTVW';
-const TRIES = 40;
-
 export class Namer {
   private readonly used = new Set<string>();
 
@@ -42,7 +39,7 @@ export class Namer {
     if (!suffixes || suffixes.length === 0) throw new Error(`names: no business suffixes for ${entry.id}`);
     const { first, surnames } = this.cfg;
     return this.unique(
-      () => `${this.rng() < 0.6 ? this.pick(first) : this.pick(surnames)} ${this.pick(suffixes)}`,
+      () => `${this.rng() < this.cfg.firstWordShare ? this.pick(first) : this.pick(surnames)} ${this.pick(suffixes)}`,
       () => `${this.pick(surnames)} & ${this.pick(surnames)} ${this.pick(suffixes)}`,
       function* () {
         for (const a of surnames) for (const b of surnames) for (const s of suffixes) if (a !== b) yield `${a} & ${b} ${s}`;
@@ -53,11 +50,12 @@ export class Namer {
   /** "<initial>. <surname>", e.g. "J. Hartley"; double-barrelled once those run out. */
   household(): string {
     const { surnames } = this.cfg;
+    const initials = [...this.cfg.initials];
     return this.unique(
-      () => `${this.pick([...INITIALS])}. ${this.pick(surnames)}`,
-      () => `${this.pick([...INITIALS])}. ${this.pick(surnames)}-${this.pick(surnames)}`,
+      () => `${this.pick(initials)}. ${this.pick(surnames)}`,
+      () => `${this.pick(initials)}. ${this.pick(surnames)}-${this.pick(surnames)}`,
       function* () {
-        for (const i of INITIALS) for (const a of surnames) for (const b of surnames) if (a !== b) yield `${i}. ${a}-${b}`;
+        for (const i of initials) for (const a of surnames) for (const b of surnames) if (a !== b) yield `${i}. ${a}-${b}`;
       },
     );
   }
@@ -100,7 +98,7 @@ export class Namer {
 
   private unique(simple: () => string, longer: () => string, all: () => Iterable<string>): string {
     for (const make of [simple, longer]) {
-      for (let i = 0; i < TRIES; i++) {
+      for (let i = 0; i < this.cfg.tries; i++) {
         const s = make();
         if (!this.used.has(s)) return this.take(s);
       }

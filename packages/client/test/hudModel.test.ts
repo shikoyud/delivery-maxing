@@ -89,6 +89,7 @@ describe('hudModel', () => {
     expect(card.pickupText).toContain(pickup.name);
     expect(card.pickupText).toContain(offer.order.item);
     expect(card.dropoffText).toBe(`Deliver to ${dropoff.name}`);
+    expect(card.dropoffName).toBeNull(); // greybox POIs have no address: the sentence already names the door
     expect(card.band).toBe(offer.order.band);
     expect(card.weightKg).toBe(offer.order.weightKg);
     expect(card.secondsLeft).toBeCloseTo(offer.expiresAt - (t + 5));
@@ -96,6 +97,26 @@ describe('hudModel', () => {
     expect(card.reward).toEqual({ points: best.points, coins: best.coins });
     const base = scoreOrder(offer.order, { inTime: false, expressOnTime: false, intact: false }, ordersConfig);
     expect(card.reward.points).toBeGreaterThan(base.points + 1); // time bonus plus the modifier bonus
+  });
+
+  it('city offers name the pickup with its address, and the dropoff by address with the name on its own line', () => {
+    const city = { ...map, pois: map.pois.map((p, i) => ({ ...p, address: `${i + 1} Test St` })) };
+    const sys = new OrderSystem(
+      { pois: city.pois, distance: streetDistance, rules: city.orderRules, cfg: ordersConfig, rng: mulberry32(7), capacity: vehiclesConfig.car },
+      0,
+    );
+    let found: Offer | undefined;
+    for (let t = 0; t < 5000 && !found; t += 0.5) {
+      sys.update(t, spawn, nowhere);
+      found = sys.offers[0];
+    }
+    const m = hudModel(sys, city, spawn, 0, null);
+    const card = m.offers[0]!;
+    const pickup = poiIndex(city).get(found!.order.pickupPoiId);
+    const dropoff = poiIndex(city).get(found!.order.dropoffPoiId);
+    expect(card.pickupText).toContain(`from ${pickup.name}, ${pickup.address}.`);
+    expect(card.dropoffName).toBe(dropoff.name);
+    expect(card.dropoffText).toBe(`Deliver to ${dropoff.address}`);
   });
 
   it("offers carry the phone's accept status (OrderSystem.canAccept at that time)", () => {
@@ -120,7 +141,7 @@ describe('hudModel', () => {
     let m = hudModel(sys, map, spawn, t + 3, null);
     let o = m.orders[0]!;
     expect(o).toMatchObject({ id: offer.order.id, kind: 'food', item: offer.order.item, targetName: pickup.name, timer: null, express: null, weightKg: null, fragileIntact: null });
-    expect(o.stage).toBe(`Pick up ${offer.order.item} from ${pickup.name}`);
+    expect(o.stage).toBe(`Pick up ${offer.order.item} from ${pickup.name}.`);
     expect(o.stage).toBe(stageText(sys.active[0]!, pois));
     expect(o.target).toEqual(pickup.position);
     expect(o.distance).toBe(Math.round(Math.hypot(spawn.x - pickup.position.x, spawn.y - pickup.position.y, spawn.z - pickup.position.z)));

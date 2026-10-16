@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import { expressLimit, orderText, scoreOrder, timeLimit, weightClassFor } from '../../src/orders/rules';
+import { expressLimit, scoreOrder, timeLimit, weightClassFor } from '../../src/orders/rules';
 import type { Order } from '../../src/orders/types';
-import type { Poi } from '../../src/world/mapTypes';
 
 const wc = ordersConfig.weightClasses;
 
@@ -69,18 +68,5 @@ describe('scoreOrder', () => {
     const fr = order({ weightClass: 'small', modifier: 'fragile' });
     expect(scoreOrder(fr, all, ordersConfig)).toEqual({ points: 4, coins: 40, bonuses: ['par', 'fragile'] });
     expect(scoreOrder(fr, { ...all, intact: false }, ordersConfig).bonuses).toEqual(['par']);
-  });
-});
-
-describe('orderText', () => {
-  it('names the item and the doors, with kg for packages', () => {
-    const a = { name: 'Corner Deli' } as Poi;
-    const b = { name: 'Harbor Books' } as Poi;
-    expect(orderText(order({ kind: 'food', item: 'noodles', weightKg: null }), a, b)).toEqual({
-      pickup: 'Pick up noodles from Corner Deli', dropoff: 'Deliver to Harbor Books',
-    });
-    expect(orderText(order({ item: 'crate', weightKg: 30 }), a, b)).toEqual({
-      pickup: 'Pick up crate from Corner Deli (30 kg)', dropoff: 'Deliver to Harbor Books',
-    });
   });
 });

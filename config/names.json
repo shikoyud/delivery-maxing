@@ -75,7 +75,6 @@
     "Abernathy",
     "Ashby",
     "Barlow",
-    "Beckett",
     "Birch",
     "Blackwood",
     "Bramley",
@@ -100,7 +99,6 @@
     "Hartley",
     "Haskell",
     "Hollis",
-    "Huxley",
     "Iverson",
     "Keating",
     "Kendrick",
@@ -113,9 +111,7 @@
     "Marlow",
     "Merriman",
     "Ashcombe",
-    "Nash",
     "Newcombe",
-    "Orwell",
     "Pemberton",
     "Penhallow",
     "Prescott",
@@ -127,7 +123,6 @@
     "Sheridan",
     "Stanhope",
     "Sutcliffe",
-    "Thackeray",
     "Thorne",
     "Tilbury",
     "Trevelyan",
@@ -137,7 +132,6 @@
     "Wainwright",
     "Whitlock",
     "Winslow",
-    "Wren",
     "Ashdown",
     "Bellamy",
     "Brannigan",
@@ -169,6 +163,9 @@
     "Duarte",
     "Sato"
   ],
+  "firstWordShare": 0.6,
+  "tries": 40,
+  "initials": "ABCDEFGHIJKLMNOPRSTVW",
   "kinds": {
     "bakery": [
       "Bakery",
@@ -438,6 +435,152 @@
       "Drive": "Dr",
       "Terrace": "Tce",
       "Row": "Row"
+    }
+  },
+  "items": {
+    "secondChance": 0.4,
+    "phrases": {
+      "bread and pastries": {
+        "max": 3,
+        "things": [
+          ["baguette", "baguettes"],
+          ["sourdough", "sourdoughs"],
+          ["croissant", "croissants"],
+          ["cinnamon roll", "cinnamon rolls"],
+          ["rye loaf", "rye loaves"]
+        ]
+      },
+      "burger meals": {
+        "max": 3,
+        "things": [
+          ["cheeseburger meal", "cheeseburger meals"],
+          ["veggie burger", "veggie burgers"],
+          ["double burger", "double burgers"],
+          ["side of fries", "sides of fries"]
+        ]
+      },
+      "sandwiches and coffee": {
+        "max": 3,
+        "things": [
+          ["club sandwich", "club sandwiches"],
+          ["toasted panini", "toasted paninis"],
+          ["flat white", "flat whites"],
+          ["iced latte", "iced lattes"]
+        ]
+      },
+      "coffee and pastries": {
+        "max": 4,
+        "things": [
+          ["cappuccino", "cappuccinos"],
+          ["flat white", "flat whites"],
+          ["almond croissant", "almond croissants"],
+          ["blueberry muffin", "blueberry muffins"]
+        ]
+      },
+      "donuts": {
+        "max": 6,
+        "things": [
+          ["glazed donut", "glazed donuts"],
+          ["jam donut", "jam donuts"],
+          ["chocolate donut", "chocolate donuts"],
+          ["box of donut holes", "boxes of donut holes"]
+        ]
+      },
+      "pizzas": {
+        "max": 3,
+        "things": [
+          ["margherita", "margheritas"],
+          ["pepperoni pizza", "pepperoni pizzas"],
+          ["veggie pizza", "veggie pizzas"],
+          ["garlic bread", "garlic breads"]
+        ]
+      },
+      "sushi platters": {
+        "max": 2,
+        "things": [
+          ["salmon platter", "salmon platters"],
+          ["maki platter", "maki platters"],
+          ["miso soup", "miso soups"],
+          ["box of nigiri", "boxes of nigiri"]
+        ]
+      },
+      "noodle boxes": {
+        "max": 3,
+        "things": [
+          ["noodle box", "noodle boxes"],
+          ["box of fried rice", "boxes of fried rice"],
+          ["spring roll", "spring rolls"],
+          ["dumpling box", "dumpling boxes"]
+        ]
+      },
+      "smoothies and snacks": {
+        "max": 4,
+        "things": [
+          ["mango smoothie", "mango smoothies"],
+          ["berry smoothie", "berry smoothies"],
+          ["fruit cup", "fruit cups"],
+          ["bag of chips", "bags of chips"]
+        ]
+      },
+      "snacks and drinks": {
+        "max": 4,
+        "things": [
+          ["cold soda", "cold sodas"],
+          ["bottle of water", "bottles of water"],
+          ["bag of chips", "bags of chips"],
+          ["chocolate bar", "chocolate bars"]
+        ]
+      },
+      "car parts": {
+        "max": 2,
+        "things": [
+          ["brake kit", "brake kits"],
+          ["car battery", "car batteries"],
+          ["set of tyres", "sets of tyres"],
+          ["exhaust pipe", "exhaust pipes"]
+        ]
+      },
+      "grocery boxes": {
+        "max": 2,
+        "things": [
+          ["grocery box", "grocery boxes"]
+        ]
+      },
+      "grocery and household boxes": {
+        "max": 2,
+        "things": [
+          ["grocery box", "grocery boxes"],
+          ["household box", "household boxes"]
+        ]
+      },
+      "industrial goods": {
+        "max": 2,
+        "things": [
+          ["crate of fittings", "crates of fittings"],
+          ["drum of oil", "drums of oil"],
+          ["steel coil", "steel coils"]
+        ]
+      },
+      "rail parcels": {
+        "max": 3,
+        "things": [
+          ["rail parcel", "rail parcels"]
+        ]
+      },
+      "parcels": {
+        "max": 3,
+        "things": [
+          ["parcel", "parcels"],
+          ["registered letter pack", "registered letter packs"]
+        ]
+      },
+      "pallets and crates": {
+        "max": 2,
+        "things": [
+          ["pallet", "pallets"],
+          ["crate", "crates"]
+        ]
+      }
     }
   }
 }

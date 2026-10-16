@@ -59,7 +59,8 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
   const pois: Poi[] = [];
   for (const lot of layout.lots) {
     const poi = cat.get(lot.asset).poi;
-    if (lot.door && poi && poi.roles.length > 0) {
+    const roles = lot.roles ?? poi?.roles ?? [];
+    if (lot.door && roles.length > 0) {
       pois.push({
         id: lot.id,
         position: lot.door,
@@ -68,9 +69,9 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
         name: lot.name,
         address: lot.address,
         lotId: lot.id,
-        roles: [...poi.roles],
-        ...(poi.items ? { items: [poi.items] } : {}),
-        ...(poi.weightKg ? { weightKg: poi.weightKg } : {}),
+        roles: [...roles],
+        ...(poi?.items ? { items: [poi.items] } : {}),
+        ...(poi?.weightKg ? { weightKg: poi.weightKg } : {}),
       });
     }
     if (lot.upperDoor) {

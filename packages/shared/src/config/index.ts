@@ -13,6 +13,7 @@ export type {
   AccessKind,
   CityConfig,
   MovementConfig,
+  ItemsConfig,
   NamesConfig,
   NavConfig,
   OrdersConfig,
