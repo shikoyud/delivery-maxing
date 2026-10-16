@@ -41,6 +41,20 @@ describe('catalog', () => {
     expect(lotSize({ ...e, size: { w: 5, h: 1, d: 5.01 } })).toEqual({ w: 5, d: 5.5 });
   });
 
+  it('lotSize swaps w and d for a model whose front is ±x (its frontage is its z extent)', () => {
+    const e = new CatalogIndex(parseCatalog(catalogJson)).get('mega/Bakery_01');
+    expect(lotSize({ ...e, front: '+x' })).toEqual({ w: 6, d: 5 });
+    expect(lotSize({ ...e, front: '-x' })).toEqual({ w: 6, d: 5 });
+    expect(lotSize({ ...e, front: '-z' })).toEqual({ w: 5, d: 6 });
+  });
+
+  it('parseCatalog rejects an unknown front or status, naming the entry', () => {
+    const entry = { id: 'mega/Bad_01', file: 'x.glb', category: 'food', use: 'placed', size: { w: 1, h: 1, d: 1 } };
+    expect(() => parseCatalog({ version: 1, packs: {}, entries: [{ ...entry, front: 'z' }] })).toThrow(/Bad_01.*front/);
+    expect(() => parseCatalog({ version: 1, packs: {}, entries: [{ ...entry, status: 'gone' }] })).toThrow(/Bad_01.*status/);
+    for (const front of ['+z', '-z', '+x', '-x']) expect(parseCatalog({ version: 1, packs: {}, entries: [{ ...entry, front }] }).entries[0]!.front).toBe(front);
+  });
+
   it('parseCatalog rejects an entry without size', () => {
     const bad = { version: 1, packs: {}, entries: [{ id: 'mega/Airport_01', file: 'x.glb', category: 'landmark', use: 'unused' }] };
     expect(() => parseCatalog(bad)).toThrow(/Airport_01.*size|size.*Airport_01/);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CatalogEntry, Facing, Lot } from '@dm/shared';
+import { lotSize, type CatalogEntry, type Facing, type Lot } from '@dm/shared';
 import { frontYaw, lotTransform } from '../src/render/city/placement';
 
 const bakery: CatalogEntry = {
@@ -77,5 +77,39 @@ describe('lotTransform', () => {
     const plain: CatalogEntry = { ...bakery, pivot: undefined, front: undefined } as CatalogEntry;
     const t = lotTransform(lotAt(plain, 'N', 0, 0, 0), plain);
     expect(t.position).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('a ±x-front model sits inside its lotSize lot (w and d swapped) for every facing', () => {
+    // the generator's lotRect: facing N/S puts the lot's w along x, E/W along z
+    const rectOf = (e: CatalogEntry, facing: Facing, cx: number, cz: number) => {
+      const { w, d } = lotSize(e);
+      const along = facing === 'N' || facing === 'S';
+      const hx = (along ? w : d) / 2;
+      const hz = (along ? d : w) / 2;
+      return { minX: cx - hx, maxX: cx + hx, minZ: cz - hz, maxZ: cz + hz };
+    };
+    for (const front of ['+x', '-x', '+z', '-z'] as const) {
+      const e: CatalogEntry = { ...police, front, size: { w: 20.26, h: 11, d: 10.9 } };
+      for (const facing of ['N', 'S', 'E', 'W'] as const) {
+        const rect = rectOf(e, facing, 40, 60);
+        const lot: Lot = { ...lotAt(e, facing, 40, 0, 60), rect };
+        const t = lotTransform(lot, e);
+        const c = Math.cos(t.rotY);
+        const s = Math.sin(t.rotY);
+        const p = e.pivot!;
+        for (const sx of [-1, 1]) {
+          for (const sz of [-1, 1]) {
+            const x = p.x + (sx * e.size.w) / 2;
+            const z = p.z + (sz * e.size.d) / 2;
+            const wx = t.position.x + x * c + z * s;
+            const wz = t.position.z - x * s + z * c;
+            expect(wx).toBeGreaterThanOrEqual(rect.minX - 1e-9);
+            expect(wx).toBeLessThanOrEqual(rect.maxX + 1e-9);
+            expect(wz).toBeGreaterThanOrEqual(rect.minZ - 1e-9);
+            expect(wz).toBeLessThanOrEqual(rect.maxZ + 1e-9);
+          }
+        }
+      }
+    }
   });
 });

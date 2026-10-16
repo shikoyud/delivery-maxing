@@ -72,6 +72,8 @@ const CATEGORIES: ReadonlySet<string> = new Set<CatalogCategory>([
   'fx',
 ]);
 const USES: ReadonlySet<string> = new Set(['placed', 'prop', 'unused']);
+const FRONTS: ReadonlySet<string> = new Set<FrontAxis>(['+z', '-z', '+x', '-x']);
+const STATUSES: ReadonlySet<string> = new Set(['missing', 'empty']);
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -90,6 +92,10 @@ export function parseCatalog(json: unknown): AssetCatalog {
     const category = raw.category === 'vehicles' ? 'vehicle' : raw.category === 'props' ? 'prop' : raw.category;
     if (typeof category !== 'string' || !CATEGORIES.has(category)) throw new Error(`catalog: ${id}: unknown category ${String(raw.category)}`);
     if (typeof raw.use !== 'string' || !USES.has(raw.use)) throw new Error(`catalog: ${id}: unknown use ${String(raw.use)}`);
+    if (raw.front !== undefined && (typeof raw.front !== 'string' || !FRONTS.has(raw.front)))
+      throw new Error(`catalog: ${id}: unknown front ${String(raw.front)} (expected +z, -z, +x or -x)`);
+    if (raw.status !== undefined && (typeof raw.status !== 'string' || !STATUSES.has(raw.status)))
+      throw new Error(`catalog: ${id}: unknown status ${String(raw.status)} (expected missing or empty)`);
     // particle-only models have no geometry and so no size in the file: they get a zero size
     const s = raw.size === undefined && raw.status === 'empty' ? { w: 0, h: 0, d: 0 } : raw.size;
     if (!isObj(s) || !isNum(s.w) || !isNum(s.h) || !isNum(s.d)) throw new Error(`catalog: ${id}: size must be { w, h, d } numbers`);
@@ -147,7 +153,11 @@ export interface Lod1Options {
 
 const up = (v: number): number => Math.ceil(v * 2 - 1e-9) / 2;
 
-/** Lot footprint of a building: w and d rounded up to 0.5 m (city design section 7.2). */
+/**
+ * Lot footprint of a building: w along the street and d deep, rounded up to 0.5 m (city design section 7.2). A model
+ * whose front is ±x is turned a quarter to face the street, so its z extent is the frontage: w and d swap.
+ */
 export function lotSize(e: CatalogEntry): { w: number; d: number } {
-  return { w: up(e.size.w), d: up(e.size.d) };
+  const sideways = e.front === '+x' || e.front === '-x';
+  return sideways ? { w: up(e.size.d), d: up(e.size.w) } : { w: up(e.size.w), d: up(e.size.d) };
 }
