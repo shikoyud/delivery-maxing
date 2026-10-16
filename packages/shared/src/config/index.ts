@@ -9,6 +9,7 @@ import type { MovementConfig, NavConfig, OrdersConfig, RidingConfig, VehiclesCon
 export { RIDE_TIERS } from './types';
 export type {
   AccessKind,
+  CityConfig,
   MovementConfig,
   NavConfig,
   OrdersConfig,

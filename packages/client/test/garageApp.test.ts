@@ -28,6 +28,8 @@ const hospital = (id: string, x: number) => ({
 });
 
 const testMap = (): MapData => ({
+  kind: 'greybox',
+  chunkSize: 100,
   size: 600,
   solids: [{ id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(600, 1, 600) }],
   pois: [],

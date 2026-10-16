@@ -142,3 +142,22 @@ export interface WorldConfig {
   chunkSize: number;
   physics: { loadRadius: number; unloadRadius: number };
 }
+
+/**
+ * config/city.json (created by SP5 Task 6). Only the fields `layoutToMap` and `terrainSolids` read are declared here;
+ * Task 6 completes the interface.
+ */
+export interface CityConfig {
+  layout: {
+    /** Thickness of every ground / terrain slab (m); its top is the level or area height. */
+    slabThickness: number;
+    /** Width of a steep-lane access zone (m). */
+    steepLaneWidth: number;
+    /** A steep lane's access zone is a chain of rects this long (m, along z). */
+    steepLaneSegment: number;
+    /** Width of a staircase access zone (m). */
+    stairsWidth: number;
+    /** L0 ground rects; each stops at the water (x range and the z the ground starts at). */
+    l0Ground: { id: string; x0: number; x1: number; z0: number }[];
+  };
+}

@@ -20,6 +20,8 @@ export const testHospital = (id: string, center = vec3(0, 0, 0), name = id): Hos
 });
 
 export const emptyMap = (): MapData => ({
+  kind: 'greybox',
+  chunkSize: 100,
   size: 200,
   solids: [{ id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(200, 1, 200) }],
   pois: [],

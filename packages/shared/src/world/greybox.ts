@@ -1,4 +1,5 @@
 import { mulberry32 } from '../util/rng';
+import { worldConfig } from '../config';
 import { vec3 } from '../math/vec3';
 import type { AccessZone, GreyboxSource, Hospital, MapData, Rect, Solid } from './mapTypes';
 
@@ -78,5 +79,5 @@ export function expandGreybox(src: GreyboxSource): MapData {
   }
 
   solids.push(...src.solids);
-  return { ...map, solids, accessZones: [...src.accessZones, ...alleyZones] };
+  return { ...map, kind: 'greybox', chunkSize: worldConfig.chunkSize, solids, accessZones: [...src.accessZones, ...alleyZones] };
 }

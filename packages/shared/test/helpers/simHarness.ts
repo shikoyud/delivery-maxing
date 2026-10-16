@@ -83,6 +83,8 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   const yaw = opts.yaw ?? 0;
   const size = opts.size ?? 200;
   const map: MapData = {
+    kind: 'greybox',
+    chunkSize: 100,
     size,
     solids: [
       ...(opts.floor === false ? [] : [box('floor', vec3(0, -0.5, 0), vec3(size, 1, size), { kind: 'ground' })]),
