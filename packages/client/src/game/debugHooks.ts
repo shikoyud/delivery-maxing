@@ -3,7 +3,9 @@ import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer
 import type { HudNextStop } from '../ui/hudModel';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { PhoneApp } from '../ui/phone/Phone';
+import type { MapDebugView } from '../ui/mapDebug';
 import type { Game } from './Game';
+import type { PerfResult } from './perf';
 import type { MapKind } from './mapLoader';
 
 /** Test and debugging API on window.__dm, installed only with ?debug. */
@@ -71,6 +73,14 @@ export interface DebugApi {
   loadedChunks(): string[];
   /** The city view's counts (instances drawn, block meshes shown, models loaded and missing); null on the greybox. */
   cityStats(): { instances: number; blocks: number; models: number; missing: number } | null;
+  /** Whether the F4 map debug view is shown (always false on the greybox). */
+  mapDebugVisible(): boolean;
+  /** Shows or hides the F4 map debug view (as F4 does). */
+  setMapDebug(on: boolean): void;
+  /** What the F4 view shows (see MapDebugView.debug); null on the greybox. */
+  mapDebug(): ReturnType<MapDebugView['debug']> | null;
+  /** The finished ?perf=1 flythrough's result (null until it has finished, or without ?perf=1). */
+  perfResult(): PerfResult | null;
   /**
    * The chase camera: its position, boom length, distance to the courier's own pivot, whether the courier is hidden
    * (that distance under minDistance), and where
@@ -158,6 +168,10 @@ export function installDebugHooks(game: Game): void {
     mapKind: () => game.mapKind,
     loadedChunks: () => game.loadedChunks(),
     cityStats: () => game.cityView?.stats() ?? null,
+    mapDebugVisible: () => game.mapDebug?.visible ?? false,
+    setMapDebug: (on) => game.setMapDebug(on),
+    mapDebug: () => game.mapDebug?.debug() ?? null,
+    perfResult: () => (game.perfResult ? structuredClone(game.perfResult) : null),
     camera() {
       const cam = game.renderer.camera;
       const c = game.courier.root.position;

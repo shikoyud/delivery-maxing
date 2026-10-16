@@ -1,5 +1,6 @@
-import type { Lod1Options, RideTier } from '@dm/shared';
+import type { Lod1Options, RideTier, Vec3 } from '@dm/shared';
 import clientJson from '../../../config/client.json';
+import perfJson from '../../../config/perf.json';
 
 export interface ClientConfig {
   camera: {
@@ -181,6 +182,33 @@ export interface CourierConfig {
 
 export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
-  | 'interact' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
+  | 'interact' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay' | 'mapDebug';
+
+/**
+ * The ?perf=1 flythrough (config/perf.json): street and terrace views over the city. The run's `seconds` are split
+ * equally across the route entries; each starts at its `feet` and glides toward its `target` at `speed`, looking at it.
+ */
+export interface PerfConfig {
+  route: { feet: Vec3; target: Vec3 }[];
+  /** Flythrough length (s, all entries together) and glide speed (m/s) toward each entry's target. */
+  seconds: number;
+  speed: number;
+  /** The run passes when the overall p95 frame time is at most this (ms): 60 Hz frames read ~16.7 ms, a dropped one ~33 ms. */
+  p95TargetMs: number;
+  /** Frames from the start of the run left out of the statistics (shader compiles, first uploads), s. */
+  warmupSeconds: number;
+  /** The first this-many frames after each teleport to the next viewpoint are left out (the jump itself). */
+  teleportSkipFrames: number;
+  /** Fewer counted frames than this and the run reports "too few frames" instead of PASS or FAIL. */
+  minFrames: number;
+}
+
+function checkPerf(cfg: PerfConfig): PerfConfig {
+  if (cfg.route.length === 0) throw new Error('config/perf.json: route is empty');
+  if (!(cfg.seconds > 0) || !(cfg.speed >= 0)) throw new Error('config/perf.json: seconds must be > 0 and speed >= 0');
+  return cfg;
+}
+
+export const perfConfig: PerfConfig = checkPerf(perfJson);
 
 export const clientConfig: ClientConfig = { ...clientJson, city: { ...clientJson.city, lod1Fallback: lod1Fallback(clientJson.city.lod1Fallback) } };

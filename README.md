@@ -58,6 +58,7 @@ pnpm install && pnpm dev   # then open the URL Vite prints
 | M | Map view (the phone opened straight on the Map app) |
 | Y | Accept the top offer |
 | F3 | Toggle the debug overlay |
+| F4 | Toggle the map debug view (city): lot ids and roles within 80 m, distance bands, chunks, access zones |
 | `` ` `` (backtick) | Open the dev panel |
 
 Your slots and the package weight you can take follow the vehicle you ride, or
@@ -80,6 +81,25 @@ progress** (zero totals, every vehicle back in the bay).
 Add `?debug=1` to the URL to turn on the debug hooks and overlay.
 Points, Coins, deliveries, your vehicles and the last ride persist in your
 browser's localStorage. Add `?seed=N` to make the offer stream reproducible.
+
+### Frame-rate check (`?perf=1`)
+
+`?perf=1` flies the camera over the city for 60 s (eight viewpoints from
+`config/perf.json`, 7.5 s each) and then shows a result panel: PASS when the
+p95 frame time is 16.7 ms or less, the draw calls and triangles per viewpoint
+against the budgets (200 calls, 700 k triangles), and the city and pack-model
+counts. Input is ignored during the run; keep the tab in front.
+
+1. With the packs in `assets/packs/`: `pnpm assets:import assets/packs`, then
+   `pnpm dev` (or `pnpm build && pnpm --filter @dm/client preview`).
+2. Open the printed URL with `?perf=1` appended, e.g.
+   `http://localhost:5173/?perf=1`, in a normal (not
+   headless) browser window at the size you play at.
+3. When the panel appears, press **Copy result** and paste the JSON into the
+   thread (it records the GPU, screen, pixel ratio and every number above).
+
+`&seconds=5` shortens the run (a quick smoke check; too few frames for a
+verdict); with `&debug=1` the result is also on `window.__dm.perfResult()`.
 
 ### One-time Pages setup
 

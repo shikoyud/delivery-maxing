@@ -16,7 +16,7 @@
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
     "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "hit": ["Mouse0"],
     "phone": ["Tab"], "map": ["KeyM"], "accept": ["KeyY"], "mount": ["KeyF"],
-    "devPanel": ["Backquote"], "debugOverlay": ["F3"] } },
+    "devPanel": ["Backquote"], "debugOverlay": ["F3"], "mapDebug": ["F4"] } },
   "courier": { "height": 1.8, "turnEaseRate": 14, "facingMinSpeed": 1.0,
     "crossFade": 0.15, "runSpeedForFullRun": 8, "runMinTimeScale": 0.7,
     "idleSpeed": 0.3, "walkMaxSpeed": 4, "fallSpeed": 2, "airClip": [0.2, 0.36],

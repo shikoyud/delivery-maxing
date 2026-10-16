@@ -119,6 +119,21 @@ describe('ActionState', () => {
     a.keyDown('F3');
     expect(onUi).toHaveBeenCalledTimes(2);
   });
+
+  it('F4 toggles the map debug view (a UI key: works without pointer lock, latches no button)', () => {
+    expect(clientConfig.input.bindings.mapDebug).toEqual(['F4']);
+    const a = make();
+    const onUi = vi.fn();
+    a.onUiKey = onUi;
+    expect(a.isUiCode('F4')).toBe(true);
+    a.keyDown('F4');
+    expect(onUi.mock.calls).toEqual([['mapDebug']]);
+    const f = a.sampleTick();
+    for (const b of [f.jump, f.crouch, f.sprint, f.interact, f.hit, f.phone, f.map, f.accept, f.mount]) expect(b).toEqual({ held: false, pressed: false });
+    a.keyUp('F4');
+    a.keyDown('F4');
+    expect(onUi).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('ActionState.setLook', () => {

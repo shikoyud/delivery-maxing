@@ -47,6 +47,7 @@ import { CAR_MODEL_ID } from '../render/vehicles/vehicleMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
+import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
 import {
@@ -62,6 +63,7 @@ import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } 
 import { interpolationStart } from './interpolation';
 import { loadMap, type MapKind } from './mapLoader';
 import { garageRows } from '../ui/phone/garageApp';
+import type { PerfResult } from './perf';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
@@ -115,6 +117,17 @@ export class Game {
   readonly models: ModelLoader;
   /** The city's regions, blocks and pack models; null on the greybox. */
   readonly cityView: CityView | null = null;
+  /** The F4 map debug view (lot labels, distance bands, chunks, zones); null on the greybox. */
+  readonly mapDebug: MapDebugView | null = null;
+  /** The last ?perf=1 flythrough's result (null until one has finished). */
+  perfResult: PerfResult | null = null;
+  /**
+   * When set, takes over each frame (the ?perf=1 flythrough): it is called with the frame's wall clock (ms) before the
+   * frame is drawn, input and the simulation do not run, and it moves the player itself (viewpoint()).
+   */
+  frameDriver: ((nowMs: number) => void) | null = null;
+  /** The last frame's CityView.update cost (ms, unsmoothed: the ?perf=1 recorder); 0 on the greybox. */
+  lastCityUpdateMs = 0;
   /** Access-zone volumes, shown with the F3 overlay. */
   private readonly accessZones: THREE.Group;
   private prevPosition: Vec3;
@@ -181,6 +194,7 @@ export class Game {
         slope: Math.hypot(sun.x, sun.z) / sun.y,
       });
       this.renderer.scene.add(this.cityView.group);
+      this.mapDebug = new MapDebugView(this.renderer.scene, city, { labelRadius: this.cfg.city.labelRadius });
     } else {
       this.renderer.scene.add(buildGreyboxMeshes(map));
     }
@@ -267,6 +281,7 @@ export class Game {
     this.devPanel.setOverrideCount(countOverrides(settings));
     this.actions.onUiKey = (name) => {
       if (name === 'debugOverlay') this.overlay.toggle();
+      else if (name === 'mapDebug') this.setMapDebug(!(this.mapDebug?.visible ?? false));
       else this.toggleDevPanel();
     };
   }
@@ -284,6 +299,11 @@ export class Game {
       void Promise.resolve(canvas.requestPointerLock()).catch(() => undefined);
     }
     this.onPhoneChanged?.(open);
+  }
+
+  /** Shows or hides the F4 map debug view (a no-op on the greybox). */
+  setMapDebug(on: boolean): void {
+    this.mapDebug?.setVisible(on);
   }
 
   /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
@@ -436,6 +456,11 @@ export class Game {
     // Long gaps (tab switches) are safe: the stepper runs at most maxStepsPerFrame and drops the rest.
     const dt = this.lastFrameMs === null ? 0 : (nowMs - this.lastFrameMs) / 1000;
     this.lastFrameMs = nowMs;
+    if (this.frameDriver) {
+      this.frameDriver(nowMs);
+      this.renderFrame(1, dt, nowMs / 1000);
+      return;
+    }
     const steps = this.stepper.advance(dt);
     for (let i = 0; i < steps; i++) this.step();
     this.renderFrame(this.stepper.alpha, dt, nowMs / 1000);
@@ -510,6 +535,7 @@ export class Game {
       const t0 = performance.now();
       this.cityView.update(feet, this.renderer.camera);
       const ms = performance.now() - t0;
+      this.lastCityUpdateMs = ms;
       this.cityUpdateMs = this.cityUpdateMs === null ? ms : this.cityUpdateMs + (ms - this.cityUpdateMs) * CITY_MS_SMOOTHING;
     }
     this.vehicles.update(this.sim.garage, alpha);
@@ -518,6 +544,7 @@ export class Game {
     this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);
     this.delivery.draw(clockSeconds);
+    if (this.mapDebug?.visible) this.mapDebug.update(feet, this.loadedChunks());
     this.renderer.followShadow(feet);
     this.renderer.render();
     this.frames++;

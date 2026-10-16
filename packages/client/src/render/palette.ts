@@ -52,6 +52,16 @@ export const accessZoneColors: Record<AccessKind, number> = {
   path: 0x5fc9a8,
 };
 
+/** The F4 map debug view (ui/mapDebug): lots with POI roles by straight-line distance band from the player. */
+export const mapDebugColors = {
+  short: 0x2ec4b6,
+  medium: 0xf5a524,
+  long: 0x9b6bff,
+} as const;
+
+/** The F4 view's overlays: chunk grid lines, the physics-loaded chunks' tint and the accent of a lot label without roles. */
+export const mapDebugOverlay = { grid: 0xffffff, loadedChunk: 0x3d7fe0, plainLot: 0xb8c4c8 } as const;
+
 /**
  * One colour per active-order slot (the car, the largest carrier, holds 5): waypoint beams and the HUD swatches share them.
  * Ordered so the first slots read best against the sky and the sand.
