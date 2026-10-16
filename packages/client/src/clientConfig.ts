@@ -23,7 +23,9 @@ export interface ClientConfig {
     shadowExtent: number;
     fogNear: number;
     fogFar: number;
+    /** Draw calls and triangles allowed in view (spec §11; e2e and ?perf=1 check them). */
     drawCallBudget: number;
+    triangleBudget: number;
     /** Water plane height (m): below the ground top (0) and above movement fall.outOfBoundsY. */
     waterLevel: number;
     /** How far the water extends past the island edge on each side (m). */
@@ -32,6 +34,7 @@ export interface ClientConfig {
     shadowBias: number;
     shadowNormalBias: number;
   };
+  city: CityRenderConfig;
   input: {
     mouseSensitivity: number;
     invertY: boolean;
@@ -58,6 +61,18 @@ export interface ClientConfig {
     /** The HUD fuel gauge turns to the warning colour at or below this tank share (%). */
     fuelLowPct: number;
   };
+}
+
+/** How the city is drawn (city design §7, §8). Distances in metres, horizontal from the player. */
+export interface CityRenderConfig {
+  /** LOD rings: pack models at LOD0 within [0], LOD1 within [1]; placeholder block boxes out to [2] (= graphics.fogFar). */
+  lodRadii: number[];
+  /** The player moves this far before the LOD rings are recomputed. */
+  relodDistance: number;
+  /** Side of the square render regions the roads, terrain and ground are merged into. */
+  renderRegion: number;
+  /** Lot ids show as labels in the map debug view (Decision 7) within this radius. */
+  labelRadius: number;
 }
 
 /** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */

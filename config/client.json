@@ -8,8 +8,9 @@
         "bicycle": { "distance": 5.5, "height": 2.0, "pivotHeight": 1.6 },
         "motorbike": { "distance": 6.5, "height": 2.2, "pivotHeight": 1.4 },
         "car": { "distance": 8.5, "height": 2.8, "pivotHeight": 1.4 } } } },
-  "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 650, "drawCallBudget": 150,
+  "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 700, "drawCallBudget": 200, "triangleBudget": 700000,
     "waterLevel": -1.5, "waterMargin": 2000, "lights": { "hemi": 2.1, "sun": 2.4 }, "shadowBias": -0.0005, "shadowNormalBias": 0.05 },
+  "city": { "lodRadii": [160, 370, 700], "relodDistance": 25, "renderRegion": 250, "labelRadius": 80 },
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
     "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "hit": ["Mouse0"],

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Vec3 } from '@dm/shared';
 import type { ClientConfig } from '../clientConfig';
 import { palette } from './palette';
+import { installRadialFog } from './radialFog';
 
 /** Owns the three.js renderer, scene, camera, lights, fog, sky and water. */
 export class Renderer {
@@ -18,6 +19,7 @@ export class Renderer {
     cam: ClientConfig['camera'],
     mapSize: number,
   ) {
+    installRadialFog(); // before any material compiles
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, gfx.maxPixelRatio));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;

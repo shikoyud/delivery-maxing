@@ -4,6 +4,7 @@ import type { HudNextStop } from '../ui/hudModel';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { PhoneApp } from '../ui/phone/Phone';
 import type { Game } from './Game';
+import type { MapKind } from './mapLoader';
 
 /** Test and debugging API on window.__dm, installed only with ?debug. */
 export interface DebugApi {
@@ -69,6 +70,10 @@ export interface DebugApi {
    * (that distance under minDistance), and where
    * the courier's mid-body and top land on screen in normalised device coordinates (−1..1, +y up).
    */
+  /** Which map is loaded (?map=). */
+  mapKind(): MapKind;
+  /** The collider chunk keys loaded around the player (the city's paged physics); empty on the greybox. */
+  loadedChunks(): string[];
   camera(): {
     position: Vec3;
     distance: number;
@@ -148,6 +153,8 @@ export function installDebugHooks(game: Game): void {
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),
+    mapKind: () => game.mapKind,
+    loadedChunks: () => game.loadedChunks(),
     camera() {
       const cam = game.renderer.camera;
       const c = game.courier.root.position;

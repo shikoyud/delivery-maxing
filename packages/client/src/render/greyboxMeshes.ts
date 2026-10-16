@@ -22,18 +22,22 @@ export function solidColor(s: Solid): THREE.Color {
   return base.offsetHSL(0, 0, jitter);
 }
 
-function solidGeometry(s: Solid): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(s.size.x, s.size.y, s.size.z);
+/** A solid's world transform: its centre and XYZ Euler rotation (degrees), as physics places its collider. */
+export function solidMatrix(s: Solid): THREE.Matrix4 {
   const r = s.rotationDeg;
-  const m = new THREE.Matrix4().compose(
+  return new THREE.Matrix4().compose(
     new THREE.Vector3(s.center.x, s.center.y, s.center.z),
     new THREE.Quaternion().setFromEuler(
       r ? new THREE.Euler(THREE.MathUtils.degToRad(r.x), THREE.MathUtils.degToRad(r.y), THREE.MathUtils.degToRad(r.z), 'XYZ') : new THREE.Euler(),
     ),
     new THREE.Vector3(1, 1, 1),
   );
-  g.applyMatrix4(m);
-  const c = solidColor(s);
+}
+
+/** A solid's box in world space, filled with `c` (default: solidColor), with world-space UVs (1 unit = 1 m). */
+export function solidGeometry(s: Solid, c: THREE.Color = solidColor(s)): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(s.size.x, s.size.y, s.size.z);
+  g.applyMatrix4(solidMatrix(s));
   const n = g.getAttribute('position').count;
   const colors = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) c.toArray(colors, i * 3);
@@ -46,7 +50,7 @@ function solidGeometry(s: Solid): THREE.BufferGeometry {
 }
 
 /** A tiling 1 m grid on a white background, multiplied over the vertex colours of the ground. */
-function gridTexture(): THREE.Texture | null {
+export function gridTexture(): THREE.Texture | null {
   if (typeof document === 'undefined') return null;
   const size = 128;
   const canvas = document.createElement('canvas');

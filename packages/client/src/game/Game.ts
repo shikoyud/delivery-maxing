@@ -3,24 +3,26 @@ import {
   FixedStepper,
   Garage,
   PlayerSim,
+  createPagedPhysicsWorld,
   createPhysicsWorld,
   defaultGarage,
   RIDE_TIERS,
-  expandGreybox,
   findRoadSpot,
   horizontalLength,
   initRapier,
   lerpVec3,
   movementConfig,
   vec3,
-  type GreyboxSource,
+  worldConfig,
+  type CatalogIndex,
+  type CityMap,
+  type DistanceTable,
   type MapData,
   type NavRouter,
   type RideTier,
   type SimEvent,
   type Vec3,
 } from '@dm/shared';
-import greyboxJson from '../../../../map/greybox.json';
 import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
@@ -31,6 +33,8 @@ import { CourierModel } from '../render/courier/CourierModel';
 import type { CourierView } from '../render/courier/CourierView';
 import { createCourierPlaceholder } from '../render/courierPlaceholder';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
+import { buildBlockMeshes } from '../render/city/blockMeshes';
+import { buildRegionMeshes } from '../render/city/regions';
 import { buildAccessZoneMeshes } from '../render/accessZoneMeshes';
 import { buildGasStationMeshes } from '../render/gasStationMeshes';
 import { buildHospitalMeshes } from '../render/hospitalMeshes';
@@ -51,7 +55,7 @@ import {
 import { browserStorage, createProgressStore, saveWhenLeaving, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
 import { interpolationStart } from './interpolation';
-import { loadNavRouter } from './navLoader';
+import { loadMap, type MapKind } from './mapLoader';
 import { garageRows } from '../ui/phone/garageApp';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
@@ -63,6 +67,14 @@ export interface GameOptions {
   overlay?: boolean;
   /** Offer RNG seed (?seed=N); defaults to Date.now(). */
   seed?: number;
+  /** Which map to play (?map=); the city by default. */
+  map?: MapKind;
+}
+
+/** What the city adds to a map: the catalog its lots name and the build-time offer distances. */
+interface CityExtras {
+  catalog: CatalogIndex;
+  distances: DistanceTable | null;
 }
 
 /**
@@ -116,6 +128,7 @@ export class Game {
     private readonly devStore: DevSettingsStore,
     model: CourierModel | null,
     progress: ProgressStore,
+    city: CityExtras | null,
   ) {
     this.progress = progress;
     this.prevPosition = { ...sim.state.position };
@@ -142,7 +155,14 @@ export class Game {
     );
     this.courier = model ?? createCourierPlaceholder(settings.movement.capsule, this.cfg.courier);
     this.renderer.scene.add(this.courier.root);
-    this.renderer.scene.add(buildGreyboxMeshes(map));
+    if (map.kind === 'city' && city) {
+      // The placeholder city (city design §7.3): code-built regions plus every lot as a category-coloured box. CityView
+      // (Task 12) will show the blocks only within city.lodRadii[2] and swap pack models in nearer.
+      for (const region of buildRegionMeshes(map, this.cfg.city.renderRegion).values()) this.renderer.scene.add(region);
+      for (const block of buildBlockMeshes(map as CityMap, city.catalog).values()) this.renderer.scene.add(block);
+    } else {
+      this.renderer.scene.add(buildGreyboxMeshes(map));
+    }
     this.renderer.scene.add(buildHospitalMeshes(map));
     this.renderer.scene.add(buildGasStationMeshes(map));
     this.accessZones = buildAccessZoneMeshes(map);
@@ -169,6 +189,7 @@ export class Game {
       }),
       // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
       distance: (a, b) => nav.distance('walk', a, b),
+      ...(city?.distances ? { table: city.distances } : {}),
       router: nav,
       cameraYaw: () => {
         const d = this.renderer.camera.getWorldDirection(this.camDir);
@@ -253,19 +274,25 @@ export class Game {
   static async create(host: HTMLElement, opts: GameOptions): Promise<Game> {
     // The model loads alongside physics; a missing or broken file falls back to the capsule with one warning.
     // The navmeshes (recast WASM and five binaries) load alongside too.
-    const [rapier, model, nav] = await Promise.all([
+    // The map (the city's layout fetched and expanded), its navmeshes and the city's distance table load alongside too.
+    const [rapier, model, loaded] = await Promise.all([
       initRapier(),
       CourierModel.load(robotUrl, clientConfig.courier),
-      loadNavRouter(),
+      loadMap(opts.map ?? 'city'),
     ]);
-    const map = expandGreybox(greyboxJson as GreyboxSource);
-    const physics = createPhysicsWorld(rapier, map);
+    const { map, nav } = loaded;
+    // The city pages its colliders by chunk around the player (world config); the greybox keeps every collider.
+    const physics =
+      map.kind === 'city' ? createPagedPhysicsWorld(rapier, map, map.chunkSize, worldConfig.physics) : createPhysicsWorld(rapier, map);
     // One deep-cloned movement object shared by PlayerSim and the dev panel; the shared import is never mutated.
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
     // Hospitals are the only spawn points (spec rev. 2); a fresh session starts at the first one.
+    // On the city that is Bayview General (the layout lists it first); the colliders around it load before anything
+    // touches physics (the garage parks at its bay, the courier spawns on its avenue).
     const spawn = map.hospitals[0];
     if (!spawn) throw new Error('map has no hospitals');
+    physics.update?.(spawn.spawn);
     // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
     const progress = createProgressStore(browserStorage(), () => defaultGarage(map));
     const saved = progress.load();
@@ -273,11 +300,28 @@ export class Game {
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
     // The tier last ridden (capacity and offers follow it), only while it is still owned.
     sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
-    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress);
+    const city = loaded.catalog ? { catalog: loaded.catalog, distances: loaded.distances } : null;
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, city);
     // Closing or hiding the tab mid-ride keeps the vehicle's spot and the fuel it burnt.
     saveWhenLeaving(window, document, () => game.delivery.save());
     if (opts.debug) installDebugHooks(game);
     return game;
+  }
+
+  /** Which map is loaded. */
+  get mapKind(): MapKind {
+    return this.map.kind;
+  }
+
+  /** The collider chunks loaded around the player (the city's paged physics); empty on the greybox. */
+  loadedChunks(): string[] {
+    const p = this.sim.physics as { loadedChunks?: () => ReadonlySet<string> };
+    return p.loadedChunks ? [...p.loadedChunks()] : [];
+  }
+
+  /** The city's paged physics loads the chunks around the player (a no-op on the greybox, whose colliders all exist). */
+  private pageAround(p: Vec3): void {
+    this.sim.physics.update?.(p);
   }
 
   get time(): number {
@@ -302,6 +346,7 @@ export class Game {
   /** Moves the player (airborne, at velocity `v`, zero by default) and resets interpolation so the camera doesn't sweep. */
   teleport(p: Vec3, v: Vec3 = { x: 0, y: 0, z: 0 }): void {
     this.sim.teleport(vec3(p.x, p.y, p.z), vec3(v.x, v.y, v.z));
+    this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
     this.courier.snap();
     this.chase.snap();
@@ -405,6 +450,7 @@ export class Game {
    * respawned courier faces (the hospital's spawnYaw).
    */
   private afterTeleport(): void {
+    this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
     this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
     this.chase.snap();
@@ -419,6 +465,7 @@ export class Game {
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
     this.vehicles.beforeStep(this.sim.garage);
+    this.pageAround(this.sim.state.position);
     const events = this.sim.step(frame, mods, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
@@ -435,6 +482,7 @@ export class Game {
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
     this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s.riding);
+    this.delivery.setCamera(this.renderer.camera.position);
     this.vehicles.update(this.sim.garage, alpha);
     this.accessZones.visible = this.overlay.visible;
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));

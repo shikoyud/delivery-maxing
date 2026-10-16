@@ -3,6 +3,14 @@ import { movementConfig, RIDE_TIERS } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 
 describe('clientConfig', () => {
+  it('city LOD radii; the fog ends at the outermost ring; budgets', () => {
+    expect(clientConfig.city.lodRadii).toEqual([160, 370, 700]);
+    expect(clientConfig.graphics.fogFar).toBe(clientConfig.city.lodRadii[2]);
+    expect(clientConfig.city).toMatchObject({ relodDistance: 25, renderRegion: 250, labelRadius: 80 });
+    expect(clientConfig.graphics.drawCallBudget).toBe(200);
+    expect(clientConfig.graphics.triangleBudget).toBe(700000);
+  });
+
   it('water sits below the ground top and above the out-of-bounds height', () => {
     expect(clientConfig.graphics.waterLevel).toBeLessThan(0);
     expect(clientConfig.graphics.waterLevel).toBeGreaterThan(movementConfig.fall.outOfBoundsY);

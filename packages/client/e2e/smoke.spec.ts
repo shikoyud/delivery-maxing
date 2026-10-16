@@ -14,14 +14,14 @@ mkdirSync(sp3, { recursive: true });
 const sp4 = fileURLToPath(new URL('../../../docs/playtest/sp4/', import.meta.url));
 mkdirSync(sp4, { recursive: true });
 
-/** Opens the game in debug mode and waits for the first frame; returns the console errors seen. */
+/** Opens the SP4 greybox town (?map=greybox) in debug mode and waits for the first frame; returns the console errors seen. */
 async function boot(page: Page, query = ''): Promise<string[]> {
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`?debug=1${query}`);
+  await page.goto(`?debug=1&map=greybox${query}`);
   await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
   return errors;
 }

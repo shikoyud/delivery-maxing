@@ -16,6 +16,7 @@ import {
   type ActiveOrder,
   type Bonus,
   type CancelResult,
+  type DistanceTable,
   type InputFrame,
   type MapData,
   type MoveMode,
@@ -71,6 +72,8 @@ export interface DeliveryDeps {
   rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
+  /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
+  table?: DistanceTable;
   /**
    * Door routes for the HUD arrow, the stops' distances and the Map app (Game: the NavRouter), cached for
    * ui.routeRefreshSeconds. Absent (tests): straight lines.
@@ -233,6 +236,7 @@ export class DeliveryLoop {
       {
         pois: this.d.map.pois,
         distance: this.d.distance,
+        ...(this.d.table ? { table: this.d.table } : {}),
         rules: this.d.map.orderRules,
         cfg: ordersConfig,
         rng: this.rng,
@@ -572,6 +576,11 @@ export class DeliveryLoop {
   }
 
   /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */
+  /** Hides the POI marker the rendered camera is in (Game calls it per frame, after the chase camera moved). */
+  setCamera(p: Vec3): void {
+    this.poiMeshes.setCamera(p);
+  }
+
   draw(clockSeconds: number): void {
     const pois = poiIndex(this.d.map);
     const targets: Vec3[] = [];

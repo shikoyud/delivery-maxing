@@ -1,5 +1,6 @@
 import './ui/styles.css';
 import { Game } from './game/Game';
+import { parseMapKind } from './game/mapLoader';
 import { playHintHidden } from './ui/playHint';
 
 const host = document.getElementById('app');
@@ -9,10 +10,11 @@ const params = new URLSearchParams(window.location.search);
 const debug = params.has('debug');
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const seed = Number.isFinite(seedParam) ? seedParam : undefined;
+const map = parseMapKind(params.get('map'));
 
 if (!host) throw new Error('#app is missing');
 
-Game.create(host, { debug, seed })
+Game.create(host, { debug, seed, map })
   .then((game) => {
     game.start();
     if (hint && !debug) {
