@@ -5,7 +5,7 @@ import { Document, Logger, NodeIO, type Material, type Node, type Primitive } fr
 import { ALL_EXTENSIONS, EXTMeshoptCompression, KHRMeshQuantization, type Transform } from '@gltf-transform/extensions';
 import { cloneDocument, prune, quantize, reorder, simplify, weld } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
-import { hasRuntimeModel, type AssetCatalog, type Lod1Options, type PackManifest } from '@dm/shared';
+import { hasRuntimeModel, MATERIAL_FLAT, MATERIAL_TEX_PREFIX, type AssetCatalog, type Lod1Options, type PackManifest } from '@dm/shared';
 import clientJson from '../../../../config/client.json';
 
 export interface ImportReport {
@@ -21,8 +21,6 @@ export interface ImportReport {
   bytes: number;
 }
 
-/** Material names in the runtime files: `tex:<file>` samples textures/<file>; `flat` is vertex-coloured. */
-const FLAT = 'flat';
 
 const readIo = () =>
   new NodeIO()
@@ -113,7 +111,7 @@ function bake(src: Document, outDir: string, shared: Shared): Document | null {
       if (prim.getMode() !== 4) continue; // triangles only (TRIANGLES = 4)
       const mat = prim.getMaterial();
       const tex = textureName(mat, outDir, shared);
-      const key = tex ? `tex:${tex}` : FLAT;
+      const key = tex ? `${MATERIAL_TEX_PREFIX}${tex}` : MATERIAL_FLAT;
       let b = buckets.get(key);
       if (!b) buckets.set(key, (b = { pos: [], nrm: [], uv: [], col: [], idx: [] }));
       appendPrimitive(b, prim, m, inv, flip, tex !== null, mat);
@@ -125,7 +123,7 @@ function bake(src: Document, outDir: string, shared: Shared): Document | null {
   const out = new Document().setLogger(new Logger(Logger.Verbosity.ERROR));
   const buf = out.createBuffer();
   const mesh = out.createMesh('model');
-  const textured = [...buckets.keys()].some((k) => k !== FLAT);
+  const textured = [...buckets.keys()].some((k) => k !== MATERIAL_FLAT);
   const colored = [...buckets.values()].some((b) => b.col.some((c) => c !== 1));
   const hasNormals = [...buckets.values()].every((b) => b.nrm.length === b.pos.length);
   for (const [key, b] of buckets) {

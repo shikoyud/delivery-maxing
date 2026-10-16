@@ -17,7 +17,9 @@ import {
   type Totals,
   type Vec3,
 } from '@dm/shared';
+import { clientConfig } from '../clientConfig';
 import { nextCorner, yawTo } from '../game/routes';
+import { keyLabel } from './dom';
 import type { ParkedMarker } from './minimap';
 import type { GarageRow } from './phone/garageApp';
 
@@ -142,19 +144,29 @@ export interface PromptContext {
   mountCandidate: RideTier | null;
   /** Within ridingConfig.refuel.pumpRadius of a pump. */
   atPump: boolean;
+  /** The ridden vehicle's tank is full (nothing to refuel). */
+  tankFull: boolean;
   /** The garage holds a ride with a tank. */
   ownsFuelledRide: boolean;
   phoneOpen: boolean;
 }
 
-/** The key hint for the moment (Decision 5), or null: nothing to do, riding fast, or the phone is up. */
-export function promptFor(c: PromptContext): string | null {
+/**
+ * The key hint for the moment (Decision 5), or null: nothing to do, riding fast, or the phone is up. The key letters
+ * are the first `mount` and `interact` bindings.
+ */
+export function promptFor(
+  c: PromptContext,
+  bindings: { mount: readonly string[]; interact: readonly string[] } = clientConfig.input.bindings,
+): string | null {
   if (c.phoneOpen) return null;
+  const mount = keyLabel(bindings.mount[0] ?? '');
   if (c.riding !== null) {
     if (!c.stopped) return null;
-    return c.atPump && ridingConfig.rides[c.riding].fuel ? 'Hold E · Refuel' : 'F · Get off';
+    const refuel = c.atPump && !c.tankFull && ridingConfig.rides[c.riding].fuel;
+    return refuel ? `Hold ${keyLabel(bindings.interact[0] ?? '')} · Refuel` : `${mount} · Get off`;
   }
-  if (c.mountCandidate !== null) return `F · Ride the ${c.mountCandidate}`;
+  if (c.mountCandidate !== null) return `${mount} · Ride the ${c.mountCandidate}`;
   return c.atPump && c.ownsFuelledRide ? 'Get on to refuel' : null;
 }
 

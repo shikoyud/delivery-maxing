@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGarage, expandGreybox, vec3, type GreyboxSource, type MapData } from '@dm/shared';
+import { expandGreybox, type GreyboxSource, type MapData } from '@dm/shared';
 import greyboxJson from '../../../map/greybox.json';
 import cityJson from '../../../map/city.layout.json';
 import { mapRowItems } from '../src/ui/devPanel';
@@ -20,7 +20,6 @@ describe('dev panel Map row', () => {
     const items = mapRowItems(teleportTargets(grey), () => undefined);
     expect(items.filter((i) => i.kind === 'hospital')).toHaveLength(4);
     expect(items.filter((i) => i.kind === 'gas')).toHaveLength(2);
-    expect(defaultGarage(grey).length).toBeGreaterThan(0);
   });
 
   it('clicking an entry calls teleportTo with its id', () => {
@@ -30,6 +29,5 @@ describe('dev panel Map row', () => {
     items[items.length - 1]!.run();
     expect(calls).toEqual(['hospital-bayview-general', 'gas-ridge-fuel']);
     expect(items[0]!.label).toMatch(/^Teleport to /);
-    expect(vec3(0, 0, 0)).toBeDefined();
   });
 });

@@ -14,7 +14,10 @@ const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const seed = Number.isFinite(seedParam) ? seedParam : undefined;
 const map = parseMapKind(params.get('map'));
 // ?perf=1 runs the flythrough (config/perf.json) and shows its result panel; &seconds=N shortens it (5 for a quick check).
-const perf = params.get('perf') === '1';
+// Its route is over the city, so on the greybox it is ignored.
+const perfAsked = params.get('perf') === '1';
+const perf = perfAsked && map === 'city';
+if (perfAsked && !perf) console.warn(`?perf=1 only runs on the city map; ignored on ?map=${map}`);
 const perfSeconds = Number.parseFloat(params.get('seconds') ?? '');
 
 if (!host) throw new Error('#app is missing');

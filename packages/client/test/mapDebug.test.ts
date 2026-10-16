@@ -6,7 +6,8 @@ import { mapDebugColors } from '../src/render/palette';
 import { lotLabel, lotRoles, MapDebugView, type LabelPainter } from '../src/ui/mapDebug';
 
 const bands = cityConfig.orderRules.bands;
-const labelRadius = clientConfig.city.labelRadius;
+/** The view's radius in these tests (the fixture lots sit around it); config's own is only checked to be positive. */
+const labelRadius = 80;
 
 const rect = (x: number, z: number) => ({ minX: x - 5, minZ: z - 5, maxX: x + 5, maxZ: z + 5 });
 const lot = (id: string, x: number, z: number): Lot =>
@@ -73,7 +74,7 @@ describe('MapDebugView', () => {
   });
 
   it(`labels lots within ${labelRadius} m with their id and roles; one beyond gets none`, () => {
-    expect(labelRadius).toBe(80);
+    expect(clientConfig.city.labelRadius).toBeGreaterThan(0);
     const { view } = build();
     view.setVisible(true);
     view.update(vec3(0, 10, 0), []);

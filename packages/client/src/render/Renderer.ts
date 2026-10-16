@@ -76,10 +76,12 @@ export class Renderer {
     const texel = (this.gfx.shadowExtent * 2) / this.gfx.shadowMapSize;
     const snap = (v: number): number => Math.round(v / texel) * texel;
     const fx = snap(focus.x);
+    const fy = snap(focus.y);
     const fz = snap(focus.z);
     const d = this.gfx.shadowExtent * 2;
-    this.sun.target.position.set(fx, 0, fz);
-    this.sun.position.set(fx + this.sunOffset.x * d, this.sunOffset.y * d, fz + this.sunOffset.z * d);
+    // centred at the focus height too, so the shadow box follows the player up the terraces
+    this.sun.target.position.set(fx, fy, fz);
+    this.sun.position.set(fx + this.sunOffset.x * d, fy + this.sunOffset.y * d, fz + this.sunOffset.z * d);
   }
 
   render(): void {

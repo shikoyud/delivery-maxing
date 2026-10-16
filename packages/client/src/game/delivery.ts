@@ -565,14 +565,20 @@ export class DeliveryLoop {
   /** The key prompt now (hud-prompt): F to ride or get off, E to refuel, a pump hint on foot; null with the phone up. */
   prompt(): string | null {
     const r = this.d.rider();
-    return promptFor({
-      riding: r.riding,
-      stopped: r.speed <= ridingConfig.riding.stoppedSpeed,
-      mountCandidate: r.riding === null ? r.mountCandidate() : null,
-      atPump: pumpAt(this.d.map, this.d.player().position, ridingConfig.refuel.pumpRadius) !== null,
-      ownsFuelledRide: (this.d.vehicles?.rows(this.d.now()) ?? []).some((x) => x.fuel !== null),
-      phoneOpen: this.phone.isOpen,
-    });
+    const rows = this.d.vehicles?.rows(this.d.now()) ?? [];
+    const fuel = r.riding === null || !this.d.vehicles ? undefined : this.d.vehicles.state(r.riding).fuel;
+    return promptFor(
+      {
+        riding: r.riding,
+        stopped: r.speed <= ridingConfig.riding.stoppedSpeed,
+        mountCandidate: r.riding === null ? r.mountCandidate() : null,
+        atPump: pumpAt(this.d.map, this.d.player().position, ridingConfig.refuel.pumpRadius) !== null,
+        tankFull: fuel !== undefined && fuel >= 1,
+        ownsFuelledRide: rows.some((x) => x.fuel !== null),
+        phoneOpen: this.phone.isOpen,
+      },
+      this.d.cfg.input.bindings,
+    );
   }
 
   /** Hides the POI marker the rendered camera is in (Game calls it per frame, after the chase camera moved). */

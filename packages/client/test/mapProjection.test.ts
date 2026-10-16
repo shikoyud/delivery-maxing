@@ -48,18 +48,19 @@ describe('MapProjection.forMap', () => {
     expect(p.toCanvas({ x: h, y: 0, z: h })).toEqual({ x: 512, y: 512 });
   });
 
-  it('the city projection maps a point 250 m east of the player to the right edge of the canvas', () => {
+  it('the city projection maps a point half the map window east of the player to the right edge of the canvas', () => {
     const p = MapProjection.forMap(city, 512);
     expect(p.panned).toBe(true);
     expect(p.scale).toBeCloseTo(512 / clientConfig.ui.mapWindowMeters);
-    expect(clientConfig.ui.mapWindowMeters).toBe(500);
+    const half = clientConfig.ui.mapWindowMeters / 2;
+    expect(half).toBeGreaterThan(0);
     const player = { x: 600, y: 10, z: 400 };
     p.pan(player);
     expect(p.toCanvas(player)).toEqual({ x: 256, y: 256 });
-    const east = p.toCanvas({ x: player.x + 250, y: 10, z: player.z });
+    const east = p.toCanvas({ x: player.x + half, y: 10, z: player.z });
     expect(east.x).toBeCloseTo(512);
     expect(east.y).toBeCloseTo(256);
-    expect(p.toCanvas({ x: player.x, y: 0, z: player.z - 250 }).y).toBeCloseTo(0); // north up
+    expect(p.toCanvas({ x: player.x, y: 0, z: player.z - half }).y).toBeCloseTo(0); // north up
   });
 
   it('the whole-map layer is drawn at the window scale and offset by the pan', () => {

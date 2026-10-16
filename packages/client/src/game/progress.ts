@@ -101,8 +101,8 @@ function parseProgress(storage: Pick<Storage, 'getItem'>, defaults: () => SavedV
  */
 export function createProgressStore(
   storage: Pick<Storage, 'getItem' | 'setItem'> | null,
-  defaults: () => SavedVehicle[] = () => [],
   kind: ProgressKind,
+  defaults: () => SavedVehicle[] = () => [],
 ): ProgressStore {
   const fresh = (): Progress => ({ totals: { points: 0, coins: 0, deliveries: 0 }, garage: defaults(), lastRide: null });
   return {

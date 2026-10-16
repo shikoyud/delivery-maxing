@@ -135,6 +135,15 @@ export function hasRuntimeModel(e: CatalogEntry): boolean {
   return e.file !== null && e.use !== 'unused';
 }
 
+/**
+ * Material names in the runtime model files (`assets:import` writes them, the client's model loader reads them):
+ * `tex:<file>` samples textures/<file>; `flat` is vertex-coloured; the loader folds a textured model's untextured parts
+ * into its texture's material as `tex:<file>+flat`.
+ */
+export const MATERIAL_TEX_PREFIX = 'tex:';
+export const MATERIAL_FLAT = 'flat';
+export const MATERIAL_FOLDED_SUFFIX = '+flat';
+
 /** `public/packs/manifest.json`, written by `pnpm assets:import`: the ids it wrote and whether each has a LOD1 file. */
 export interface PackManifest {
   version: 1;

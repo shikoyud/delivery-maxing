@@ -39,7 +39,7 @@ interface Popup {
  */
 function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: PathDistance = streetDistance) {
   const data = new Map<string, string>();
-  const progress = createProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) }, undefined, 'greybox');
+  const progress = createProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) }, 'greybox');
   if (saved) progress.save(saved);
   const popups: Popup[] = [];
   const huds: HudModel[] = [];
@@ -652,6 +652,8 @@ describe('DeliveryLoop', () => {
     s.rider.riding = 'car';
     expect(s.loop.prompt()).toBe('F · Get off');
     s.env.position = { ...map.gasStations[0]!.pumps[0]! };
+    expect(s.loop.prompt()).toBe('F · Get off'); // a full tank: nothing to refuel
+    s.states.car.fuel = 0.5;
     expect(s.loop.prompt()).toBe('Hold E · Refuel');
     s.rider.speed = 9;
     expect(s.loop.prompt()).toBeNull();

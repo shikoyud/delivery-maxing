@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { PackManifest } from '@dm/shared';
+import { MATERIAL_FOLDED_SUFFIX, MATERIAL_TEX_PREFIX, type PackManifest } from '@dm/shared';
 
 export type { PackManifest };
 
@@ -29,10 +29,10 @@ export interface ModelLoaderOptions {
 
 type State = PieceModels | 'missing' | 'loading';
 
-/** The importer's material names: `tex:<file>` samples `<base>textures/<file>`; `flat` is vertex-coloured. */
-const TEX = 'tex:';
-/** A textured model's untextured parts folded into its texture's material (see foldFlat): `tex:<file>+flat`. */
-const FOLDED = '+flat';
+// The importer's material names (shared MATERIAL_*): `tex:<file>` samples `<base>textures/<file>`; `flat` is
+// vertex-coloured; a textured model's untextured parts folded into its texture's material (foldFlat): `tex:<file>+flat`.
+const TEX = MATERIAL_TEX_PREFIX;
+const FOLDED = MATERIAL_FOLDED_SUFFIX;
 
 /**
  * The texture material for folded models: vertex colours are RGBA, and A = 1 marks an untextured vertex (glass,

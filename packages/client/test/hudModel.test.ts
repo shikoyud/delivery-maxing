@@ -16,6 +16,7 @@ import {
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import type { GarageRow } from '../src/ui/phone/garageApp';
+import { clientConfig } from '../src/clientConfig';
 import { hudModel, loadText, promptFor, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
 
 const map = expandGreybox(greybox as GreyboxSource);
@@ -290,7 +291,7 @@ describe('hudModel next stop and ride', () => {
 });
 
 describe('promptFor', () => {
-  const ctx = { riding: null, stopped: true, mountCandidate: null, atPump: false, ownsFuelledRide: true, phoneOpen: false };
+  const ctx = { riding: null, stopped: true, mountCandidate: null, atPump: false, tankFull: false, ownsFuelledRide: true, phoneOpen: false };
   test.each([
     [{ riding: null, stopped: true, mountCandidate: 'car', atPump: false, ownsFuelledRide: true, phoneOpen: false }, 'F · Ride the car'],
     [{ riding: 'car', stopped: true, mountCandidate: null, atPump: false, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
@@ -305,5 +306,14 @@ describe('promptFor', () => {
   });
   test('nothing to say on foot with nothing near', () => {
     expect(promptFor(ctx)).toBeNull();
+  });
+  test('no refuel prompt at a pump when the tank is full: F to get off instead', () => {
+    expect(promptFor({ ...ctx, riding: 'car', atPump: true, tankFull: true })).toBe('F · Get off');
+  });
+  test('the key letters follow the bindings', () => {
+    const bindings = { ...clientConfig.input.bindings, mount: ['KeyG'], interact: ['KeyR'] };
+    expect(promptFor({ ...ctx, mountCandidate: 'car' }, bindings)).toBe('G · Ride the car');
+    expect(promptFor({ ...ctx, riding: 'car' }, bindings)).toBe('G · Get off');
+    expect(promptFor({ ...ctx, riding: 'car', atPump: true }, bindings)).toBe('Hold R · Refuel');
   });
 });

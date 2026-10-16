@@ -345,7 +345,7 @@ export class Game {
     if (!spawn) throw new Error('map has no hospitals');
     physics.update?.(spawn.spawn);
     // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
-    const progress = createProgressStore(browserStorage(), () => defaultGarage(map), map.kind);
+    const progress = createProgressStore(browserStorage(), map.kind, () => defaultGarage(map));
     const saved = progress.load();
     const garage = new Garage(physics, map, saved.garage);
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
