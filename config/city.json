@@ -44,10 +44,25 @@
       { "id": "harbor", "x0": 820, "x1": 1200, "z0": 120 }
     ]
   },
-  "switchback": { "gradePct": 9, "legLength": 80, "legLengthShallow": 50, "landing": 14, "landingShallow": 10, "width": 12 },
-  "steepLane": { "gradePct": 14, "width": 6, "zoneStep": 6 },
-  "stairs": { "width": 4, "rise": 0.25, "tread": 0.35, "landingEvery": 12 },
-  "parapet": { "height": 1, "thickness": 0.3 },
+  "switchback": { "gradePct": 9, "legLength": 80, "legLengthShallow": 50, "landing": 14, "landingShallow": 10, "width": 12, "thickness": 0.4, "deepBandMin": 50 },
+  "steepLane": { "gradePct": 14, "width": 6, "zoneStep": 6, "thickness": 0.4 },
+  "stairs": { "width": 4, "rise": 0.25, "tread": 0.35, "landingEvery": 12, "landingDepth": 2 },
+  "parapet": { "height": 1, "thickness": 0.3, "mouthClearance": 1 },
+  "slopeBands": {
+    "switchbackK": { "A": [1, 5, 9], "B": [2, 6, 10], "C": [1, 5, 9], "D": [3, 8] },
+    "laneK": { "A": [3, 7], "B": [0, 4, 8], "C": [3, 7, 10], "D": [0, 6] },
+    "laneOffset": 40,
+    "laneShift": 30,
+    "stairX": {
+      "A": [70, 330, 500, 650, 820, 1050],
+      "B": [60, 170, 280, 390, 500, 610, 720, 830, 940, 1050],
+      "C": [60, 170, 280, 500, 610, 720, 830, 940, 1050, 1150],
+      "D": [120, 450, 760, 1000, 1150]
+    },
+    "stairShift": 25,
+    "gapMargin": 2,
+    "slopeLots": { "bands": ["B", "C"], "x0": 6, "endMargin": 8, "slot": 8, "chance": 0.45, "skip": 3, "spacing": 0.5, "clearance": 2 }
+  },
   "hospital": { "lot": 27, "safeRadius": 18, "bayOffset": 3.6, "bayBack": 2 },
   "gasStation": { "lotW": 18, "lotD": 15 },
   "hillcrest": { "lot": 15, "depth": 16, "driveZ": 1118, "driveAmplitude": 22, "drivePeriod": 420, "driveWidth": 10, "parkX0": 560, "parkX1": 660 },

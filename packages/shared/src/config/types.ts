@@ -187,11 +187,56 @@ export interface CityConfig {
     /** L0 ground rects; each stops at the water (x range and the z the ground starts at). */
     l0Ground: { id: string; x0: number; x1: number; z0: number }[];
   };
-  switchback: { gradePct: number; legLength: number; legLengthShallow: number; landing: number; landingShallow: number; width: number };
+  /**
+   * A U of two climbing legs: `legLength` (`legLengthShallow` in a band shallower than `deepBandMin`) is the x span of
+   * each leg, `landing` (`landingShallow`) the length of the entry and exit stubs and the depth of the hairpin landing.
+   */
+  switchback: {
+    gradePct: number;
+    legLength: number;
+    legLengthShallow: number;
+    landing: number;
+    landingShallow: number;
+    width: number;
+    /** Ramp box thickness (m) */
+    thickness: number;
+    deepBandMin: number;
+  };
   /** A steep lane's access zone is one rect per zoneStep metres of run. */
-  steepLane: { gradePct: number; width: number; zoneStep: number };
-  stairs: { width: number; rise: number; tread: number; landingEvery: number };
-  parapet: { height: number; thickness: number };
+  steepLane: { gradePct: number; width: number; zoneStep: number; thickness: number };
+  /** One step box per `rise`, `tread` deep; a `landingDepth` landing after every `landingEvery` steps. */
+  stairs: { width: number; rise: number; tread: number; landingEvery: number; landingDepth: number };
+  /** Along every upper terrace edge; it stops `mouthClearance` short of each connector mouth. */
+  parapet: { height: number; thickness: number; mouthClearance: number };
+  /** Where the connectors go (the prototype's SW_K, LANE_K and STAIR_X) and the slope-band walk-ups. */
+  slopeBands: {
+    /** Switchbacks start on these cross streets (k) */
+    switchbackK: Record<CityBandKey, number[]>;
+    /** Steep lanes start `laneOffset` east of these cross streets, `laneShift` further east while they overlap */
+    laneK: Record<CityBandKey, number[]>;
+    laneOffset: number;
+    laneShift: number;
+    /** Staircase x, `stairShift` further east (west at the city edge) while they overlap */
+    stairX: Record<CityBandKey, number[]>;
+    stairShift: number;
+    /** The band gap reaches this far beyond a switchback's or steep lane's footprint (m) */
+    gapMargin: number;
+    slopeLots: {
+      bands: CityBandKey[];
+      /** First slot x, and the slot loop stops `endMargin` short of the east edge */
+      x0: number;
+      endMargin: number;
+      /** A free slot is `slot` m; with `chance` it gets a walk-up, else it is skipped */
+      slot: number;
+      chance: number;
+      /** Step past a slot that touches a connector (m) */
+      skip: number;
+      /** Gap after a walk-up (m) */
+      spacing: number;
+      /** Distance kept from a connector's extent (m) */
+      clearance: number;
+    };
+  };
   hospital: { lot: number; safeRadius: number; bayOffset: number; bayBack: number };
   gasStation: { lotW: number; lotD: number };
   hillcrest: {

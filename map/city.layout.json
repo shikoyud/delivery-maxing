@@ -323,6 +323,258 @@
         "minZ": 979
       },
       "y": 38
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-A-switchback-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 188,
+        "maxZ": 310,
+        "minX": 112,
+        "minZ": 270
+      },
+      "y": 2
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-A-switchback-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 620,
+        "maxZ": 310,
+        "minX": 544,
+        "minZ": 270
+      },
+      "y": 2
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-A-switchback-2",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 1052,
+        "maxZ": 310,
+        "minX": 976,
+        "minZ": 270
+      },
+      "y": 2
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-A-steepLane-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 420.9081624488163,
+        "maxZ": 310,
+        "minX": 371.9,
+        "minZ": 270
+      },
+      "y": 2
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-A-steepLane-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 852.9081624488164,
+        "maxZ": 310,
+        "minX": 803.9,
+        "minZ": 270
+      },
+      "y": 2
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-B-switchback-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 330,
+        "maxZ": 620,
+        "minX": 220,
+        "minZ": 560
+      },
+      "y": 10
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-B-switchback-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 762,
+        "maxZ": 620,
+        "minX": 652,
+        "minZ": 560
+      },
+      "y": 10
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-B-switchback-2",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 1194,
+        "maxZ": 620,
+        "minX": 1084,
+        "minZ": 560
+      },
+      "y": 10
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-B-steepLane-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 135.8,
+        "maxZ": 620,
+        "minX": 48.2,
+        "minZ": 560
+      },
+      "y": 10
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-B-steepLane-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 567.8,
+        "maxZ": 620,
+        "minX": 480.2,
+        "minZ": 560
+      },
+      "y": 10
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-B-steepLane-2",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 999.8,
+        "maxZ": 620,
+        "minX": 912.2,
+        "minZ": 560
+      },
+      "y": 10
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-C-switchback-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 222,
+        "maxZ": 880,
+        "minX": 112,
+        "minZ": 820
+      },
+      "y": 24
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-C-switchback-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 654,
+        "maxZ": 880,
+        "minX": 544,
+        "minZ": 820
+      },
+      "y": 24
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-C-switchback-2",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 1086,
+        "maxZ": 880,
+        "minX": 976,
+        "minZ": 820
+      },
+      "y": 24
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-C-steepLane-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 459.8,
+        "maxZ": 880,
+        "minX": 372.2,
+        "minZ": 820
+      },
+      "y": 24
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-C-steepLane-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 891.8,
+        "maxZ": 880,
+        "minX": 804.2,
+        "minZ": 820
+      },
+      "y": 24
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-C-steepLane-2",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 1185.8,
+        "maxZ": 880,
+        "minX": 1098.2,
+        "minZ": 820
+      },
+      "y": 24
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-D-switchback-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 409.55555555555554,
+        "maxZ": 1070,
+        "minX": 328,
+        "minZ": 1040
+      },
+      "y": 38
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-D-switchback-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 949.5555555555555,
+        "maxZ": 1070,
+        "minX": 868,
+        "minZ": 1040
+      },
+      "y": 38
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-D-steepLane-0",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 120.08315031164817,
+        "maxZ": 1070,
+        "minX": 48.74,
+        "minZ": 1040
+      },
+      "y": 38
+    },
+    {
+      "district": "slope",
+      "id": "area-gap-conn-D-steepLane-1",
+      "kind": "bandGap",
+      "rect": {
+        "maxX": 768.0831503116482,
+        "maxZ": 1070,
+        "minX": 696.74,
+        "minZ": 1040
+      },
+      "y": 38
     }
   ],
   "bands": {
@@ -1887,9 +2139,781 @@
         "minX": 1098,
         "minZ": 979
       }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-0",
+      "level": "L1",
+      "rect": {
+        "maxX": 48.2,
+        "maxZ": 620,
+        "minX": 0,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-1",
+      "level": "L1",
+      "rect": {
+        "maxX": 158,
+        "maxZ": 620,
+        "minX": 135.8,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-4",
+      "level": "L1",
+      "rect": {
+        "maxX": 353,
+        "maxZ": 620,
+        "minX": 330,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-5",
+      "level": "L1",
+      "rect": {
+        "maxX": 388,
+        "maxZ": 620,
+        "minX": 357,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-6",
+      "level": "L1",
+      "rect": {
+        "maxX": 480.2,
+        "maxZ": 620,
+        "minX": 392,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-8",
+      "level": "L1",
+      "rect": {
+        "maxX": 608,
+        "maxZ": 620,
+        "minX": 577,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-9",
+      "level": "L1",
+      "rect": {
+        "maxX": 652,
+        "maxZ": 620,
+        "minX": 612,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-11",
+      "level": "L1",
+      "rect": {
+        "maxX": 828,
+        "maxZ": 620,
+        "minX": 772,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-12",
+      "level": "L1",
+      "rect": {
+        "maxX": 912.2,
+        "maxZ": 620,
+        "minX": 832,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-B-14",
+      "level": "L1",
+      "rect": {
+        "maxX": 1048,
+        "maxZ": 620,
+        "minX": 1017,
+        "minZ": 560
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-0",
+      "level": "L2",
+      "rect": {
+        "maxX": 58,
+        "maxZ": 880,
+        "minX": 0,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-1",
+      "level": "L2",
+      "rect": {
+        "maxX": 112,
+        "maxZ": 880,
+        "minX": 62,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-2",
+      "level": "L2",
+      "rect": {
+        "maxX": 243,
+        "maxZ": 880,
+        "minX": 222,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-3",
+      "level": "L2",
+      "rect": {
+        "maxX": 278,
+        "maxZ": 880,
+        "minX": 247,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-4",
+      "level": "L2",
+      "rect": {
+        "maxX": 372.2,
+        "maxZ": 880,
+        "minX": 282,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-5",
+      "level": "L2",
+      "rect": {
+        "maxX": 498,
+        "maxZ": 880,
+        "minX": 459.8,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-8",
+      "level": "L2",
+      "rect": {
+        "maxX": 718,
+        "maxZ": 880,
+        "minX": 662,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-9",
+      "level": "L2",
+      "rect": {
+        "maxX": 804.2,
+        "maxZ": 880,
+        "minX": 722,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-11",
+      "level": "L2",
+      "rect": {
+        "maxX": 938,
+        "maxZ": 880,
+        "minX": 907,
+        "minZ": 820
+      }
+    },
+    {
+      "alley": false,
+      "district": "slope",
+      "id": "block-band-C-12",
+      "level": "L2",
+      "rect": {
+        "maxX": 976,
+        "maxZ": 880,
+        "minX": 942,
+        "minZ": 820
+      }
     }
   ],
-  "connectors": [],
+  "connectors": [
+    {
+      "band": "A",
+      "id": "conn-A-switchback-0",
+      "kind": "switchback",
+      "legLength": 50,
+      "x": 120,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-switchback-1",
+      "kind": "switchback",
+      "legLength": 50,
+      "x": 552,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-switchback-2",
+      "kind": "switchback",
+      "legLength": 50,
+      "x": 984,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-steepLane-0",
+      "kind": "steepLane",
+      "x": 376,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-steepLane-1",
+      "kind": "steepLane",
+      "x": 808,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-stairs-0",
+      "kind": "stairs",
+      "x": 70,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-stairs-1",
+      "kind": "stairs",
+      "x": 330,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-stairs-2",
+      "kind": "stairs",
+      "x": 500,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-stairs-3",
+      "kind": "stairs",
+      "x": 650,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-stairs-4",
+      "kind": "stairs",
+      "x": 870,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "A",
+      "id": "conn-A-stairs-5",
+      "kind": "stairs",
+      "x": 1075,
+      "y0": 2,
+      "y1": 10,
+      "z0": 270,
+      "z1": 310
+    },
+    {
+      "band": "B",
+      "id": "conn-B-switchback-0",
+      "kind": "switchback",
+      "legLength": 80,
+      "x": 228,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-switchback-1",
+      "kind": "switchback",
+      "legLength": 80,
+      "x": 660,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-switchback-2",
+      "kind": "switchback",
+      "legLength": 80,
+      "x": 1092,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-steepLane-0",
+      "kind": "steepLane",
+      "x": 52,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-steepLane-1",
+      "kind": "steepLane",
+      "x": 484,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-steepLane-2",
+      "kind": "steepLane",
+      "x": 916,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-0",
+      "kind": "stairs",
+      "x": 160,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-1",
+      "kind": "stairs",
+      "x": 170,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-2",
+      "kind": "stairs",
+      "x": 355,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-3",
+      "kind": "stairs",
+      "x": 390,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-4",
+      "kind": "stairs",
+      "x": 575,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-5",
+      "kind": "stairs",
+      "x": 610,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-6",
+      "kind": "stairs",
+      "x": 770,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-7",
+      "kind": "stairs",
+      "x": 830,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-8",
+      "kind": "stairs",
+      "x": 1015,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "B",
+      "id": "conn-B-stairs-9",
+      "kind": "stairs",
+      "x": 1050,
+      "y0": 10,
+      "y1": 24,
+      "z0": 560,
+      "z1": 620
+    },
+    {
+      "band": "C",
+      "id": "conn-C-switchback-0",
+      "kind": "switchback",
+      "legLength": 80,
+      "x": 120,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-switchback-1",
+      "kind": "switchback",
+      "legLength": 80,
+      "x": 552,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-switchback-2",
+      "kind": "switchback",
+      "legLength": 80,
+      "x": 984,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-steepLane-0",
+      "kind": "steepLane",
+      "x": 376,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-steepLane-1",
+      "kind": "steepLane",
+      "x": 808,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-steepLane-2",
+      "kind": "steepLane",
+      "x": 1102,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-0",
+      "kind": "stairs",
+      "x": 60,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-1",
+      "kind": "stairs",
+      "x": 245,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-2",
+      "kind": "stairs",
+      "x": 280,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-3",
+      "kind": "stairs",
+      "x": 500,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-4",
+      "kind": "stairs",
+      "x": 660,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-5",
+      "kind": "stairs",
+      "x": 720,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-6",
+      "kind": "stairs",
+      "x": 905,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-7",
+      "kind": "stairs",
+      "x": 940,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-8",
+      "kind": "stairs",
+      "x": 1088,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "C",
+      "id": "conn-C-stairs-9",
+      "kind": "stairs",
+      "x": 1187.8,
+      "y0": 24,
+      "y1": 38,
+      "z0": 820,
+      "z1": 880
+    },
+    {
+      "band": "D",
+      "id": "conn-D-switchback-0",
+      "kind": "switchback",
+      "legLength": 55.55555555555556,
+      "x": 336,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-switchback-1",
+      "kind": "switchback",
+      "legLength": 55.55555555555556,
+      "x": 876,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-steepLane-0",
+      "kind": "steepLane",
+      "x": 52,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-steepLane-1",
+      "kind": "steepLane",
+      "x": 700,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-stairs-0",
+      "kind": "stairs",
+      "x": 145,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-stairs-1",
+      "kind": "stairs",
+      "x": 450,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-stairs-2",
+      "kind": "stairs",
+      "x": 785,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-stairs-3",
+      "kind": "stairs",
+      "x": 1000,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    },
+    {
+      "band": "D",
+      "id": "conn-D-stairs-4",
+      "kind": "stairs",
+      "x": 1150,
+      "y0": 38,
+      "y1": 48,
+      "z0": 1040,
+      "z1": 1070
+    }
+  ],
   "curvedRoads": [],
   "gasStations": [],
   "hospitals": [],
@@ -48981,6 +50005,1378 @@
       },
       "upperDoor": null,
       "y": 38
+    },
+    {
+      "address": "6 Bayview Tce, apt 8",
+      "asset": "mega/House_06",
+      "block": "block-band-B-0",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-0",
+      "level": "L1",
+      "name": "E. Castell",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 13.5,
+        "maxZ": 566.5,
+        "minX": 6,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 9.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "14 Bayview Tce, apt 6",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-0",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-1",
+      "level": "L1",
+      "name": "R. Vance",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 29.5,
+        "maxZ": 566.5,
+        "minX": 22,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 25.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "22 Bayview Tce, apt 7",
+      "asset": "mega/House_05",
+      "block": "block-band-B-0",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-2",
+      "level": "L1",
+      "name": "J. Gilroy",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 45.5,
+        "maxZ": 566.5,
+        "minX": 38,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 41.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "76 Bayview Tce, apt 8",
+      "asset": "mega/House_06",
+      "block": "block-band-B-1",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-3",
+      "level": "L1",
+      "name": "C. Dalby",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 154.5,
+        "maxZ": 566.5,
+        "minX": 147,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 150.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "170 Bayview Tce, apt 9",
+      "asset": "mega/House_06",
+      "block": "block-band-B-4",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-4",
+      "level": "L1",
+      "name": "I. Thackeray",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 340.5,
+        "maxZ": 566.5,
+        "minX": 333,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 336.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "174 Bayview Tce, apt 3",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-4",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-5",
+      "level": "L1",
+      "name": "R. Coyle",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 348.5,
+        "maxZ": 566.5,
+        "minX": 341,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 344.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "184 Bayview Tce, apt 5",
+      "asset": "mega/House_06",
+      "block": "block-band-B-5",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-6",
+      "level": "L1",
+      "name": "I. Calloway",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 368.5,
+        "maxZ": 566.5,
+        "minX": 361,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 364.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "192 Bayview Tce, apt 10",
+      "asset": "mega/House_05",
+      "block": "block-band-B-5",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-7",
+      "level": "L1",
+      "name": "M. Carmody",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 384.5,
+        "maxZ": 566.5,
+        "minX": 377,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 380.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "220 Bayview Tce, apt 1",
+      "asset": "mega/House_05",
+      "block": "block-band-B-6",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-8",
+      "level": "L1",
+      "name": "M. Mehta",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 441.5,
+        "maxZ": 566.5,
+        "minX": 434,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 437.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "224 Bayview Tce, apt 2",
+      "asset": "mega/House_05",
+      "block": "block-band-B-6",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-9",
+      "level": "L1",
+      "name": "C. Sheridan",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 449.5,
+        "maxZ": 566.5,
+        "minX": 442,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 445.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "228 Bayview Tce, apt 8",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-6",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-10",
+      "level": "L1",
+      "name": "F. Selwyn",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 457.5,
+        "maxZ": 566.5,
+        "minX": 450,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 453.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "236 Bayview Tce, apt 6",
+      "asset": "mega/House_06",
+      "block": "block-band-B-6",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-11",
+      "level": "L1",
+      "name": "P. Fairbairn",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 473.5,
+        "maxZ": 566.5,
+        "minX": 466,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 469.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "296 Bayview Tce, apt 9",
+      "asset": "mega/House_06",
+      "block": "block-band-B-8",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-12",
+      "level": "L1",
+      "name": "J. Wren",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 594.5,
+        "maxZ": 566.5,
+        "minX": 587,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 590.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "300 Bayview Tce, apt 4",
+      "asset": "mega/House_05",
+      "block": "block-band-B-8",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-13",
+      "level": "L1",
+      "name": "K. Hendry",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 602.5,
+        "maxZ": 566.5,
+        "minX": 595,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 598.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "310 Bayview Tce, apt 8",
+      "asset": "mega/House_06",
+      "block": "block-band-B-9",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-14",
+      "level": "L1",
+      "name": "K. Garnett",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 622.5,
+        "maxZ": 566.5,
+        "minX": 615,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 618.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "318 Bayview Tce, apt 5",
+      "asset": "mega/House_06",
+      "block": "block-band-B-9",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-15",
+      "level": "L1",
+      "name": "T. Holloway",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 638.5,
+        "maxZ": 566.5,
+        "minX": 631,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 634.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "322 Bayview Tce, apt 7",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-9",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-16",
+      "level": "L1",
+      "name": "M. Sutcliffe",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 646.5,
+        "maxZ": 566.5,
+        "minX": 639,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 642.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "390 Bayview Tce, apt 6",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-11",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-17",
+      "level": "L1",
+      "name": "M. Hendry",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 783.5,
+        "maxZ": 566.5,
+        "minX": 776,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 779.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "394 Bayview Tce, apt 5",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-11",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-18",
+      "level": "L1",
+      "name": "I. Hartley",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 791.5,
+        "maxZ": 566.5,
+        "minX": 784,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 787.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "410 Bayview Tce, apt 10",
+      "asset": "mega/House_06",
+      "block": "block-band-B-11",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-19",
+      "level": "L1",
+      "name": "D. Iverson",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 823.5,
+        "maxZ": 566.5,
+        "minX": 816,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 819.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "420 Bayview Tce, apt 4",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-12",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-20",
+      "level": "L1",
+      "name": "J. Finch",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 843.5,
+        "maxZ": 566.5,
+        "minX": 836,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 839.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "424 Bayview Tce, apt 6",
+      "asset": "mega/House_06",
+      "block": "block-band-B-12",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-21",
+      "level": "L1",
+      "name": "L. Underhill",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 851.5,
+        "maxZ": 566.5,
+        "minX": 844,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 847.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "428 Bayview Tce, apt 7",
+      "asset": "mega/House_05",
+      "block": "block-band-B-12",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-22",
+      "level": "L1",
+      "name": "V. Abernathy",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 859.5,
+        "maxZ": 566.5,
+        "minX": 852,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 855.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "436 Bayview Tce, apt 3",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-12",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-23",
+      "level": "L1",
+      "name": "M. Fairbairn",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 875.5,
+        "maxZ": 566.5,
+        "minX": 868,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 871.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "444 Bayview Tce, apt 7",
+      "asset": "mega/House_06",
+      "block": "block-band-B-12",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-24",
+      "level": "L1",
+      "name": "C. Tanaka",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 891.5,
+        "maxZ": 566.5,
+        "minX": 884,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 887.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "512 Bayview Tce, apt 4",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-B-14",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-B-25",
+      "level": "L1",
+      "name": "R. Salazar",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 1026.5,
+        "maxZ": 566.5,
+        "minX": 1019,
+        "minZ": 560
+      },
+      "upperDoor": {
+        "position": {
+          "x": 1022.75,
+          "y": 24,
+          "z": 566.5
+        },
+        "y": 24
+      },
+      "y": 10
+    },
+    {
+      "address": "10 Midtown Tce, apt 5",
+      "asset": "mega/House_06",
+      "block": "block-band-C-0",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-0",
+      "level": "L2",
+      "name": "T. Okafor",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 21.5,
+        "maxZ": 826.5,
+        "minX": 14,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 17.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "22 Midtown Tce, apt 7",
+      "asset": "mega/House_06",
+      "block": "block-band-C-0",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-1",
+      "level": "L2",
+      "name": "I. Mehta",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 45.5,
+        "maxZ": 826.5,
+        "minX": 38,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 41.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "44 Midtown Tce, apt 1",
+      "asset": "mega/House_05",
+      "block": "block-band-C-1",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-2",
+      "level": "L2",
+      "name": "D. Calloway",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 89.5,
+        "maxZ": 826.5,
+        "minX": 82,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 85.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "116 Midtown Tce, apt 5",
+      "asset": "mega/House_05",
+      "block": "block-band-C-2",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-3",
+      "level": "L2",
+      "name": "E. Novak",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 233.5,
+        "maxZ": 826.5,
+        "minX": 226,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 229.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "128 Midtown Tce, apt 4",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-3",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-4",
+      "level": "L2",
+      "name": "L. Halloran",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 256.5,
+        "maxZ": 826.5,
+        "minX": 249,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 252.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "132 Midtown Tce, apt 4",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-3",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-5",
+      "level": "L2",
+      "name": "J. Quinlan",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 264.5,
+        "maxZ": 826.5,
+        "minX": 257,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 260.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "146 Midtown Tce, apt 3",
+      "asset": "mega/House_06",
+      "block": "block-band-C-4",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-6",
+      "level": "L2",
+      "name": "P. Dempsey",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 292.5,
+        "maxZ": 826.5,
+        "minX": 285,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 288.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "150 Midtown Tce, apt 8",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-4",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-7",
+      "level": "L2",
+      "name": "G. Selwyn",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 300.5,
+        "maxZ": 826.5,
+        "minX": 293,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 296.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "166 Midtown Tce, apt 7",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-4",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-8",
+      "level": "L2",
+      "name": "L. Radley",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 332.5,
+        "maxZ": 826.5,
+        "minX": 325,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 328.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "178 Midtown Tce, apt 5",
+      "asset": "mega/House_06",
+      "block": "block-band-C-4",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-9",
+      "level": "L2",
+      "name": "M. Dempsey",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 356.5,
+        "maxZ": 826.5,
+        "minX": 349,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 352.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "182 Midtown Tce, apt 3",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-4",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-10",
+      "level": "L2",
+      "name": "M. Calloway",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 364.5,
+        "maxZ": 826.5,
+        "minX": 357,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 360.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "234 Midtown Tce, apt 9",
+      "asset": "mega/House_06",
+      "block": "block-band-C-5",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-11",
+      "level": "L2",
+      "name": "K. Dunmore",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 471.5,
+        "maxZ": 826.5,
+        "minX": 464,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 467.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "238 Midtown Tce, apt 7",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-5",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-12",
+      "level": "L2",
+      "name": "E. Mallory",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 479.5,
+        "maxZ": 826.5,
+        "minX": 472,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 475.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "242 Midtown Tce, apt 7",
+      "asset": "mega/House_05",
+      "block": "block-band-C-5",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-13",
+      "level": "L2",
+      "name": "F. Ashcombe",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 487.5,
+        "maxZ": 826.5,
+        "minX": 480,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 483.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "246 Midtown Tce, apt 2",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-5",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-14",
+      "level": "L2",
+      "name": "J. Lindgren",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 495.5,
+        "maxZ": 826.5,
+        "minX": 488,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 491.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "340 Midtown Tce, apt 2",
+      "asset": "mega/House_06",
+      "block": "block-band-C-8",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-15",
+      "level": "L2",
+      "name": "L. Fairbairn",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 681.5,
+        "maxZ": 826.5,
+        "minX": 674,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 677.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "356 Midtown Tce, apt 5",
+      "asset": "mega/House_05",
+      "block": "block-band-C-8",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-16",
+      "level": "L2",
+      "name": "K. Haskell",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 713.5,
+        "maxZ": 826.5,
+        "minX": 706,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 709.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "374 Midtown Tce, apt 9",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-9",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-17",
+      "level": "L2",
+      "name": "S. Galloway",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 749.5,
+        "maxZ": 826.5,
+        "minX": 742,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 745.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "382 Midtown Tce, apt 1",
+      "asset": "mega/House_06",
+      "block": "block-band-C-9",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-18",
+      "level": "L2",
+      "name": "O. Hollis",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 765.5,
+        "maxZ": 826.5,
+        "minX": 758,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 761.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "390 Midtown Tce, apt 7",
+      "asset": "mega/House_05",
+      "block": "block-band-C-9",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-19",
+      "level": "L2",
+      "name": "V. Sutcliffe",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 781.5,
+        "maxZ": 826.5,
+        "minX": 774,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 777.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "462 Midtown Tce, apt 10",
+      "asset": "mega/OldHouse_07",
+      "block": "block-band-C-11",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-20",
+      "level": "L2",
+      "name": "H. Pemberton",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 924.5,
+        "maxZ": 826.5,
+        "minX": 917,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 920.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "466 Midtown Tce, apt 3",
+      "asset": "mega/House_06",
+      "block": "block-band-C-11",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-21",
+      "level": "L2",
+      "name": "O. Corrigan",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 932.5,
+        "maxZ": 826.5,
+        "minX": 925,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 928.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
+    },
+    {
+      "address": "480 Midtown Tce, apt 1",
+      "asset": "mega/House_05",
+      "block": "block-band-C-12",
+      "district": "slope",
+      "door": null,
+      "facing": "S",
+      "id": "lot-band-C-22",
+      "level": "L2",
+      "name": "K. Osei",
+      "open": false,
+      "prop": false,
+      "rect": {
+        "maxX": 960.5,
+        "maxZ": 826.5,
+        "minX": 953,
+        "minZ": 820
+      },
+      "upperDoor": {
+        "position": {
+          "x": 956.75,
+          "y": 38,
+          "z": 826.5
+        },
+        "y": 38
+      },
+      "y": 24
     }
   ],
   "orderRules": {

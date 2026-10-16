@@ -1,12 +1,27 @@
-import { mulberry32, type Area, type Block, type CatalogIndex, type CityConfig, type CityDistrict, type CityLayout, type Lot, type NamesConfig, type Rng, type Road } from '@dm/shared';
+import {
+  connectorExtent,
+  mulberry32,
+  type Area,
+  type Block,
+  type CatalogIndex,
+  type CityConfig,
+  type CityDistrict,
+  type CityLayout,
+  type Connector,
+  type Lot,
+  type NamesConfig,
+  type Rng,
+  type Road,
+} from '@dm/shared';
+import { BAND_LOWER, BANDS, bandBlock, bandConnectors, bandGaps, bandSegments, slopeLots } from './bands';
 import { blockStreets, fillBlock, levelBlocks, toBlock } from './blocks';
-import { BUILT_LEVELS, levelRoads } from './frame';
+import { BUILT_LEVELS, levelRoads, roadId } from './frame';
 import { Namer } from './names';
 import { PALETTES } from './palettes';
 
 // The deterministic city generator (city design section 7.1; the prototype city-map-prototype/layout.py is its
-// starting point). Part 1: the frame, the blocks and their lots, names and addresses. Tasks 7-9 add the slope bands,
-// the landmarks, waterfront and Hillcrest, and the doors.
+// starting point). Part 1: the frame, the blocks and their lots, names and addresses. Part 2: the slope bands (their
+// connectors, gaps and walk-ups). Tasks 8-9 add the landmarks, waterfront and Hillcrest, and the doors.
 
 /** FNV-1a of a stream name mixed with the seed: each district (and the namer) has its own random stream. */
 export function districtSeed(seed: number, name: string): number {
@@ -48,6 +63,28 @@ export function generateLayout(cfg: CityConfig, names: NamesConfig, cat: Catalog
     }
   }
 
+  const connectors: Connector[] = [];
+  for (const band of BANDS) {
+    const cs = bandConnectors(band, cfg);
+    connectors.push(...cs);
+    areas.push(...bandGaps(band, cs, cfg));
+    const used = cs.map((c) => connectorExtent(c, cfg));
+    const slope = slopeLots(band, used, rngOf('slope'), cat, cfg);
+    if (slope.length === 0) continue;
+    const front = roads.find((r) => r.id === roadId.top(BAND_LOWER[band]));
+    if (!front) throw new Error(`generate: band ${band} walk-ups face no street`);
+    const segments = bandSegments(used, cfg.size);
+    const blockIds = new Set(slope.map((l) => l.block));
+    segments.forEach((seg, i) => {
+      const b = bandBlock(band, i, seg, cfg);
+      if (blockIds.has(b.id)) blocks.push(b);
+    });
+    for (const lot of slope) {
+      const entry = cat.get(lot.asset);
+      lots.push({ ...lot, name: namer.lotName(entry), address: namer.address(lot, front, entry) });
+    }
+  }
+
   return {
     version: 1,
     seed: cfg.seed,
@@ -58,7 +95,7 @@ export function generateLayout(cfg: CityConfig, names: NamesConfig, cat: Catalog
     lots,
     roads,
     curvedRoads: [],
-    connectors: [],
+    connectors,
     areas,
     hospitals: [],
     gasStations: [],

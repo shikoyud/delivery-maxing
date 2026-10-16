@@ -64,3 +64,16 @@ test('every lot sits inside its block and its level', () => {
     expect(l.y).toBe(cityConfig.levels[l.level].y);
   }
 });
+
+test('the slope bands: 11 switchbacks, 10 steep lanes, 31 staircases; a band gap per switchback and lane; walk-ups in B and C', () => {
+  const count = (k: string) => layout.connectors.filter((c) => c.kind === k).length;
+  expect([count('switchback'), count('steepLane'), count('stairs')]).toEqual([11, 10, 31]);
+  expect(layout.areas.filter((a) => a.kind === 'bandGap')).toHaveLength(21);
+  const slope = layout.lots.filter((l) => l.district === 'slope');
+  expect(slope.length).toBeGreaterThan(20);
+  expect(new Set(slope.map((l) => l.level))).toEqual(new Set(['L1', 'L2']));
+  for (const l of slope) {
+    expect(l.upperDoor!.y).toBe(l.level === 'L1' ? 24 : 38);
+    expect(l.block).toMatch(/^block-band-[BC]-\d+$/);
+  }
+});

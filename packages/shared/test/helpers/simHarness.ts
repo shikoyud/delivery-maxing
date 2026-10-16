@@ -42,6 +42,8 @@ export interface SimOptions {
   size?: number;
   /** The vehicles owned at the start (a function receives the map); default: the carried skateboard only. */
   garage?: SavedVehicle[] | ((map: MapData) => SavedVehicle[]);
+  /** A whole map to run on instead of the test floor (floor, solids, size and hospitals are then ignored). */
+  map?: MapData;
 }
 
 /** The default test garage: only the carried skateboard, so no parked vehicle stands in a movement test. */
@@ -83,7 +85,7 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   const spawn = opts.spawn ?? vec3(0, 0, 0);
   const yaw = opts.yaw ?? 0;
   const size = opts.size ?? 200;
-  const map: MapData = {
+  const map: MapData = opts.map ?? {
     kind: 'greybox',
     chunkSize: worldConfig.chunkSize,
     size,
