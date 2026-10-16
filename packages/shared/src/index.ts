@@ -30,3 +30,4 @@ export * from './orders/offers';
 export * from './orders/OrderSystem';
 export * from './vehicles/summon';
 export * from './vehicles/fuel';
+export * from './world/catalog';

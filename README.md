@@ -90,3 +90,11 @@ browser's localStorage. Add `?seed=N` to make the offer stream reproducible.
 
 Every push to `main` or `sp1/movement-delivery-loop` then builds, tests and
 deploys the client.
+
+### Asset catalog tools
+
+`map/catalog.json` lists every model of the owner's packs (git-ignored, unpacked in `assets/packs/`).
+`pnpm assets:check [folder]` compares it with the packs: missing, extra, empty and resized models. It exits 1 on
+a placed entry that is missing, empty or grew by more than 0.5 m, and prints `assets:check: packs folder not found`
+(exit 1) where the packs are absent. `pnpm assets:sheet` renders each placed building from its `front` side into
+`docs/playtest/sp5/sheet-<category>.png` (needs the packs and Chromium via `PW_CHROMIUM_PATH`; the PNGs are not committed).
