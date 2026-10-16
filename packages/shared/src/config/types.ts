@@ -137,3 +137,8 @@ export interface OrdersConfig {
   };
   zones: { poiRadius: number; poiHeight: number };
 }
+
+export interface WorldConfig {
+  chunkSize: number;
+  physics: { loadRadius: number; unloadRadius: number };
+}

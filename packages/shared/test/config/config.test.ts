@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { movementConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig } from '../../src/config';
+import { movementConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig, worldConfig } from '../../src/config';
 
 describe('config pins spec values', () => {
   it('two-wheelers back up at walking pace, the skateboard does not (Decision 3)', () => {
@@ -23,6 +23,9 @@ describe('config pins spec values', () => {
     expect(ordersConfig.referenceSpeed).toBe(8);
     expect(ordersConfig.express.distanceFactor).toBeLessThan(ordersConfig.par.distanceFactor);
     expect(ordersConfig.fragile.maxFallMeters).toBe(7);
+  });
+  it('world', () => {
+    expect(worldConfig).toEqual({ chunkSize: 100, physics: { loadRadius: 150, unloadRadius: 220 } });
   });
   it('vehicles', () => {
     expect(vehiclesConfig.car.maxPackageKg).toBe(150);

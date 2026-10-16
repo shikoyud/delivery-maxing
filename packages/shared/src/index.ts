@@ -7,6 +7,8 @@ export * from './world/mapTypes';
 export * from './world/greybox';
 export * from './world/access';
 export * from './world/physicsWorld';
+export * from './world/chunks';
+export * from './world/colliderPager';
 export * from './world/distance';
 export * from './world/zones';
 export * from './world/hospitals';
