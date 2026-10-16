@@ -15,7 +15,7 @@ import {
   type Vec3,
   type VehicleTier,
 } from '@dm/shared';
-import { forbiddenAreaRects } from '../nav/build';
+import { floorDeckParts, subtractRects } from '../nav/build';
 import { validateMapNav } from '../nav/validate';
 
 // The city's checks, run by `pnpm map:check`: validateLayout on map/city.layout.json, validateCityNav on the city's
@@ -67,7 +67,7 @@ function expectedDoor(lot: Lot, offset: number): Vec3 {
  * a door off the sidewalk (a front door not `door.offset` outside its lot's facing edge at the lot's height, an upper
  * door not on its lot's edge on the upper level's ground (a level, or a band's terrace top at y1), or either inside another lot).
  */
-export function validateLayout(layout: CityLayout, cat: CatalogIndex, city: CityConfig = cityConfig): string[] {
+export function validateLayout(layout: CityLayout, cat: CatalogIndex, city: CityConfig = cityConfig, nav: NavConfig = navConfig): string[] {
   const messages: string[] = [];
 
   const seen = new Map<string, string>();
@@ -132,7 +132,7 @@ export function validateLayout(layout: CityLayout, cat: CatalogIndex, city: City
 
   const offset = city.door.offset;
   const closed = layout.lots.filter((l) => !l.open);
-  const inOtherLot = (lot: Lot, p: Vec3): Lot | undefined => closed.find((o) => o.id !== lot.id && Math.abs(o.y - p.y) < 30 && inside(o.rect, p.x, p.z, 0.01));
+  const inOtherLot = (lot: Lot, p: Vec3): Lot | undefined => closed.find((o) => o.id !== lot.id && Math.abs(o.y - p.y) < nav.validate.doorLotHeightWindow && inside(o.rect, p.x, p.z, 0.01));
   for (const lot of layout.lots) {
     if (lot.door) {
       const want = expectedDoor(lot, offset);
@@ -166,6 +166,22 @@ function grid(r: Rect, step: number): { x: number; z: number; hx: number; hz: nu
   const out = [];
   for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) out.push({ x: r.minX + (2 * i + 1) * hx, z: r.minZ + (2 * k + 1) * hz, hx, hz });
   return out;
+}
+
+/**
+ * The floor rects the validator samples for `tier`'s polygons on the city areas it is kept off: each area whole, at
+ * its height; a band gap's floor under the switchback decks included, leaving out only the deck parts that lie on or
+ * within the floor tolerance of the floor (the entry stub and the foot of the first leg, which are the car's road).
+ * Deck polygons elsewhere are above the floor's height window, so they are not mistaken for floor.
+ */
+export function areaSampleRects(map: CityMap, tier: VehicleTier, nav: NavConfig = navConfig, city: CityConfig = cityConfig): { id: string; rect: Rect; y: number }[] {
+  const kinds = new Set(nav.forbiddenAreasByTier[tier]);
+  const onFloor = map.layout.connectors
+    .filter((c) => c.kind === 'switchback')
+    .flatMap((c) => floorDeckParts(c, nav.validate.floorTolerance + city.switchback.thickness, city));
+  return map.layout.areas
+    .filter((a) => kinds.has(a.kind))
+    .flatMap((a) => (a.kind === 'bandGap' ? subtractRects(a.rect, onFloor) : [a.rect]).map((rect, i) => ({ id: `${a.id}-${i}`, rect, y: a.y })));
 }
 
 /** An avenue point of each level (the centre of its first avenue; Hillcrest Drive's middle vertex on the ridge). */
@@ -204,17 +220,18 @@ export function validateCityNav(map: CityMap, router: NavRouter, nav: NavConfig 
     return q && Math.hypot(q.x - p.x, q.z - p.z) <= tol && Math.abs(q.y - p.y) <= tol ? q : null;
   };
 
+  const { floorTolerance: yTol, zoneInset } = nav.validate;
   for (const tier of NAV_TIERS) {
     const regions = [
       ...map.accessZones.filter((z) => !accessAllowed(tier, z.kind)).map((z) => ({ what: `${z.kind} zone ${z.id}`, rect: z.rect, minY: z.minY, maxY: z.maxY })),
-      ...forbiddenAreaRects(map, tier, nav).map((a) => ({ what: `area ${a.id}`, rect: a.rect, minY: a.y, maxY: a.y })),
+      ...areaSampleRects(map, tier, nav).map((a) => ({ what: `area ${a.id}`, rect: a.rect, minY: a.y, maxY: a.y })),
     ];
     for (const r of regions) {
       const midY = (r.minY + r.maxY) / 2;
-      const hy = (r.maxY - r.minY) / 2 + 0.5;
+      const hy = (r.maxY - r.minY) / 2 + yTol;
       for (const s of grid(r.rect, nav.forbiddenSampleStep)) {
         const q = router.closestPoint(tier, { x: s.x, y: midY, z: s.z }, { x: s.hx, y: hy, z: s.hz });
-        if (q && inside(r.rect, q.x, q.z, 0.05) && q.y >= r.minY - 0.5 && q.y <= r.maxY + 0.5) {
+        if (q && inside(r.rect, q.x, q.z, zoneInset) && q.y >= r.minY - yTol && q.y <= r.maxY + yTol) {
           messages.push(`${tier} mesh has a polygon inside ${r.what} at ${fmt(q)}`);
           break;
         }

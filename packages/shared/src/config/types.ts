@@ -122,6 +122,21 @@ export interface NavConfig {
   forbiddenAreasByTier: Record<VehicleTier, string[]>;
   /** The validator samples each forbidden zone or area on a grid this fine (m) for polygons of a tier's mesh. */
   forbiddenSampleStep: number;
+  /**
+   * A band gap's blocker is a slab `height` thick on the gap floor (one fill layer above the floor, so no ride stands
+   * on it) that runs under the switchback decks: only deck parts whose top is less than height + deck thickness +
+   * `deckClearance` above the floor (the entry stub, the foot of the first leg) are left out of it.
+   */
+  gapFloorBlocker: { height: number; deckClearance: number };
+  /** Validator tolerances (m). */
+  validate: {
+    /** A polygon within this of a zone's or floor's height range counts as on it. */
+    floorTolerance: number;
+    /** A polygon point counts as inside a zone or area only this far inside its rect (edges are shared with roads). */
+    zoneInset: number;
+    /** A door counts as inside another lot only when the lots' base heights differ by less than this. */
+    doorLotHeightWindow: number;
+  };
 }
 
 interface TimeRule { distanceFactor: number; extraSeconds: number }

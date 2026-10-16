@@ -66,7 +66,10 @@ describe('config pins spec values', () => {
   it('nav: walk climb under the mantle height, door search and foot leg limits', () => {
     expect(navConfig).toMatchObject({ walkClimb: 1.0, doorSearchMaxRadius: 120, maxFootLeg: 60, carRoadMaxDoorDistance: 30 });
     expect(navConfig.walkClimb).toBeGreaterThanOrEqual(movementConfig.controller.maxStepHeight);
-    expect(navConfig.walkClimb).toBeLessThanOrEqual(movementConfig.mantle.maxHeight);
+    // the walk mesh never takes a ledge the courier cannot mantle; a parapet (1 m) is not crossed whatever the climb,
+    // because its top is unwalkable (geometry.ts ROOFED)
+    expect(navConfig.walkClimb).toBeLessThan(movementConfig.mantle.maxHeight);
+    expect(navConfig.gapFloorBlocker.height).toBeGreaterThan(0);
     expect(navConfig.doorSearchMaxRadius).toBeGreaterThanOrEqual(navConfig.carRoadMaxDoorDistance);
     expect(navConfig.maxFootLeg).toBeGreaterThanOrEqual(navConfig.carRoadMaxDoorDistance);
   });

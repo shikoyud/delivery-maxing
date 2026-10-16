@@ -200,6 +200,36 @@ describe('generateOffer', () => {
       expect(r.calls).toHaveLength(2); // player → pickup, pickup → dropoff
     });
 
+    it('one query budget per roll: a food roll with no dropoff in its window falls back to packages within the same 8 queries', () => {
+      const senders: Poi[] = Array.from({ length: 20 }, (_, i) => ({
+        id: `ps-${i}`, position: vec3(0, 0, 10 + i * 10), district: 'downtown', kind: 'counter', name: `Parcels ${i}`, roles: ['packagePickup'], items: ['parcel'], weightKg: [1, 5],
+      }));
+      const parcelDrop: Poi = { id: 'dp-x', position: vec3(0, 0, 400), district: 'downtown', kind: 'door', name: '9 Far Rd', roles: ['dropoffPackage'] };
+      // 3 kitchens use 3 queries, the fallback to packages gets the other 5
+      const kitchens = pickups.slice(0, 3);
+      const all = [...kitchens, ...dropoffs, ...senders, parcelDrop];
+      const ids = { p: [...kitchens, ...senders].map((p) => p.id), d: [...dropoffs, parcelDrop].map((d) => d.id) };
+      // food pairs are all 10 m (under the 80 m food minimum); every sender is 300 m from dp-x
+      const values = new Float32Array(ids.p.length * ids.d.length).map((_, k) =>
+        ids.p[Math.floor(k / ids.d.length)]!.startsWith('ps-') && ids.d[k % ids.d.length] === 'dp-x' ? 300 : 10,
+      );
+      const t = new DistanceTable(ids.p, ids.d, values);
+      const cfg = { ...ordersConfig, mix: { ...ordersConfig.mix, kindWeights: { food: 1000, package: 1 } } };
+      let offers = 0;
+      for (let seed = 1; seed <= 20; seed++) {
+        const r = counting();
+        const o = generateOffer(ctx({ pois: all, cfg, rng: mulberry32(seed), distance: r.distance, table: t }));
+        expect(r.calls.length, `seed ${seed}`).toBeLessThanOrEqual(8);
+        // the 20 senders alone would take 8 queries after the kitchens' 3
+        expect(r.calls.filter((c) => c.startsWith('0,0->0,')).length, `seed ${seed}`).toBeLessThanOrEqual(5);
+        if (o) {
+          offers++;
+          expect(o.kind).toBe('package');
+        }
+      }
+      expect(offers).toBeGreaterThan(0);
+    });
+
     it('an unreachable pair (Infinity in the table) is never offered', () => {
       const none = new DistanceTable(pickups.map((p) => p.id), dropoffs.map((d) => d.id), new Float32Array(30 * 30).fill(Infinity));
       expect(generateOffer(ctx({ pois: pois(), cfg: onlyKind('food'), table: none }))).toBeNull();

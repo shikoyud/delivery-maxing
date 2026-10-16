@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { initNav, NAV_TIERS, NavRouter, vec3, type CityMap, type Lot, type VehicleTier } from '@dm/shared';
+import { cityConfig, initNav, NAV_TIERS, switchbackGeometry, navConfig, NavRouter, vec3, type CityMap, type Lot, type NavConfig, type VehicleTier } from '@dm/shared';
 import { exportNavMesh } from 'recast-navigation';
 import { readCatalog, readLayout } from '../../src/city/files';
-import { validateCityNav, validateLayout } from '../../src/city/validate';
-import { buildTierNavMesh } from '../../src/nav/build';
+import { areaSampleRects, validateCityNav, validateLayout } from '../../src/city/validate';
+import { buildTierNavMesh, readCityMap } from '../../src/nav/build';
 import { REPO } from '../../src/nav/files';
 
 const cat = readCatalog(REPO);
@@ -68,10 +68,10 @@ function stairsFixture(): CityMap {
   };
 }
 
-function routerFor(map: CityMap): NavRouter {
+function routerFor(map: CityMap, nav: NavConfig = navConfig): NavRouter {
   const bins = {} as Record<VehicleTier, Uint8Array>;
   for (const t of NAV_TIERS) {
-    const mesh = buildTierNavMesh(map, t);
+    const mesh = buildTierNavMesh(map, t, nav);
     bins[t] = exportNavMesh(mesh);
     mesh.destroy();
   }
@@ -90,3 +90,47 @@ test('validateCityNav reports a car polygon under a stairs zone, and not when th
   const sound = validateCityNav(map, routerFor(map));
   expect(sound.filter((m) => m.includes('zone-test-stairs'))).toEqual([]);
 }, 60_000);
+
+/** The stairs fixture's ground with a sand area and a band-gap area on it (no connector: the gap is all floor). */
+function areasFixture(): CityMap {
+  const map = stairsFixture();
+  return {
+    ...map,
+    accessZones: [],
+    layout: {
+      ...map.layout,
+      areas: [
+        { id: 'area-test-sand', kind: 'sand', rect: { minX: -40, maxX: -20, minZ: -10, maxZ: 10 }, y: 0, district: 'beach' },
+        { id: 'area-test-gap', kind: 'bandGap', rect: { minX: 20, maxX: 40, minZ: -10, maxZ: 10 }, y: 0, district: 'slope' },
+      ],
+    },
+  };
+}
+
+test('validateCityNav reports car polygons on an unblocked sand or band-gap floor, and none once they are blocked', () => {
+  const map = areasFixture();
+  const leaky = routerFor(map, { ...navConfig, forbiddenAreasByTier: { ...navConfig.forbiddenAreasByTier, car: [] } });
+  const messages = validateCityNav(map, leaky);
+  for (const id of ['area-test-sand', 'area-test-gap']) {
+    expect(messages.some((m) => m.includes(id) && m.includes('car')), `${id}: ${messages.join('\n')}`).toBe(true);
+  }
+  const sound = validateCityNav(map, routerFor(map));
+  expect(sound.filter((m) => m.includes('area-test'))).toEqual([]);
+}, 60_000);
+
+test('the validator samples the whole band-gap floor, under every switchback deck, leaving out only the deck on the floor', () => {
+  const city = readCityMap(REPO);
+  const rects = areaSampleRects(city, 'car');
+  const covered = (x: number, z: number, y: number) =>
+    rects.some((r) => Math.abs(r.y - y) < 1e-6 && x > r.rect.minX && x < r.rect.maxX && z > r.rect.minZ && z < r.rect.maxZ);
+  for (const c of city.layout.connectors.filter((k) => k.kind === 'switchback')) {
+    const g = switchbackGeometry(c, cityConfig.switchback);
+    const [za, zb] = g.legZ;
+    const xe = g.xs + g.run;
+    expect(covered((xe + g.xEast) / 2, (za + zb) / 2, c.y0), `${c.id} under the hairpin`).toBe(true);
+    expect(covered((g.xs + xe) / 2, zb, c.y0), `${c.id} under leg 2`).toBe(true);
+    expect(covered(xe - 5, za, c.y0), `${c.id} under leg 1`).toBe(true);
+    expect(covered(c.x, (zb + c.z1) / 2, c.y0), `${c.id} under the exit`).toBe(true);
+    expect(covered(c.x, c.z0 + 1, c.y0), `${c.id} entry stub`).toBe(false);
+  }
+});

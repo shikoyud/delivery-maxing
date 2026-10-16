@@ -88,9 +88,8 @@ export function zoneBlockers(map: MapData, tier: VehicleTier, nav: NavConfig = n
     });
 }
 
-/** An axis-aligned box from `rect` at `y0` up to `y0 + nav.blockerHeight`, as a blocker solid. */
-function blockerBox(id: string, r: Rect, y0: number, nav: NavConfig): Solid {
-  const top = y0 + nav.blockerHeight;
+/** An axis-aligned box from `rect` at `y0` up to `top`, as a blocker solid. */
+function blockerBox(id: string, r: Rect, y0: number, top: number): Solid {
   return {
     id,
     kind: 'prop',
@@ -125,41 +124,61 @@ export function subtractRects(r: Rect, holes: readonly Rect[]): Rect[] {
   return out;
 }
 
-/** The ground rects of a switchback's deck: entry stub, both legs, hairpin landing, exit stub. */
-export function switchbackFootprint(c: Connector, city: CityConfig = cityConfig): Rect[] {
-  const g = switchbackGeometry(c, city.switchback);
-  const half = city.switchback.width / 2;
+/**
+ * The parts of a switchback's deck whose top is less than `rise` above the band-gap floor (y0), as ground rects: the
+ * entry stub (on the floor), the foot of the first leg up to where it has climbed `rise`, and the hairpin and the
+ * low end of the second leg if they are that low. Everything else of the deck passes over a floor blocker that is
+ * lower than `rise` minus the deck's thickness.
+ */
+export function floorDeckParts(c: Connector, rise: number, city: CityConfig = cityConfig): Rect[] {
+  const sw = city.switchback;
+  const g = switchbackGeometry(c, sw);
+  const half = sw.width / 2;
   const [za, zb] = g.legZ;
   const xe = g.xs + g.run;
-  return [
-    { minX: c.x - half, maxX: c.x + half, minZ: c.z0, maxZ: za + half },
-    { minX: g.xs, maxX: xe, minZ: za - half, maxZ: za + half },
-    { minX: xe, maxX: g.xEast, minZ: za - half, maxZ: zb + half },
-    { minX: g.xs, maxX: xe, minZ: zb - half, maxZ: zb + half },
-    { minX: c.x - half, maxX: c.x + half, minZ: zb - half, maxZ: c.z1 },
-  ];
+  const midRise = g.mid - c.y0;
+  const out: Rect[] = [{ minX: c.x - half, maxX: c.x + half, minZ: c.z0, maxZ: za + half }];
+  // leg 1 climbs midRise over its run from xs; leg 2 climbs from the hairpin (mid) back west to y1
+  out.push({ minX: g.xs, maxX: g.xs + Math.min(g.run, (g.run * rise) / midRise), minZ: za - half, maxZ: za + half });
+  if (midRise < rise) {
+    out.push({ minX: xe, maxX: g.xEast, minZ: za - half, maxZ: zb + half });
+    const leg2 = (g.run * (rise - midRise)) / (c.y1 - g.mid);
+    out.push({ minX: Math.max(g.xs, xe - leg2), maxX: xe, minZ: zb - half, maxZ: zb + half });
+  }
+  return out;
 }
 
 /**
- * The ground rects of the city areas `tier` is kept off (nav.forbiddenAreasByTier), each with its area: the whole
- * area, except that a band gap leaves out the deck of every switchback in it (the deck is the car's way up; the gap
- * floor around and inside the U is not). Empty on the greybox.
+ * The floor rects of the city areas `tier` is kept off (nav.forbiddenAreasByTier), each with its area, its floor
+ * height `y` and the blocker's `top`: sand, pier and marina whole, nav.blockerHeight high; a band gap as a
+ * nav.gapFloorBlocker slab over its whole floor, under the switchback decks too, minus the deck parts that lie on or
+ * near the floor (`floorDeckParts`: the car's way in). Empty on the greybox.
  */
-export function forbiddenAreaRects(map: MapData, tier: VehicleTier, nav: NavConfig = navConfig, city: CityConfig = cityConfig): { id: string; rect: Rect; y: number }[] {
+export function forbiddenAreaRects(
+  map: MapData,
+  tier: VehicleTier,
+  nav: NavConfig = navConfig,
+  city: CityConfig = cityConfig,
+): { id: string; rect: Rect; y: number; top: number }[] {
   if (map.kind !== 'city') return [];
   const kinds = new Set(nav.forbiddenAreasByTier[tier]);
   const { layout } = map as CityMap;
-  const decks = layout.connectors.filter((c) => c.kind === 'switchback').flatMap((c) => switchbackFootprint(c, city));
+  const gb = nav.gapFloorBlocker;
+  const onFloor = layout.connectors
+    .filter((c) => c.kind === 'switchback')
+    .flatMap((c) => floorDeckParts(c, gb.height + city.switchback.thickness + gb.deckClearance, city));
   return layout.areas
     .filter((a) => kinds.has(a.kind))
-    .flatMap((a) =>
-      (a.kind === 'bandGap' ? subtractRects(a.rect, decks) : [a.rect]).map((rect, i) => ({ id: `${a.id}-${i}`, rect, y: a.y })),
-    );
+    .flatMap((a) => {
+      const gap = a.kind === 'bandGap';
+      const top = a.y + (gap ? gb.height : nav.blockerHeight);
+      return (gap ? subtractRects(a.rect, onFloor) : [a.rect]).map((rect, i) => ({ id: `${a.id}-${i}`, rect, y: a.y, top }));
+    });
 }
 
-/** One blocker box per forbidden area rect (`forbiddenAreaRects`), from the area's height up nav.blockerHeight. */
+/** One blocker box per forbidden area rect (`forbiddenAreaRects`), from the floor up to its top. */
 export function areaBlockers(map: MapData, tier: VehicleTier, nav: NavConfig = navConfig): Solid[] {
-  return forbiddenAreaRects(map, tier, nav).map((a) => blockerBox(`blocker-${a.id}`, a.rect, a.y, nav));
+  return forbiddenAreaRects(map, tier, nav).map((a) => blockerBox(`blocker-${a.id}`, a.rect, a.y, a.top));
 }
 
 /** `tier`'s navmesh of `map`. Call `initNav()` first. Throws when recast fails. */
@@ -172,7 +191,11 @@ export function buildTierNavMesh(map: MapData, tier: VehicleTier, nav: NavConfig
   // Fill layers one voxel above the climb: never lifted onto the surface below, and lower than the agent.
   const layerVoxels = walkableClimb + 1;
   if (layerVoxels >= walkableHeight) throw new Error(`navmesh ${tier}: agent height must exceed its climb by 2 voxels`);
-  const blockers = [...zoneBlockers(map, tier, nav), ...areaBlockers(map, tier, nav)];
+  const areas = areaBlockers(map, tier, nav);
+  // a blocker thinner than one fill layer would leave the floor under it walkable
+  const thin = areas.find((b) => b.size.y <= layerVoxels * ch);
+  if (thin) throw new Error(`navmesh ${tier}: blocker ${thin.id} is ${thin.size.y} m high, not above one ${layerVoxels * ch} m fill layer`);
+  const blockers = [...zoneBlockers(map, tier, nav), ...areas];
   const { positions, indices } = solidsToTriangles(map.solids, blockers, layerVoxels * ch);
   const result = generateTiledNavMesh(positions, indices, {
     cs,

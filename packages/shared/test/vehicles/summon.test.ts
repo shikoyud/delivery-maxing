@@ -49,7 +49,7 @@ describe('summon', () => {
   test('a car 240 m away comes to a spot ≥ 3 m from the player, on the car mesh, outside alleys', () => {
     const was = { ...garage.state('car').position };
     const player = vec3(100, 0, 156);
-    expect(flat(player, was)).toBeGreaterThan(235);
+    expect(flat(player, was)).toBeGreaterThan(230);
     expect(summon('car', player, 0, 0.7)).toBe('ok');
     const spot = garage.spot('car');
     expect(spot.kind).toBe('parked');

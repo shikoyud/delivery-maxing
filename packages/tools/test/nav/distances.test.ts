@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
 import { DistanceTable, vec3, type MapData, type NavRouter, type Poi, type Vec3 } from '@dm/shared';
+import { readCityMap } from '../../src/nav/build';
 import { buildDistanceTable, serialize } from '../../src/nav/distances';
+import { DISTANCES, readGz, REPO } from '../../src/nav/files';
 
 const poi = (id: string, x: number, roles: Poi['roles']): Poi => ({ id, position: vec3(x, 0, 0), district: 'downtown', kind: 'door', name: id, roles });
 
@@ -40,4 +42,14 @@ test('a 2-pickup × 3-dropoff table serialises and parses back with the same val
   }
   // serialising the parsed table gives the same bytes
   expect(Buffer.from(serialize(back)).equals(Buffer.from(serialize(t)))).toBe(true);
+});
+
+test('the committed distance table holds every city pickup × dropoff pair, so offers on the city never fall back to the router', () => {
+  const city = readCityMap(REPO);
+  const t = DistanceTable.parse(readGz(REPO, DISTANCES));
+  const pickups = city.pois.filter((p) => p.roles.some((r) => r === 'foodPickup' || r === 'packagePickup'));
+  const dropoffs = city.pois.filter((p) => p.roles.some((r) => r === 'dropoffFood' || r === 'dropoffPackage'));
+  expect(t.pickups).toEqual(pickups.map((p) => p.id));
+  expect(t.dropoffs).toEqual(dropoffs.map((p) => p.id));
+  for (const p of pickups) for (const d of dropoffs) if (t.get(p.id, d.id) === undefined) throw new Error(`${p.id} → ${d.id} missing`);
 });

@@ -50,14 +50,16 @@ export function generateOffer(ctx: OfferContext): Order | null {
   const kindWeights = { food: cfg.mix.kindWeights.food, package: packageOk ? cfg.mix.kindWeights.package : 0 };
   if (kindWeights.food <= 0 && kindWeights.package <= 0) return null;
   const kind: OrderKind = pickWeighted(rng, kindWeights);
-  const first = offerOfKind(ctx, kind, remainingKg);
+  // one budget of offers.maxPathQueries player→pickup queries for the whole roll, the fallback kind included
+  const budget = { left: cfg.offers.maxPathQueries };
+  const first = offerOfKind(ctx, kind, remainingKg, budget);
   if (first) return first;
   const other: OrderKind = kind === 'food' ? 'package' : 'food';
-  return kindWeights[other] > 0 ? offerOfKind(ctx, other, remainingKg) : null;
+  return kindWeights[other] > 0 ? offerOfKind(ctx, other, remainingKg, budget) : null;
 }
 
 /** One offer of `kind`, or null when no pickup/dropoff pair of that kind qualifies. */
-function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): Order | null {
+function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number, budget: { left: number }): Order | null {
   const { pois, rules, cfg, rng } = ctx;
   const pickupRole: PoiRole = kind === 'food' ? 'foodPickup' : 'packagePickup';
   const dropoffRole: PoiRole = kind === 'food' ? 'dropoffFood' : 'dropoffPackage';
@@ -68,7 +70,7 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
     !ctx.blockedDoors.some((d) => Math.hypot(p.position.x - d.x, p.position.z - d.z) < spacing);
 
   // Player → pickup: a path is never shorter than the straight line, so only pickups within maxPickupDistance in a
-  // straight line can qualify; of those at most offers.maxPathQueries, nearest first, get a path query.
+  // straight line can qualify; of those, nearest first, as many as the roll's query budget has left get a path query.
   const straight = (p: Poi): number =>
     Math.hypot(p.position.x - ctx.player.x, p.position.y - ctx.player.y, p.position.z - ctx.player.z);
   const candidates = pois
@@ -81,8 +83,9 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
     )
     .map((p) => ({ p, d: straight(p) }))
     .sort((a, b) => a.d - b.d || (a.p.id < b.p.id ? -1 : a.p.id > b.p.id ? 1 : 0))
-    .slice(0, cfg.offers.maxPathQueries)
+    .slice(0, Math.max(0, budget.left))
     .map(({ p }) => p);
+  budget.left -= candidates.length;
   const pickups = shuffle(
     candidates.filter((p) => ctx.distance(ctx.player, p.position) <= rules.maxPickupDistance),
     rng,

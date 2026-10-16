@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import clientJson from '../../../config/client.json' with { type: 'json' };
+import ridingJson from '../../../config/riding.json' with { type: 'json' };
 import type {} from '../src/game/debugHooks';
 
 const artifacts = fileURLToPath(new URL('../e2e-artifacts/', import.meta.url));
@@ -714,8 +715,8 @@ test('F at the spawn bay mounts the car; 12 s of W reaches 28 m/s and never more
   expect(car.spot).toBe('parked');
   const hospital = (await page.evaluate(() => window.__dm!.hospitals()))[0]!;
   expect(flat(car.position, hospital.center)).toBeLessThan(hospital.safeRadius + 10); // at the spawn hospital's bay
-  // On foot 2 m off the car's side (nearer the car than the motorbike in the next slot), then F.
-  const feet = { x: car.position.x, y: 0, z: car.position.z - 2 };
+  // On foot 2 m off the car's side (bays face along the street, Decision 6: its side is x), then F.
+  const feet = { x: car.position.x - 2, y: 0, z: car.position.z };
   await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, { ...car.position, y: 1 }] as const);
   await page.evaluate(() => window.__dm!.advance(3));
   await pressF(page, 'car');
@@ -754,9 +755,12 @@ test('the car stops at an alley mouth; the motorbike rides through', async ({ pa
   await rideFrom(page, 'car', start, west);
   await hold(page, ['KeyW'], 5 * TICK_RATE);
   const car = await player(page);
-  console.log(`car at the alley mouth: x ${car.position.x.toFixed(3)}, speed ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(3)} m/s`);
-  expect(car.position.x).toBeGreaterThanOrEqual(94);
-  expect(car.position.x).toBeLessThan(95);
+  // The nose probe (SP5 Task 1) holds the car's nose, halfLength + radius ahead of its centre, at the mouth.
+  const c = ridingJson.rides.car.collider;
+  const nose = car.position.x - (c.halfLength + c.radius);
+  console.log(`car at the alley mouth: x ${car.position.x.toFixed(3)}, nose ${nose.toFixed(3)}, speed ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(3)} m/s`);
+  expect(nose).toBeGreaterThanOrEqual(94);
+  expect(nose).toBeLessThan(95);
   expect(Math.hypot(car.velocity.x, car.velocity.z)).toBeLessThan(0.5);
   expect(errors).toEqual([]);
 });
