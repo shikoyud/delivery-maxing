@@ -5,7 +5,8 @@ import type { CatalogIndex } from './catalog';
 import { cityConfigDefaults } from './cityDefaults';
 import type { CityLayout } from './cityLayout';
 import type { AccessZone, MapData, Poi, Rect, Solid } from './mapTypes';
-import { slab, terrainSolids } from './terrainSolids';
+import { slab } from './slab';
+import { steepLaneGeometry, terrainSolids } from './terrainSolids';
 
 export interface CityMap extends MapData {
   kind: 'city';
@@ -24,7 +25,7 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
   const solids: Solid[] = terrainSolids(layout, { city });
   for (const a of layout.areas) {
     if (TERRAIN_AREAS.has(a.kind)) {
-      solids.push(slab(a.id, 'terrain', a.rect.minX, a.rect.maxX, a.rect.minZ, a.rect.maxZ, a.y, lc.slabThickness * 3));
+      solids.push(slab(a.id, 'terrain', a.rect.minX, a.rect.maxX, a.rect.minZ, a.rect.maxZ, a.y, lc.terrainThickness));
     }
   }
   for (const lot of layout.lots) {
@@ -50,12 +51,25 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
       const rect: Rect = { minX: c.x - lc.stairsWidth / 2, maxX: c.x + lc.stairsWidth / 2, minZ: c.z0, maxZ: c.z1 };
       accessZones.push({ id: `zone-${c.id}`, kind: 'stairs', rect, minY: lo, maxY: hi });
     } else if (c.kind === 'steepLane') {
-      const n = Math.max(1, Math.ceil((c.z1 - c.z0) / lc.steepLaneSegment));
-      const dz = (c.z1 - c.z0) / n;
+      const { run, endX } = steepLaneGeometry(c, lc.steepLaneGradePct);
+      const n = Math.max(1, Math.ceil(run / lc.zoneStep - 1e-9));
+      const half = lc.steepLaneWidth / 2;
       for (let i = 0; i < n; i++) {
-        const ya = c.y0 + ((c.y1 - c.y0) * i) / n;
-        const yb = c.y0 + ((c.y1 - c.y0) * (i + 1)) / n;
-        const rect: Rect = { minX: c.x - lc.steepLaneWidth / 2, maxX: c.x + lc.steepLaneWidth / 2, minZ: c.z0 + dz * i, maxZ: i === n - 1 ? c.z1 : c.z0 + dz * (i + 1) };
+        const t0 = i / n;
+        const t1 = (i + 1) / n;
+        const xa = c.x + (endX - c.x) * t0;
+        const xb = c.x + (endX - c.x) * t1;
+        const za = c.z0 + (c.z1 - c.z0) * t0;
+        const zb = c.z0 + (c.z1 - c.z0) * t1;
+        const ya = c.y0 + (c.y1 - c.y0) * t0;
+        const yb = c.y0 + (c.y1 - c.y0) * t1;
+        // each rect overlaps the next by half a lane width
+        const rect: Rect = {
+          minX: Math.min(xa, xb) - half,
+          maxX: Math.max(xa, xb) + half,
+          minZ: za,
+          maxZ: i === n - 1 ? c.z1 : Math.min(c.z1, zb + half),
+        };
         accessZones.push({ id: `zone-${c.id}-${i}`, kind: 'steepLane', rect, minY: Math.min(ya, yb), maxY: Math.max(ya, yb) });
       }
     }
@@ -66,9 +80,8 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
 
   const pois: Poi[] = [];
   for (const lot of layout.lots) {
-    const roles = cat.get(lot.asset).poi;
-    if (!roles || roles.roles.length === 0) continue;
-    if (lot.door) {
+    const poi = cat.get(lot.asset).poi;
+    if (lot.door && poi && poi.roles.length > 0) {
       pois.push({
         id: lot.id,
         position: lot.door,
@@ -77,9 +90,9 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
         name: lot.name,
         address: lot.address,
         lotId: lot.id,
-        roles: [...roles.roles],
-        ...(roles.items ? { items: [roles.items] } : {}),
-        ...(roles.weightKg ? { weightKg: roles.weightKg } : {}),
+        roles: [...poi.roles],
+        ...(poi.items ? { items: [poi.items] } : {}),
+        ...(poi.weightKg ? { weightKg: poi.weightKg } : {}),
       });
     }
     if (lot.upperDoor) {

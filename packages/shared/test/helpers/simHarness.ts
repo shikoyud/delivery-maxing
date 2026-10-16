@@ -1,3 +1,4 @@
+import { worldConfig } from '../../src/config';
 import { movementConfig } from '../../src/config';
 import { emptyInput, type InputFrame } from '../../src/input/inputFrame';
 import { vec3, type Vec3 } from '../../src/math/vec3';
@@ -84,7 +85,7 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   const size = opts.size ?? 200;
   const map: MapData = {
     kind: 'greybox',
-    chunkSize: 100,
+    chunkSize: worldConfig.chunkSize,
     size,
     solids: [
       ...(opts.floor === false ? [] : [box('floor', vec3(0, -0.5, 0), vec3(size, 1, size), { kind: 'ground' })]),

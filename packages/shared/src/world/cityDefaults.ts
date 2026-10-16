@@ -7,8 +7,10 @@ import type { CityConfig } from '../config';
 export const cityConfigDefaults: CityConfig = {
   layout: {
     slabThickness: 1,
+    terrainThickness: 3,
     steepLaneWidth: 6,
-    steepLaneSegment: 6,
+    steepLaneGradePct: 14,
+    zoneStep: 6,
     stairsWidth: 4,
     l0Ground: [
       { id: 'docks', x0: 0, x1: 380, z0: 110 },

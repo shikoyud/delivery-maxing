@@ -149,12 +149,16 @@ export interface WorldConfig {
  */
 export interface CityConfig {
   layout: {
-    /** Thickness of every ground / terrain slab (m); its top is the level or area height. */
+    /** Thickness of every ground slab (m); its top is the level height. */
     slabThickness: number;
+    /** Thickness of sand / pier / breakwater slabs (m); the top is the area height. */
+    terrainThickness: number;
     /** Width of a steep-lane access zone (m). */
     steepLaneWidth: number;
-    /** A steep lane's access zone is a chain of rects this long (m, along z). */
-    steepLaneSegment: number;
+    /** Steep lane grade (percent); sets the diagonal run of the lane. */
+    steepLaneGradePct: number;
+    /** A steep lane's access zone is one rect per this many metres of run. */
+    zoneStep: number;
     /** Width of a staircase access zone (m). */
     stairsWidth: number;
     /** L0 ground rects; each stops at the water (x range and the z the ground starts at). */

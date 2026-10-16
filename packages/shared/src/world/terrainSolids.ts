@@ -1,19 +1,23 @@
-import { vec3 } from '../math/vec3';
 import { cityConfigDefaults } from './cityDefaults';
 import type { CityConfig } from '../config';
-import type { CityLayout, Level } from './cityLayout';
+import { slab } from './slab';
+import type { CityLayout, Connector, Level } from './cityLayout';
 import type { Solid } from './mapTypes';
 
 const LEVEL_ORDER: Level[] = ['L0', 'L1', 'L2', 'L3', 'ridge'];
 
-/** A slab whose top face is at `top`. */
-export function slab(id: string, kind: Solid['kind'], x0: number, x1: number, z0: number, z1: number, top: number, thickness: number): Solid {
-  return {
-    id,
-    kind,
-    center: vec3((x0 + x1) / 2, top - thickness / 2, (z0 + z1) / 2),
-    size: vec3(x1 - x0, thickness, z1 - z0),
-  };
+/**
+ * A steep lane is a diagonal ramp at a fixed grade: its horizontal run is (y1 - y0) * 100 / gradePct, and it climbs
+ * `z1 - z0` northward, so it drifts east by sqrt(run^2 - dz^2). A lane whose run is no longer than dz goes straight north.
+ */
+export function steepLaneGeometry(
+  c: Pick<Connector, 'x' | 'z0' | 'z1' | 'y0' | 'y1'>,
+  gradePct: number,
+): { run: number; endX: number } {
+  const dz = c.z1 - c.z0;
+  const run = (Math.abs(c.y1 - c.y0) * 100) / gradePct;
+  if (run <= dz) return { run: dz, endX: c.x };
+  return { run, endX: c.x + Math.sqrt(run * run - dz * dz) };
 }
 
 /**

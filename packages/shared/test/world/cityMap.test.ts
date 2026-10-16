@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { vec3 } from '../../src/math/vec3';
 import { worldConfig } from '../../src/config';
 import { layoutToMap } from '../../src/world/cityMap';
 import { cityCatalogFixture, cityLayoutFixture } from './cityFixtures';
@@ -59,11 +60,21 @@ describe('layoutToMap', () => {
     expect(z.find((x) => x.kind === 'path' && x.id.includes('park-1'))).toBeDefined();
     expect(z.some((x) => x.id.includes('road-ave'))).toBe(false);
     const lane = z.filter((x) => x.kind === 'steepLane');
-    expect(lane.length).toBeGreaterThan(1);
-    expect(Math.min(...lane.map((x) => x.minY))).toBe(10);
-    expect(Math.max(...lane.map((x) => x.maxY))).toBe(24);
-    expect(Math.min(...lane.map((x) => x.rect.minZ))).toBe(560);
-    expect(Math.max(...lane.map((x) => x.rect.maxZ))).toBe(620);
+    // y 10 -> 24 at 14% = 100 m of run over 60 m of z, so the lane drifts east by 80 m
+    expect(lane).toHaveLength(Math.ceil(100 / 6));
+    const first = lane[0]!;
+    const last = lane[lane.length - 1]!;
+    expect(first.rect.minX).toBeCloseTo(200 - 3, 6);
+    expect(first.rect.minZ).toBe(560);
+    expect(first.minY).toBe(10);
+    expect(last.rect.maxX).toBeCloseTo(280 + 3, 6);
+    expect(last.rect.maxZ).toBe(620);
+    expect(last.maxY).toBe(24);
+    for (const seg of lane) expect((seg.maxY - seg.minY) / 6).toBeCloseTo(0.14, 2);
+    for (let i = 1; i < lane.length; i++) {
+      expect(lane[i]!.rect.minX).toBeLessThanOrEqual(lane[i - 1]!.rect.maxX);
+      expect(lane[i]!.rect.minZ).toBeLessThanOrEqual(lane[i - 1]!.rect.maxZ);
+    }
     const stairs = z.filter((x) => x.kind === 'stairs');
     expect(stairs).toHaveLength(1);
     expect(stairs[0]!.minY).toBe(2);
@@ -81,6 +92,14 @@ describe('layoutToMap', () => {
     expect(upper.roles).toEqual(['dropoffFood']);
     expect(upper.upper).toBe(true);
     expect(upper.position.y).toBe(24);
+  });
+
+  it('an upper door gives a food-only POI even when the asset has no poi roles', () => {
+    const l = cityLayoutFixture();
+    l.lots.push({ ...l.lots[2]!, id: 'lot-slope', prop: false, door: null, upperDoor: { position: vec3(1, 24, 1), y: 24 } });
+    const pois = layoutToMap(l, cityCatalogFixture()).pois;
+    expect(pois.find((x) => x.id === 'lot-slope-upper')!.roles).toEqual(['dropoffFood']);
+    expect(pois.some((x) => x.id === 'lot-slope')).toBe(false);
   });
 
   it('copies hospitals, gas stations and order rules', () => {
