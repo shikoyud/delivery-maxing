@@ -88,6 +88,7 @@ export class Refueller {
   }
 
   private end(v: VehicleState, events: RefuelEvent[], reason: 'full' | 'released' | 'coins' | 'moved'): void {
+    if (reason === 'coins') this.refused = true; // the cut-short fill said it; no refusal until E is released
     events.push({ kind: 'refuelled', cost: Math.ceil(this.accrued - EPS), fuel: v.fuel, reason });
     this.active = false;
     this.accrued = 0;

@@ -16,8 +16,8 @@ export interface HudView {
 /**
  * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals and load top
  * right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the next-stop
- * arrow (name and route distance) over the safe-zone and lockout chips; bottom centre the key prompt; bottom left while riding the speed and, on the
- * motorbike and car, the fuel gauge.
+ * arrow (name and route distance) over the safe-zone and lockout chips; bottom centre the key prompt; bottom left
+ * while riding the speed and, on the motorbike and car, the fuel gauge.
  */
 export class Hud implements HudView {
   private readonly orders: HTMLElement;

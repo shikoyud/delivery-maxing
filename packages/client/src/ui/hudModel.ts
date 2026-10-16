@@ -139,8 +139,6 @@ export interface PromptContext {
   phoneOpen: boolean;
 }
 
-const PROMPT_RIDE_NAME: Record<RideTier, string> = { skateboard: 'skateboard', bicycle: 'bicycle', motorbike: 'motorbike', car: 'car' };
-
 /** The key hint for the moment (Decision 5), or null: nothing to do, riding fast, or the phone is up. */
 export function promptFor(c: PromptContext): string | null {
   if (c.phoneOpen) return null;
@@ -148,7 +146,7 @@ export function promptFor(c: PromptContext): string | null {
     if (!c.stopped) return null;
     return c.atPump && ridingConfig.rides[c.riding].fuel ? 'Hold E · Refuel' : 'F · Get off';
   }
-  if (c.mountCandidate !== null) return `F · Ride the ${PROMPT_RIDE_NAME[c.mountCandidate]}`;
+  if (c.mountCandidate !== null) return `F · Ride the ${c.mountCandidate}`;
   return c.atPump && c.ownsFuelledRide ? 'Get on to refuel' : null;
 }
 

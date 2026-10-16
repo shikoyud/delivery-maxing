@@ -640,6 +640,7 @@ describe('DeliveryLoop', () => {
     t.states.car.fuel = 0.195;
     for (let i = 0; i < 60; i++) t.tick(false, false, false, { interact: { held: true, pressed: i === 0 } });
     expect(t.popups.map((p) => p.text)).toContain('Out of Coins · tank 57 %');
+    expect(t.popups.map((p) => p.text)).not.toContain('No Coins for fuel');
     expect(t.loop.orders.totals.coins).toBe(0);
   });
 

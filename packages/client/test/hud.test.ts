@@ -107,7 +107,6 @@ describe('Hud next stop and ride', () => {
   });
 });
 
-
 describe('Hud key prompt', () => {
   it('renders the model prompt and hides when null', () => {
     const dom = installFakeDom();

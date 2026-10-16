@@ -120,7 +120,8 @@ describe('Refueller', () => {
     expect(end).toMatchObject({ kind: 'refuelled', reason: 'coins', cost: 30 });
     expect(v.fuel).toBeCloseTo(30 / 80, 6);
     expect(coins).toBeGreaterThanOrEqual(0);
-    expect(all.filter((e) => e.kind === 'refuelled')).toHaveLength(1);
+    // Exact list: no refuelRefused for the rest of the press, even though E stays held for 400 ticks.
+    expect(all).toEqual([{ kind: 'refuelStarted' }, { kind: 'refuelled', cost: 30, fuel: v.fuel, reason: 'coins' }]);
   });
 
   test('never charges more than held for awkward balances', () => {
