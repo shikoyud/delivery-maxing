@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import catalogJson from '../../../../map/catalog.json';
 import cityJson from '../../../../map/city.layout.json';
-import { movementConfig as cfg, worldConfig } from '../../src/config';
+import { movementConfig as cfg, ridingConfig, worldConfig } from '../../src/config';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import type { PlayerState, SimEvent } from '../../src/movement/types';
 import type { SavedVehicle } from '../../src/vehicles/Garage';
 import { CatalogIndex, parseCatalog } from '../../src/world/catalog';
+import { forbiddenZoneAt } from '../../src/world/access';
 import { chunkOf } from '../../src/world/chunks';
 import { parseCityLayout } from '../../src/world/cityLayout';
 import { layoutToMap } from '../../src/world/cityMap';
@@ -61,6 +62,48 @@ describe('streamed colliders on the city (Review Focus 5)', () => {
     // Paging, not everything: a 150 m load radius keeps at most a 5 x 5 block of 100 m chunks.
     expect(maxChunks).toBeLessThanOrEqual(25);
     expect(h.pager!.loadedChunks().has(chunkOf(30, zMid, map.chunkSize))).toBe(false); // the start unloaded behind
+  });
+
+  test('a car at top speed along Market Street stops at the alley mouth it reaches: not past it, no respawn, never under the level', async () => {
+    // Market Street (L1, z 373..385) runs straight from x 342 to the mouth of the Market district alley at x 774
+    // (alley z 380..384, a car-forbidden access zone). The car starts 420 m west of it, so the alley's chunk is unloaded
+    // at the start and pages in on the way; it is driven flat out along the alley's centre line.
+    const alley = map.layout.roads.find((r) => r.id === 'road-L1-alley-7-1')!;
+    const mouth = alley.rect.minX;
+    const onStreet = (x: number) => map.layout.roads.find((r) => r.y === L1 && x >= r.rect.minX && x <= r.rect.maxX && r.rect.minZ <= alley.rect.minZ && r.rect.maxZ >= alley.rect.maxZ);
+    expect(onStreet(500)?.name).toBe('Market Street');
+    expect(onStreet(mouth - 6)?.name).toBe('Tiller Street'); // the cross street in front of the mouth
+    const z = (alley.rect.minZ + alley.rect.maxZ) / 2;
+    const at = vec3(354, L1, z);
+    const car: SavedVehicle = { tier: 'car', spot: { kind: 'parked', position: at, heading: EAST }, fuel: 1 };
+    const h = await makeSim({ map, paged: true, spawn: vec3(at.x, L1, at.z - 2.5), yaw: EAST, garage: [SKATEBOARD, car] });
+    expect(h.tick({}, ['mount'])).toContainEqual({ kind: 'mounted', tier: 'car' });
+    expect(h.pager!.loadedChunks().has(chunkOf(mouth + 1, z, map.chunkSize))).toBe(false);
+
+    const c = ridingConfig.rides.car.collider;
+    const noseReach = c.halfLength + c.radius;
+    let minY = Infinity;
+    let maxSpeed = 0;
+    let speedNearMouth = 0;
+    for (let i = 0; i < seconds(30); i++) {
+      expect(respawned(h.tick({ forward: 1, yaw: EAST }))).toBe(false);
+      const s = h.sim.state;
+      minY = Math.min(minY, s.position.y);
+      maxSpeed = Math.max(maxSpeed, speed(s));
+      if (s.position.x + noseReach > mouth - 30) speedNearMouth = Math.max(speedNearMouth, speed(s));
+      // the car's centre never enters the alley
+      expect(forbiddenZoneAt(map, 'car', s.position)).toBeNull();
+    }
+    const s = h.sim.state;
+    expect(s.riding).toBe('car');
+    expect(maxSpeed).toBeGreaterThan(27.5); // top speed reached on the way
+    expect(speedNearMouth).toBeGreaterThan(27.5); // and still flat out in the last 30 m before the mouth
+    expect(minY).toBeGreaterThanOrEqual(L1 - 0.1);
+    // Held at the mouth: the nose at the wall, not past it, and stopped there however long W is held.
+    expect(s.position.x + noseReach).toBeLessThanOrEqual(mouth + 0.05);
+    expect(s.position.x + noseReach).toBeGreaterThan(mouth - 1);
+    expect(speed(s)).toBeLessThan(0.5);
+    expect(h.pager!.loadedChunks().has(chunkOf(mouth + 1, z, map.chunkSize))).toBe(true);
   });
 
   test('after a teleport across the city the chunks around the new position are loaded before the next step', async () => {

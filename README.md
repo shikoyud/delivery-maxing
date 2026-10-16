@@ -5,11 +5,19 @@ package orders on your phone, run them from pickup to dropoff across a
 fictional city, and earn Delivery Points and Coins. All names and places are
 invented; no real brands or delivery apps are used.
 
-Status: sub-project 4 (SP4), vehicles: single player on the greybox map, on
-foot or on a skateboard, bicycle, motorbike or car. Offers arrive on the phone,
-you accept one, pick it up and deliver it on foot before its timer runs out.
+Status: sub-project 5 (SP5), City v2: single player in the 1.2 × 1.2 km
+terraced bay city (four levels joined by switchback roads, steep lanes and
+stairs; about 2,600 buildings, four hospitals, six gas stations), on foot or
+on a skateboard, bicycle, motorbike or car. Offers arrive on the phone, you
+accept one, pick it up and deliver it on foot before its timer runs out; every
+pickup and dropoff is a named business or household with a street address.
 You spawn and respawn at the nearest hospital, whose safe zone is marked on the
 HUD. There are no blockchain or token features yet.
+
+The city is the default map. `?map=greybox` loads the SP4 greybox test town
+instead (kept for its vehicle tests); progress is saved per map. Without the
+owner's model packs (below) every building is drawn as a box coloured by its
+category, which is what the GitHub Pages build shows.
 
 There is no HUB and no Order Board any more: every order starts as an offer on
 the phone, and there are no parkour props (wall-runs, zip lines, rails, pads)
@@ -22,14 +30,14 @@ Requires Node 22 (see `.nvmrc`) and pnpm (version pinned by `packageManager`).
 ```bash
 pnpm install
 pnpm dev      # Vite dev server for the client
-pnpm check    # lint + typecheck + unit tests
+pnpm check    # lint + typecheck + unit tests + map:check
 pnpm e2e      # builds the client, then runs the Playwright tests
 ```
 
 In a sandbox with a preinstalled Chromium, point Playwright at it:
 
 ```bash
-PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm e2e
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome pnpm e2e
 ```
 
 To test the build exactly as it is served on GitHub Pages, also set
@@ -67,14 +75,16 @@ skateboard, packages only on the motorbike and car. Every pickup and hand-over
 is on foot: get off at the door. New offers only arrive while you have a free
 slot. Cancelling an order on the phone blocks new offers for 45 s.
 
-### Vehicles in SP4
+### Vehicles
 
 All four vehicles are yours from the start (the shop comes in SP6): the
-bicycle, motorbike and car wait in the bay beside the first hospital and the
-skateboard is carried. Cars stay out of alleys, steep lanes, stairs and paths;
-the greybox test town in the hillside corner of the map has a steep lane,
-stairs, a park path, a boardwalk and the Hilltop Fuel Stop to try them on (the
-harbor has the second gas station, Bayline Fuel). The dev panel (backtick) has
+bicycle, motorbike and car wait in the bay beside the first hospital (Bayview
+General in the city) and the skateboard is carried. Cars stay out of alleys,
+steep lanes, stairs and paths; the bicycle and motorbike back up at walking
+pace (hold S while stopped). The Map app and minimap mark hospitals, gas
+stations and your parked vehicles. On `?map=greybox` the test town has a steep
+lane, stairs, a park path, a boardwalk and two gas stations to try them on.
+The dev panel (backtick) has
 an **Owned** box per vehicle, **Fill all tanks**, **+500 coins** and **Reset
 progress** (zero totals, every vehicle back in the bay).
 
@@ -111,10 +121,20 @@ verdict); with `&debug=1` the result is also on `window.__dm.perfResult()`.
 Every push to `main` or `sp1/movement-delivery-loop` then builds, tests and
 deploys the client.
 
-### Asset catalog tools
+### Asset packs and catalog tools
 
-`map/catalog.json` lists every model of the owner's packs (git-ignored, unpacked in `assets/packs/`).
+The city's buildings come from the owner's licensed Megatropolis and Tropical
+City packs (`assets/CREDITS.md`). They are never committed: unpack them into
+the git-ignored `assets/packs/` with their original folder names, then run
+`pnpm assets:import assets/packs`, which writes the runtime models (compressed,
+with LOD1 files and a manifest) into `packages/client/public/packs/`, also
+git-ignored. Rebuild or restart `pnpm dev` afterwards. Without that folder the
+game makes no model requests, logs one "pack models not installed" warning and
+draws boxes.
+
+`map/catalog.json` lists every model of the packs.
 `pnpm assets:check [folder]` compares it with the packs: missing, extra, empty and resized models. It exits 1 on
 a placed entry that is missing, empty or grew by more than 0.5 m, and prints `assets:check: packs folder not found`
 (exit 1) where the packs are absent. `pnpm assets:sheet` renders each placed building from its `front` side into
-`docs/playtest/sp5/sheet-<category>.png` (needs the packs and Chromium via `PW_CHROMIUM_PATH`; the PNGs are not committed).
+`docs/playtest/sp5/sheet-<category>.png` (needs the packs and Chromium via `PW_CHROMIUM_PATH`; the PNGs are not committed),
+so a building whose door is not on its `+z` side can be given a `front` override in `map/catalog.json` by hand.

@@ -324,8 +324,9 @@ The prototype caps pickups (100 food, 60 package) so most restaurants and shops 
 | File | Contents |
 |---|---|
 | `map/catalog.json` | The catalog (§5) |
-| `map/city.layout.json` | Every lot (rectangle, level, facing, catalog id, door anchors, name and address), roads, alleys, connectors, open areas, landmarks, hospitals, gas stations |
-| `map/city.poi.json`, navmeshes | Generated from the layout at build time, as in SP2 |
+| `map/city.layout.json` | Every lot (rectangle, level, facing, catalog id, door anchors and POI roles, name and address), roads, alleys, connectors, open areas, landmarks, hospitals, gas stations. The POI doors are folded into the layout (there is no separate `city.poi.json`). |
+| `map/city.distances.bin.gz` | Generated: on-foot path distance between every pickup and dropoff door, read by the offer rolls |
+| `map/nav/city-<tier>.bin.gz` | Generated: one navmesh per tier (walk, skateboard, bicycle, motorbike, car), gzipped; `map/nav/greybox-<tier>.bin.gz` for the SP4 test town |
 
 A deterministic generator in `packages/tools` writes the first `city.layout.json` from the district rules in this document (the prototype in `city-map-prototype/layout.py` is the starting point). After that the file can be edited by hand; the build validates it (no overlapping lots, no lots on roads, package doors within 30 m of a car road, the 15% food-only cap, reachability per vehicle class).
 
@@ -337,11 +338,11 @@ A deterministic generator in `packages/tools` writes the first `city.layout.json
 
 ### 7.3 Placeholders
 
-Any catalog entry without a model on disk — missing types, or the whole city when the packs aren't installed — renders as a low-poly box at its catalog size, coloured by category, with the id on a sign. The same boxes are the far LOD for distant blocks (as SP2's LOD2 tinted boxes), so placeholders cost nothing extra.
+Any catalog entry without a model on disk — missing types, or the whole city when the packs aren't installed — renders as a low-poly box at its catalog size, coloured by category. The id is not drawn on the box: the map debug view (F4) labels every lot within 80 m with its id and roles (a sign texture per lot would cost draw calls and memory for nothing a player needs). The same boxes are the far LOD for distant blocks (as SP2's LOD2 tinted boxes), so placeholders cost nothing extra.
 
 ### 7.4 Where the packs live
 
-The packs are the owner's purchase of the Unity Asset Store **Low Poly Asset Bundle** (https://assetstore.unity.com/packages/3d/environments/low-poly-asset-bundle-196214), Standard EULA, Single Entity seat. That licence allows shipping the models inside the game but not redistributing the source files, so the `.glb` files are **never committed** to this public repository: they live in a git-ignored `assets/packs/` folder with the original folder names (`assets/CREDITS.md`). CI and GitHub Pages fetch them from a private store at build time (a private GitHub repository or release read with a deploy token stored as a CI secret); the deployed bundle may contain them. Contractors would need their own seat.
+The packs are the owner's purchase of the Unity Asset Store **Low Poly Asset Bundle** (https://assetstore.unity.com/packages/3d/environments/low-poly-asset-bundle-196214), Standard EULA, Single Entity seat. That licence allows shipping the models inside the game but not redistributing the source files, so the `.glb` files are **never committed** to this public repository: they live in a git-ignored `assets/packs/` folder with the original folder names (`assets/CREDITS.md`). CI and GitHub Pages are to fetch them from a private store at build time (a private GitHub repository or release read with a deploy token stored as a CI secret; not set up yet, §9 item 1); the deployed bundle may contain them. Contractors would need their own seat.
 
 ### 7.5 `pnpm assets:check <folder>`
 
@@ -375,8 +376,8 @@ Run by hand on `C:\Users\nnduy\Downloads\assets` (931 `.glb`, 168 MB, already co
 
 ## 9. Open items
 
-1. **Asset storage in CI.** Licence settled (§7.4): the packs stay out of git. Set up the private store and the CI secret in the city sub-project. The project rule "CC0 assets only" should be updated to "CC0, or the owner's licensed packs listed in `assets/CREDITS.md`".
+1. **Asset storage in CI.** Licence settled (§7.4): the packs stay out of git. The private store and the CI secret are not set up: that is a CI change waiting for the owner, so CI and GitHub Pages build without the packs and deploy the placeholder city; locally, `pnpm assets:import assets/packs` writes the runtime models into the git-ignored `packages/client/public/packs/`. The spec's asset rule now reads "CC0, or the owner's licensed packs listed in `assets/CREDITS.md`"; the project instructions are for the owner to update.
 2. **Courier vehicle and missing building models** (§5.5): owner to source; placeholders until then.
-3. **Player car model:** choose from `mega/Car_01–37` / `trop/Car_01–19` in the vehicles sub-project.
-4. **Front axis per building** (§7.2): set during import.
+3. **Player car model:** `mega/Car_01` (chosen in City v2; the code-built car is drawn when it is missing). The skateboard, bicycle and motorbike stay code-built placeholders (§5.5).
+4. **Front axis per building** (§7.2): every entry defaults to `front: "+z"`. `pnpm assets:sheet` renders each placed building from that side into contact sheets so the owner can mark the wrong ones; overrides are edited into `map/catalog.json` by hand.
 5. **Business names and addresses:** a word list for the generator, reviewed for real-brand collisions.
