@@ -1,5 +1,6 @@
 import {
   connectorExtent,
+  freeSpans,
   lotSize,
   switchbackGeometry,
   vec3,
@@ -99,21 +100,9 @@ export function bandGaps(band: BandId, connectors: Connector[], cfg: CityConfig)
     });
 }
 
-/** The stretches of band terrain between the connector extents, west to east (the band's blocks). */
-export function bandSegments(used: Span[], size: number): Span[] {
-  const out: Span[] = [];
-  let x = 0;
-  for (const [a, e] of [...used].sort((p, q) => p[0] - q[0])) {
-    if (a - x > 1e-3) out.push([x, a]);
-    x = Math.max(x, e);
-  }
-  if (size - x > 1e-3) out.push([x, size]);
-  return out;
-}
-
 export const bandBlockId = (band: BandId, i: number): string => `block-band-${band}-${i}`;
 
-/** The layout block of band segment `i`: the stretch of terrace the walk-ups stand in. */
+/** The layout block of band segment `i` (`freeSpans(0, size, extents)`): the stretch of terrace the walk-ups stand in. */
 export function bandBlock(band: BandId, i: number, seg: Span, cfg: CityConfig): Block {
   const b = cfg.bands[band];
   return { id: bandBlockId(band, i), rect: { minX: seg[0], minZ: b.z0, maxX: seg[1], maxZ: b.z1 }, level: BAND_LOWER[band], district: 'slope', alley: false };
@@ -129,7 +118,7 @@ export function slopeLots(band: BandId, used: Span[], rng: Rng, cat: CatalogInde
   const sl = cfg.slopeBands.slopeLots;
   if (!sl.bands.includes(band)) return [];
   const b = cfg.bands[band];
-  const segments = bandSegments(used, cfg.size);
+  const segments = freeSpans(0, cfg.size, used);
   const blocked = (a: number, e: number) => used.some(([u0, u1]) => a < u1 + sl.clearance && u0 - sl.clearance < e);
   const lots: Lot[] = [];
   let x = sl.x0;

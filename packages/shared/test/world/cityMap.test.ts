@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { vec3 } from '../../src/math/vec3';
 import { cityConfig, worldConfig } from '../../src/config';
+import { zoneAt } from '../../src/world/access';
 import { layoutToMap } from '../../src/world/cityMap';
+import { steepLaneGeometry } from '../../src/world/terrainSolids';
 import { cityCatalogFixture, cityLayoutFixture } from './cityFixtures';
 
 const build = () => layoutToMap(cityLayoutFixture(), cityCatalogFixture());
@@ -60,20 +62,27 @@ describe('layoutToMap', () => {
     expect(z.find((x) => x.kind === 'path' && x.id.includes('park-1'))).toBeDefined();
     expect(z.some((x) => x.id.includes('road-ave'))).toBe(false);
     const lane = z.filter((x) => x.kind === 'steepLane');
-    // y 10 -> 24 at 14% = 100 m of run over 60 m of z, so the lane drifts east by 80 m
-    expect(lane).toHaveLength(Math.ceil(100 / 6));
+    // y 10 -> 24 at 14% = 100 m of ramp; the chain follows the deck's centre line from z0 to z1 in 6 m steps
+    const g = steepLaneGeometry({ x: 200, z0: 560, z1: 620, y0: 10, y1: 24 }, cityConfig.steepLane);
+    expect(lane).toHaveLength(Math.ceil((60 / g.dz) / 6));
     const first = lane[0]!;
     const last = lane[lane.length - 1]!;
-    expect(first.rect.minX).toBeCloseTo(200 - 3, 6);
     expect(first.rect.minZ).toBe(560);
     expect(first.minY).toBe(10);
-    expect(last.rect.maxX).toBeCloseTo(280 + 3, 6);
     expect(last.rect.maxZ).toBe(620);
     expect(last.maxY).toBe(24);
-    for (const seg of lane) expect((seg.maxY - seg.minY) / 6).toBeCloseTo(0.14, 2);
     for (let i = 1; i < lane.length; i++) {
       expect(lane[i]!.rect.minX).toBeLessThanOrEqual(lane[i - 1]!.rect.maxX);
       expect(lane[i]!.rect.minZ).toBeLessThanOrEqual(lane[i - 1]!.rect.maxZ);
+    }
+    // Every point of the deck between z0 and z1, edges included, is in a steep-lane zone at its height.
+    const m = build();
+    for (let s = -10; s <= g.run + g.flat; s += 0.5) {
+      for (let t = -3; t <= 3; t += 1) {
+        const p = vec3(g.start.x + s * g.dx - t * g.dz, 10 + (14 * Math.min(g.run, Math.max(0, s))) / g.run, g.start.z + s * g.dz + t * g.dx);
+        if (p.z < 560 || p.z > 620 || s < 0) continue;
+        expect(zoneAt(m, p)?.kind, `s ${s} t ${t}`).toBe('steepLane');
+      }
     }
     const stairs = z.filter((x) => x.kind === 'stairs');
     expect(stairs).toHaveLength(1);

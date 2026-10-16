@@ -1,5 +1,6 @@
 import {
   connectorExtent,
+  freeSpans,
   mulberry32,
   type Area,
   type Block,
@@ -13,7 +14,7 @@ import {
   type Rng,
   type Road,
 } from '@dm/shared';
-import { BAND_LOWER, BANDS, bandBlock, bandConnectors, bandGaps, bandSegments, slopeLots } from './bands';
+import { BAND_LOWER, BANDS, bandBlock, bandConnectors, bandGaps, slopeLots } from './bands';
 import { blockStreets, fillBlock, levelBlocks, toBlock } from './blocks';
 import { BUILT_LEVELS, levelRoads, roadId } from './frame';
 import { Namer } from './names';
@@ -73,7 +74,7 @@ export function generateLayout(cfg: CityConfig, names: NamesConfig, cat: Catalog
     if (slope.length === 0) continue;
     const front = roads.find((r) => r.id === roadId.top(BAND_LOWER[band]));
     if (!front) throw new Error(`generate: band ${band} walk-ups face no street`);
-    const segments = bandSegments(used, cfg.size);
+    const segments = freeSpans(0, cfg.size, used);
     const blockIds = new Set(slope.map((l) => l.block));
     segments.forEach((seg, i) => {
       const b = bandBlock(band, i, seg, cfg);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cityConfig } from '../../src/config';
 import type { CityLayout, Connector } from '../../src/world/cityLayout';
 import type { Solid } from '../../src/world/mapTypes';
-import { connectorExtent, connectorMouth, steepLaneGeometry, switchbackGeometry, terrainSolids } from '../../src/world/terrainSolids';
+import { connectorExtent, connectorMouth, freeSpans, steepLaneGeometry, switchbackGeometry, terrainSolids } from '../../src/world/terrainSolids';
 import { cityLayoutFixture } from './cityFixtures';
 
 const B = cityConfig.bands.B;
@@ -41,6 +41,15 @@ function topEnds(s: Solid): { x: number; y: number; z: number }[] {
 const top = (s: Solid) => s.center.y + s.size.y / 2;
 const minX = (s: Solid) => s.center.x - s.size.x / 2;
 const maxX = (s: Solid) => s.center.x + s.size.x / 2;
+
+describe('freeSpans', () => {
+  it('is [lo, hi] minus the union of the cuts, west to east, clamped to hi, without slivers under 1 mm', () => {
+    expect(freeSpans(0, 100, [[40, 50], [10, 20], [45, 60], [99.9995, 120]])).toEqual([[0, 10], [20, 40], [60, 99.9995]]);
+    expect(freeSpans(0, 100, [[90, 130]])).toEqual([[0, 90]]);
+    expect(freeSpans(0, 100, [[-5, 0.0005]])).toEqual([[0.0005, 100]]);
+    expect(freeSpans(0, 100, [])).toEqual([[0, 100]]);
+  });
+});
 
 describe('terrainSolids', () => {
   it('keeps one ground solid per level (L0 split at the water)', () => {
@@ -113,22 +122,37 @@ describe('terrainSolids', () => {
     expect(bW!.y).toBeCloseTo(D.y1, 6);
   });
 
-  it('a steep lane in band B is one 6 m ramp from (x, z0, y0) to (x + 80, z1, y1), yawed atan2(60, 80) and tilted 14 %', () => {
-    const ramps = of('lane-b').filter((s) => s.kind === 'ramp');
-    expect(ramps).toHaveLength(1);
-    const r = ramps[0]!;
+  it('a steep lane in band B: a 6 m ramp tilted 14 % climbing y0 -> y1 between z0 and z1, then a flat mouth piece at y1', () => {
+    const g = steepLaneGeometry(LANE, cityConfig.steepLane);
+    const parts = of('lane-b').filter((s) => s.kind === 'ramp');
+    expect(parts.map((s) => s.id).sort()).toEqual(['lane-b-mouth', 'lane-b-ramp']);
+    const r = parts.find((s) => s.id === 'lane-b-ramp')!;
+    const mouth = parts.find((s) => s.id === 'lane-b-mouth')!;
     expect(r.size.z).toBe(6);
-    expect(Math.abs(r.rotationDeg!.y)).toBeCloseTo(deg(Math.atan2(60, 80)), 6);
     expect(r.rotationDeg!.z).toBeCloseTo(deg(Math.atan(0.14)), 6);
     expect(r.size.x).toBeCloseTo(Math.hypot(100, 14), 6);
+    // yawed along the lane (three.js XYZ: an east-and-north lane has a negative y)
+    expect(r.rotationDeg!.y).toBeCloseTo(-deg(Math.atan2(g.dz, g.dx)), 6);
+    expect(mouth.rotationDeg!.y).toBeCloseTo(r.rotationDeg!.y, 6);
+    expect(mouth.rotationDeg!.z).toBeCloseTo(0, 9);
+    expect(mouth.size.z).toBe(6);
+    // about 84 m east for 55 m north of centre line, as the deck's corners use the rest of the 60 m
+    expect(g.run * g.dz + 6 * g.dx).toBeCloseTo(60, 6);
+    expect(g.end.x - g.start.x).toBeGreaterThan(80);
     const [lo, hi] = topEnds(r);
-    expect(lo!.x).toBeCloseTo(52, 6);
-    expect(lo!.z).toBeCloseTo(560, 6);
-    expect(lo!.y).toBeCloseTo(10, 6);
-    expect(hi!.x).toBeCloseTo(steepLaneGeometry(LANE, 14).endX, 6);
-    expect(hi!.x).toBeCloseTo(132, 6);
-    expect(hi!.z).toBeCloseTo(620, 6);
-    expect(Math.abs(hi!.y - 24)).toBeLessThan(0.1);
+    expect(lo).toMatchObject({ x: expect.closeTo(52, 6), y: expect.closeTo(10, 6), z: expect.closeTo(560 + g.corner, 6) });
+    expect(hi).toMatchObject({ x: expect.closeTo(g.end.x, 6), y: expect.closeTo(24, 6), z: expect.closeTo(620 - g.corner, 6) });
+    const [m0, m1] = topEnds(mouth);
+    expect(m0).toMatchObject({ x: expect.closeTo(g.end.x, 6), y: expect.closeTo(24, 6), z: expect.closeTo(g.end.z, 6) });
+    expect(m1).toMatchObject({ x: expect.closeTo(g.mouthEnd.x, 6), y: expect.closeTo(24, 6), z: expect.closeTo(620 + g.corner, 6) });
+    // Every line along the deck, centre or edge: at z0 it is still on the band-gap floor (the ramp starts north of the
+    // lower street, flush at y0); at z1 it is on the flat mouth piece at y1 (no lip under the upper edge, no hole).
+    for (let t = -3; t <= 3; t += 0.5) {
+      const sAt = (z: number) => (z - g.start.z - t * g.dx) / g.dz;
+      expect(sAt(560)).toBeLessThanOrEqual(1e-9);
+      expect(sAt(620)).toBeGreaterThanOrEqual(g.run - 1e-9);
+      expect(sAt(620)).toBeLessThanOrEqual(g.run + g.flat + 1e-9);
+    }
   });
 
   it('a 14 m staircase: 56 steps 0.35 deep, each top 0.25 above the last, and 4 landings 2 m deep', () => {
@@ -201,9 +225,10 @@ describe('terrainSolids', () => {
       expect(maxX(ps[i]!)).toBeCloseTo(a - 1, 9);
       expect(minX(ps[i + 1]!)).toBeCloseTo(b + 1, 9);
     }
-    // The lane's mouth is where its 6 m deck crosses z1.
-    expect(mouths[0]![0]).toBeCloseTo(132 - 3 / 0.6, 9);
-    expect(mouths[0]![1]).toBeCloseTo(132 + 3 * 0.6, 9);
+    // The lane's mouth is where its 6 m deck crosses z1: from the ramp's top edge (west) to the mouth piece's corner.
+    const g = steepLaneGeometry(LANE, cityConfig.steepLane);
+    expect(mouths[0]![0]).toBeCloseTo(g.end.x - 3 * g.dz, 9);
+    expect(mouths[0]![1]).toBeCloseTo(g.mouthEnd.x + 3 * g.dz, 9);
   });
 
   it('the band gaps under a switchback and a steep lane have a floor at y0 and a wall under the upper edge', () => {

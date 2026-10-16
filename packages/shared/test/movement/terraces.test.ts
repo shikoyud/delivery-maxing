@@ -1,12 +1,18 @@
 import { describe, expect, test } from 'vitest';
-import { cityConfig, movementConfig as cfg } from '../../src/config';
+import { cityConfig, movementConfig as cfg, ordersConfig } from '../../src/config';
+import type { OrdersConfig } from '../../src/config/types';
+import { OrderSystem } from '../../src/orders/OrderSystem';
+import { streetDistance } from '../../src/world/distance';
+import type { Poi } from '../../src/world/mapTypes';
+import type { PlayerZones } from '../../src/world/zones';
+import { offerPlayer, offerRules } from '../orders/fixture';
 import { vec3, type Vec3 } from '../../src/math/vec3';
 import type { PlayerState, SimEvent } from '../../src/movement/types';
 import type { SavedVehicle } from '../../src/vehicles/Garage';
 import { forbiddenZoneAt } from '../../src/world/access';
 import type { CityLayout, Connector } from '../../src/world/cityLayout';
 import { layoutToMap } from '../../src/world/cityMap';
-import { switchbackGeometry } from '../../src/world/terrainSolids';
+import { steepLaneGeometry, switchbackGeometry } from '../../src/world/terrainSolids';
 import { makeSim, type Harness } from '../helpers/simHarness';
 import { cityCatalogFixture, cityLayoutFixture } from '../world/cityFixtures';
 import { testHospital } from '../world/fixtures';
@@ -36,11 +42,14 @@ const NORTH = yawToward(0, 1);
 const SOUTH = yawToward(0, -1);
 const EAST = yawToward(1, 0);
 const WEST = yawToward(-1, 0);
-/** The steep lane's direction: 80 m east for 60 m north. */
-const LANE_DIR = { x: 0.8, z: 0.6 };
+/** The steep lane's direction (Decision 8: diagonal, about 84 m east for 55 m north). */
+const LANE_G = steepLaneGeometry(LANE, cityConfig.steepLane);
+const LANE_DIR = { x: LANE_G.dx, z: LANE_G.dz };
 const LANE_YAW = yawToward(LANE_DIR.x, LANE_DIR.z);
-/** On L1, 12 m before the foot of the lane, on its centre line. */
-const BEFORE_LANE = vec3(52 - 12 * LANE_DIR.x, 10, 560 - 12 * LANE_DIR.z);
+/** `t` m to the left (west-north) of the lane's centre line */
+const offLine = (p: Vec3, t: number): Vec3 => vec3(p.x - t * LANE_DIR.z, p.y, p.z + t * LANE_DIR.x);
+/** On L1, 14 m before the foot of the lane, on its centre line. */
+const BEFORE_LANE = vec3(LANE_G.start.x - 14 * LANE_DIR.x, 10, LANE_G.start.z - 14 * LANE_DIR.z);
 
 const parked = (tier: SavedVehicle['tier'], position: Vec3, heading: number): SavedVehicle => ({ tier, spot: { kind: 'parked', position, heading }, fuel: 1 });
 const SKATEBOARD: SavedVehicle = { tier: 'skateboard', spot: { kind: 'carried' }, fuel: 1 };
@@ -66,6 +75,30 @@ function drive(h: Harness, yaw: number, vmax: number, until: (s: PlayerState) =>
 function stop(h: Harness, yaw: number): void {
   for (let i = 0; i < seconds(5) && speed(h.sim.state) > 0.5; i++) h.tick({ forward: -1, yaw });
   h.run(2);
+}
+
+/** An OrderSystem with one accepted, picked-up Fragile package order (the SP4 OrderSystem test's set-up). */
+function fragileCarried(): { sys: OrderSystem; id: string } {
+  const cfg: OrdersConfig = {
+    ...ordersConfig,
+    offers: { maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15 },
+    deliveryCooldown: { minSeconds: 0, maxSeconds: 0 },
+    prep: { foodSeconds: 0 },
+    mix: { kindWeights: { food: 0, package: 1 }, modifierWeights: { none: 0, express: 0, fragile: 1 } },
+  };
+  const pois: Poi[] = [
+    { id: 'ps-30', position: vec3(0, 0, 60), district: 'downtown', kind: 'counter', name: 'Sender', roles: ['packagePickup'], items: ['vase'], weightKg: [30, 30] },
+    { id: 'dp-0', position: vec3(300, 0, 0), district: 'downtown', kind: 'door', name: '0 Pkg Ave', roles: ['dropoffPackage'] },
+  ];
+  const zones = (...ids: string[]): PlayerZones => ({ poiIds: new Set(ids), safeZone: null });
+  const sys = new OrderSystem({ pois, distance: streetDistance, rules: offerRules, cfg, rng: () => 0, capacity: { slots: 3, maxPackageKg: 50 } }, 0);
+  sys.update(8, offerPlayer, zones());
+  const id = sys.offers[0]!.order.id;
+  expect(sys.offers[0]!.order.modifier).toBe('fragile');
+  sys.accept(id, 9);
+  sys.update(10, offerPlayer, zones('ps-30'));
+  expect(sys.active[0]!.pickedUpAt).not.toBeNull();
+  return { sys, id };
 }
 
 describe('terraces (band B fixture)', () => {
@@ -104,6 +137,28 @@ describe('terraces (band B fixture)', () => {
     expect(car.sim.state.position.y).toBeCloseTo(24, 1);
   });
 
+  test('the bicycle rides up the steep lane 2 m either side of its centre line onto L2 without a fall or a stall', async () => {
+    for (const t of [-2, 2]) {
+      const bike = await riding('bicycle', offLine(BEFORE_LANE, t), LANE_YAW);
+      const events: SimEvent[] = [];
+      // how far the bike ever is from the deck height at its distance along the lane (it never leaves the deck)
+      let off = 0;
+      for (let i = 0; i < seconds(40) && bike.sim.state.position.z <= 625; i++) {
+        events.push(...bike.tick({ forward: 1, yaw: LANE_YAW }));
+        const p = bike.sim.state.position;
+        const along = (p.x - LANE_G.start.x) * LANE_DIR.x + (p.z - LANE_G.start.z) * LANE_DIR.z;
+        off = Math.max(off, Math.abs(p.y - (10 + (14 * Math.min(LANE_G.run, Math.max(0, along))) / LANE_G.run)));
+      }
+      const s = bike.sim.state;
+      expect(s.position.z, `offset ${t}`).toBeGreaterThan(625);
+      expect(s.riding).toBe('bicycle');
+      expect(s.position.y).toBeCloseTo(24, 1);
+      expect(off).toBeLessThan(0.3);
+      expect(events.filter((e) => e.kind === 'landed' && e.fallHeight > 0.3)).toEqual([]);
+      expect(events.some((e) => e.kind === 'crashed')).toBe(false);
+    }
+  });
+
   test('a car driven at a steep lane is stopped by its access wall; a skateboard too', async () => {
     for (const tier of ['car', 'skateboard'] as const) {
       const h = await riding(tier, BEFORE_LANE, LANE_YAW);
@@ -114,14 +169,16 @@ describe('terraces (band B fixture)', () => {
       const s = h.sim.state;
       expect(s.riding).toBe(tier);
       expect(s.position.z).toBeLessThan(560);
-      // at most on the corner of the ramp that reaches south of the band edge, never up the lane
-      expect(s.position.y).toBeLessThan(10.6);
+      // the ramp starts north of z0, so a vehicle held at the wall is still on the street
+      expect(s.position.y).toBeCloseTo(10, 1);
       // it did get going and is now pinned against the wall
-      expect(s.position.z).toBeGreaterThan(BEFORE_LANE.z + 5);
+      expect(s.position.z).toBeGreaterThan(BEFORE_LANE.z + 2);
     }
   });
 
   test('Review Focus 3: hopping the parapet drops the courier 14 m into the band gap; no respawn; landed with fallHeight ≥ 13', async () => {
+    // Carrying a Fragile package (accepted and picked up), as the SP4 order tests do.
+    const orders = fragileCarried();
     // On L2 above the lane's band gap, facing the parapet at z 620.
     const h = await makeSim({ map, spawn: vec3(100, 24, 624), yaw: SOUTH });
     expect(h.sim.state.grounded).toBe(true);
@@ -143,9 +200,18 @@ describe('terraces (band B fixture)', () => {
     expect(s.position.z).toBeGreaterThan(560);
     expect(s.position.z).toBeLessThan(620);
     // The steep lane leads back up: out of the gap onto L1, to the foot of the lane, and up it.
-    h.runUntil((p) => p.position.z < BEFORE_LANE.z, seconds(30), { forward: 1, yaw: SOUTH });
-    h.runUntil((p) => p.position.x < BEFORE_LANE.x, seconds(30), { forward: 1, yaw: WEST });
-    h.runUntil((p) => p.position.z > 625, seconds(40), { forward: 1, yaw: LANE_YAW });
+    const until = (pred: (p: PlayerState) => boolean, yaw: number) => {
+      for (let i = 0; i < seconds(40) && !pred(h.sim.state); i++) events.push(...h.tick({ forward: 1, yaw }));
+      expect(pred(h.sim.state)).toBe(true);
+    };
+    until((p) => p.position.z < BEFORE_LANE.z, SOUTH);
+    until((p) => p.position.x < BEFORE_LANE.x, WEST);
+    until((p) => p.position.z > 625, LANE_YAW);
     expect(h.sim.state.position.y).toBeCloseTo(24, 1);
+    // The fall broke the Fragile item once; nothing on the way back up breaks it again.
+    const broken = orders.sys.onSimEvents(events);
+    expect(broken).toEqual([{ kind: 'fragileBroken', orderId: orders.id, reason: 'fall' }]);
+    expect(orders.sys.active[0]!.fragileIntact).toBe(false);
+    expect(orders.sys.onSimEvents(events)).toEqual([]);
   });
 });

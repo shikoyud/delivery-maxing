@@ -12,15 +12,55 @@ const DEG = 180 / Math.PI;
 type Span = [number, number];
 type ConnectorPos = Pick<Connector, 'x' | 'z0' | 'z1' | 'y0' | 'y1'>;
 
+export interface SteepLaneGeometry {
+  /** Unit horizontal direction of the lane (east and north) */
+  dx: number;
+  dz: number;
+  /** Horizontal length of the climbing ramp: (y1 - y0) * 100 / gradePct */
+  run: number;
+  /** Centre of the ramp's foot edge (at y0) and of its top edge (at y1) */
+  start: { x: number; z: number };
+  end: { x: number; z: number };
+  /** Length of the flat mouth piece beyond the top edge, and the centre of its far edge (at y1) */
+  flat: number;
+  mouthEnd: { x: number; z: number };
+  /** How far a deck corner sits north or south of the centre line: width / 2 * dx */
+  corner: number;
+}
+
 /**
- * A steep lane is a diagonal ramp at a fixed grade: its horizontal run is (y1 - y0) * 100 / gradePct, and it climbs
- * `z1 - z0` northward, so it drifts east by sqrt(run^2 - dz^2). A lane whose run is no longer than dz goes straight north.
+ * A steep lane (Decision 8) is a diagonal ramp at a fixed grade, then a flat mouth piece at y1, both 6 m wide and
+ * square to the lane. The direction is chosen so that the whole ramp lies between z0 and z1: its foot edge's southern
+ * corner is on z0 (so it starts on the band-gap floor and no wedge reaches over the lower street), and its top edge's
+ * northern corner is on z1 (so no part of the climbing deck runs under the upper level's edge). The mouth piece
+ * carries the deck on at y1 until its southern corner reaches z1, so every line along the lane meets the upper edge at
+ * y1 with no lip and no hole. A lane whose run fits in the band goes straight north and its mouth piece fills to z1.
  */
-export function steepLaneGeometry(c: ConnectorPos, gradePct: number): { run: number; endX: number } {
-  const dz = c.z1 - c.z0;
-  const run = (Math.abs(c.y1 - c.y0) * 100) / gradePct;
-  if (run <= dz) return { run: dz, endX: c.x };
-  return { run, endX: c.x + Math.sqrt(run * run - dz * dz) };
+export function steepLaneGeometry(c: ConnectorPos, lane: Pick<CityConfig['steepLane'], 'gradePct' | 'width'>): SteepLaneGeometry {
+  const depth = c.z1 - c.z0;
+  const w = lane.width;
+  const run = (Math.abs(c.y1 - c.y0) * 100) / lane.gradePct;
+  if (run <= depth) {
+    const start = { x: c.x, z: c.z0 };
+    const end = { x: c.x, z: c.z0 + run };
+    return { dx: 0, dz: 1, run, start, end, flat: depth - run, mouthEnd: { x: c.x, z: c.z1 }, corner: 0 };
+  }
+  if (depth <= w) throw new Error(`steep lane at x ${c.x}: a ${depth} m band is too shallow for a ${w} m lane`);
+  // run * dz + w * dx = depth with dx = sqrt(1 - dz^2): concave in dz, negative at 0 and positive at 1, one root.
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 80; i++) {
+    const m = (lo + hi) / 2;
+    if (run * m + w * Math.sqrt(1 - m * m) < depth) lo = m;
+    else hi = m;
+  }
+  const dz = (lo + hi) / 2;
+  const dx = Math.sqrt(1 - dz * dz);
+  const corner = (w / 2) * dx;
+  const start = { x: c.x, z: c.z0 + corner };
+  const end = { x: start.x + run * dx, z: start.z + run * dz };
+  const flat = (w * dx) / dz;
+  return { dx, dz, run, start, end, flat, mouthEnd: { x: end.x + flat * dx, z: end.z + flat * dz }, corner };
 }
 
 export interface SwitchbackGeometry {
@@ -59,13 +99,6 @@ export function switchbackGeometry(c: ConnectorPos & Pick<Connector, 'legLength'
   return { landing, run, span, xs, xEast: xs + span + landing, legZ, mid: (c.y0 + c.y1) / 2 };
 }
 
-/** Unit horizontal direction of a steep lane (east and north). */
-function laneDir(c: ConnectorPos, gradePct: number): { dx: number; dz: number; run: number; endX: number } {
-  const { run, endX } = steepLaneGeometry(c, gradePct);
-  const h = Math.hypot(endX - c.x, c.z1 - c.z0);
-  return { dx: (endX - c.x) / h, dz: (c.z1 - c.z0) / h, run, endX };
-}
-
 /**
  * The x range a connector cuts out of its band's terrain: a switchback's U and a steep lane's footprint plus
  * `slopeBands.gapMargin` (the band gap, floored at y0), a staircase's own width (its steps fill the slot).
@@ -78,9 +111,12 @@ export function connectorExtent(c: Connector, city: CityConfig): Span {
       return [c.x - city.switchback.width / 2 - m, g.xEast + m];
     }
     case 'steepLane': {
-      const { dz, endX } = laneDir(c, city.steepLane.gradePct);
-      const half = (city.steepLane.width / 2) * dz;
-      return [c.x - half - m, endX + half + m];
+      // from the west edge of the approach strip at z0 (the deck's west edge carried back to the lower street) to
+      // the mouth piece's east corner on z1
+      const g = steepLaneGeometry(c, city.steepLane);
+      const half = (city.steepLane.width / 2) * g.dz;
+      const approach = g.dz > 0 ? (2 * g.corner * g.dx) / g.dz : 0;
+      return [g.start.x - half - approach - m, g.mouthEnd.x + half + m];
     }
     case 'stairs':
       return [c.x - city.stairs.width / 2, c.x + city.stairs.width / 2];
@@ -93,19 +129,18 @@ export function connectorMouth(c: Connector, city: CityConfig): Span {
     case 'switchback':
       return [c.x - city.switchback.width / 2, c.x + city.switchback.width / 2];
     case 'steepLane': {
-      // The deck's end edge is square to the lane, so along z1 it spans from where the west edge crosses z1 to the
-      // end edge's southern corner.
-      const { dz, endX } = laneDir(c, city.steepLane.gradePct);
-      const half = city.steepLane.width / 2;
-      return dz >= 1 - 1e-9 ? [endX - half, endX + half] : [endX - half / dz, endX + half * dz];
+      // The deck's west edge crosses z1 at the ramp's top edge, its east edge at the mouth piece's far corner.
+      const g = steepLaneGeometry(c, city.steepLane);
+      const half = (city.steepLane.width / 2) * g.dz;
+      return [g.end.x - half, g.mouthEnd.x + half];
     }
     case 'stairs':
       return [c.x - city.stairs.width / 2, c.x + city.stairs.width / 2];
   }
 }
 
-/** [lo, hi] minus the union of `cuts`, in order (pieces thinner than 1 mm are dropped). */
-function freeSpans(lo: number, hi: number, cuts: Span[]): Span[] {
+/** [lo, hi] minus the union of `cuts`, west to east (pieces thinner than 1 mm are dropped). */
+export function freeSpans(lo: number, hi: number, cuts: Span[]): Span[] {
   const out: Span[] = [];
   let x = lo;
   for (const [a, b] of [...cuts].sort((p, q) => p[0] - q[0])) {
@@ -134,6 +169,7 @@ function ramp(id: string, from: [number, number, number], to: [number, number, n
     kind: 'ramp',
     center: vec3((a[0] + b[0]) / 2 - n[0]! * t, (a[1] + b[1]) / 2 - n[1]! * t, (a[2] + b[2]) / 2 - n[2]! * t),
     size: vec3(length, thickness, width),
+    // `+ 0` turns the -0 an x-aligned ramp's atan2(-0, dx) gives into 0
     rotationDeg: vec3(0, yaw * DEG + 0, tilt * DEG),
   };
 }
@@ -160,8 +196,11 @@ function switchbackSolids(c: Connector, city: CityConfig): Solid[] {
 }
 
 function laneSolids(c: Connector, city: CityConfig): Solid[] {
-  const { endX } = laneDir(c, city.steepLane.gradePct);
-  return [ramp(`${c.id}-ramp`, [c.x, c.y0, c.z0], [endX, c.y1, c.z1], city.steepLane.width, city.steepLane.thickness)];
+  const g = steepLaneGeometry(c, city.steepLane);
+  const { width: w, thickness: t } = city.steepLane;
+  const out = [ramp(`${c.id}-ramp`, [g.start.x, c.y0, g.start.z], [g.end.x, c.y1, g.end.z], w, t)];
+  if (g.flat > 1e-9) out.push(ramp(`${c.id}-mouth`, [g.end.x, c.y1, g.end.z], [g.mouthEnd.x, c.y1, g.mouthEnd.z], w, t));
+  return out;
 }
 
 /**

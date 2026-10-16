@@ -2,7 +2,7 @@ import { cityConfig, worldConfig } from '../config';
 import type { CityConfig, WorldConfig } from '../config';
 import { vec3 } from '../math/vec3';
 import type { CatalogIndex } from './catalog';
-import type { CityLayout } from './cityLayout';
+import type { CityLayout, Connector } from './cityLayout';
 import type { AccessZone, MapData, Poi, Rect, Solid } from './mapTypes';
 import { slab } from './slab';
 import { steepLaneGeometry, terrainSolids } from './terrainSolids';
@@ -49,27 +49,7 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
       const rect: Rect = { minX: c.x - city.stairs.width / 2, maxX: c.x + city.stairs.width / 2, minZ: c.z0, maxZ: c.z1 };
       accessZones.push({ id: `zone-${c.id}`, kind: 'stairs', rect, minY: lo, maxY: hi });
     } else if (c.kind === 'steepLane') {
-      const { run, endX } = steepLaneGeometry(c, city.steepLane.gradePct);
-      const n = Math.max(1, Math.ceil(run / city.steepLane.zoneStep - 1e-9));
-      const half = city.steepLane.width / 2;
-      for (let i = 0; i < n; i++) {
-        const t0 = i / n;
-        const t1 = (i + 1) / n;
-        const xa = c.x + (endX - c.x) * t0;
-        const xb = c.x + (endX - c.x) * t1;
-        const za = c.z0 + (c.z1 - c.z0) * t0;
-        const zb = c.z0 + (c.z1 - c.z0) * t1;
-        const ya = c.y0 + (c.y1 - c.y0) * t0;
-        const yb = c.y0 + (c.y1 - c.y0) * t1;
-        // each rect overlaps the next by half a lane width
-        const rect: Rect = {
-          minX: Math.min(xa, xb) - half,
-          maxX: Math.max(xa, xb) + half,
-          minZ: za,
-          maxZ: i === n - 1 ? c.z1 : Math.min(c.z1, zb + half),
-        };
-        accessZones.push({ id: `zone-${c.id}-${i}`, kind: 'steepLane', rect, minY: Math.min(ya, yb), maxY: Math.max(ya, yb) });
-      }
+      accessZones.push(...steepLaneZones(c, city));
     }
   }
   for (const a of layout.areas) {
@@ -120,4 +100,33 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
     gasStations: layout.gasStations,
     orderRules: layout.orderRules,
   };
+}
+
+/**
+ * A steep lane's access zones (Decision 8): one axis-aligned rect per `zoneStep` metres of the deck's centre line from
+ * where it crosses z0 to where it crosses z1, each widened to the whole 6 m deck (corners included) over its z range
+ * and the next rect's first half lane width, with the deck's height range there.
+ */
+function steepLaneZones(c: Connector, city: CityConfig): AccessZone[] {
+  const g = steepLaneGeometry(c, city.steepLane);
+  const half = city.steepLane.width / 2;
+  // centre-line distance s from the ramp's foot edge; the deck height there
+  const at = (s: number) => ({ x: g.start.x + s * g.dx, z: g.start.z + s * g.dz });
+  const height = (s: number) => c.y0 + ((c.y1 - c.y0) * Math.min(g.run, Math.max(0, s))) / g.run;
+  const sOfZ = (z: number) => (z - g.start.z) / g.dz;
+  const s0 = sOfZ(c.z0);
+  const s1 = sOfZ(c.z1);
+  const n = Math.max(1, Math.ceil((s1 - s0) / city.steepLane.zoneStep - 1e-9));
+  const out: AccessZone[] = [];
+  for (let i = 0; i < n; i++) {
+    const za = at(s0 + ((s1 - s0) * i) / n).z;
+    const zb = i === n - 1 ? c.z1 : Math.min(c.z1, at(s0 + ((s1 - s0) * (i + 1)) / n).z + half);
+    // centre points whose deck reaches into [za, zb]
+    const sa = sOfZ(za - g.corner);
+    const sb = sOfZ(zb + g.corner);
+    const wx = half * g.dz;
+    const rect: Rect = { minX: at(sa).x - wx, maxX: at(sb).x + wx, minZ: za, maxZ: zb };
+    out.push({ id: `zone-${c.id}-${i}`, kind: 'steepLane', rect, minY: height(sa), maxY: height(sb) });
+  }
+  return out;
 }
