@@ -9,3 +9,6 @@ assets/packs/
 
 # Contact sheets of pack models (assets:sheet)
 docs/playtest/sp5/sheet-*.png
+
+# Runtime pack models written by assets:import (derived from the packs: never committed)
+packages/client/public/packs/

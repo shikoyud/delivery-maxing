@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "assets:check": "tsx src/bin/assets-check.ts",
+    "assets:import": "tsx src/bin/assets-import.ts",
     "assets:sheet": "tsx src/bin/assets-sheet.ts",
     "map:build": "tsx src/bin/map-build.ts",
     "map:check": "tsx src/bin/map-check.ts",

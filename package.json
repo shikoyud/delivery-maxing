@@ -13,6 +13,7 @@
     "dev": "pnpm --filter @dm/client dev",
     "e2e": "pnpm --filter @dm/client e2e",
     "assets:check": "pnpm --filter @dm/tools assets:check",
+    "assets:import": "pnpm --filter @dm/tools assets:import",
     "assets:sheet": "pnpm --filter @dm/tools assets:sheet",
     "map:build": "pnpm --filter @dm/tools map:build",
     "map:check": "pnpm --filter @dm/tools map:check",
