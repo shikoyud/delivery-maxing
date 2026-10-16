@@ -80,8 +80,9 @@ slot. Cancelling an order on the phone blocks new offers for 45 s.
 All four vehicles are yours from the start (the shop comes in SP6): the
 bicycle, motorbike and car wait in the bay beside the first hospital (Bayview
 General in the city) and the skateboard is carried. Cars stay out of alleys,
-steep lanes, stairs and paths; the bicycle and motorbike back up at walking
-pace (hold S while stopped). The Map app and minimap mark hospitals, gas
+steep lanes, stairs and paths. Holding S while stopped reverses the car; the
+bicycle and motorbike turn round toward it first, and back up at walking pace
+only while a wall stops the turn. The Map app and minimap mark hospitals, gas
 stations and your parked vehicles. On `?map=greybox` the test town has a steep
 lane, stairs, a park path, a boardwalk and two gas stations to try them on.
 The dev panel (backtick) has
@@ -90,7 +91,8 @@ progress** (zero totals, every vehicle back in the bay).
 
 Add `?debug=1` to the URL to turn on the debug hooks and overlay.
 Points, Coins, deliveries, your vehicles and the last ride persist in your
-browser's localStorage. Add `?seed=N` to make the offer stream reproducible.
+browser's localStorage, one save per map: the city starts fresh, and an SP4
+save stays with `?map=greybox`. Add `?seed=N` to make the offer stream reproducible.
 
 ### Frame-rate check (`?perf=1`)
 
@@ -98,7 +100,8 @@ browser's localStorage. Add `?seed=N` to make the offer stream reproducible.
 `config/perf.json`, 7.5 s each) and then shows a result panel: PASS when the
 p95 frame time is 16.7 ms or less, the draw calls and triangles per viewpoint
 against the budgets (200 calls, 700 k triangles), and the city and pack-model
-counts. Input is ignored during the run; keep the tab in front.
+counts. Input is ignored during the run; keep the tab in front. It only runs
+on the city: with `?map=greybox` it logs a warning and is ignored.
 
 1. With the packs in `assets/packs/`: `pnpm assets:import assets/packs`, then
    `pnpm dev` (or `pnpm build && pnpm --filter @dm/client preview`).

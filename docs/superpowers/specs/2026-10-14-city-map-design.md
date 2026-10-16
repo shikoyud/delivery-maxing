@@ -371,7 +371,7 @@ Run by hand on `C:\Users\nnduy\Downloads\assets` (931 `.glb`, 168 MB, already co
 | Misleading names | §5.2 |
 | Off-centre pivots | `mega/Police_01` (5.3 m), `mega/Supermarket_03–04` (4.5 m), `mega/House_31–32` and `OldHouse_03–04` (3.5 m), `mega/CityHall_*` (3 m), `mega/Airport_01` (24 m) |
 | Proportions | People-scale props are life-size; buildings and vehicles are compact (cars about 2.0 × 3.3 m and 1.4 m high). Used at 1:1. |
-| Triangles | 2,589 placed buildings total 7.3 M triangles at full detail. With SP2-style LOD rings (LOD0 ≤ 160 m, simplified LOD1, placeholder boxes beyond) and the dense blocks blocking long views, the SP2 proxy budget (≤ 700 k triangles, ≤ 200 draw calls in view) is the target; the city sub-project re-proves 60 fps. |
+| Triangles | 2,589 placed buildings total 7.3 M triangles at full detail. With SP2-style LOD rings (LOD0 ≤ 160 m, simplified LOD1, placeholder boxes beyond) and the dense blocks blocking long views, the SP2 proxy budget (≤ 700 k triangles, ≤ 200 draw calls in view) is the target; the city sub-project re-proves 60 fps. As shipped, the rings are config `city.lodRadii` = [100, 250, 700] m (SP5 Task 12: tuned down to fit the budgets with the pack models), to be widened if the owner's `?perf=1` run shows headroom. |
 | Download size | 168 MB raw. Needs meshopt compression, shared textures and per-district loading; target under 40 MB for first load. |
 
 ## 9. Open items
