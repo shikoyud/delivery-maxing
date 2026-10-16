@@ -123,9 +123,10 @@ export class VehicleBody {
    */
   tryTurnToward(target: number, maxTurn: number): number {
     const h = this.headingNow;
-    const step = Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(target - h)));
+    const first = clampTurn(h, target, maxTurn);
+    const step = wrapAngle(first - h);
     if (step === 0) return h;
-    for (const heading of [clampTurn(h, target, maxTurn), wrapAngle(h - step)]) {
+    for (const heading of [first, wrapAngle(h - step)]) {
       if (this.tryTurn(heading)) return this.headingNow;
     }
     return this.headingNow;

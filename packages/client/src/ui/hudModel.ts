@@ -160,11 +160,11 @@ export function promptFor(
   bindings: { mount: readonly string[]; interact: readonly string[] } = clientConfig.input.bindings,
 ): string | null {
   if (c.phoneOpen) return null;
-  const mount = keyLabel(bindings.mount[0] ?? '');
+  const mount = keyLabel(bindings.mount[0] ?? 'KeyF');
   if (c.riding !== null) {
     if (!c.stopped) return null;
     const refuel = c.atPump && !c.tankFull && ridingConfig.rides[c.riding].fuel;
-    return refuel ? `Hold ${keyLabel(bindings.interact[0] ?? '')} · Refuel` : `${mount} · Get off`;
+    return refuel ? `Hold ${keyLabel(bindings.interact[0] ?? 'KeyE')} · Refuel` : `${mount} · Get off`;
   }
   if (c.mountCandidate !== null) return `${mount} · Ride the ${c.mountCandidate}`;
   return c.atPump && c.ownsFuelledRide ? 'Get on to refuel' : null;
