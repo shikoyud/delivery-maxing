@@ -110,7 +110,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     },
     phoneChanged: (open) => void phone.changes.push(open),
     vehicles: {
-      rows: () => [{ tier: 'car', status: 'parked', distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn }],
+      rows: () => [{ tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn }],
       summon: (t, now) => {
         vehicles.calls.push(`summon ${t} at ${now}`);
         return vehicles.result;

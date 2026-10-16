@@ -65,6 +65,8 @@ import { garageRows } from '../ui/phone/garageApp';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
+/** Weight of each new CityView.update sample in the overlay's running average (about the last ten frames). */
+const CITY_MS_SMOOTHING = 0.1;
 
 export interface GameOptions {
   debug: boolean;
@@ -121,6 +123,8 @@ export class Game {
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
   private lastFrameMs: number | null = null;
+  /** CityView.update's cost (ms), smoothed (the F3 overlay); null until the city has drawn a frame. */
+  private cityUpdateMs: number | null = null;
   private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
   /** Called after the phone opened or closed (main.ts refreshes the play hint from it). */
@@ -502,7 +506,12 @@ export class Game {
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
     this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s.riding);
     this.delivery.setCamera(this.renderer.camera.position);
-    this.cityView?.update(feet, this.renderer.camera);
+    if (this.cityView) {
+      const t0 = performance.now();
+      this.cityView.update(feet, this.renderer.camera);
+      const ms = performance.now() - t0;
+      this.cityUpdateMs = this.cityUpdateMs === null ? ms : this.cityUpdateMs + (ms - this.cityUpdateMs) * CITY_MS_SMOOTHING;
+    }
     this.vehicles.update(this.sim.garage, alpha);
     this.accessZones.visible = this.overlay.visible;
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
@@ -521,6 +530,9 @@ export class Game {
       sprinting: s.sprinting,
       tick: this.tick,
       position: s.position,
+      ...(this.cityView
+        ? { city: { chunks: this.sim.physics.loadedChunks?.().size ?? null, city: this.cityView.stats(), cityUpdateMs: this.cityUpdateMs } }
+        : {}),
     }));
   }
 }

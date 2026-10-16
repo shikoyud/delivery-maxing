@@ -15,6 +15,7 @@ import {
   type VehicleTier,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
+import type { GarageRow } from '../src/ui/phone/garageApp';
 import { hudModel, loadText, promptFor, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
 
 const map = expandGreybox(greybox as GreyboxSource);
@@ -259,6 +260,32 @@ describe('hudModel next stop and ride', () => {
     const m = hudModel(sys, map, spawn, 0, null, 1, [], { ride: { tier: 'car', speed: 21.3, fuel: 0.4 } });
     expect(m.nextStop).toBeNull();
     expect(m.ride).toEqual({ tier: 'car', speed: 21.3, fuel: 0.4 });
+  });
+
+  test('parked lists only parked vehicles with their positions (Decision 15)', () => {
+    const sys = makeSystem('car');
+    const row = (tier: GarageRow['tier'], status: GarageRow['status'], position: Vec3 | null): GarageRow => ({
+      tier,
+      status,
+      position,
+      distance: position ? 50 : null,
+      fuel: null,
+      summon: 'ok',
+      readyIn: 0,
+    });
+    const rows = [
+      row('skateboard', 'carried', null),
+      row('bicycle', 'riding', null),
+      row('motorbike', 'parked', { x: 40, y: 10, z: 320 }),
+      row('car', 'parked', { x: 120, y: 10, z: 318 }),
+    ];
+    const m = hudModel(sys, map, spawn, 0, null, 1, rows);
+    expect(m.parked).toEqual([
+      { tier: 'motorbike', position: { x: 40, y: 10, z: 320 } },
+      { tier: 'car', position: { x: 120, y: 10, z: 318 } },
+    ]);
+    expect(m.parked[0]!.position).not.toBe(rows[2]!.position); // a copy
+    expect(hudModel(sys, map, spawn, 0, null).parked).toEqual([]);
   });
 });
 

@@ -60,6 +60,8 @@ export interface ClientConfig {
     hintCooldownSeconds: number;
     /** The HUD fuel gauge turns to the warning colour at or below this tank share (%). */
     fuelLowPct: number;
+    /** The phone Map app on the city shows a window this many metres wide, centred on the player (the greybox shows all of it). */
+    mapWindowMeters: number;
   };
 }
 

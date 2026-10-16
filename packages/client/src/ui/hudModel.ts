@@ -18,6 +18,7 @@ import {
   type Vec3,
 } from '@dm/shared';
 import { nextCorner, yawTo } from '../game/routes';
+import type { ParkedMarker } from './minimap';
 import type { GarageRow } from './phone/garageApp';
 
 /** A countdown: seconds left (0 once over) and whether the limit has passed. */
@@ -119,6 +120,8 @@ export interface HudModel {
   stamina: number;
   /** The owned vehicles (the Garage app). */
   garage: GarageRow[];
+  /** The owned vehicles parked in the world, where they stand (the Map app's and minimap's markers, Decision 15). */
+  parked: ParkedMarker[];
   /**
    * The active order whose current target has the shortest route for the current tier (ties: the oldest order);
    * null without active orders.
@@ -153,6 +156,13 @@ export function promptFor(c: PromptContext): string | null {
   }
   if (c.mountCandidate !== null) return `F · Ride the ${c.mountCandidate}`;
   return c.atPump && c.ownsFuelledRide ? 'Get on to refuel' : null;
+}
+
+/** The parked rows' tiers and positions (copies), in row order; carried and ridden vehicles have no marker. */
+export function parkedOf(rows: readonly GarageRow[]): ParkedMarker[] {
+  const out: ParkedMarker[] = [];
+  for (const r of rows) if (r.status === 'parked' && r.position) out.push({ tier: r.tier, position: { ...r.position } });
+  return out;
 }
 
 /** "1 pt", "N pts". */
@@ -281,6 +291,7 @@ export function hudModel(
     safeZone,
     stamina,
     garage,
+    parked: parkedOf(garage),
     nextStop: null,
     ride: nav.ride ?? null,
     prompt: nav.prompt ?? null,

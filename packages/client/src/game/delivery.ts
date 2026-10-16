@@ -42,7 +42,7 @@ import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
 import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoints';
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
-import { hudModel, poiIndex, promptFor, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, type HudModel } from '../ui/hudModel';
 import { createMinimap } from '../ui/minimap';
 import { createMapApp } from '../ui/phone/mapApp';
 import { MapProjection } from '../ui/phone/mapProjection';
@@ -223,7 +223,7 @@ export class DeliveryLoop {
     if (d.ui) this.phone = d.ui.phone(phoneCb, closeCodes);
     else {
       const phone = new Phone(d.host, phoneCb, closeCodes);
-      phone.setMapApp(createMapApp(d.map, new MapProjection(d.map.size, 512), this.colorIndex));
+      phone.setMapApp(createMapApp(d.map, MapProjection.forMap(d.map, 512), this.colorIndex));
       this.phone = phone;
     }
     this.minimap = d.ui ? null : createMinimap(d.host, d.map);
@@ -601,6 +601,7 @@ export class DeliveryLoop {
       this.d.player().heading ?? 0,
       targets.map((position, i) => ({ position, colorIndex: colorIndices[i] ?? 0 })),
       this.sys.offers.map((o) => pois.target(o.order.pickupPoiId)),
+      parkedOf(this.d.vehicles?.rows(this.d.now()) ?? []),
     );
 
     this.hud.aim?.(this.d.cameraYaw?.() ?? 0);

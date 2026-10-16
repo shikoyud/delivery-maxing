@@ -47,6 +47,7 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     safeZone: null,
     stamina: 1,
     garage: [],
+    parked: [],
     nextStop: null,
     ride: null,
     prompt: null,

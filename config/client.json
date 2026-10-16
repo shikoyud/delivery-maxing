@@ -35,5 +35,5 @@
       "crouch": { "drop": 0, "hipDrop": 0.2, "body": [0, 0, 0],
         "bones": { "Abdomen": [-60.0, 0, 0], "UpperLegL": [80.0, 0, 0], "UpperLegR": [80.0, 0, 0], "LowerLegL": [-125.0, 0, 0], "LowerLegR": [-125.0, 0, 0], "UpperArmL": [125, 0, 0], "UpperArmR": [125, 0, 0] } } } },
   "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "timerUrgentSeconds": 10,
-    "routeRefreshSeconds": 0.5, "routeDriftMeters": 5, "hintCooldownSeconds": 3, "fuelLowPct": 20 }
+    "routeRefreshSeconds": 0.5, "routeDriftMeters": 5, "hintCooldownSeconds": 3, "fuelLowPct": 20, "mapWindowMeters": 500 }
 }
