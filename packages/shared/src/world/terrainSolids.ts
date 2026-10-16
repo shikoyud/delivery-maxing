@@ -1,4 +1,4 @@
-import { cityConfigDefaults } from './cityDefaults';
+import { cityConfig } from '../config';
 import type { CityConfig } from '../config';
 import { slab } from './slab';
 import type { CityLayout, Connector, Level } from './cityLayout';
@@ -25,7 +25,7 @@ export function steepLaneGeometry(
  * parapets and connector solids here.
  */
 export function terrainSolids(layout: CityLayout, cfg?: { city: CityConfig }): Solid[] {
-  const c = (cfg?.city ?? cityConfigDefaults).layout;
+  const c = (cfg?.city ?? cityConfig).terrain;
   const out: Solid[] = [];
   for (const lv of LEVEL_ORDER) {
     const { y, z0, z1 } = layout.levels[lv];

@@ -1,0 +1,64 @@
+{
+  "size": 1200,
+  "seed": 1,
+  "street": 12,
+  "avenue": 15,
+  "alley": 4,
+  "crossStreetFirst": 12,
+  "crossStreetPitch": 108,
+  "crossStreets": 11,
+  "eastEdgeStreetX": 1188,
+  "levels": {
+    "L0": { "y": 2, "z0": 0, "z1": 270 },
+    "L1": { "y": 10, "z0": 310, "z1": 560 },
+    "L2": { "y": 24, "z0": 620, "z1": 820 },
+    "L3": { "y": 38, "z0": 880, "z1": 1040 },
+    "ridge": { "y": 48, "z0": 1070, "z1": 1180 }
+  },
+  "bands": {
+    "A": { "z0": 270, "z1": 310, "y0": 2, "y1": 10 },
+    "B": { "z0": 560, "z1": 620, "y0": 10, "y1": 24 },
+    "C": { "z0": 820, "z1": 880, "y0": 24, "y1": 38 },
+    "D": { "z0": 1040, "z1": 1070, "y0": 38, "y1": 48 }
+  },
+  "blockDepth": { "dense": 48, "alley": 30 },
+  "openEvery": 3,
+  "districtSplits": {
+    "L1": { "industrialMaxX": 330, "downtownMaxX": 760 },
+    "L2": { "rowhousesMaxX": 400, "highstreetMaxX": 800 }
+  },
+  "blockFill": {
+    "minGap": 4.2,
+    "denseDistricts": ["downtown"],
+    "openDistricts": ["industrial", "rowhouses", "apartments", "uptown"],
+    "sportsInset": 6,
+    "sportsSpacing": 20,
+    "parkingInset": 3
+  },
+  "terrain": {
+    "slabThickness": 1,
+    "terrainThickness": 3,
+    "l0Ground": [
+      { "id": "docks", "x0": 0, "x1": 380, "z0": 110 },
+      { "id": "beach", "x0": 380, "x1": 820, "z0": 200 },
+      { "id": "harbor", "x0": 820, "x1": 1200, "z0": 120 }
+    ]
+  },
+  "switchback": { "gradePct": 9, "legLength": 80, "legLengthShallow": 50, "landing": 14, "landingShallow": 10, "width": 12 },
+  "steepLane": { "gradePct": 14, "width": 6, "zoneStep": 6 },
+  "stairs": { "width": 4, "rise": 0.25, "tread": 0.35, "landingEvery": 12 },
+  "parapet": { "height": 1, "thickness": 0.3 },
+  "hospital": { "lot": 27, "safeRadius": 18, "bayOffset": 3.6, "bayBack": 2 },
+  "gasStation": { "lotW": 18, "lotD": 15 },
+  "hillcrest": { "lot": 15, "depth": 16, "driveZ": 1118, "driveAmplitude": 22, "drivePeriod": 420, "driveWidth": 10, "parkX0": 560, "parkX1": 660 },
+  "docks": { "quayZ": 110, "railZ0": 236, "railZ1": 246, "containerCols": 8, "containerRows": 4 },
+  "beach": { "x0": 380, "x1": 820, "boardwalkZ0": 200, "boardwalkZ1": 208 },
+  "harbor": { "pierX": 995, "pierWidth": 12, "breakwater": { "x0": 1120, "z0": 60, "z1": 72 } },
+  "pois": { "foodPickupCap": 100, "packagePickupCap": 60, "target": 800, "doorSpacing": 12 },
+  "orderRules": {
+    "bands": { "shortMax": 350, "mediumMax": 800 },
+    "foodDropoff": { "min": 150, "max": 800 },
+    "packageDropoff": { "min": 150, "max": 1600 },
+    "maxPickupDistance": 400
+  }
+}

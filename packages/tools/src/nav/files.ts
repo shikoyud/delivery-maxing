@@ -10,3 +10,9 @@ export const GREYBOX_SOURCE = 'map/greybox.json';
 
 /** The committed navmesh of a tier (`pnpm map:build`), relative to the repository root. */
 export const navBinPath = (tier: VehicleTier): string => `map/nav/greybox-${tier}.bin`;
+
+/** The generated city layout (`pnpm map:build`), relative to the repository root. */
+export const CITY_LAYOUT = 'map/city.layout.json';
+
+/** The asset catalog, relative to the repository root. */
+export const CATALOG = 'map/catalog.json';

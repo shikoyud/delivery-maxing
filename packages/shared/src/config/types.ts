@@ -1,4 +1,5 @@
 import type { Vec3 } from '../math/vec3';
+import type { CityDistrict, OrderRules } from '../world/mapTypes';
 
 export interface MovementConfig {
   tickRate: number;
@@ -143,25 +144,102 @@ export interface WorldConfig {
   physics: { loadRadius: number; unloadRadius: number };
 }
 
-/**
- * config/city.json (created by SP5 Task 6). Only the fields `layoutToMap` and `terrainSolids` read are declared here;
- * Task 6 completes the interface.
- */
+type CityLevelKey = 'L0' | 'L1' | 'L2' | 'L3' | 'ridge';
+type CityBandKey = 'A' | 'B' | 'C' | 'D';
+
+/** config/city.json: the city generator's rules (city design sections 2-6) and the terrain the map is built from. */
 export interface CityConfig {
-  layout: {
+  size: number;
+  seed: number;
+  /** Widths (m) */
+  street: number;
+  avenue: number;
+  alley: number;
+  /** Cross streets: centre lines at crossStreetFirst + crossStreetPitch * k for k < crossStreets */
+  crossStreetFirst: number;
+  crossStreetPitch: number;
+  crossStreets: number;
+  /** West side of the east edge street */
+  eastEdgeStreetX: number;
+  levels: Record<CityLevelKey, { y: number; z0: number; z1: number }>;
+  bands: Record<CityBandKey, { z0: number; z1: number; y0: number; y1: number }>;
+  blockDepth: { dense: number; alley: number };
+  /** Every openEvery-th block ((k + row) % openEvery === 0) is open in blockFill.openDistricts */
+  openEvery: number;
+  districtSplits: { L1: { industrialMaxX: number; downtownMaxX: number }; L2: { rowhousesMaxX: number; highstreetMaxX: number } };
+  blockFill: {
+    /** A row of lots stops when less than this is left (m) */
+    minGap: number;
+    /** Districts whose full-depth blocks have no alley */
+    denseDistricts: CityDistrict[];
+    openDistricts: CityDistrict[];
+    /** Sports courts: inset from the block's south-west corner, and x spacing between the two courts */
+    sportsInset: number;
+    sportsSpacing: number;
+    /** Car park: x inset from the block's west side */
+    parkingInset: number;
+  };
+  terrain: {
     /** Thickness of every ground slab (m); its top is the level height. */
     slabThickness: number;
     /** Thickness of sand / pier / breakwater slabs (m); the top is the area height. */
     terrainThickness: number;
-    /** Width of a steep-lane access zone (m). */
-    steepLaneWidth: number;
-    /** Steep lane grade (percent); sets the diagonal run of the lane. */
-    steepLaneGradePct: number;
-    /** A steep lane's access zone is one rect per this many metres of run. */
-    zoneStep: number;
-    /** Width of a staircase access zone (m). */
-    stairsWidth: number;
     /** L0 ground rects; each stops at the water (x range and the z the ground starts at). */
     l0Ground: { id: string; x0: number; x1: number; z0: number }[];
+  };
+  switchback: { gradePct: number; legLength: number; legLengthShallow: number; landing: number; landingShallow: number; width: number };
+  /** A steep lane's access zone is one rect per zoneStep metres of run. */
+  steepLane: { gradePct: number; width: number; zoneStep: number };
+  stairs: { width: number; rise: number; tread: number; landingEvery: number };
+  parapet: { height: number; thickness: number };
+  hospital: { lot: number; safeRadius: number; bayOffset: number; bayBack: number };
+  gasStation: { lotW: number; lotD: number };
+  hillcrest: {
+    lot: number;
+    depth: number;
+    driveZ: number;
+    driveAmplitude: number;
+    drivePeriod: number;
+    driveWidth: number;
+    parkX0: number;
+    parkX1: number;
+  };
+  docks: { quayZ: number; railZ0: number; railZ1: number; containerCols: number; containerRows: number };
+  beach: { x0: number; x1: number; boardwalkZ0: number; boardwalkZ1: number };
+  harbor: { pierX: number; pierWidth: number; breakwater: { x0: number; z0: number; z1: number } };
+  pois: { foodPickupCap: number; packagePickupCap: number; target: number; doorSpacing: number };
+  orderRules: OrderRules;
+}
+
+/** config/names.json: the fictional word lists business, household and street names are made from. */
+export interface NamesConfig {
+  /** First words of business names ("Crumb", "Bayside", ...) */
+  first: string[];
+  /** Suffixes by catalog kind word ("bakery") or, failing that, by catalog category ("food") */
+  kinds: Record<string, string[]>;
+  surnames: string[];
+  streets: {
+    /** L0, L1, L2, L3, ridge */
+    avenues: string[];
+    /** One per cross street, west to east */
+    cross: string[];
+    quay: string;
+    /** The east edge street of every built level */
+    edge: string;
+    /** East-west streets between block rows, south to north, per built level */
+    rows: Record<'L1' | 'L2' | 'L3', string[]>;
+    /** The street along the top of each built level */
+    terraces: Record<'L1' | 'L2' | 'L3', string>;
+  };
+  address: {
+    /** House numbers go up by 2 every `step` metres along the street */
+    step: number;
+    /** Homes with more floors than this get ", apt <n>" */
+    aptOverFloors: number;
+    aptsPerFloor: number;
+    /** Floors of a home whose catalog kind does not say: height / floorHeight */
+    floorHeight: number;
+    /** Street-name words shortened in addresses ("Street" -> "St") */
+    abbreviations: Record<string, string>;
   };
 }

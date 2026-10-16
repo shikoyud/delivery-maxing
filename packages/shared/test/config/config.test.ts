@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { movementConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig, worldConfig } from '../../src/config';
+import { cityConfig, movementConfig, namesConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig, worldConfig } from '../../src/config';
 
 describe('config pins spec values', () => {
   it('two-wheelers back up at walking pace, the skateboard does not (Decision 3)', () => {
@@ -65,5 +65,38 @@ describe('config pins spec values', () => {
     expect(navConfig.walkClimb).toBeLessThanOrEqual(movementConfig.mantle.maxHeight);
     expect(navConfig.doorSearchMaxRadius).toBeGreaterThanOrEqual(navConfig.carRoadMaxDoorDistance);
     expect(navConfig.maxFootLeg).toBeGreaterThanOrEqual(navConfig.carRoadMaxDoorDistance);
+  });
+
+  it('city: levels, bands and POI caps from the city design', () => {
+    expect(cityConfig.size).toBe(1200);
+    expect(cityConfig.levels.L2).toEqual({ y: 24, z0: 620, z1: 820 });
+    expect(cityConfig.bands.B).toEqual({ z0: 560, z1: 620, y0: 10, y1: 24 });
+    expect(cityConfig.pois).toEqual({ foodPickupCap: 100, packagePickupCap: 60, target: 800, doorSpacing: 12 });
+    expect(cityConfig.orderRules.bands).toEqual({ shortMax: 350, mediumMax: 800 });
+    expect(cityConfig.steepLane).toMatchObject({ gradePct: 14, width: 6 });
+    expect(cityConfig.switchback.gradePct).toBe(9);
+    expect(cityConfig.stairs.width).toBe(4);
+  });
+  it('names: enough fictional words, five avenues, eleven cross streets', () => {
+    expect(namesConfig.first.length).toBeGreaterThanOrEqual(60);
+    expect(namesConfig.surnames.length).toBeGreaterThanOrEqual(80);
+    expect(namesConfig.kinds.bakery).toEqual(['Bakery', '& Co. Bakery', 'Bakehouse']);
+    expect(namesConfig.streets.avenues).toEqual(['Harbor Road', 'Bayview Avenue', 'Midtown Avenue', 'Uptown Avenue', 'Hillcrest Drive']);
+    expect(namesConfig.streets.cross).toHaveLength(11);
+    expect(namesConfig.streets.quay).toBe('Quay Street');
+    expect(new Set(namesConfig.first).size).toBe(namesConfig.first.length);
+    expect(new Set(namesConfig.surnames).size).toBe(namesConfig.surnames.length);
+  });
+  it('names: no real delivery-app or marketplace names anywhere', () => {
+    const banned = /amazon|grab|shopee|uber|doordash|deliveroo|foodpanda/i;
+    const words: string[] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === 'string') words.push(v);
+      else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') Object.entries(v).forEach(([k, x]) => (words.push(k), walk(x)));
+    };
+    walk(namesConfig);
+    expect(words.length).toBeGreaterThan(200);
+    expect(words.filter((w) => banned.test(w))).toEqual([]);
   });
 });

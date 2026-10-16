@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { vec3 } from '../../src/math/vec3';
-import { worldConfig } from '../../src/config';
+import { cityConfig, worldConfig } from '../../src/config';
 import { layoutToMap } from '../../src/world/cityMap';
 import { cityCatalogFixture, cityLayoutFixture } from './cityFixtures';
 
@@ -116,5 +116,24 @@ describe('layoutToMap', () => {
     expect(m.chunkSize).toBe(worldConfig.chunkSize);
     expect(m.size).toBe(1200);
     expect(m.layout.version).toBe(1);
+  });
+
+  it('reads config/city.json, and a city config override changes the output', () => {
+    const base = build();
+    const stairsOf = (m: ReturnType<typeof build>) => m.accessZones.find((z) => z.kind === 'stairs')!.rect;
+    expect(stairsOf(base).maxX - stairsOf(base).minX).toBe(cityConfig.stairs.width);
+    const city = {
+      ...cityConfig,
+      stairs: { ...cityConfig.stairs, width: 6 },
+      steepLane: { ...cityConfig.steepLane, zoneStep: 12 },
+      terrain: { ...cityConfig.terrain, slabThickness: 2, terrainThickness: 5 },
+    };
+    const m = layoutToMap(cityLayoutFixture(), cityCatalogFixture(), { world: worldConfig, city });
+    expect(stairsOf(m).maxX - stairsOf(m).minX).toBe(6);
+    const lanes = (x: ReturnType<typeof build>) => x.accessZones.filter((z) => z.kind === 'steepLane').length;
+    expect(lanes(m)).toBeLessThan(lanes(base));
+    expect(m.solids.find((x) => x.id === 'ground-L1')!.size.y).toBe(2);
+    expect(base.solids.find((x) => x.id === 'ground-L1')!.size.y).toBe(1);
+    expect(m.solids.find((x) => x.id === 'sand-1')!.size.y).toBe(5);
   });
 });

@@ -1,8 +1,7 @@
-import { worldConfig } from '../config';
+import { cityConfig, worldConfig } from '../config';
 import type { CityConfig, WorldConfig } from '../config';
 import { vec3 } from '../math/vec3';
 import type { CatalogIndex } from './catalog';
-import { cityConfigDefaults } from './cityDefaults';
 import type { CityLayout } from './cityLayout';
 import type { AccessZone, MapData, Poi, Rect, Solid } from './mapTypes';
 import { slab } from './slab';
@@ -19,13 +18,12 @@ const PATH_AREAS: ReadonlySet<string> = new Set(['boardwalk', 'pier', 'park', 's
 /** Expands a city layout into the MapData the sim, physics and orders use. */
 export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world: WorldConfig; city: CityConfig }): CityMap {
   const world = cfg?.world ?? worldConfig;
-  const city = cfg?.city ?? cityConfigDefaults;
-  const lc = city.layout;
+  const city = cfg?.city ?? cityConfig;
 
   const solids: Solid[] = terrainSolids(layout, { city });
   for (const a of layout.areas) {
     if (TERRAIN_AREAS.has(a.kind)) {
-      solids.push(slab(a.id, 'terrain', a.rect.minX, a.rect.maxX, a.rect.minZ, a.rect.maxZ, a.y, lc.terrainThickness));
+      solids.push(slab(a.id, 'terrain', a.rect.minX, a.rect.maxX, a.rect.minZ, a.rect.maxZ, a.y, city.terrain.terrainThickness));
     }
   }
   for (const lot of layout.lots) {
@@ -48,12 +46,12 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
     const lo = Math.min(c.y0, c.y1);
     const hi = Math.max(c.y0, c.y1);
     if (c.kind === 'stairs') {
-      const rect: Rect = { minX: c.x - lc.stairsWidth / 2, maxX: c.x + lc.stairsWidth / 2, minZ: c.z0, maxZ: c.z1 };
+      const rect: Rect = { minX: c.x - city.stairs.width / 2, maxX: c.x + city.stairs.width / 2, minZ: c.z0, maxZ: c.z1 };
       accessZones.push({ id: `zone-${c.id}`, kind: 'stairs', rect, minY: lo, maxY: hi });
     } else if (c.kind === 'steepLane') {
-      const { run, endX } = steepLaneGeometry(c, lc.steepLaneGradePct);
-      const n = Math.max(1, Math.ceil(run / lc.zoneStep - 1e-9));
-      const half = lc.steepLaneWidth / 2;
+      const { run, endX } = steepLaneGeometry(c, city.steepLane.gradePct);
+      const n = Math.max(1, Math.ceil(run / city.steepLane.zoneStep - 1e-9));
+      const half = city.steepLane.width / 2;
       for (let i = 0; i < n; i++) {
         const t0 = i / n;
         const t1 = (i + 1) / n;
