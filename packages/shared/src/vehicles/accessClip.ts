@@ -21,8 +21,22 @@ export interface AccessClip {
  * along the edge. The crossed edge is the one the segment enters through last (slab method). Starting inside a
  * forbidden zone is never blocked, so a summoned or towed vehicle can always drive out; nor is a drop into a zone's
  * height band from above (no edge is crossed).
+ *
+ * `probes` are extra points relative to `from` (a lengthwise collider's nose and tail) that must stay outside the
+ * forbidden zones too; the move is clipped by the first probe (after the centre) that would enter one. A probe that
+ * starts inside a zone never blocks.
  */
-export function clipToAccess(map: MapData, tier: VehicleTier, from: Vec3, move: Vec3): AccessClip {
+export function clipToAccess(map: MapData, tier: VehicleTier, from: Vec3, move: Vec3, probes: Vec3[] = []): AccessClip {
+  const first = clipPoint(map, tier, from, move);
+  if (first.zone) return first;
+  for (const p of probes) {
+    const clip = clipPoint(map, tier, vec3(from.x + p.x, from.y + p.y, from.z + p.z), move);
+    if (clip.zone) return clip;
+  }
+  return first;
+}
+
+function clipPoint(map: MapData, tier: VehicleTier, from: Vec3, move: Vec3): AccessClip {
   const unclipped: AccessClip = { move, zone: null, normal: null };
   if (forbiddenZoneAt(map, tier, from)) return unclipped;
   // The end point looks ACCESS_CLIP_GAP further along the horizontal move, so a move that would end inside the gap

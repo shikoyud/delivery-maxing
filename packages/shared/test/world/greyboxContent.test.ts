@@ -118,6 +118,14 @@ describe('greybox city: hospitals', () => {
     }
   });
 
+  it('every greybox bay faces along the street in front of it (Decision 6)', () => {
+    for (const h of map.hospitals) {
+      const d = (((h.bayYaw - h.spawnYaw) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      const alongStreet = Math.min(d, Math.abs(d - Math.PI), 2 * Math.PI - d) < 1e-6;
+      expect(alongStreet, `${h.id} bayYaw ${h.bayYaw} vs spawnYaw ${h.spawnYaw}`).toBe(true);
+    }
+  });
+
   it('each hospital spawn faces away from its block, with 20 m of open street ahead', () => {
     for (const h of map.hospitals) {
       const f = facing(h.spawnYaw);

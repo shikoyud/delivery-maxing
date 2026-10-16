@@ -2,6 +2,7 @@ import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { movementConfig } from '../config';
 import type { RideSpec } from '../config/types';
 import { vec3, type Vec3 } from '../math/vec3';
+import { wrapAngle } from '../movement/ground';
 import { KinematicMover, type BottomSphere, type MoveResult, type MoverSettings, type RayHit } from '../movement/kinematicMover';
 import type { PhysicsWorld } from '../world/physicsWorld';
 
@@ -114,6 +115,22 @@ export class VehicleBody {
     this.body.setRotation(rotationFor(this.spec.collider.shape, heading), true);
     this.body.setNextKinematicRotation(rotationFor(this.spec.collider.shape, heading));
     return true;
+  }
+
+  /**
+   * Turns toward `target` by at most `maxTurn`, the short way; when that capsule overlaps something, the same amount
+   * the long way. Returns the heading reached (unchanged when both overlap).
+   */
+  tryTurnToward(target: number, maxTurn: number): number {
+    const turn = wrapAngle(target - this.headingNow);
+    const step = Math.min(Math.abs(turn), maxTurn);
+    if (step === 0) return this.headingNow;
+    const sign = turn < 0 ? -1 : 1;
+    for (const dir of [sign, -sign]) {
+      const heading = wrapAngle(this.headingNow + dir * step);
+      if (this.tryTurn(heading)) return this.headingNow;
+    }
+    return this.headingNow;
   }
 
   /** Places the vehicle at `feet` facing `heading` immediately (no collision check; see fitsAt). */

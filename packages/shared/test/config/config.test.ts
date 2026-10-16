@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { movementConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig } from '../../src/config';
 
 describe('config pins spec values', () => {
+  it('two-wheelers back up at walking pace, the skateboard does not (Decision 3)', () => {
+    expect(ridingConfig.rides.bicycle.reverseSpeed).toBe(2);
+    expect(ridingConfig.rides.motorbike.reverseSpeed).toBe(2.5);
+    expect(ridingConfig.rides.skateboard.reverseSpeed).toBe(0);
+    expect(ridingConfig.rides.car.reverseSpeed).toBe(6);
+  });
   it('movement', () => {
     expect(movementConfig.tickRate).toBe(30);
     expect(movementConfig.run.sprintSpeed).toBe(8);
@@ -31,6 +37,8 @@ describe('config pins spec values', () => {
     expect(ridingConfig.riding.emptyTankSpeed).toBe(3);
     expect(ridingConfig.riding.mountReachHeight).toBe(1.5);
     expect(ridingConfig.riding.backInputDot).toBe(-0.5);
+    expect(ridingConfig.riding.turnFirstMaxReverse).toBe(3);
+    expect(ridingConfig.riding.backOutSeconds).toBe(0.5);
     expect(ridingConfig.summon).toMatchObject({ minDistance: 100, cooldownSeconds: 60 });
   });
   it('access table matches spec §4.3', () => {

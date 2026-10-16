@@ -36,7 +36,7 @@ export interface Hospital {
   /** Respawn point and facing */
   spawn: Vec3;
   spawnYaw: number;
-  /** First vehicle parking slot; slot i is `bay + i * bays.spacing` along the bay's right vector. */
+  /** First vehicle parking slot; slot i is `bay + i * bays.spacing` behind it (opposite the facing of `bayYaw`). */
   bay: Vec3;
   /** Facing of parked vehicles (radians, same convention as `spawnYaw`). */
   bayYaw: number;

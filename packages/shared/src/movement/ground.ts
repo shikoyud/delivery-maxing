@@ -105,3 +105,10 @@ export function applyAirVelocity(state: PlayerState, wish: Vec3, target: number,
   }
   state.velocity = vec3(x, v.y, z);
 }
+
+/** Wraps an angle to (-π, π]. */
+export function wrapAngle(a: number): number {
+  const twoPi = 2 * Math.PI;
+  const w = a - twoPi * Math.floor((a + Math.PI) / twoPi);
+  return w === -Math.PI ? Math.PI : w;
+}

@@ -2,7 +2,7 @@ import { ridingConfig, vehiclesConfig } from '../config';
 import type { RideSpec, RidingConfig, VehiclesConfig } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
 import { vec3, type Vec3 } from '../math/vec3';
-import { facing, hasMoveInput, wishDirection, yawOf } from '../movement/ground';
+import { facing, hasMoveInput, wishDirection, wrapAngle, yawOf } from '../movement/ground';
 import type { VehicleState } from './types';
 
 export interface DriveInput {
@@ -32,10 +32,10 @@ export function vehicleTopSpeed(
   return top;
 }
 
-function wrapAngle(a: number): number {
-  const twoPi = 2 * Math.PI;
-  const w = a - twoPi * Math.floor((a + Math.PI) / twoPi);
-  return w === -Math.PI ? Math.PI : w;
+/** The turn a drive step asks for: the wished heading (null without a turn input) and the most to turn this step. */
+export interface DriveTurn {
+  wishHeading: number | null;
+  maxTurn: number;
 }
 
 const approach = (value: number, target: number, maxDelta: number): number =>
@@ -43,7 +43,12 @@ const approach = (value: number, target: number, maxDelta: number): number =>
 
 /**
  * Grounded arcade drive of one ride. Rolls along the heading at a signed speed; sideways velocity decays at the
- * grip. Mutates the heading and the horizontal velocity only (vertical velocity is untouched). Speed is driven toward
+ * grip. Mutates the horizontal velocity only (vertical velocity is untouched); it does not turn `v.heading`: it
+ * returns the heading the input wishes (null without a turn input) and the most it may turn this step, and the
+ * caller turns the collider (which may refuse) before the next step.
+ *
+ * Rides that reverse at walking pace (turnFirstMaxReverse: bicycle, motorbike) turn toward back input first and only
+ * back up while `v.backOutTicks` runs, which stepVehicle starts when the short-way turn is refused; the car backs up at once. Speed is driven toward
  * topSpeed (above it, it coasts down at coastDecel: an empty tank slows gradually); |speed| never exceeds the tier's
  * spec cap (`capSpeed`, vehicles.json topSpeed), slopes included.
  */
@@ -56,21 +61,25 @@ export function applyDrive(
   dt: number,
   stoppedSpeed: number = ridingConfig.riding.stoppedSpeed,
   capSpeed: number = vehiclesConfig[v.tier].topSpeed,
-): void {
+): DriveTurn {
   const h0 = facing(v.heading);
   let s = v.velocity.x * h0.x + v.velocity.z * h0.z;
   const back = d.hasInput && d.wish.x * h0.x + d.wish.z * h0.z < ridingConfig.riding.backInputDot;
   const braking = back && s > stoppedSpeed;
-  const reversing = back && !braking && spec.reverseSpeed > 0;
+  const turnsFirst = spec.reverseSpeed <= ridingConfig.riding.turnFirstMaxReverse;
+  const reversing = back && !braking && spec.reverseSpeed > 0 && (!turnsFirst || (v.backOutTicks ?? 0) > 0);
 
-  if (d.hasInput && !braking && !reversing) {
+  let wishHeading: number | null = null;
+  let maxTurn = 0;
+  if (d.hasInput && !braking && (!reversing || turnsFirst)) {
     const t = Math.max(0, Math.min(1, topSpeed > 0 ? Math.abs(s) / topSpeed : 0));
     const rate = spec.turnRateLow + (spec.turnRateHigh - spec.turnRateLow) * t;
-    const maxTurn = rate * dt;
-    const turn = wrapAngle(yawOf(d.wish) - v.heading);
-    v.heading = wrapAngle(v.heading + Math.max(-maxTurn, Math.min(maxTurn, turn)));
+    wishHeading = yawOf(d.wish);
+    maxTurn = rate * dt;
   }
-  const h = facing(v.heading);
+  // The speed maths rolls along the heading this step asks for (as if the turn is granted); the caller's turn may
+  // be refused, and the sideways velocity that leaves then slides the vehicle off the obstacle as before.
+  const h = facing(wishHeading === null ? v.heading : wrapAngle(v.heading + Math.max(-maxTurn, Math.min(maxTurn, wrapAngle(wishHeading - v.heading)))));
   s = v.velocity.x * h.x + v.velocity.z * h.z;
 
   // Sideways velocity (relative to the new heading) decays toward 0 at the grip.
@@ -98,4 +107,5 @@ export function applyDrive(
   const cap = Math.max(topSpeed, capSpeed);
   s = Math.max(-cap, Math.min(cap, s));
   v.velocity = vec3(h.x * s + sx, v.velocity.y, h.z * s + sz);
+  return { wishHeading, maxTurn };
 }
