@@ -26,6 +26,8 @@ export interface Lot {
   prop: boolean;
   /** An empty lot: no solid */
   open: boolean;
+  /** A stack of this many (a container stack): the solid is `stack` catalog heights tall */
+  stack?: number;
 }
 
 export type RoadKind = 'avenue' | 'street' | 'lane' | 'dockLane' | 'alley';
@@ -180,6 +182,7 @@ export function parseCityLayout(json: unknown): CityLayout {
     if (l.door !== null && !isVec(l.door)) fail('lot', id, 'door must be a Vec3 or null');
     if (l.upperDoor !== null && !(isObj(l.upperDoor) && isVec(l.upperDoor.position) && isNum(l.upperDoor.y))) fail('lot', id, 'upperDoor must be { position, y } or null');
     if (typeof l.prop !== 'boolean' || typeof l.open !== 'boolean') fail('lot', id, 'prop and open must be booleans');
+    if (l.stack !== undefined && !(isNum(l.stack) && Number.isInteger(l.stack) && l.stack >= 1)) fail('lot', id, 'stack must be a whole number from 1');
   }
   for (const r of list(json, 'roads')) {
     const id = r.id as string;

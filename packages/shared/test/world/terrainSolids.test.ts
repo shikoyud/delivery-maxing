@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cityConfig } from '../../src/config';
+import { cityConfig, movementConfig } from '../../src/config';
+import { vec3 as vec } from '../../src/math/vec3';
 import type { CityLayout, Connector } from '../../src/world/cityLayout';
 import type { Solid } from '../../src/world/mapTypes';
 import { connectorExtent, connectorMouth, freeSpans, steepLaneGeometry, switchbackGeometry, terrainSolids } from '../../src/world/terrainSolids';
@@ -243,5 +244,74 @@ describe('terrainSolids', () => {
       expect(wall.center.z - wall.size.z / 2).toBe(620);
     }
     expect(solids.some((s) => s.id === 'stairs-b-floor')).toBe(false);
+  });
+});
+
+describe('terrainSolids: the city edges and Hillcrest Drive (Task 8)', () => {
+  const edges = (): CityLayout => ({
+    ...cityLayoutFixture(),
+    connectors: [],
+    curvedRoads: [{ id: 'drive', polyline: [vec(0, 48, 1100), vec(10, 48, 1105), vec(20, 48, 1108)], width: 10 }],
+    areas: [{ id: 'area-cliff', kind: 'cliff', rect: { minX: 0, minZ: 1180, maxX: 1200, maxZ: 1200 }, y: 60, district: 'hillcrest' }],
+  });
+  const all = terrainSolids(edges());
+
+  it('the curved road is one flat road slab per polyline segment, yawed to the segment and topped at its y', () => {
+    const segs = all.filter((s) => s.id.startsWith('drive-seg-'));
+    expect(segs).toHaveLength(2);
+    const pts = edges().curvedRoads[0]!.polyline;
+    segs.forEach((s, i) => {
+      expect(s.kind).toBe('road');
+      expect(s.size.z).toBe(10);
+      expect(s.size.y).toBe(cityConfig.terrain.slabThickness);
+      const [a, b] = [pts[i]!, pts[i + 1]!];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      expect(s.size.x).toBeCloseTo(len + 2 * cityConfig.edges.curvedRoadOverlap, 9);
+      expect(top(s)).toBeCloseTo(48, 9);
+      expect(s.center.x).toBeCloseTo((a.x + b.x) / 2, 9);
+      expect(s.center.z).toBeCloseTo((a.z + b.z) / 2, 9);
+      // the slab's local +x runs along the segment
+      const [dx, dy, dz] = rotate(s, [1, 0, 0]);
+      expect(dy).toBeCloseTo(0, 9);
+      expect(Math.abs(dx * (b.z - a.z) - dz * (b.x - a.x))).toBeLessThan(1e-9);
+      expect(s.rotationDeg!.z).toBeCloseTo(0, 9);
+    });
+  });
+
+  it('the cliff is a terrain block from the ridge height to the cliff area height over its rect', () => {
+    const cliff = all.find((s) => s.id === 'area-cliff-terrain')!;
+    expect(cliff.kind).toBe('terrain');
+    expect(cliff.center.y - cliff.size.y / 2).toBe(cityLayoutFixture().levels.ridge.y);
+    expect(top(cliff)).toBe(60);
+    expect([minX(cliff), maxX(cliff)]).toEqual([0, 1200]);
+    expect([cliff.center.z - cliff.size.z / 2, cliff.center.z + cliff.size.z / 2]).toEqual([1180, 1200]);
+  });
+
+  it('three backdrop mountain wedges beyond z 1,200 climb north from the cliff top', () => {
+    const m = all.filter((s) => s.id.startsWith('mountain-'));
+    expect(m).toHaveLength(3);
+    for (const s of m) {
+      expect(s.kind).toBe('terrain');
+      expect(s.center.z).toBeGreaterThan(1200);
+      // the top face's local +x end points: one at the cliff top, one depth further north and height higher
+      const ends = [-1, 1].map((sign) => {
+        const [, y, z] = rotate(s, [(sign * s.size.x) / 2, s.size.y / 2, 0]);
+        return { y: s.center.y + y, z: s.center.z + z };
+      });
+      ends.sort((a, b) => a.z - b.z);
+      expect(ends[0]!.z).toBeCloseTo(1200, 6);
+      expect(ends[0]!.y).toBeCloseTo(60, 6);
+      expect(ends[1]!.z).toBeCloseTo(1200 + cityConfig.edges.mountains.depth, 6);
+      expect(ends[1]!.y).toBeCloseTo(60 + cityConfig.edges.mountains.height, 6);
+    }
+  });
+
+  it('the water is one water solid under the bay, its top below the out-of-bounds height', () => {
+    const w = all.filter((s) => s.kind === 'water');
+    expect(w).toHaveLength(1);
+    expect(top(w[0]!)).toBe(cityConfig.edges.water.top);
+    expect(top(w[0]!)).toBeLessThan(movementConfig.fall.outOfBoundsY);
+    expect([minX(w[0]!), maxX(w[0]!)]).toEqual([0, 1200]);
+    expect(w[0]!.center.z + w[0]!.size.z / 2).toBe(cityConfig.edges.water.z1);
   });
 });

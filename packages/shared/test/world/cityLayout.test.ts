@@ -38,4 +38,15 @@ describe('parseCityLayout', () => {
     b.lots[0]!.level = 'L9' as Level;
     expect(() => parseCityLayout(b)).toThrow(/lot-bakery/);
   });
+
+  it('accepts a lot stack of a whole number from 1 and rejects any other', () => {
+    const ok = json();
+    ok.lots[2]!.stack = 2;
+    expect(() => parseCityLayout(ok)).not.toThrow();
+    for (const bad of [0, 1.5, '2']) {
+      const j = json();
+      (j.lots[2] as unknown as { stack: unknown }).stack = bad;
+      expect(() => parseCityLayout(j)).toThrow(/lot-tree/);
+    }
+  });
 });

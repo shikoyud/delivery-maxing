@@ -262,8 +262,52 @@ function bandSolids(b: BandId, layout: CityLayout, city: CityConfig): Solid[] {
 }
 
 /**
+ * Hillcrest Drive (and any curved road): one flat road slab per polyline segment, yawed to the segment, topped at the
+ * segment's mean height and carried `edges.curvedRoadOverlap` past both ends so the outer edge has no gap at a bend.
+ */
+function curvedRoadSolids(layout: CityLayout, city: CityConfig): Solid[] {
+  const ext = city.edges.curvedRoadOverlap;
+  const t = city.terrain.slabThickness;
+  return layout.curvedRoads.flatMap((r) =>
+    r.polyline.slice(1).map((b, i) => {
+      const a = r.polyline[i]!;
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      const [ux, uz] = [(b.x - a.x) / len, (b.z - a.z) / len];
+      const y = (a.y + b.y) / 2;
+      const s = ramp(`${r.id}-seg-${i}`, [a.x - ux * ext, y, a.z - uz * ext], [b.x + ux * ext, y, b.z + uz * ext], r.width, t);
+      return { ...s, kind: 'road' as const };
+    }),
+  );
+}
+
+/**
+ * The city edges: the cliff behind the ridge (a terrain block from the ridge height up to each cliff area's height),
+ * the backdrop mountains beyond it (placeholders for `mega/Mountain_*`: one terrain wedge per `edges.mountains.spans`
+ * x span, its top face climbing `height` over `depth` north from the cliff top), and the water: one `water` solid
+ * under the bay whose top is below the out-of-bounds height, so a fall into the bay still respawns.
+ */
+function edgeSolids(layout: CityLayout, city: CityConfig): Solid[] {
+  const out: Solid[] = [];
+  const ridgeY = layout.levels.ridge.y;
+  const cliffs = layout.areas.filter((a) => a.kind === 'cliff');
+  for (const a of cliffs) out.push(box(`${a.id}-terrain`, 'terrain', a.rect.minX, a.rect.maxX, ridgeY, a.y, a.rect.minZ, a.rect.maxZ));
+  const m = city.edges.mountains;
+  const z0 = Math.max(layout.size, ...cliffs.map((a) => a.rect.maxZ));
+  const y0 = Math.max(ridgeY, ...cliffs.map((a) => a.y));
+  m.spans.forEach(([x0, x1], i) => {
+    const xc = (x0 + x1) / 2;
+    const s = ramp(`mountain-${i}`, [xc, y0, z0], [xc, y0 + m.height, z0 + m.depth], x1 - x0, m.thickness);
+    out.push({ ...s, kind: 'terrain' });
+  });
+  const w = city.edges.water;
+  out.push(slab('water', 'water', 0, layout.size, 0, w.z1, w.top, w.thickness));
+  return out;
+}
+
+/**
  * The static terrain: one ground per level (L0 split so the water has none), then per slope band its terrain blocks,
- * band gaps, connector solids (switchback ramps and slabs, steep-lane ramps, stair steps) and parapets.
+ * band gaps, connector solids (switchback ramps and slabs, steep-lane ramps, stair steps) and parapets, then the
+ * curved road slabs and the edges (cliff, mountains, water).
  */
 export function terrainSolids(layout: CityLayout, cfg?: { city: CityConfig }): Solid[] {
   const city = cfg?.city ?? cityConfig;
@@ -278,5 +322,6 @@ export function terrainSolids(layout: CityLayout, cfg?: { city: CityConfig }): S
     }
   }
   for (const b of BAND_ORDER) out.push(...bandSolids(b, layout, city));
+  out.push(...curvedRoadSolids(layout, city), ...edgeSolids(layout, city));
   return out;
 }

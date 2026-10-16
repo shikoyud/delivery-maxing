@@ -3,9 +3,10 @@ import type { Vec3 } from '../math/vec3';
 
 /**
  * `hospital`: the solid block at a hospital's centre (generated from `GreyboxSource.hospitalBlock`).
- * `road`, `terrain`, `parapet` and `stairs` belong to the city map (slope bands, beach sand, pier, retaining walls, staircases).
+ * `road`, `terrain`, `parapet`, `stairs` and `water` belong to the city map (slope bands, beach sand, pier, retaining walls,
+ * staircases, Hillcrest Drive, the cliff and backdrop mountains; the bay's floor, below the out-of-bounds height).
  */
-export type SolidKind = 'ground' | 'building' | 'prop' | 'ramp' | 'hospital' | 'road' | 'terrain' | 'parapet' | 'stairs';
+export type SolidKind = 'ground' | 'building' | 'prop' | 'ramp' | 'hospital' | 'road' | 'terrain' | 'parapet' | 'stairs' | 'water';
 export interface Solid {
   id: string;
   kind: SolidKind;

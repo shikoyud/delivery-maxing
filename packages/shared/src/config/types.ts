@@ -237,8 +237,26 @@ export interface CityConfig {
       clearance: number;
     };
   };
-  hospital: { lot: number; safeRadius: number; bayOffset: number; bayBack: number };
-  gasStation: { lotW: number; lotD: number };
+  /**
+   * A hospital block: `mega/Hospital_01` on a `lot` x `lot` hospitalLot at the block's west end, facing the avenue.
+   * The courier respawns `spawnOffset` in front of the door; the first parking bay is on the avenue-side sidewalk
+   * `bayOffset` east of the hospitalLot and `bayBack` south of the block's front (Decision 6). The rest of the block is
+   * two filler rows `rowMargin` short of half its depth, and a north row behind the hospitalLot past `behindGap`.
+   */
+  hospital: { asset: string; lot: number; safeRadius: number; bayOffset: number; bayBack: number; spawnOffset: number; behindGap: number; rowMargin: number };
+  /** An 18 x 15 m gasLot: the canopy and the kiosk at (x, z) from its south-west corner, two pumps under the canopy. */
+  gasStation: {
+    lotW: number;
+    lotD: number;
+    canopy: { asset: string; x: number; z: number };
+    kiosk: { asset: string; x: number; z: number };
+    pumpSpacing: number;
+  };
+  /**
+   * The ridge: Hillcrest Drive (z = driveZ + driveAmplitude * sin(2 pi x / drivePeriod), a point every driveStep m,
+   * driveWidth wide), `lot` x `depth` plots both sides every `slot` m from x0, `setback` off the drive's edge, none in
+   * the park x range or within `mouthClearance` of a band D switchback exit; the gas station's lot corner; the cliff.
+   */
   hillcrest: {
     lot: number;
     depth: number;
@@ -246,12 +264,79 @@ export interface CityConfig {
     driveAmplitude: number;
     drivePeriod: number;
     driveWidth: number;
+    driveStep: number;
+    x0: number;
+    slot: number;
+    endMargin: number;
+    setback: number;
+    mouthClearance: number;
     parkX0: number;
     parkX1: number;
+    parkZ0: number;
+    parkZ1: number;
+    gas: { name: string; x: number; z: number };
+    cliff: { z0: number; z1: number; y: number };
   };
-  docks: { quayZ: number; railZ0: number; railZ1: number; containerCols: number; containerRows: number };
-  beach: { x0: number; x1: number; boardwalkZ0: number; boardwalkZ1: number };
-  harbor: { pierX: number; pierWidth: number; breakwater: { x0: number; z0: number; z1: number } };
+  /** The docks (the prototype's hand placements): quay, rail, container yard, cranes, buildings, roads, gas lot corner. */
+  docks: {
+    quayZ: number;
+    railZ0: number;
+    railZ1: number;
+    railX1: number;
+    yard: { x0: number; z0: number; x1: number; z1: number };
+    containerCols: number;
+    containerRows: number;
+    containers: { x0: number; z0: number; dx: number; dz: number; stackMax: number };
+    cranes: { x: number; z: number }[];
+    buildings: { asset: string; x: number; z: number; facing: 'N' | 'S' | 'E' | 'W' }[];
+    street: { x0: number; x1: number; z0: number };
+    lanes: { x0: number; x1: number; z0: number; z1: number }[];
+    gas: { name: string; x: number; z: number };
+  };
+  /** The beach: sand strips `sandStep` wide down to shore(x) = shoreZ + crescent * sin(pi (x - x0) / (x1 - x0)). */
+  beach: {
+    x0: number;
+    x1: number;
+    boardwalkZ0: number;
+    boardwalkZ1: number;
+    sandY: number;
+    sandStep: number;
+    shoreZ: number;
+    crescent: number;
+    bars: { assets: string[]; x0: number; x1: number; slot: number; every: number; gap: number };
+    hotels: { x0: number; x1: number; maxD: number; gap: number };
+    ferrisWheel: { asset: string; x: number; z: number };
+  };
+  /** Old Harbor: quay, pier, breakwater (with an arm back to the quay), lighthouse, marina, Quay Street, the alley, three rows. */
+  harbor: {
+    quayZ: number;
+    x0: number;
+    x1: number;
+    pierX: number;
+    pierWidth: number;
+    pierZ0: number;
+    breakwater: { x0: number; x1: number; z0: number; z1: number; armX0: number };
+    lighthouse: { asset: string; x: number };
+    marina: { x0: number; z0: number; x1: number; z1: number; y: number };
+    quayStreet: { z0: number; z1: number };
+    alley: { z0: number; z1: number };
+    rows: { z: number; facing: 'N' | 'S'; maxD: number }[];
+  };
+  /** The prototype's SPECIAL blocks, keyed "<level>:<k>:<row>". */
+  landmarks: {
+    hospitals: { name: string; at: string }[];
+    gas: { name: string; at: string; side: 'W' | 'E' }[];
+    civic: { asset: string; name: string; at: string }[];
+    /** A landmark block: filler lots `sideGap` either side of the landmark up to `fillerDepth` deep, a north row behind */
+    plaza: { fillerDepth: number; sideGap: number; backGap: number; backMin: number };
+  };
+  /** The city edges: curved-road segment overlap, backdrop mountain wedges beyond the cliff, the water under the bay. */
+  edges: {
+    curvedRoadOverlap: number;
+    mountains: { depth: number; height: number; thickness: number; spans: [number, number][] };
+    /** Below movement fall.outOfBoundsY, so a fall into the bay still respawns */
+    water: { top: number; thickness: number; z1: number };
+  };
   pois: { foodPickupCap: number; packagePickupCap: number; target: number; doorSpacing: number };
   orderRules: OrderRules;
 }
@@ -269,6 +354,9 @@ export interface NamesConfig {
     /** One per cross street, west to east */
     cross: string[];
     quay: string;
+    docks: { street: string; lanes: string[] };
+    boardwalk: string;
+    breakwater: string;
     /** The east edge street of every built level */
     edge: string;
     /** East-west streets between block rows, south to north, per built level */

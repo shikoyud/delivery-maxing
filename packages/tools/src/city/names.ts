@@ -14,6 +14,12 @@ export class Namer {
     private readonly rng: Rng,
   ) {}
 
+  /** Keeps a fixed name (a landmark's, a gas station's) from being given to any other lot. */
+  reserve(name: string): void {
+    if (this.used.has(name)) throw new Error(`names: ${name} is used twice`);
+    this.used.add(name);
+  }
+
   /** The first word of the entry's catalog `kind` that names.json has suffixes for ("Bakery, 3 floors" -> "bakery"). */
   kindKey(entry: CatalogEntry): string | null {
     for (const w of (entry.kind ?? '').toLowerCase().split(/[^a-z]+/)) if (w && Object.hasOwn(this.cfg.kinds, w)) return w;

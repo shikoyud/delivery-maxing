@@ -396,6 +396,9 @@
       "Pilot Street"
     ],
     "quay": "Quay Street",
+    "docks": { "street": "Depot Street", "lanes": ["Crane Lane", "Yard Lane"] },
+    "boardwalk": "Boardwalk",
+    "breakwater": "Lighthouse Mole",
     "edge": "Eastcliff Street",
     "rows": {
       "L1": [

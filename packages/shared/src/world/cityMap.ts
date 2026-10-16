@@ -28,7 +28,7 @@ export function layoutToMap(layout: CityLayout, cat: CatalogIndex, cfg?: { world
   }
   for (const lot of layout.lots) {
     if (lot.open) continue;
-    const h = cat.get(lot.asset).size.h;
+    const h = cat.get(lot.asset).size.h * (lot.stack ?? 1);
     const r = lot.rect;
     solids.push({
       id: lot.id,

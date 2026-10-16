@@ -5,7 +5,9 @@ import {
   type CatalogEntry,
   type CatalogIndex,
   type CityConfig,
+  type CityDistrict,
   type Facing,
+  type Level,
   type Lot,
   type NamesConfig,
   type Rect,
@@ -95,6 +97,88 @@ export function toBlock(b: BlockPlan): Block {
   return { id: b.id, rect: b.rect, level: b.level, district: b.district, alley: b.alley };
 }
 
+/** A lot's rectangle: S / N front on z (its south / north edge), W / E front on x (its west / east edge), z its south end. */
+export function lotRect(x: number, z: number, facing: Facing, w: number, d: number): Rect {
+  switch (facing) {
+    case 'S':
+      return { minX: x, minZ: z, maxX: x + w, maxZ: z + d };
+    case 'N':
+      return { minX: x, minZ: z - d, maxX: x + w, maxZ: z };
+    case 'W':
+      return { minX: x, minZ: z, maxX: x + d, maxZ: z + w };
+    case 'E':
+      return { minX: x - d, minZ: z, maxX: x, maxZ: z + w };
+  }
+}
+
+export interface PlaceOptions {
+  open?: boolean;
+  /** Base height when not the level's (beach bars on the sand) */
+  y?: number;
+  /** A fixed name (a landmark, a hospital, a gas station); empty lets generate.ts name the lot */
+  name?: string;
+  stack?: number;
+}
+
+/** Places lots of one block (ids `<idPrefix>-<n>`) and fills rows of them wall to wall from a palette. */
+export interface LotPlacer {
+  readonly lots: Lot[];
+  /** A lot of the entry's `lotSize` with its front at (x, zFront) (see `lotRect`) */
+  place(e: CatalogEntry, x: number, zFront: number, facing: Facing, opts?: PlaceOptions): Lot;
+  /**
+   * A row facing `facing` with its fronts on `zFront`, wall to wall from x0 until less than `blockFill.minGap` is left
+   * before x1 or nothing from the palette fits in `maxD`, as the prototype's fill_row.
+   */
+  fillRow(x0: number, x1: number, zFront: number, facing: 'N' | 'S', maxD: number): void;
+}
+
+export function lotPlacer(
+  at: { idPrefix: string; level: Level; district: CityDistrict; block: string; y: number },
+  pal: Palette,
+  rng: Rng,
+  cat: CatalogIndex,
+  cfg: CityConfig,
+): LotPlacer {
+  const lots: Lot[] = [];
+  const place = (e: CatalogEntry, x: number, zFront: number, facing: Facing, opts: PlaceOptions = {}): Lot => {
+    const { w, d } = lotSize(e);
+    const lot: Lot = {
+      id: `${at.idPrefix}-${lots.length}`,
+      asset: e.id,
+      rect: lotRect(x, zFront, facing, w, d),
+      y: opts.y ?? at.y,
+      facing,
+      level: at.level,
+      district: at.district,
+      block: at.block,
+      name: opts.name ?? '',
+      address: '',
+      door: null,
+      upperDoor: null,
+      prop: e.category === 'prop',
+      open: opts.open ?? false,
+      ...(opts.stack !== undefined ? { stack: opts.stack } : {}),
+    };
+    lots.push(lot);
+    return lot;
+  };
+  const fillRow = (x0: number, x1: number, zFront: number, facing: 'N' | 'S', maxD: number): void => {
+    let x = x0;
+    while (x1 - x >= cfg.blockFill.minGap) {
+      const e = pickLot(pal, rng, x1 - x, maxD, cat);
+      if (!e) break;
+      x = place(e, x, zFront, facing).rect.maxX;
+    }
+  };
+  return { lots, place, fillRow };
+}
+
+/** The placer for a planned block: ids `lot-<level>-<k>-<row>-<n>`, the block's level height and district. */
+export function blockPlacer(block: BlockPlan, pal: Palette, rng: Rng, cat: CatalogIndex, cfg: CityConfig): LotPlacer {
+  const { level, k, row, district } = block;
+  return lotPlacer({ idPrefix: `lot-${level}-${k}-${row}`, level, district, block: block.id, y: cfg.levels[level].y }, pal, rng, cat, cfg);
+}
+
 /**
  * The lots of a block: two rows facing the block's south and north streets, wall to wall from the west end, with an
  * alley road between them unless the block is dense. An open block is an area instead, with the two sports courts or
@@ -110,57 +194,28 @@ export function fillBlock(
   const { level, k, row, district } = block;
   const { minX: x0, maxX: x1, minZ: z0, maxZ: z1 } = block.rect;
   const y = cfg.levels[level].y;
-  const lots: Lot[] = [];
-  const place = (e: CatalogEntry, x: number, zFront: number, facing: Facing, open = false): number => {
-    const { w, d } = lotSize(e);
-    const rect: Rect = facing === 'S' ? { minX: x, minZ: zFront, maxX: x + w, maxZ: zFront + d } : { minX: x, minZ: zFront - d, maxX: x + w, maxZ: zFront };
-    lots.push({
-      id: `lot-${level}-${k}-${row}-${lots.length}`,
-      asset: e.id,
-      rect,
-      y,
-      facing,
-      level,
-      district,
-      block: block.id,
-      name: '',
-      address: '',
-      door: null,
-      upperDoor: null,
-      prop: e.category === 'prop',
-      open,
-    });
-    return w;
-  };
-  const fillRow = (zFront: number, facing: Facing, maxD: number): void => {
-    let x = x0;
-    while (x1 - x >= cfg.blockFill.minGap) {
-      const e = pickLot(pal, rng, x1 - x, maxD, cat);
-      if (!e) break;
-      x += place(e, x, zFront, facing);
-    }
-  };
+  const { lots, place, fillRow } = blockPlacer(block, pal, rng, cat, cfg);
 
   if (block.open) {
     const f = cfg.blockFill;
     if (block.open === 'sports') {
-      place(cat.get('mega/FootballPlayground_01'), x0 + f.sportsInset, z0 + f.sportsInset, 'S', true);
-      place(cat.get('mega/BasketballPlayground_01'), x0 + f.sportsInset + f.sportsSpacing, z0 + f.sportsInset, 'S', true);
+      place(cat.get('mega/FootballPlayground_01'), x0 + f.sportsInset, z0 + f.sportsInset, 'S', { open: true });
+      place(cat.get('mega/BasketballPlayground_01'), x0 + f.sportsInset + f.sportsSpacing, z0 + f.sportsInset, 'S', { open: true });
     } else if (block.open === 'parking') {
-      place(cat.get('mega/ParkingZone_01'), x0 + f.parkingInset, z0, 'S', true);
+      place(cat.get('mega/ParkingZone_01'), x0 + f.parkingInset, z0, 'S', { open: true });
     }
     return { lots, roads: [], areas: [{ id: `area-${level}-${k}-${row}`, kind: block.open, rect: block.rect, y, district }] };
   }
   const depth = z1 - z0;
   if (!block.alley) {
-    fillRow(z0, 'S', depth / 2);
-    fillRow(z1, 'N', depth / 2);
+    fillRow(x0, x1, z0, 'S', depth / 2);
+    fillRow(x0, x1, z1, 'N', depth / 2);
     return { lots, roads: [], areas: [] };
   }
   const mid = (z0 + z1) / 2;
   const alley: Road = { id: roadId.alley(level, k, row), kind: 'alley', rect: { minX: x0, minZ: mid - cfg.alley / 2, maxX: x1, maxZ: mid + cfg.alley / 2 }, y, name: null };
   const half = depth / 2 - cfg.alley / 2;
-  fillRow(z0, 'S', half);
-  fillRow(z1, 'N', half);
+  fillRow(x0, x1, z0, 'S', half);
+  fillRow(x0, x1, z1, 'N', half);
   return { lots, roads: [alley], areas: [] };
 }

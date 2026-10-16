@@ -27,7 +27,7 @@ export function rotationMatrixXYZ(r: { x: number; y: number; z: number }): numbe
 }
 
 /** Solid kinds whose tops nobody walks or drives on: building and hospital roofs (no parkour, spec rev. 2) and parapets. */
-const ROOFED: ReadonlySet<Solid['kind']> = new Set(['building', 'hospital', 'parapet']);
+const ROOFED: ReadonlySet<Solid['kind']> = new Set(['building', 'hospital', 'parapet', 'water']);
 
 /**
  * Solids as closed box meshes for recast: 8 corners and 12 outward-facing triangles each, rotation honoured, then the

@@ -26,6 +26,14 @@ describe('layoutToMap', () => {
     expect(m.solids.some((x) => x.id === 'lot-open')).toBe(false);
   });
 
+  it('a stacked lot (a container stack) is `stack` catalog heights tall', () => {
+    const layout = cityLayoutFixture();
+    layout.lots = layout.lots.map((l) => (l.id === 'lot-tree' ? { ...l, stack: 3 } : l));
+    const s = layoutToMap(layout, cityCatalogFixture()).solids.find((x) => x.id === 'lot-tree')!;
+    expect(s.size.y).toBe(15);
+    expect(s.center.y).toBe(10 + 7.5);
+  });
+
   it('each level has ground; L0 ground stops at the water in three rects', () => {
     const g = build().solids.filter((x) => x.kind === 'ground');
     expect(g.filter((x) => x.id.startsWith('ground-L0'))).toHaveLength(3);
