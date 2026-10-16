@@ -58,6 +58,7 @@ import {
   type DevSettings,
   type DevSettingsStore,
 } from './devSettings';
+import { teleportTargets, teleportToTarget } from './mapTargets';
 import { browserStorage, createProgressStore, saveWhenLeaving, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
 import { interpolationStart } from './interpolation';
@@ -273,6 +274,12 @@ export class Game {
         fillTanks: () => this.fillTanks(),
         addCoins: (n) => this.delivery.setCoins(this.delivery.orders.totals.coins + n),
       },
+      map: {
+        kind: map.kind,
+        targets: teleportTargets(map),
+        teleportTo: (id) => void this.teleportTo(id),
+        lotIds: this.mapDebug ? { get: () => this.mapDebug?.visible ?? false, set: (on) => this.setMapDebug(on) } : null,
+      },
       onChange: () => {
         this.saver.schedule();
         this.devPanel.setOverrideCount(countOverrides(settings));
@@ -338,7 +345,7 @@ export class Game {
     if (!spawn) throw new Error('map has no hospitals');
     physics.update?.(spawn.spawn);
     // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
-    const progress = createProgressStore(browserStorage(), () => defaultGarage(map));
+    const progress = createProgressStore(browserStorage(), () => defaultGarage(map), map.kind);
     const saved = progress.load();
     const garage = new Garage(physics, map, saved.garage);
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
@@ -394,6 +401,11 @@ export class Game {
     this.courier.snap();
     this.chase.snap();
     this.vehicles.snap();
+  }
+
+  /** Dev panel and debug API: teleports to a hospital, gas station or lot id (false when unknown). */
+  teleportTo(id: string): boolean {
+    return teleportToTarget(this, id);
   }
 
   /**

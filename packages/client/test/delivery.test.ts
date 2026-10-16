@@ -39,7 +39,7 @@ interface Popup {
  */
 function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: PathDistance = streetDistance) {
   const data = new Map<string, string>();
-  const progress = createProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) });
+  const progress = createProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) }, undefined, 'greybox');
   if (saved) progress.save(saved);
   const popups: Popup[] = [];
   const huds: HudModel[] = [];

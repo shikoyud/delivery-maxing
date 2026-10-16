@@ -10,9 +10,14 @@ export interface Progress {
   lastRide: RideTier | null;
 }
 
-/** localStorage key. v3 adds the garage; v2 records are read once for their totals (the capacity tier is dropped). */
-export const PROGRESS_KEY = 'dm.progress.v3';
-/** The previous key: only its totals carry over. */
+/** Which map a save belongs to: a greybox save never places a vehicle in the city. */
+export type ProgressKind = 'greybox' | 'city';
+
+/** localStorage key of a map's save. */
+export const progressKey = (kind: ProgressKind): string => `dm.progress.${kind}`;
+/** SP4's single-map key (written on the greybox): read as the greybox save when that has none yet. */
+export const PROGRESS_KEY_V3 = 'dm.progress.v3';
+/** The key before it: only its totals carry over (to the greybox). */
 export const PROGRESS_KEY_V2 = 'dm.progress.v2';
 
 export interface ProgressStore {
@@ -75,33 +80,36 @@ function parseJson(raw: string | null): Record<string, unknown> | null {
 }
 
 /** Field by field: a bad value falls back to its default, the rest of the record survives. */
-function parseProgress(storage: Pick<Storage, 'getItem'>, defaults: () => SavedVehicle[]): Progress {
-  const raw = storage.getItem(PROGRESS_KEY);
+function parseProgress(storage: Pick<Storage, 'getItem'>, defaults: () => SavedVehicle[], kind: ProgressKind): Progress {
+  // The map's own record, else (greybox only) SP4's single-map record: it alone counts, a corrupt one gives defaults
+  // and never brings back older totals.
+  const raw = storage.getItem(progressKey(kind)) ?? (kind === 'greybox' ? storage.getItem(PROGRESS_KEY_V3) : null);
   if (raw !== null) {
-    // A v3 record exists: it alone counts (a corrupt one gives defaults; it never brings back v2 totals).
     const v3 = parseJson(raw);
     return { totals: parseTotals(v3?.totals), garage: parseGarage(v3?.garage, defaults()), lastRide: rideTier(v3?.lastRide) };
   }
-  // First visit on v3 (no v3 key at all): a v2 record keeps its totals and starts with the default garage.
+  // No record at all: on the greybox a v2 record keeps its totals; the city starts fresh.
+  if (kind !== 'greybox') return { totals: parseTotals(null), garage: defaults(), lastRide: null };
   const v2 = parseJson(storage.getItem(PROGRESS_KEY_V2));
   return { totals: parseTotals(v2?.totals), garage: defaults(), lastRide: null };
 }
 
 /**
- * Local progress (v3). Never throws: blocked storage (private windows, disabled site data), quota errors and
+ * Local progress, one save per map kind. Never throws: blocked storage (private windows, disabled site data), quota errors and
  * malformed data all give default progress (Review Focus 5). `defaults` is the garage a new player starts with
  * (Game: defaultGarage(map)); it is called afresh for each load.
  */
 export function createProgressStore(
   storage: Pick<Storage, 'getItem' | 'setItem'> | null,
   defaults: () => SavedVehicle[] = () => [],
+  kind: ProgressKind,
 ): ProgressStore {
   const fresh = (): Progress => ({ totals: { points: 0, coins: 0, deliveries: 0 }, garage: defaults(), lastRide: null });
   return {
     load() {
       if (!storage) return fresh();
       try {
-        return parseProgress(storage, defaults);
+        return parseProgress(storage, defaults, kind);
       } catch {
         return fresh();
       }
@@ -109,7 +117,7 @@ export function createProgressStore(
     save(p) {
       if (!storage) return;
       try {
-        storage.setItem(PROGRESS_KEY, JSON.stringify({
+        storage.setItem(progressKey(kind), JSON.stringify({
           totals: { points: p.totals.points, coins: p.totals.coins, deliveries: p.totals.deliveries },
           garage: p.garage,
           lastRide: p.lastRide,

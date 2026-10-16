@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AcceptResult, ActiveOrder, CancelResult, Hospital, MoveMode, Offer, RideTier, Totals, Vec3, VehicleSpot, VehicleTier } from '@dm/shared';
+import type { AcceptResult, ActiveOrder, CancelResult, Hospital, Lot, MoveMode, Offer, RideTier, Totals, Vec3, VehicleSpot, VehicleTier } from '@dm/shared';
 import type { HudNextStop } from '../ui/hudModel';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { PhoneApp } from '../ui/phone/Phone';
@@ -7,6 +7,7 @@ import type { MapDebugView } from '../ui/mapDebug';
 import type { Game } from './Game';
 import type { PerfResult } from './perf';
 import type { MapKind } from './mapLoader';
+import { lotAt, teleportToTarget } from './mapTargets';
 
 /** Test and debugging API on window.__dm, installed only with ?debug. */
 export interface DebugApi {
@@ -69,6 +70,10 @@ export interface DebugApi {
   cameraInsideSolid(): boolean;
   /** Which map is loaded (?map=). */
   mapKind(): MapKind;
+  /** The lot whose footprint holds `p` (a copy), or null; always null on the greybox. */
+  lotAt(p: Vec3): Lot | null;
+  /** Teleports to a hospital (its spawn), gas station or lot id; hospital and gas ids also match without their prefix. Throws on an unknown id. */
+  teleportTo(id: string): void;
   /** The collider chunk keys loaded around the player (the city's paged physics); empty on the greybox. */
   loadedChunks(): string[];
   /** The city view's counts (instances drawn, block meshes shown, models loaded and missing); null on the greybox. */
@@ -166,6 +171,13 @@ export function installDebugHooks(game: Game): void {
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),
     mapKind: () => game.mapKind,
+    lotAt: (p) => {
+      const lot = lotAt(game.map, p);
+      return lot ? structuredClone(lot) : null;
+    },
+    teleportTo: (id) => {
+      if (!teleportToTarget(game, id)) throw new Error(`unknown teleport target ${id}`);
+    },
     loadedChunks: () => game.loadedChunks(),
     cityStats: () => game.cityView?.stats() ?? null,
     mapDebugVisible: () => game.mapDebug?.visible ?? false,

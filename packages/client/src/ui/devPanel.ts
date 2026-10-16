@@ -1,6 +1,7 @@
 import GUI, { type Controller } from 'lil-gui';
 import { RIDE_TIERS, type RideTier } from '@dm/shared';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
+import type { TeleportTarget } from '../game/mapTargets';
 import { el } from './dom';
 
 export interface DevPanelHooks {
@@ -21,6 +22,28 @@ export interface DevPanelHooks {
     /** "+500 coins" (the amount is `DEV_COINS`). */
     addCoins(n: number): void;
   };
+  /** The "Map" folder: the loaded map's teleport entries and the lot-id view (the city only; null on the greybox). */
+  map: {
+    kind: string;
+    targets: TeleportTarget[];
+    teleportTo(id: string): void;
+    lotIds: { get(): boolean; set(on: boolean): void } | null;
+  };
+}
+
+export interface MapRowItem {
+  label: string;
+  kind: TeleportTarget['kind'];
+  run(): void;
+}
+
+/** The Map row's "Teleport to" buttons, one per target, each calling `teleportTo` with its id. */
+export function mapRowItems(targets: TeleportTarget[], teleportTo: (id: string) => void): MapRowItem[] {
+  return targets.map((t) => ({
+    label: `Teleport to ${t.label}`,
+    kind: t.kind,
+    run: () => teleportTo(t.id),
+  }));
 }
 
 /** What "+500 coins" adds. */
@@ -109,6 +132,17 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
   folder.add({ fill: () => hooks.vehicles.fillTanks() }, 'fill').name('Fill all tanks');
   folder.add({ coins: () => hooks.vehicles.addCoins(DEV_COINS) }, 'coins').name(`+${DEV_COINS} coins`);
 
+  // Map: which map is loaded, a teleport button per hospital and gas station, and the F4 lot-id view.
+  const mapFolder = gui.addFolder('Map');
+  const mapInfo = { map: hooks.map.kind };
+  mapFolder.add(mapInfo, 'map').name('current map').disable();
+  for (const item of mapRowItems(hooks.map.targets, hooks.map.teleportTo)) {
+    mapFolder.add({ go: item.run }, 'go').name(item.label);
+  }
+  const lotIds = hooks.map.lotIds;
+  const lotState = { show: lotIds?.get() ?? false };
+  const lotCtrl = lotIds ? mapFolder.add(lotState, 'show').name('Show lot ids').onChange((on: boolean) => lotIds.set(on)) : null;
+
   const refresh = (): void => gui.controllersRecursive().forEach((c: Controller) => c.updateDisplay());
   const actions = {
     copy: () => void copyOrShow(gui, JSON.stringify(settings.movement, null, 2)),
@@ -132,6 +166,8 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
     },
     toggle() {
       if (gui._hidden) {
+        lotState.show = lotIds?.get() ?? false; // F4 may have changed it
+        lotCtrl?.updateDisplay();
         syncVehicles(); // ownership or the ride may have changed since (debug API, a reset)
         gui.show();
       } else gui.hide();
