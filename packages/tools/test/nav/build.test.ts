@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { accessAllowed, initNav, type NAV_TIERS } from '@dm/shared';
+import { accessAllowed, initNav, NAV_TIERS, navConfig, switchbackGeometry, cityConfig } from '@dm/shared';
 import { exportNavMesh, getNavMeshPositionsAndIndices, NavMeshQuery, type NavMesh } from 'recast-navigation';
-import { buildTierNavMesh, readGreyboxMap } from '../../src/nav/build';
+import { areaBlockers, buildTierNavMesh, navAgent, readCityMap, readGreyboxMap } from '../../src/nav/build';
 import { REPO } from '../../src/nav/files';
 
 const map = readGreyboxMap(REPO);
@@ -14,6 +14,8 @@ const build = (tier: (typeof NAV_TIERS)[number]): NavMesh => {
 /** One car mesh shared by the tests (each build of the whole greybox takes seconds). */
 let carMesh: NavMesh | undefined;
 const car = (): NavMesh => (carMesh ??= build('car'));
+let walkMesh: NavMesh | undefined;
+const walk = (): NavMesh => (walkMesh ??= build('walk'));
 
 beforeAll(initNav);
 afterAll(() => meshes.forEach((m) => m.destroy()));
@@ -39,8 +41,7 @@ test('the car mesh has no polygon inside an alley, steep-lane, stairs or path zo
   }
   expect(inside).toEqual([]);
 
-  const walk = build('walk');
-  const q = new NavMeshQuery(walk);
+  const q = new NavMeshQuery(walk());
   const stairs = map.solids.filter((s) => /^town-stair-\d+$/.test(s.id));
   expect(stairs).toHaveLength(20);
   for (const s of stairs) {
@@ -59,3 +60,40 @@ test('building twice gives byte-identical binaries', () => {
   expect(a.length).toBeGreaterThan(0);
   expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
 }, 60_000);
+
+test('each tier is voxelised at its own cell size (nav.cellSizeByTier, Decision 13)', () => {
+  for (const t of NAV_TIERS) expect(navAgent(t).cellSize, t).toBe(navConfig.cellSizeByTier[t]);
+  expect(navAgent('car').cellSize).toBeGreaterThan(navAgent('walk').cellSize);
+});
+
+test('the greybox car mesh (0.6 m cells) is smaller in bytes than the walk mesh (0.3 m cells)', () => {
+  const carBytes = exportNavMesh(car()).length;
+  const walkBytes = exportNavMesh(walk()).length;
+  expect(carBytes).toBeGreaterThan(0);
+  expect(carBytes).toBeLessThan(walkBytes);
+}, 60_000);
+
+test('city area blockers: the car is kept off sand, pier, marina and band-gap floors, not off a switchback deck', () => {
+  const city = readCityMap(REPO);
+  expect(areaBlockers(readGreyboxMap(REPO), 'car')).toEqual([]);
+  expect(areaBlockers(city, 'walk')).toEqual([]);
+  const blockers = areaBlockers(city, 'car');
+  const covers = (x: number, z: number, y: number): boolean =>
+    blockers.some((b) => Math.abs(x - b.center.x) < b.size.x / 2 && Math.abs(z - b.center.z) < b.size.z / 2 && Math.abs(y - (b.center.y - b.size.y / 2)) < 0.5);
+  const forbidden = city.layout.areas.filter((a) => ['sand', 'pier', 'marina'].includes(a.kind));
+  expect(forbidden.length).toBeGreaterThan(40);
+  for (const a of forbidden) expect(covers((a.rect.minX + a.rect.maxX) / 2, (a.rect.minZ + a.rect.maxZ) / 2, a.y), a.id).toBe(true);
+  const switchbacks = city.layout.connectors.filter((c) => c.kind === 'switchback');
+  expect(switchbacks).toHaveLength(11);
+  for (const c of switchbacks) {
+    const g = switchbackGeometry(c, cityConfig.switchback);
+    const [za, zb] = g.legZ;
+    const legMidX = g.xs + g.run / 2;
+    // the floor inside the U is blocked; the legs, the hairpin and the entry and exit stubs are not
+    expect(covers(legMidX, (za + zb) / 2, c.y0), `${c.id} U floor`).toBe(true);
+    expect(covers(legMidX, za, c.y0), `${c.id} leg 1`).toBe(false);
+    expect(covers(legMidX, zb, c.y0), `${c.id} leg 2`).toBe(false);
+    expect(covers((g.xs + g.run + g.xEast) / 2, (za + zb) / 2, c.y0), `${c.id} hairpin`).toBe(false);
+    expect(covers(c.x, c.z0 + 0.5, c.y0), `${c.id} entry`).toBe(false);
+  }
+});

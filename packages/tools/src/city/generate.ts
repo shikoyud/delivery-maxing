@@ -1,5 +1,6 @@
 import {
   connectorExtent,
+  connectorMouth,
   freeSpans,
   mulberry32,
   type Area,
@@ -92,11 +93,22 @@ export function generateLayout(cfg: CityConfig, names: NamesConfig, cat: Catalog
     connectors.push(...cs);
     areas.push(...bandGaps(band, cs, cfg));
     const used = cs.map((c) => connectorExtent(c, cfg));
-    const slope = slopeLots(band, used, rngOf('slope'), cat, cfg);
+    const segments = freeSpans(0, cfg.size, used);
+    // A walk-up's upper door is on its terrace strip, which the parapet along z1 shuts off from the upper level but
+    // where a connector's opening (its mouth plus parapet.mouthClearance) reaches onto it; on a strip no opening
+    // reaches (only a staircase's does), the walk-up keeps its front door only.
+    const openings = cs.map((c): [number, number] => {
+      const [a, e] = connectorMouth(c, cfg);
+      return [a - cfg.parapet.mouthClearance, e + cfg.parapet.mouthClearance];
+    });
+    const reached = (seg: [number, number]): boolean => openings.some(([a, e]) => a < seg[1] - 1e-6 && e > seg[0] + 1e-6);
+    const slope = slopeLots(band, used, rngOf('slope'), cat, cfg).map((lot) => {
+      const seg = segments.find((_, i) => bandBlock(band, i, segments[i]!, cfg).id === lot.block);
+      return seg && reached(seg) ? lot : { ...lot, upperDoor: null };
+    });
     if (slope.length === 0) continue;
     const front = roads.find((r) => r.id === roadId.top(BAND_LOWER[band]));
     if (!front) throw new Error(`generate: band ${band} walk-ups face no street`);
-    const segments = freeSpans(0, cfg.size, used);
     const blockIds = new Set(slope.map((l) => l.block));
     segments.forEach((seg, i) => {
       const b = bandBlock(band, i, seg, cfg);

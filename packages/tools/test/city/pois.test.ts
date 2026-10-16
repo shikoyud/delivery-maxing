@@ -94,10 +94,13 @@ test('every door is 0.5 m outside its lot rect on the facing side, centred on th
   }
 });
 
-test('slope lots keep their upper door; no lot keeps a door without a POI role', () => {
+test('slope lots keep their upper door (unless their terrace strip is cut off: generate.test); no lot keeps a door without a POI role', () => {
   const slope = layout.lots.filter((l) => l.district === 'slope');
   expect(slope.length).toBeGreaterThan(0);
-  for (const l of slope) expect(l.upperDoor, l.id).not.toBeNull();
+  const upper = new Set(layout.lots.filter((l) => l.upperDoor).map((l) => `${l.id}-upper`));
+  expect(upper.size).toBeGreaterThan(slope.length - 5);
+  // every upper door the generator gave survives the POI pass
+  for (const id of upper) expect(pois.some((p) => p.id === id), id).toBe(true);
   for (const l of layout.lots.filter((x) => x.door)) {
     expect(l.prop).toBe(false);
     expect((l.roles ?? cat.get(l.asset).poi?.roles ?? []).length).toBeGreaterThan(0);

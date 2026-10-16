@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { cityConfig, namesConfig, parseCityLayout, type Rect } from '@dm/shared';
+import { cityConfig, connectorMouth, namesConfig, parseCityLayout, type Rect } from '@dm/shared';
 import { readCatalog } from '../../src/city/files';
 import { generateLayout } from '../../src/city/generate';
 import { stableStringify } from '../../src/city/stableJson';
@@ -81,9 +81,27 @@ test('the slope bands: 11 switchbacks, 10 steep lanes, 31 staircases; a band gap
   expect(slope.length).toBeGreaterThan(20);
   expect(new Set(slope.map((l) => l.level))).toEqual(new Set(['L1', 'L2']));
   for (const l of slope) {
-    expect(l.upperDoor!.y).toBe(l.level === 'L1' ? 24 : 38);
+    if (l.upperDoor) expect(l.upperDoor.y).toBe(l.level === 'L1' ? 24 : 38);
     expect(l.block).toMatch(/^block-band-[BC]-\d+$/);
   }
+  expect(slope.filter((l) => l.upperDoor).length).toBeGreaterThan(20);
+});
+
+test('a walk-up has an upper door only where a parapet opening reaches its terrace strip (else no path on foot)', () => {
+  // The parapet runs along z1 except at connector mouths (plus mouthClearance); only a staircase's opening reaches
+  // past its own extent onto the terrace strip beside it. A strip no opening reaches is cut off from the upper level.
+  let stranded = 0;
+  for (const band of ['B', 'C'] as const) {
+    const cs = layout.connectors.filter((c) => c.band === band);
+    const openings = cs.map((c) => connectorMouth(c, cityConfig)).map(([a, e]) => [a - cityConfig.parapet.mouthClearance, e + cityConfig.parapet.mouthClearance] as const);
+    for (const l of layout.lots.filter((q) => q.block.startsWith(`block-band-${band}-`))) {
+      const block = layout.blocks.find((b) => b.id === l.block)!;
+      const reached = openings.some(([a, e]) => a < block.rect.maxX - 1e-6 && e > block.rect.minX + 1e-6);
+      expect(l.upperDoor !== null, `${l.id} on ${block.id}`).toBe(reached);
+      if (!reached) stranded++;
+    }
+  }
+  expect(stranded).toBeGreaterThan(0); // band B's westmost strip: only a steep lane beside it
 });
 
 const EPS = 1e-6;

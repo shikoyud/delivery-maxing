@@ -3,13 +3,17 @@ import type { Vec3 } from '../math/vec3';
 import { pickWeighted, type Rng } from '../util/rng';
 import { bandFor, type PathDistance } from '../world/distance';
 import type { OrderRules, Poi, PoiRole } from '../world/mapTypes';
+import type { DistanceTable } from './distanceTable';
 import { itemPhrase } from './orderText';
 import { expressLimit, timeLimit, weightClassFor } from './rules';
 import type { CarrierCapacity, Modifier, Order, OrderKind } from './types';
 
 export interface OfferContext {
   pois: Poi[];
+  /** The router's on-foot path distance (the player→pickup leg, and pickup→dropoff pairs the table lacks). */
   distance: PathDistance;
+  /** Build-time pickup→dropoff path distances (the city's map/city.distances.bin.gz); absent: every leg asks `distance`. */
+  table?: DistanceTable;
   rules: OrderRules;
   cfg: OrdersConfig;
   rng: Rng;
@@ -63,14 +67,24 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
     !ctx.recentlyUsed.has(p.id) &&
     !ctx.blockedDoors.some((d) => Math.hypot(p.position.x - d.x, p.position.z - d.z) < spacing);
 
-  const pickups = shuffle(
-    pois.filter(
+  // Player → pickup: a path is never shorter than the straight line, so only pickups within maxPickupDistance in a
+  // straight line can qualify; of those at most offers.maxPathQueries, nearest first, get a path query.
+  const straight = (p: Poi): number =>
+    Math.hypot(p.position.x - ctx.player.x, p.position.y - ctx.player.y, p.position.z - ctx.player.z);
+  const candidates = pois
+    .filter(
       (p) =>
         p.roles.includes(pickupRole) &&
         free(p) &&
-        ctx.distance(ctx.player, p.position) <= rules.maxPickupDistance &&
-        (kind === 'food' || (p.weightKg !== undefined && p.weightKg[0] <= remainingKg)),
-    ),
+        (kind === 'food' || (p.weightKg !== undefined && p.weightKg[0] <= remainingKg)) &&
+        straight(p) <= rules.maxPickupDistance,
+    )
+    .map((p) => ({ p, d: straight(p) }))
+    .sort((a, b) => a.d - b.d || (a.p.id < b.p.id ? -1 : a.p.id > b.p.id ? 1 : 0))
+    .slice(0, cfg.offers.maxPathQueries)
+    .map(({ p }) => p);
+  const pickups = shuffle(
+    candidates.filter((p) => ctx.distance(ctx.player, p.position) <= rules.maxPickupDistance),
     rng,
   );
 
@@ -78,7 +92,7 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
   for (const pickup of pickups) {
     const dropoffs = pois
       .filter((d) => d.id !== pickup.id && d.roles.includes(dropoffRole) && free(d))
-      .map((d) => ({ poi: d, distance: ctx.distance(pickup.position, d.position) }))
+      .map((d) => ({ poi: d, distance: ctx.table?.get(pickup.id, d.id) ?? ctx.distance(pickup.position, d.position) }))
       .filter(({ distance }) => distance >= window.min && distance <= window.max);
     if (dropoffs.length === 0) continue;
     const { poi: dropoff, distance } = pickOne(dropoffs, rng);

@@ -160,7 +160,9 @@ export function buildWaterfront(cfg: CityConfig, rng: Rng, cat: CatalogIndex, na
   area('breakwater-arm', 'breakwater', rect(bw.armX0, bw.z1, bw.x1, h.quayZ), 'harbor');
   area('marina', 'marina', rect(h.marina.x0, h.marina.z0, h.marina.x1, h.marina.z1), 'harbor', h.marina.y);
   const quayStreet: Road = { id: 'road-L0-quay', kind: 'street', rect: rect(b.x1, h.quayStreet.z0, size, h.quayStreet.z1), y, name: names.streets.quay };
-  const alley: Road = { id: 'road-L0-harbor-alley', kind: 'alley', rect: rect(b.x1, h.alley.z0, size, h.alley.z1), y, name: null };
+  // the alley stops at the rows' ends: the 12 m of quay beyond them at each end is the cars' way from Quay Street
+  // to Harbor Road (an alley is closed to cars)
+  const alley: Road = { id: 'road-L0-harbor-alley', kind: 'alley', rect: rect(h.x0, h.alley.z0, h.x1, h.alley.z1), y, name: null };
   roads.push(quayStreet, alley);
 
   const quay = placer('harbor-quay', 'harbor');

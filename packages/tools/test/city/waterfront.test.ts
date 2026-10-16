@@ -78,8 +78,20 @@ test('Old Harbor: the pier is 12 m wide, the lighthouse lot is on the breakwater
   expect(area('marina')).toHaveLength(1);
   const quay = wf.roads.find((r) => r.name === 'Quay Street')!;
   expect(quay.rect).toEqual({ minX: 820, minZ: 170, maxX: 1200, maxZ: 182 });
-  expect(wf.roads.some((r) => r.kind === 'alley' && r.rect.minX === 820 && r.rect.maxX === 1200)).toBe(true);
+  expect(wf.roads.some((r) => r.kind === 'alley' && r.rect.minX === cfg.harbor.x0 && r.rect.maxX === cfg.harbor.x1)).toBe(true);
   expect(wf.lots.filter((l) => l.district === 'harbor').length).toBeGreaterThan(80);
+});
+
+test('Old Harbor: a 12 m car passage at each end links Quay Street to Harbor Road (no lot, no alley across it)', () => {
+  const passages: Rect[] = [
+    { minX: 820, maxX: cfg.harbor.x0, minZ: 170, maxZ: 255 },
+    { minX: cfg.harbor.x1, maxX: 1200, minZ: 170, maxZ: 255 },
+  ];
+  for (const p of passages) {
+    expect(p.maxX - p.minX).toBe(12);
+    expect(wf.lots.filter((l) => overlaps(l.rect, p)).map((l) => l.id)).toEqual([]);
+    expect(wf.roads.filter((r) => r.kind === 'alley' && overlaps(r.rect, p)).map((r) => r.id)).toEqual([]);
+  }
 });
 
 test('Harbor Road runs the full width at z 255-270; the docks gas station', () => {

@@ -87,7 +87,8 @@ export interface RidingConfig {
 }
 
 export interface NavConfig {
-  cellSize: number;
+  /** Recast cell size per tier (m): finer on foot, coarser for wider agents (Decision 13). */
+  cellSizeByTier: Record<VehicleTier, number>;
   cellHeight: number;
   tileSize: number;
   minRegionArea: number;
@@ -103,20 +104,38 @@ export interface NavConfig {
   /**
    * The walk navmesh's climb (m), clamped to movement.mantle.maxHeight. Above the courier's step height because
    * recast's ledge filter rejects a cell whose neighbours span more than one climb, and on stairs a cell can have
-   * the step below and the step above as neighbours (two rises).
+   * the step below and the step above as neighbours (two rises). 1 m: the beach bars stand on the sand 1 m below the
+   * boardwalk, which the courier mantles (the mantle height caps it).
    */
   walkClimb: number;
   /** routeToDoor snaps a door to the mesh within carRoadMaxDoorDistance, doubling the search box up to this (m). */
   doorSearchMaxRadius: number;
   /** routeToDoor returns null when the straight foot leg from where the tier stops to the door is longer (m). */
   maxFootLeg: number;
+  /** map:check fails when a map's five gzipped navmeshes total more than this (MB, 10^6 bytes). */
+  maxNavMeshMB: number;
+  /**
+   * City area kinds (`CityLayout.areas`) each tier's navmesh is kept off with blocker boxes, beside the access zones:
+   * the car off the beach sand, the pier, the marina and the band-gap floors (Review Focus 4). A band gap's blocker
+   * leaves its switchback's own deck open.
+   */
+  forbiddenAreasByTier: Record<VehicleTier, string[]>;
+  /** The validator samples each forbidden zone or area on a grid this fine (m) for polygons of a tier's mesh. */
+  forbiddenSampleStep: number;
 }
 
 interface TimeRule { distanceFactor: number; extraSeconds: number }
 interface Rewards { short: number; medium: number; long: number; hot: number; par: number; express: number; fragile: number }
 
 export interface OrdersConfig {
-  offers: { maxShown: number; lifetimeSeconds: number; minIntervalSeconds: number; maxIntervalSeconds: number };
+  offers: {
+    maxShown: number;
+    lifetimeSeconds: number;
+    minIntervalSeconds: number;
+    maxIntervalSeconds: number;
+    /** A roll path-queries at most this many pickups (nearest in a straight line first) for the player→pickup leg. */
+    maxPathQueries: number;
+  };
   /** After a completed delivery, the next offer waits at least this long (server-side pacing; no UI). */
   deliveryCooldown: { minSeconds: number; maxSeconds: number };
   /** Food orders: seconds the kitchen takes once the courier arrives at the pickup, before the order can be picked up. */

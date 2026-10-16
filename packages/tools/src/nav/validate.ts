@@ -1,6 +1,6 @@
 import { baySlot, navConfig, RIDE_TIERS, type MapData, type NavConfig, type NavRouter, type Poi, type Vec3, type VehicleTier } from '@dm/shared';
 
-// The greybox's navigation checks, run by `pnpm map:check` on the committed navmeshes.
+// The navigation checks of any map (the greybox and the city), run by `pnpm map:check` on the committed navmeshes.
 
 const fmt = (p: Vec3): string => `(${p.x}, ${p.y}, ${p.z})`;
 const isPackageDoor = (p: Poi): boolean => p.roles.includes('packagePickup') || p.roles.includes('dropoffPackage');
@@ -23,7 +23,7 @@ export function footFromCar(router: NavRouter, carStart: Vec3, door: Vec3): numb
  * than nav.maxFoodOffCarShare of the food dropoffs that far;
  * a pump or a bay slot off the car or motorbike mesh, or not reachable on it from a hospital bay.
  */
-export function validateGreyboxNav(map: MapData, router: NavRouter, nav: NavConfig = navConfig): string[] {
+export function validateMapNav(map: MapData, router: NavRouter, nav: NavConfig = navConfig): string[] {
   const messages: string[] = [];
   const tol = nav.reachTolerance;
   const maxFoot = nav.carRoadMaxDoorDistance;

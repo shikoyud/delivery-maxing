@@ -17,12 +17,16 @@ describe('config pins spec values', () => {
   });
   it('orders', () => {
     expect(ordersConfig.lockout.seconds).toBe(45);
-    expect(ordersConfig.offers).toEqual({ maxShown: 3, lifetimeSeconds: 25, minIntervalSeconds: 18, maxIntervalSeconds: 30 });
+    expect(ordersConfig.offers).toEqual({ maxShown: 3, lifetimeSeconds: 25, minIntervalSeconds: 18, maxIntervalSeconds: 30, maxPathQueries: 8 });
     expect(ordersConfig.deliveryCooldown).toEqual({ minSeconds: 8, maxSeconds: 10 });
     expect(ordersConfig.prep.foodSeconds).toBeGreaterThan(0);
     expect(ordersConfig.referenceSpeed).toBe(8);
     expect(ordersConfig.express.distanceFactor).toBeLessThan(ordersConfig.par.distanceFactor);
     expect(ordersConfig.fragile.maxFallMeters).toBe(7);
+  });
+  it('navmesh budget: per-tier cell sizes and a 10 MB gzipped total (Decision 13)', () => {
+    expect(navConfig.cellSizeByTier).toEqual({ walk: 0.3, skateboard: 0.4, bicycle: 0.4, motorbike: 0.5, car: 0.6 });
+    expect(navConfig.maxNavMeshMB).toBe(10);
   });
   it('world', () => {
     expect(worldConfig).toEqual({ chunkSize: 100, physics: { loadRadius: 150, unloadRadius: 220 } });
@@ -60,7 +64,7 @@ describe('config pins spec values', () => {
     expect(ordersConfig.fragile.crashSpeed).toBe(10);
   });
   it('nav: walk climb under the mantle height, door search and foot leg limits', () => {
-    expect(navConfig).toMatchObject({ walkClimb: 0.8, doorSearchMaxRadius: 120, maxFootLeg: 60, carRoadMaxDoorDistance: 30 });
+    expect(navConfig).toMatchObject({ walkClimb: 1.0, doorSearchMaxRadius: 120, maxFootLeg: 60, carRoadMaxDoorDistance: 30 });
     expect(navConfig.walkClimb).toBeGreaterThanOrEqual(movementConfig.controller.maxStepHeight);
     expect(navConfig.walkClimb).toBeLessThanOrEqual(movementConfig.mantle.maxHeight);
     expect(navConfig.doorSearchMaxRadius).toBeGreaterThanOrEqual(navConfig.carRoadMaxDoorDistance);

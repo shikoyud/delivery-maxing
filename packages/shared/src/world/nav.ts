@@ -3,7 +3,7 @@ import { navConfig } from '../config';
 import type { NavConfig, VehicleTier } from '../config';
 import { distance as dist, vec3, type Vec3 } from '../math/vec3';
 
-// Runtime routing on the five per-tier navmeshes (spec §5.2): built by `pnpm map:build` into map/nav/, loaded here
+// Runtime routing on the five per-tier navmeshes (spec §5.2): built by `pnpm map:build` into map/nav/ (gzipped), loaded here
 // from their bytes. Recast reports a partial path (one that stops short of an unreachable target) as a success, so
 // every query here checks that the path really starts at `from` and ends at the target.
 
@@ -95,7 +95,7 @@ export class NavRouter {
     private readonly nav: NavConfig,
   ) {}
 
-  /** Imports the five navmeshes from their `exportNavMesh` bytes (map/nav/greybox-<tier>.bin). */
+  /** Imports the five navmeshes from their `exportNavMesh` bytes (map/nav/<kind>-<tier>.bin.gz, inflated). */
   static fromBinaries(bins: Record<VehicleTier, Uint8Array>, cfg: NavConfig = navConfig): NavRouter {
     const meshes = {} as Record<VehicleTier, NavMesh>;
     const paths = {} as Record<VehicleTier, NavPaths>;

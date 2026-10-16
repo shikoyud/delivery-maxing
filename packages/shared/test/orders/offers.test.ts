@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ordersConfig } from '../../src/config';
 import { vec3 } from '../../src/math/vec3';
+import { DistanceTable } from '../../src/orders/distanceTable';
 import { generateOffer, type OfferContext } from '../../src/orders/offers';
 import { mulberry32 } from '../../src/util/rng';
 import { streetDistance } from '../../src/world/distance';
@@ -149,5 +150,59 @@ describe('generateOffer', () => {
       const fb = { carriedKg: 47 }; // through the fallback path too
       expect(generateOffer(ctx({ rng: mulberry32(seed), ...fb }))).toEqual(generateOffer(ctx({ rng: mulberry32(seed), ...fb })));
     }
+  });
+
+  describe('on a big map: a distance table and a capped number of path queries', () => {
+    // 30 food pickups on a line east of the player, 10 m apart (10 m to 300 m), and one dropoff 200 m north of each.
+    const pickups: Poi[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `fp-${i}`, position: vec3(10 + i * 10, 0, 0), district: 'downtown', kind: 'counter', name: `Kitchen ${i}`, roles: ['foodPickup'], items: ['soup'],
+    }));
+    const dropoffs: Poi[] = pickups.map((p, i) => ({
+      id: `df-${i}`, position: vec3(p.position.x, 0, 200), district: 'downtown', kind: 'door', name: `${i} North St`, roles: ['dropoffFood'],
+    }));
+    const pois = (): Poi[] => [...pickups, ...dropoffs];
+    // every pickup to every dropoff 123 m by the table (the router would say 200 m or more)
+    const table = new DistanceTable(pickups.map((p) => p.id), dropoffs.map((d) => d.id), new Float32Array(30 * 30).fill(123));
+    const counting = () => {
+      const calls: string[] = [];
+      const distance = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+        calls.push(`${a.x},${a.z}->${b.x},${b.z}`);
+        return streetDistance(a as never, b as never);
+      };
+      return { calls, distance };
+    };
+
+    it('makes at most offers.maxPathQueries router calls and takes the pickup→dropoff leg from the table', () => {
+      expect(ordersConfig.offers.maxPathQueries).toBe(8);
+      for (let seed = 1; seed <= 20; seed++) {
+        const r = counting();
+        const o = generateOffer(ctx({ pois: pois(), cfg: onlyKind('food'), rng: mulberry32(seed), distance: r.distance, table }));
+        expect(o, `seed ${seed}`).not.toBeNull();
+        expect(r.calls.length).toBeLessThanOrEqual(8);
+        expect(o!.distance).toBeCloseTo(123);
+        // only the 8 nearest pickups (10 m .. 80 m) are path-queried, so only they are offered
+        expect(Number(o!.pickupPoiId.slice(3))).toBeLessThan(8);
+      }
+    });
+
+    it('prefilters by straight line: a pickup beyond maxPickupDistance in a straight line is never queried', () => {
+      const r = counting();
+      const far: Poi = { ...pickups[0]!, id: 'fp-far-away', position: vec3(0, 0, -260) };
+      generateOffer(ctx({ pois: [far, dropoffs[0]!], cfg: onlyKind('food'), distance: r.distance, table }));
+      expect(r.calls).toEqual([]);
+    });
+
+    it('falls back to the router for a pair the table does not hold', () => {
+      const r = counting();
+      const small = new DistanceTable(['fp-0'], ['df-1'], new Float32Array([123]));
+      const o = generateOffer(ctx({ pois: [pickups[0]!, dropoffs[0]!], cfg: onlyKind('food'), distance: r.distance, table: small }));
+      expect(o!.distance).toBe(200); // fp-0 → df-0 is not in the table: the router's street distance
+      expect(r.calls).toHaveLength(2); // player → pickup, pickup → dropoff
+    });
+
+    it('an unreachable pair (Infinity in the table) is never offered', () => {
+      const none = new DistanceTable(pickups.map((p) => p.id), dropoffs.map((d) => d.id), new Float32Array(30 * 30).fill(Infinity));
+      expect(generateOffer(ctx({ pois: pois(), cfg: onlyKind('food'), table: none }))).toBeNull();
+    });
   });
 });
