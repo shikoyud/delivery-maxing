@@ -6,7 +6,10 @@ describe('clientConfig', () => {
   it('city LOD radii; the fog ends at the outermost ring; budgets', () => {
     expect(clientConfig.city.lodRadii).toEqual([160, 370, 700]);
     expect(clientConfig.graphics.fogFar).toBe(clientConfig.city.lodRadii[2]);
-    expect(clientConfig.city).toMatchObject({ relodDistance: 25, renderRegion: 250, labelRadius: 80 });
+    expect(clientConfig.city).toMatchObject({ relodDistance: 25, renderRegion: 250, labelRadius: 80, modelsBase: 'packs/', loadAheadRadius: 420 });
+    // models are requested before their lots enter the LOD1 ring
+    expect(clientConfig.city.loadAheadRadius).toBeGreaterThan(clientConfig.city.lodRadii[1]!);
+    expect(clientConfig.city.lod1).toEqual({ ratio: 0.4, error: 0.02, minDrop: 0.3 });
     expect(clientConfig.graphics.drawCallBudget).toBe(200);
     expect(clientConfig.graphics.triangleBudget).toBe(700000);
   });

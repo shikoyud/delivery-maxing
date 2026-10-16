@@ -575,12 +575,12 @@ export class DeliveryLoop {
     });
   }
 
-  /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */
   /** Hides the POI marker the rendered camera is in (Game calls it per frame, after the chase camera moved). */
   setCamera(p: Vec3): void {
     this.poiMeshes.setCamera(p);
   }
 
+  /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */
   draw(clockSeconds: number): void {
     const pois = poiIndex(this.d.map);
     const targets: Vec3[] = [];

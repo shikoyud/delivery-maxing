@@ -29,8 +29,8 @@ export interface LoadedMap {
   nav: NavRouter;
   /** The city's build-time pickup→dropoff distances; null on the greybox (every leg asks the router). */
   distances: DistanceTable | null;
-  /** The asset catalog the city's lots name (block boxes, later pack models); null on the greybox. */
-  catalog: CatalogIndex | null;
+  /** The asset catalog: what the city's lots name (block boxes, pack models), and the pack car on either map. */
+  catalog: CatalogIndex;
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -40,13 +40,13 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 /**
- * Loads a map with its navmeshes (and, for the city, the distance table), in parallel. The city's layout is parsed
+ * Loads a map with its navmeshes and the catalog (and, for the city, the distance table), in parallel. The city's layout is parsed
  * and expanded with `layoutToMap`; the greybox is the SP4 town exactly as before.
  */
 export async function loadMap(kind: MapKind): Promise<LoadedMap> {
   if (kind === 'greybox') {
-    const nav = await loadNavRouter('greybox');
-    return { map: expandGreybox(greyboxJson as GreyboxSource), nav, distances: null, catalog: null };
+    const [nav, catalogJson] = await Promise.all([loadNavRouter('greybox'), fetchJson(catalogUrl)]);
+    return { map: expandGreybox(greyboxJson as GreyboxSource), nav, distances: null, catalog: new CatalogIndex(parseCatalog(catalogJson)) };
   }
   const [layoutJson, catalogJson, nav, distances] = await Promise.all([
     fetchJson(layoutUrl),

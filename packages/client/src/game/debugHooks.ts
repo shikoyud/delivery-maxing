@@ -65,15 +65,17 @@ export interface DebugApi {
   courier(): CourierDebug;
   /** Whether any of the camera's near plane is inside a map solid (a ball reaching the near-plane corners). */
   cameraInsideSolid(): boolean;
+  /** Which map is loaded (?map=). */
+  mapKind(): MapKind;
+  /** The collider chunk keys loaded around the player (the city's paged physics); empty on the greybox. */
+  loadedChunks(): string[];
+  /** The city view's counts (instances drawn, block meshes shown, models loaded and missing); null on the greybox. */
+  cityStats(): { instances: number; blocks: number; models: number; missing: number } | null;
   /**
    * The chase camera: its position, boom length, distance to the courier's own pivot, whether the courier is hidden
    * (that distance under minDistance), and where
    * the courier's mid-body and top land on screen in normalised device coordinates (−1..1, +y up).
    */
-  /** Which map is loaded (?map=). */
-  mapKind(): MapKind;
-  /** The collider chunk keys loaded around the player (the city's paged physics); empty on the greybox. */
-  loadedChunks(): string[];
   camera(): {
     position: Vec3;
     distance: number;
@@ -155,6 +157,7 @@ export function installDebugHooks(game: Game): void {
     courier: () => game.courier.debug(),
     mapKind: () => game.mapKind,
     loadedChunks: () => game.loadedChunks(),
+    cityStats: () => game.cityView?.stats() ?? null,
     camera() {
       const cam = game.renderer.camera;
       const c = game.courier.root.position;

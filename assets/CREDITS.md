@@ -22,3 +22,13 @@ until the owner supplies models.
 | `assets/packs/megatropolis */`, `assets/packs/tropical city */` | Low Poly Asset Bundle (Megatropolis and Tropical City packs), converted to `.glb` with glTFast | Unity Asset Store, purchased by the project owner | Unity Asset Store EULA, Standard license, **Single Entity** seat. The packs may be shipped inside the game (deployed bundle) but their source files may not be redistributed, so they are **git-ignored** (`assets/packs/`) and never committed to this public repository. Contractors need their own seat. | https://assetstore.unity.com/packages/3d/environments/low-poly-asset-bundle-196214 |
 
 The catalog of these models is `map/catalog.json`; see `docs/superpowers/specs/2026-10-14-city-map-design.md`.
+
+| Model | Used as | Source | License |
+|---|---|---|---|
+| `mega/Car_01` (`assets/packs/megatropolis vehicles/Car_01.glb`) | The player's car (Decision 11), 1:1, placed by its catalog pivot on the car's feet; the code-built car is drawn when it is missing | Low Poly Asset Bundle (above) | Owner-licensed, not in git |
+
+**Runtime folder.** `pnpm assets:import assets/packs` writes the models the city uses (every catalog entry with a file
+whose `use` is not `unused`) into `packages/client/public/packs/`, quantised and meshopt-compressed, with `.lod1.glb`
+files, the two pack textures (`textures/`) and `manifest.json`. That folder is derived from the packs, so it is
+**git-ignored** too and never committed; Vite copies it into the build, so a deployed bundle built with it contains the
+models. Without it the build has no model files and the city draws every lot as a category-coloured box.

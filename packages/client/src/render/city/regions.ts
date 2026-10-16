@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { AreaKind, CityLayout, MapData, Rect, Solid, SolidKind } from '@dm/shared';
+import type { AreaKind, CityLayout, CityMap, MapData, Rect, Solid, SolidKind } from '@dm/shared';
 import { gridTexture, solidColor, solidGeometry, solidMatrix } from '../greyboxMeshes';
 import { cityPalette } from '../palette';
 
@@ -78,6 +78,9 @@ function streetGeometry(rect: Rect, y: number): THREE.BufferGeometry[] {
 
 const rectCenter = (r: Rect): [number, number] => [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
 
+/** A city map carries its layout (layoutToMap); a greybox has none. */
+const isCityMap = (map: MapData): map is CityMap => map.kind === 'city' && 'layout' in map;
+
 /**
  * The code-built city geometry merged per render region of side `regionSize` (each piece goes to the region holding
  * its centre). A region is one group of up to two meshes: `region-solids` (vertex-coloured, casting shadows) and
@@ -88,7 +91,7 @@ const rectCenter = (r: Rect): [number, number] => [(r.minX + r.maxX) / 2, (r.min
  * ground slab is their collider), are drawn on the ground the same way, over its flat-coloured areas (parks, plazas…).
  */
 export function buildRegionMeshes(map: MapData, regionSize: number): Map<string, THREE.Group> {
-  const layout: CityLayout | undefined = map.kind === 'city' ? (map as MapData & { layout?: CityLayout }).layout : undefined;
+  const layout: CityLayout | undefined = isCityMap(map) ? map.layout : undefined;
   const areaKind = new Map<string, AreaKind>(layout?.areas.map((a) => [a.id, a.kind]) ?? []);
   const parts = new Map<string, { solids: THREE.BufferGeometry[]; ground: THREE.BufferGeometry[] }>();
   const entry = (x: number, z: number) => {

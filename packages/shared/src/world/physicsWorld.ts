@@ -21,6 +21,8 @@ export interface PhysicsWorld {
    * sim step and after a teleport or respawn. Absent on a plain world, where every solid always has a collider.
    */
   update?(center: Vec3): boolean;
+  /** Present on a paged world: the chunk keys whose colliders are loaded now. */
+  loadedChunks?(): ReadonlySet<string>;
 }
 
 /** Quaternion for an XYZ Euler rotation (degrees), matching three.js 'XYZ' order. */

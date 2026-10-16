@@ -6,6 +6,7 @@ import { ALL_EXTENSIONS, EXTMeshoptCompression, KHRMeshQuantization, type Transf
 import { cloneDocument, prune, quantize, reorder, simplify, weld } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import type { AssetCatalog } from '@dm/shared';
+import clientJson from '../../../../config/client.json';
 
 export interface ImportReport {
   /** Models written (LOD0 files) */
@@ -24,10 +25,12 @@ export interface PackManifest {
   models: Record<string, { lod1: boolean }>;
 }
 
-/** Plan values (Task 12): LOD1 = simplify to 40% within 2% error, kept only when it drops at least 30% of the triangles. */
-const LOD1_RATIO = 0.4;
-const LOD1_ERROR = 0.02;
-const LOD1_MIN_DROP = 0.3;
+/** LOD1 simplification (config/client.json city.lod1): toward `ratio` within `error`, kept if it drops `minDrop`. */
+export interface Lod1Options {
+  ratio: number;
+  error: number;
+  minDrop: number;
+}
 /** Material names in the runtime files: `tex:<file>` samples textures/<file>; `flat` is vertex-coloured. */
 const FLAT = 'flat';
 
@@ -220,10 +223,16 @@ async function writeCompressed(doc: Document, path: string): Promise<number> {
 /**
  * `assets:import`: for every catalog entry with a `file` whose `use` is not `unused`, reads `<folder>/<file>`, bakes it
  * into one mesh (see bake) and writes `<outDir>/<id>.glb` (a `/` in the id is a folder) compressed, plus
- * `<id>.lod1.glb` simplified to LOD1_RATIO within LOD1_ERROR when that drops at least LOD1_MIN_DROP of the triangles.
+ * `<id>.lod1.glb` simplified toward `lod1.ratio` within `lod1.error` when that drops at least `lod1.minDrop` of the
+ * triangles.
  * Textures go to `<outDir>/textures/` once each; `<outDir>/manifest.json` lists what was written.
  */
-export async function importPacks(folder: string, cat: AssetCatalog, outDir: string): Promise<ImportReport> {
+export async function importPacks(
+  folder: string,
+  cat: AssetCatalog,
+  outDir: string,
+  lod1: Lod1Options = clientJson.city.lod1,
+): Promise<ImportReport> {
   await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready, MeshoptSimplifier.ready]);
   const io = readIo();
   const shared: Shared = { textures: new Map(), bytes: 0 };
@@ -246,13 +255,13 @@ export async function importPacks(folder: string, cat: AssetCatalog, outDir: str
     const tris = triCount(doc);
     report.bytes += await writeCompressed(cloneDocument(doc), join(outDir, `${e.id}.glb`));
     report.written++;
-    await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: LOD1_RATIO, error: LOD1_ERROR }));
-    const lod1 = triCount(doc) <= tris * (1 - LOD1_MIN_DROP);
-    if (lod1) {
+    await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: lod1.ratio, error: lod1.error }));
+    const hasLod1 = triCount(doc) <= tris * (1 - lod1.minDrop);
+    if (hasLod1) {
       report.bytes += await writeCompressed(doc, join(outDir, `${e.id}.lod1.glb`));
       report.lod1++;
     }
-    manifest.models[e.id] = { lod1 };
+    manifest.models[e.id] = { lod1: hasLod1 };
   }
   const manifestPath = join(outDir, 'manifest.json');
   mkdirSync(outDir, { recursive: true });

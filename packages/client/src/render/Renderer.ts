@@ -66,6 +66,11 @@ export class Renderer {
     this.resize();
   }
 
+  /** Unit vector from the ground toward the sun. */
+  sunDirection(): Vec3 {
+    return { x: this.sunOffset.x, y: this.sunOffset.y, z: this.sunOffset.z };
+  }
+
   /** Keeps the sun's shadow camera centred on `focus`, snapped to whole shadow texels to avoid shimmering. */
   followShadow(focus: Vec3): void {
     const texel = (this.gfx.shadowExtent * 2) / this.gfx.shadowMapSize;

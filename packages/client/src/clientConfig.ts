@@ -73,6 +73,21 @@ export interface CityRenderConfig {
   renderRegion: number;
   /** Lot ids show as labels in the map debug view (Decision 7) within this radius. */
   labelRadius: number;
+  /** Where `pnpm assets:import` puts the runtime pack models, relative to the site base (public/packs/). */
+  modelsBase: string;
+  /** Lots this near request their models, so they have loaded by the time they enter lodRadii[1]. */
+  loadAheadRadius: number;
+  /**
+   * How `pnpm assets:import` makes LOD1 files: meshopt simplification toward `ratio` of the triangles within `error`
+   * (a share of the model's size), kept only when it drops at least `minDrop` of them (else LOD1 draws LOD0).
+   */
+  lod1: Lod1Config;
+}
+
+export interface Lod1Config {
+  ratio: number;
+  error: number;
+  minDrop: number;
 }
 
 /** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */

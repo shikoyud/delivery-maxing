@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import {
   createPhysicsWorld,
@@ -16,7 +16,10 @@ import {
 import greybox from '../../../map/greybox.json';
 import { buildAccessZoneMeshes } from '../src/render/accessZoneMeshes';
 import { buildGasStationMeshes } from '../src/render/gasStationMeshes';
-import { buildVehicleMesh } from '../src/render/vehicles/vehicleMeshes';
+import { buildVehicleMesh, CAR_MODEL_ID, carModel } from '../src/render/vehicles/vehicleMeshes';
+import { ModelLoader } from '../src/render/city/modelLoader';
+import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { CatalogEntry } from '@dm/shared';
 import { VehicleViews } from '../src/render/vehicles/VehicleViews';
 
 const map: MapData = expandGreybox(greybox as GreyboxSource);
@@ -222,3 +225,73 @@ describe('VehicleViews', () => {
     expect([o.position.x, o.position.z]).toEqual([3, 4]);
   });
 });
+
+describe('the pack car (Decision 11)', () => {
+  // The catalog's mega/Car_01: 1.97 × 1.38 × 3.28 m, its front (the FL/FR wheels) on +z.
+  const car: CatalogEntry = {
+    id: CAR_MODEL_ID, file: 'megatropolis vehicles/Car_01.glb', category: 'vehicle', size: { w: 1.97, h: 1.38, d: 3.28 },
+    pivot: { x: 0.2, z: 0.01, minY: -0.1 }, use: 'placed',
+  };
+  /** A loader serving a car-sized box (front half marked by a +z offset) or 404s when `serve` is false. */
+  const loaderFor = (serve: boolean): ModelLoader => {
+    const gltf = {
+      loadAsync: async () => {
+        if (!serve) throw new Error('HTTP 404');
+        const g = new THREE.BoxGeometry(1.97, 1.38, 3.28).translate(0.2, 0.59, 0.01);
+        return { scene: new THREE.Mesh(g, new THREE.MeshStandardMaterial({ name: 'flat' })) };
+      },
+    } as unknown as GLTFLoader;
+    return new ModelLoader('packs/', gltf);
+  };
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it('carModel: null until loaded and when missing; then the model 1:1, its pivot on the feet, its front on −z', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const missing = loaderFor(false);
+    missing.request(CAR_MODEL_ID);
+    expect(carModel(missing, car)).toBeNull();
+    await flush();
+    expect(carModel(missing, car)).toBeNull();
+    warn.mockRestore();
+
+    const ok = loaderFor(true);
+    ok.request(CAR_MODEL_ID);
+    await flush();
+    const o = carModel(ok, car)!;
+    expect(o).not.toBeNull();
+    o.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(o);
+    expect(box.min.y).toBeCloseTo(0, 5);
+    expect((box.min.x + box.max.x) / 2).toBeCloseTo(0, 5);
+    expect((box.min.z + box.max.z) / 2).toBeCloseTo(0, 5);
+    // 1:1, turned half round: its length along z
+    expect(box.max.z - box.min.z).toBeCloseTo(3.28, 5);
+    expect(box.max.x - box.min.x).toBeCloseTo(1.97, 5);
+    let mesh: THREE.Mesh | null = null;
+    o.traverse((c) => {
+      if ((c as THREE.Mesh).isMesh) mesh = c as THREE.Mesh;
+    });
+    expect(mesh!.castShadow).toBe(true);
+    // the model's +z front faces the vehicles' forward (−z)
+    const front = new THREE.Vector3(0, 0, 1).transformDirection(mesh!.matrixWorld);
+    expect(front.z).toBeCloseTo(-1, 6);
+  });
+
+  it('VehicleViews swaps the car placeholder for the model once it loads, and keeps it when missing', async () => {
+    const physics = createPhysicsWorld(await initRapier(), map);
+    const garage = new Garage(physics, map, defaultGarage(map));
+    for (const [serve, model] of [[true, true], [false, false]] as const) {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const scene = new THREE.Scene();
+      const views = new VehicleViews(scene, { loader: loaderFor(serve), car });
+      views.update(garage, 1);
+      await flush();
+      views.update(garage, 1);
+      const root = scene.getObjectByName('vehicle-car')!;
+      expect(root.getObjectByName('vehicle-car-mesh') === undefined, `serve ${serve}`).toBe(model);
+      expect(root.getObjectByName('vehicle-car-model') !== undefined).toBe(model);
+      warn.mockRestore();
+    }
+  });
+});
+

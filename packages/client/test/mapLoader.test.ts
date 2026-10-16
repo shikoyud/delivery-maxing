@@ -28,10 +28,11 @@ describe('parseMapKind', () => {
 });
 
 describe('loadMap', () => {
-  it('greybox: the SP4 town, its navmeshes and no distance table', async () => {
+  it('greybox: the SP4 town, its navmeshes, the catalog and no distance table', async () => {
     vi.stubGlobal('fetch', fileFetch());
-    const { map, nav, distances } = await loadMap('greybox');
+    const { map, nav, distances, catalog } = await loadMap('greybox');
     expect(map.kind).toBe('greybox');
+    expect(catalog.has('mega/Car_01')).toBe(true); // the pack car rides on the greybox too
     expect(map.hospitals.length).toBeGreaterThan(0);
     expect(distances).toBeNull();
     const h = map.hospitals[0]!.spawn;

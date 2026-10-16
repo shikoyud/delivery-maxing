@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { ridingConfig, type RideSpec, type RideTier } from '@dm/shared';
+import { ridingConfig, type CatalogEntry, type RideSpec, type RideTier } from '@dm/shared';
+import type { ModelLoader } from '../city/modelLoader';
+import { placeModel } from '../city/placement';
 import { palette } from '../palette';
 
 /**
@@ -196,4 +198,30 @@ export function buildVehicleMesh(tier: RideTier, spec: RideSpec): THREE.Group {
  */
 export function riderLift(tier: RideTier, spec: RideSpec = ridingConfig.rides[tier]): number {
   return tier === 'skateboard' ? deckTop(footprint(spec).l) : 0;
+}
+
+/** The player's car model (Decision 11); the other rides stay code-built (missing models, city design §5.5). */
+export const CAR_MODEL_ID = 'mega/Car_01';
+
+/**
+ * The pack car, once `loader` has it (`entry` is its catalog entry): a Group named `vehicle-car-model` holding the
+ * model 1:1, placed by its catalog pivot on the car's feet (bounding-box centre on the origin, lowest point on y = 0)
+ * and turned so its front (`entry.front`, +z by default) faces −Z like the placeholders. Null while loading or when
+ * the model is missing (the placeholder stays).
+ */
+export function carModel(loader: ModelLoader, entry: CatalogEntry): THREE.Object3D | null {
+  const m = loader.get(entry.id);
+  if (m === 'missing' || m === 'loading') return null;
+  const mesh = new THREE.Mesh(m.lod0, m.material);
+  // facing 'S' is −z (placement's convention: the side a lot's front is on)
+  const t = placeModel(entry, 'S', { x: 0, y: 0, z: 0 });
+  mesh.position.set(t.position.x, t.position.y, t.position.z);
+  mesh.rotation.y = t.rotY;
+  mesh.name = 'vehicle-car-model-mesh';
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
+  const group = new THREE.Group();
+  group.name = 'vehicle-car-model';
+  group.add(mesh);
+  return group;
 }

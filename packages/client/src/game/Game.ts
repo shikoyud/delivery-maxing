@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import {
   FixedStepper,
   Garage,
@@ -34,11 +36,14 @@ import type { CourierView } from '../render/courier/CourierView';
 import { createCourierPlaceholder } from '../render/courierPlaceholder';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
 import { buildBlockMeshes } from '../render/city/blockMeshes';
-import { buildRegionMeshes } from '../render/city/regions';
+import { CityView } from '../render/city/CityView';
+import { ModelLoader } from '../render/city/modelLoader';
+import { packManifest } from '../render/city/packManifest';
 import { buildAccessZoneMeshes } from '../render/accessZoneMeshes';
 import { buildGasStationMeshes } from '../render/gasStationMeshes';
 import { buildHospitalMeshes } from '../render/hospitalMeshes';
 import { VehicleViews } from '../render/vehicles/VehicleViews';
+import { CAR_MODEL_ID } from '../render/vehicles/vehicleMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
@@ -71,8 +76,8 @@ export interface GameOptions {
   map?: MapKind;
 }
 
-/** What the city adds to a map: the catalog its lots name and the build-time offer distances. */
-interface CityExtras {
+/** The catalog (the city's lots, the pack car) and, on the city, the build-time offer distances. */
+interface MapExtras {
   catalog: CatalogIndex;
   distances: DistanceTable | null;
 }
@@ -102,8 +107,12 @@ export class Game {
   private readonly cameraCast: RayCast;
   /** The animated courier, or the capsule when the model failed to load (Review Focus 4). */
   readonly courier: CourierView;
-  /** The owned vehicles' placeholders, interpolated like the courier. */
+  /** The owned vehicles' placeholders (the pack car once loaded), interpolated like the courier. */
   readonly vehicles: VehicleViews;
+  /** The runtime pack models (public/packs/, git-ignored; boxes and placeholders without them). */
+  readonly models: ModelLoader;
+  /** The city's regions, blocks and pack models; null on the greybox. */
+  readonly cityView: CityView | null = null;
   /** Access-zone volumes, shown with the F3 overlay. */
   private readonly accessZones: THREE.Group;
   private prevPosition: Vec3;
@@ -128,7 +137,7 @@ export class Game {
     private readonly devStore: DevSettingsStore,
     model: CourierModel | null,
     progress: ProgressStore,
-    city: CityExtras | null,
+    extras: MapExtras,
   ) {
     this.progress = progress;
     this.prevPosition = { ...sim.state.position };
@@ -155,11 +164,19 @@ export class Game {
     );
     this.courier = model ?? createCourierPlaceholder(settings.movement.capsule, this.cfg.courier);
     this.renderer.scene.add(this.courier.root);
-    if (map.kind === 'city' && city) {
-      // The placeholder city (city design §7.3): code-built regions plus every lot as a category-coloured box. CityView
-      // (Task 12) will show the blocks only within city.lodRadii[2] and swap pack models in nearer.
-      for (const region of buildRegionMeshes(map, this.cfg.city.renderRegion).values()) this.renderer.scene.add(region);
-      for (const block of buildBlockMeshes(map as CityMap, city.catalog).values()) this.renderer.scene.add(block);
+    this.models = new ModelLoader(`${import.meta.env.BASE_URL}${this.cfg.city.modelsBase}`, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder), {
+      manifest: packManifest,
+    });
+    if (map.kind === 'city') {
+      // The city (city design §7.2–§7.3): code-built regions and every lot as a category-coloured box, shown within
+      // city.lodRadii[2], with the pack models swapped in nearer when public/packs/ has them.
+      const city = map as CityMap;
+      const sun = this.renderer.sunDirection();
+      this.cityView = CityView.create(city, extras.catalog, buildBlockMeshes(city, extras.catalog), this.cfg.city, this.models, {
+        extent: this.cfg.graphics.shadowExtent,
+        slope: Math.hypot(sun.x, sun.z) / sun.y,
+      });
+      this.renderer.scene.add(this.cityView.group);
     } else {
       this.renderer.scene.add(buildGreyboxMeshes(map));
     }
@@ -167,7 +184,10 @@ export class Game {
     this.renderer.scene.add(buildGasStationMeshes(map));
     this.accessZones = buildAccessZoneMeshes(map);
     this.renderer.scene.add(this.accessZones);
-    this.vehicles = new VehicleViews(this.renderer.scene);
+    this.vehicles = new VehicleViews(
+      this.renderer.scene,
+      extras.catalog.has(CAR_MODEL_ID) ? { loader: this.models, car: extras.catalog.get(CAR_MODEL_ID) } : undefined,
+    );
     this.input = new InputManager(this.renderer.renderer.domElement, this.actions, {
       requirePointerLock: !opts.debug,
     });
@@ -189,7 +209,7 @@ export class Game {
       }),
       // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
       distance: (a, b) => nav.distance('walk', a, b),
-      ...(city?.distances ? { table: city.distances } : {}),
+      ...(extras.distances ? { table: extras.distances } : {}),
       router: nav,
       cameraYaw: () => {
         const d = this.renderer.camera.getWorldDirection(this.camDir);
@@ -300,8 +320,8 @@ export class Game {
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
     // The tier last ridden (capacity and offers follow it), only while it is still owned.
     sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
-    const city = loaded.catalog ? { catalog: loaded.catalog, distances: loaded.distances } : null;
-    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, city);
+    const extras = { catalog: loaded.catalog, distances: loaded.distances };
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras);
     // Closing or hiding the tab mid-ride keeps the vehicle's spot and the fuel it burnt.
     saveWhenLeaving(window, document, () => game.delivery.save());
     if (opts.debug) installDebugHooks(game);
@@ -315,8 +335,7 @@ export class Game {
 
   /** The collider chunks loaded around the player (the city's paged physics); empty on the greybox. */
   loadedChunks(): string[] {
-    const p = this.sim.physics as { loadedChunks?: () => ReadonlySet<string> };
-    return p.loadedChunks ? [...p.loadedChunks()] : [];
+    return [...(this.sim.physics.loadedChunks?.() ?? [])];
   }
 
   /** The city's paged physics loads the chunks around the player (a no-op on the greybox, whose colliders all exist). */
@@ -483,6 +502,7 @@ export class Game {
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
     this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s.riding);
     this.delivery.setCamera(this.renderer.camera.position);
+    this.cityView?.update(feet, this.renderer.camera);
     this.vehicles.update(this.sim.garage, alpha);
     this.accessZones.visible = this.overlay.visible;
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
