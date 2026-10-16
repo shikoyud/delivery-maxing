@@ -327,6 +327,26 @@ kbd {
 .hud-safe { background: rgba(31, 158, 147, 0.9); }
 .hud-lockout { background: rgba(242, 113, 102, 0.92); }
 
+/* Key prompt, bottom centre, in the popups' style. */
+.hud-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(22, 50, 58, 0.88);
+  color: var(--dm-paper);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+  pointer-events: none;
+}
+
+.hud-prompt[hidden] { display: none; }
+
 /* Riding, bottom left: speed, and the fuel gauge on the motorbike and car (--fuel is the tank share). */
 .hud-ride {
   position: absolute;

@@ -41,7 +41,7 @@ import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
 import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoints';
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
-import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { hudModel, poiIndex, promptFor, pointsText, stageText, type HudModel } from '../ui/hudModel';
 import { createMinimap } from '../ui/minimap';
 import { createMapApp } from '../ui/phone/mapApp';
 import { MapProjection } from '../ui/phone/mapProjection';
@@ -417,12 +417,18 @@ export class DeliveryLoop {
 
   private pay(events: RefuelEvent[]): void {
     for (const e of events) {
+      if (e.kind === 'refuelRefused') {
+        this.nextHudAt = 0;
+        this.popups.show('No Coins for fuel', [], 'warn');
+        continue;
+      }
       if (e.kind !== 'refuelled') continue;
       this.nextHudAt = 0;
       if (e.cost <= 0) continue;
       this.sys.spendCoins(e.cost);
       this.save();
       this.popups.show(`Refuelled · −${e.cost} coins`, [], 'info');
+      if (e.reason === 'coins') this.popups.show(`Out of Coins · tank ${Math.round(e.fuel * 100)} %`, [], 'warn');
     }
   }
 
@@ -548,6 +554,20 @@ export class DeliveryLoop {
     return hudModel(this.sys, this.d.map, p, now, name, this.d.stamina?.() ?? 1, rows, {
       route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
+      prompt: this.prompt(),
+    });
+  }
+
+  /** The key prompt now (hud-prompt): F to ride or get off, E to refuel, a pump hint on foot; null with the phone up. */
+  prompt(): string | null {
+    const r = this.d.rider();
+    return promptFor({
+      riding: r.riding,
+      stopped: r.speed <= ridingConfig.riding.stoppedSpeed,
+      mountCandidate: r.riding === null ? r.mountCandidate() : null,
+      atPump: pumpAt(this.d.map, this.d.player().position, ridingConfig.refuel.pumpRadius) !== null,
+      ownsFuelledRide: (this.d.vehicles?.rows(this.d.now()) ?? []).some((x) => x.fuel !== null),
+      phoneOpen: this.phone.isOpen,
     });
   }
 

@@ -627,6 +627,40 @@ describe('DeliveryLoop', () => {
     expect(s.loop.orders.totals.coins).toBe(80);
   });
 
+  it('refuelRefused shows "No Coins for fuel" once; a fill cut short shows "Out of Coins · tank 57 %"', () => {
+    const s = setup('car', { totals: { points: 0, coins: 0, deliveries: 0 }, garage: [], lastRide: null });
+    s.env.position = { ...map.gasStations[0]!.pumps[0]! };
+    s.rider.riding = 'car';
+    s.states.car.fuel = 0.2;
+    for (let i = 0; i < 10; i++) s.tick(false, false, false, { interact: { held: true, pressed: i === 0 } });
+    expect(s.popups.filter((p) => p.text === 'No Coins for fuel')).toEqual([{ text: 'No Coins for fuel', lines: [], tone: 'warn' }]);
+    const t = setup('car', { totals: { points: 0, coins: 30, deliveries: 0 }, garage: [], lastRide: null });
+    t.env.position = { ...map.gasStations[0]!.pumps[0]! };
+    t.rider.riding = 'car';
+    t.states.car.fuel = 0.195;
+    for (let i = 0; i < 60; i++) t.tick(false, false, false, { interact: { held: true, pressed: i === 0 } });
+    expect(t.popups.map((p) => p.text)).toContain('Out of Coins · tank 57 %');
+    expect(t.loop.orders.totals.coins).toBe(0);
+  });
+
+  it('the prompt follows the rider: ride candidate, get off, refuel at a pump, nothing with the phone open', () => {
+    const s = setup('car', { totals: { points: 0, coins: 10, deliveries: 0 }, garage: [], lastRide: null });
+    s.rider.candidate = 'car';
+    expect(s.loop.prompt()).toBe('F · Ride the car');
+    s.rider.candidate = null;
+    s.rider.riding = 'car';
+    expect(s.loop.prompt()).toBe('F · Get off');
+    s.env.position = { ...map.gasStations[0]!.pumps[0]! };
+    expect(s.loop.prompt()).toBe('Hold E · Refuel');
+    s.rider.speed = 9;
+    expect(s.loop.prompt()).toBeNull();
+    s.rider.speed = 0;
+    s.rider.riding = null;
+    expect(s.loop.prompt()).toBe('Get on to refuel');
+    s.loop.openPhone();
+    expect(s.loop.prompt()).toBeNull();
+  });
+
   it('saves the garage and the last ride on mount, dismount and a successful summon, not on a refused one', () => {
     const s = setup('car', { totals: { points: 0, coins: 0, deliveries: 0 }, garage: [], lastRide: null });
     expect(s.stored().garage).toEqual([]);

@@ -50,6 +50,8 @@ export interface DebugApi {
    * (m/s) after each one: long sim windows in tests without waiting on the headless frame rate.
    */
   advance(ticks: number): number[];
+  /** The key prompt line shown now (bottom centre), or null. */
+  prompt(): string | null;
   /** Whether the phone is up (Tab). */
   phoneOpen(): boolean;
   /** Opens the phone on `app` (as Tab does, for Orders), or switches to it when open. */
@@ -139,6 +141,7 @@ export function installDebugHooks(game: Game): void {
       return { nextStop: m.nextStop ? { ...m.nextStop } : null, points: points.map((p) => ({ ...p })) };
     },
     advance: (ticks) => game.advanceTicks(ticks),
+    prompt: () => game.delivery.prompt(),
     phoneOpen: () => game.delivery.phoneOpen,
     openPhone: (app) => game.delivery.openPhone(app),
     closePhone: () => game.delivery.closePhone(),

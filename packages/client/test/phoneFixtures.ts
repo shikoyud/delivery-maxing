@@ -48,6 +48,7 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     garage: [],
     nextStop: null,
     ride: null,
+    prompt: null,
     ...over,
   };
 }

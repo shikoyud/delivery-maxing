@@ -9,6 +9,7 @@ import {
   type OrderKind,
   type OrderSystem,
   type Poi,
+  ridingConfig,
   type RideTier,
   type RouteToDoor,
   type Totals,
@@ -95,6 +96,8 @@ export interface HudNav {
   /** The current tier's route from the player to a target's door, or null; absent (tests): straight lines. */
   route?(targetId: string, door: Vec3): RouteToDoor | null;
   ride?: HudRide | null;
+  /** The key prompt line (DeliveryLoop: `promptFor`). */
+  prompt?: string | null;
 }
 
 export interface HudModel {
@@ -118,6 +121,35 @@ export interface HudModel {
   nextStop: HudNextStop | null;
   /** Null on foot. */
   ride: HudRide | null;
+  /** The key prompt line (bottom centre), or null. */
+  prompt: string | null;
+}
+
+/** What the key prompt depends on. */
+export interface PromptContext {
+  riding: RideTier | null;
+  /** At or under ridingConfig.riding.stoppedSpeed. */
+  stopped: boolean;
+  /** What F would mount now on foot. */
+  mountCandidate: RideTier | null;
+  /** Within ridingConfig.refuel.pumpRadius of a pump. */
+  atPump: boolean;
+  /** The garage holds a ride with a tank. */
+  ownsFuelledRide: boolean;
+  phoneOpen: boolean;
+}
+
+const PROMPT_RIDE_NAME: Record<RideTier, string> = { skateboard: 'skateboard', bicycle: 'bicycle', motorbike: 'motorbike', car: 'car' };
+
+/** The key hint for the moment (Decision 5), or null: nothing to do, riding fast, or the phone is up. */
+export function promptFor(c: PromptContext): string | null {
+  if (c.phoneOpen) return null;
+  if (c.riding !== null) {
+    if (!c.stopped) return null;
+    return c.atPump && ridingConfig.rides[c.riding].fuel ? 'Hold E · Refuel' : 'F · Get off';
+  }
+  if (c.mountCandidate !== null) return `F · Ride the ${PROMPT_RIDE_NAME[c.mountCandidate]}`;
+  return c.atPump && c.ownsFuelledRide ? 'Get on to refuel' : null;
 }
 
 /** "1 pt", "N pts". */
@@ -245,6 +277,7 @@ export function hudModel(
     garage,
     nextStop: null,
     ride: nav.ride ?? null,
+    prompt: nav.prompt ?? null,
   };
   model.nextStop = next?.stop ?? null;
   return model;

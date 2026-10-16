@@ -145,6 +145,22 @@ describe('Refueller', () => {
     expect(bike.fuel).toBe(1);
   });
 
+  test('holding E with 0 Coins emits refuelRefused once, then nothing while held (playtest issue 2)', () => {
+    const v = state('car', 0.2);
+    const rf = new Refueller();
+    const t = (holding: boolean) => rf.tick(v, car, { ...base, holding, coins: 0 });
+    expect(t(true)).toEqual([{ kind: 'refuelRefused', reason: 'noCoins' }]);
+    for (let k = 0; k < 9; k++) expect(t(true)).toEqual([]);
+    t(false);
+    expect(t(true)).toEqual([{ kind: 'refuelRefused', reason: 'noCoins' }]);
+    expect(v.fuel).toBe(0.2);
+  });
+
+  test('a full tank, or E without being at a pump, is not a refusal', () => {
+    expect(run(state('car', 1), car, 0, 10).all).toEqual([]);
+    expect(run(state('car', 0.2), car, 0, 10, { atPump: false }).all).toEqual([]);
+  });
+
   test('moving mid-session ends it with reason moved', () => {
     const v = state('car', 0);
     const rf = new Refueller();

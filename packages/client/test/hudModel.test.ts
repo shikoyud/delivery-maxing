@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import {
   OrderSystem,
   expandGreybox,
@@ -15,7 +15,7 @@ import {
   type VehicleTier,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
-import { hudModel, loadText, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
+import { hudModel, loadText, promptFor, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
 
 const map = expandGreybox(greybox as GreyboxSource);
 const spawn = map.hospitals[0]!.spawn;
@@ -238,5 +238,24 @@ describe('hudModel next stop and ride', () => {
     const m = hudModel(sys, map, spawn, 0, null, 1, [], { ride: { tier: 'car', speed: 21.3, fuel: 0.4 } });
     expect(m.nextStop).toBeNull();
     expect(m.ride).toEqual({ tier: 'car', speed: 21.3, fuel: 0.4 });
+  });
+});
+
+describe('promptFor', () => {
+  const ctx = { riding: null, stopped: true, mountCandidate: null, atPump: false, ownsFuelledRide: true, phoneOpen: false };
+  test.each([
+    [{ riding: null, stopped: true, mountCandidate: 'car', atPump: false, ownsFuelledRide: true, phoneOpen: false }, 'F · Ride the car'],
+    [{ riding: 'car', stopped: true, mountCandidate: null, atPump: false, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
+    [{ riding: 'car', stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'Hold E · Refuel'],
+    [{ riding: 'bicycle', stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
+    [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'Get on to refuel'],
+    [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: false, phoneOpen: false }, null],
+    [{ riding: 'car', stopped: false, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, null],
+    [{ riding: null, stopped: true, mountCandidate: 'car', atPump: false, ownsFuelledRide: true, phoneOpen: true }, null],
+  ] as const)('promptFor %j', (c, text) => {
+    expect(promptFor({ ...ctx, ...c })).toBe(text);
+  });
+  test('nothing to say on foot with nothing near', () => {
+    expect(promptFor(ctx)).toBeNull();
   });
 });
