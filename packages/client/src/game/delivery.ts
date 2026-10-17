@@ -111,6 +111,9 @@ export interface DeliveryDeps {
   };
 }
 
+/** "3 min" for whole minutes, else seconds. */
+const durationText = (s: number): string => (s >= 60 && s % 60 === 0 ? `${s / 60} min` : `${s} s`);
+
 const BONUS_LINE: Record<Bonus, string> = { hot: 'Still hot', par: 'Within par', express: 'Express on time', fragile: 'Fragile intact' };
 
 export const TIER_LABEL: Record<VehicleTier, string> = {
@@ -691,6 +694,12 @@ export class DeliveryLoop {
       case 'prepStarted': {
         const a = this.sys.active.find((x) => x.order.id === e.orderId);
         if (a) this.popups.show(`Preparing ${a.order.item}`, ['Wait at the counter'], 'info');
+        this.nextHudAt = 0;
+        break;
+      }
+      case 'pickupMissed': {
+        const missed = before.find((a) => a.order.id === e.orderId);
+        this.popups.show(`Missed the pickup${missed ? ` · ${missed.order.item}` : ''}`, [`No new offers for ${durationText(e.lockoutSeconds)}`], 'warn');
         this.nextHudAt = 0;
         break;
       }

@@ -382,6 +382,16 @@ describe('DeliveryLoop', () => {
     expect(done.lines.some((l) => l.startsWith('Still hot'))).toBe(true);
   });
 
+  it('a missed pickup shows the warn popup with the lockout length', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.kind === 'food');
+    s.loop.accept(offer.order.id);
+    s.wait(ordersConfig.pickupDeadline.seconds + 1);
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.popups.find((p) => p.text === `Missed the pickup · ${offer.order.item}`)).toMatchObject({ lines: ['No new offers for 3 min'], tone: 'warn' });
+    expect(s.loop.orders.lockoutReason).toBe('missedPickup');
+  });
+
   it('carriedCount drops after cancelling a picked-up order (Review Focus 3)', () => {
     const s = setup('car');
     const offer = s.waitForOffer((o) => o.order.kind === 'food');

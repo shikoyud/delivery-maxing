@@ -124,6 +124,36 @@ describe('Hud key prompt', () => {
   });
 });
 
+describe('Hud pickup deadline', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  let hud: Hud;
+  const rowHtml = (): string => dom.host.byClass('hud-active')[0]!.innerHTML;
+
+  beforeEach(() => {
+    dom = installFakeDom();
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
+  });
+  afterEach(() => dom.restore());
+
+  it('an unreached order shows the pickup countdown, urgent under the threshold; a reached one does not', () => {
+    hud.update(model({ orders: [order('a', { pickup: { secondsLeft: 161, late: false } })] }), () => 0);
+    expect(rowHtml()).toContain('<span class="hud-timer">Pickup 2:41</span>');
+    hud.update(model({ orders: [order('a', { pickup: { secondsLeft: 9, late: false } })] }), () => 0);
+    expect(rowHtml()).toContain('hud-timer urgent">Pickup 0:09');
+    hud.update(model({ orders: [order('a', { pickup: null })] }), () => 0);
+    expect(rowHtml()).not.toContain('Pickup');
+  });
+
+  it('the lockout chip names a missed pickup', () => {
+    const chip = () => dom.host.byClass('hud-lockout')[0]!;
+    hud.update(model({ lockoutLeft: 173.2, lockoutReason: 'missedPickup' }), () => 0);
+    expect(chip().hidden).toBe(false);
+    expect(chip().textContent).toBe('Missed pickup · no new offers · 174 s');
+    hud.update(model({ lockoutLeft: 41.5, lockoutReason: 'cancelled' }), () => 0);
+    expect(chip().textContent).toBe('No new offers · 42 s');
+  });
+});
+
 describe('Hud food prep bar', () => {
   let dom: ReturnType<typeof installFakeDom>;
   let hud: Hud;

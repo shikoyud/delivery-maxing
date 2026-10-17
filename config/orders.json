@@ -3,6 +3,7 @@
   "deliveryCooldown": { "minSeconds": 8, "maxSeconds": 10 },
   "prep": { "foodSeconds": 6 },
   "lockout": { "seconds": 45 },
+  "pickupDeadline": { "seconds": 180, "lockoutSeconds": 180 },
   "spacing": { "doorMeters": 12, "reuseSeconds": 180 },
   "referenceSpeed": 8,
   "hot": { "distanceFactor": 1.3, "extraSeconds": 20 },

@@ -247,6 +247,77 @@ describe('OrderSystem', () => {
     expect(kinds(run(sys, 22, 80))).not.toContain('lockoutEnded');
   });
 
+  test('an order not reached within pickupDeadline.seconds fails and starts a 180 s lockout', () => {
+    const sys = makeSystem({ pois: twoFoodPois() });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 0);
+    expect(sys.active[0]!.pickupBy).toBe(180);
+    expect(kinds(run(sys, 9, 179))).not.toContain('pickupMissed');
+    expect(sys.active).toHaveLength(1);
+    const ev = sys.update(180, offerPlayer, nowhere);
+    expect(ev).toContainEqual({ kind: 'pickupMissed', orderId: 'o1', lockoutSeconds: 180 });
+    expect(kinds(ev).filter((k) => k === 'pickupMissed')).toHaveLength(1);
+    expect(sys.active).toHaveLength(0);
+    expect(sys.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
+    expect(sys.lockoutUntil).toBe(360);
+    expect(sys.lockoutReason).toBe('missedPickup');
+    expect(kinds(run(sys, 181, 359))).not.toContain('offered');
+    expect(kinds(run(sys, 360, 400))).toEqual(expect.arrayContaining(['lockoutEnded', 'offered']));
+    expect(sys.lockoutReason).toBeNull();
+  });
+
+  test('reaching the pickup in time (food: prep starts; package: picked up) clears the deadline', () => {
+    const food = makeSystem({ cfg: { ...cfgWith('food'), prep: { foodSeconds: 6 } } });
+    food.update(8, offerPlayer, nowhere);
+    food.accept('o1', 0);
+    food.update(100, offerPlayer, zones('fp-near'));
+    expect(kinds(run(food, 101, 300))).not.toContain('pickupMissed');
+    expect(food.active).toHaveLength(1);
+
+    const pkg = makeSystem({ pois: packagePois([5]), cfg: cfgWith('package') });
+    pkg.update(8, offerPlayer, nowhere);
+    pkg.accept('o1', 0);
+    pkg.update(100, offerPlayer, zones('ps-5'));
+    expect(kinds(run(pkg, 101, 300))).not.toContain('pickupMissed');
+    expect(pkg.active).toHaveLength(1);
+  });
+
+  test('a cancel lockout still running is extended to the missed-pickup lockout, never shortened', () => {
+    const other = makeSystem({ pois: twoFoodPois(), capacity: CAR });
+    other.update(8, offerPlayer, nowhere);
+    other.accept('o1', 0);
+    other.update(16, offerPlayer, nowhere);
+    other.accept('o2', 1);
+    // A cancel at 170 locks until 215; the second order's miss at 181 extends it.
+    other.cancel('o1', 170);
+    expect(other.lockoutUntil).toBe(215);
+    const ev = other.update(181, offerPlayer, nowhere);
+    expect(ev).toContainEqual({ kind: 'pickupMissed', orderId: 'o2', lockoutSeconds: 180 });
+    expect(other.lockoutUntil).toBe(361);
+    expect(other.lockoutReason).toBe('missedPickup');
+    // and a cancel afterwards (picked-up orders can still be cancelled) never cuts it
+    const third = makeSystem({ pois: twoFoodPois(), capacity: CAR });
+    third.update(8, offerPlayer, nowhere);
+    third.accept('o1', 0);
+    third.update(16, offerPlayer, nowhere);
+    third.accept('o2', 170);
+    third.update(180, offerPlayer, nowhere); // o1 missed: lockout until 360
+    expect(third.lockoutUntil).toBe(360);
+    third.cancel('o2', 200);
+    expect(third.lockoutUntil).toBe(360);
+    expect(third.lockoutReason).toBe('missedPickup');
+  });
+
+  test('skipLockout ends a missed-pickup lockout too', () => {
+    const sys = makeSystem({ pois: twoFoodPois() });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 0);
+    sys.update(180, offerPlayer, nowhere);
+    sys.skipLockout();
+    expect(sys.lockoutUntil).toBe(0);
+    expect(kinds(sys.update(181, offerPlayer, nowhere))).toEqual(['lockoutEnded', 'offered']);
+  });
+
   test('a respawn breaks a carried Fragile once; a second respawn emits nothing', () => {
     const sys = makeSystem({ pois: packagePois([30]), cfg: cfgWith('package', 'fragile') });
     sys.update(8, offerPlayer, nowhere);

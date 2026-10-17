@@ -44,6 +44,8 @@ export interface HudOrder {
   route: RouteToDoor | null;
   /** Food being prepared at the pickup: how far along (0..1) and whether it is ready. Null before arrival and after pickup. */
   prep: { progress: number; ready: boolean } | null;
+  /** Seconds to reach the pickup before the order fails (spec §3.5); null once the courier has arrived. */
+  pickup: HudTimer | null;
   /** Hot (food) or par (package) time; null before pickup (timers start at pickup, spec §3.2). */
   timer: HudTimer | null;
   /** Express packages only, after pickup. */
@@ -113,6 +115,8 @@ export interface HudModel {
   load: HudLoad;
   /** Seconds of offer lockout left (0 when none). */
   lockoutLeft: number;
+  /** Why offers are locked (null when none). */
+  lockoutReason: 'cancelled' | 'missedPickup' | null;
   orders: HudOrder[];
   /** In arrival order: the first is the one Y accepts. */
   offers: HudOffer[];
@@ -254,6 +258,7 @@ export function hudModel(
       maxPackageKg: orders.capacity.maxPackageKg,
     },
     lockoutLeft: Math.max(0, orders.lockoutUntil - now),
+    lockoutReason: orders.lockoutUntil > now ? orders.lockoutReason : null,
     orders: orders.active.map((a): HudOrder => {
       const { order } = a;
       const targetPoi = pois.get(orders.currentTarget(a));
@@ -282,6 +287,7 @@ export function hudModel(
         target: { ...target },
         distance: Math.round(length),
         route,
+        pickup: a.prepStartedAt !== null || a.pickedUpAt !== null ? null : { secondsLeft: Math.max(0, a.pickupBy - now), late: false },
         timer: elapsed === null ? null : countdown(order.timeLimit, elapsed),
         express: elapsed === null || order.modifier !== 'express' || order.expressLimit === null ? null : countdown(order.expressLimit, elapsed),
         weightKg: order.weightKg,

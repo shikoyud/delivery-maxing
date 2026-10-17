@@ -32,6 +32,8 @@ export interface Offer {
 export interface ActiveOrder {
   order: Order;
   acceptedAt: number;
+  /** Sim seconds by which the courier must first reach the pickup door (food: prep starts; package: pickup). */
+  pickupBy: number;
   /** Food: when the courier first reached the pickup and the kitchen started preparing. Null for packages. */
   prepStartedAt: number | null;
   pickedUpAt: number | null;

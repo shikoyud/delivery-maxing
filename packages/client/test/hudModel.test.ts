@@ -193,6 +193,28 @@ describe('hudModel', () => {
     expect(o.express!.secondsLeft).toBeCloseTo(offer.order.expressLimit! - 2);
   });
 
+  test('an unreached order shows the pickup countdown; a reached one does not', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys, (o) => o.order.kind === 'food');
+    sys.accept(offer.order.id, t);
+    const limit = ordersConfig.pickupDeadline.seconds;
+    expect(hudModel(sys, map, spawn, t + 20, null).orders[0]!.pickup).toEqual({ secondsLeft: limit - 20, late: false });
+    const pickup = poiIndex(map).get(offer.order.pickupPoiId).position;
+    sys.update(t + 30, pickup, playerZones(pickup, map, ordersConfig.zones));
+    expect(hudModel(sys, map, pickup, t + 31, null).orders[0]!.pickup).toBeNull();
+  });
+
+  test('the lockout reason follows a missed pickup', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys);
+    sys.accept(offer.order.id, t);
+    sys.update(t + ordersConfig.pickupDeadline.seconds, spawn, nowhere);
+    const m = hudModel(sys, map, spawn, t + ordersConfig.pickupDeadline.seconds + 6, null);
+    expect(m.orders).toHaveLength(0);
+    expect(m.lockoutReason).toBe('missedPickup');
+    expect(m.lockoutLeft).toBeCloseTo(ordersConfig.pickupDeadline.lockoutSeconds - 6);
+  });
+
   it('reports the offer lockout left after a cancel', () => {
     const sys = makeSystem('car');
     const { offer, t } = waitForOffer(sys);

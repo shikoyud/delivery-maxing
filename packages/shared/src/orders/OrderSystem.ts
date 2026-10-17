@@ -23,6 +23,7 @@ export type OrderEvent =
   | { kind: 'pickedUp'; orderId: string }
   | { kind: 'fragileBroken'; orderId: string; reason: FragileBreak }
   | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; inTime: boolean; expressOnTime: boolean | null }
+  | { kind: 'pickupMissed'; orderId: string; lockoutSeconds: number }
   | { kind: 'lockoutEnded' };
 
 export interface Totals {
@@ -57,6 +58,8 @@ export class OrderSystem {
   totals: Totals;
   capacity: CarrierCapacity;
   lockoutUntil = 0;
+  /** Why offers are locked: a cancel or a missed pickup deadline. Null when no lockout is running. */
+  lockoutReason: 'cancelled' | 'missedPickup' | null = null;
   nextOfferAt: number;
 
   constructor(opts: OrderSystemOptions, now: number) {
@@ -118,7 +121,7 @@ export class OrderSystem {
     const i = this._offers.findIndex((o) => o.order.id === offerId);
     const [offer] = this._offers.splice(i, 1) as [Offer];
     if (result === 'expired') return result;
-    this._active.push({ order: offer.order, acceptedAt: now, prepStartedAt: null, pickedUpAt: null, fragileIntact: true });
+    this._active.push({ order: offer.order, acceptedAt: now, pickupBy: now + this.opts.cfg.pickupDeadline.seconds, prepStartedAt: null, pickedUpAt: null, fragileIntact: true });
     this.used.push({ ids: [offer.order.pickupPoiId, offer.order.dropoffPoiId], at: now });
     return 'ok';
   }
@@ -128,9 +131,16 @@ export class OrderSystem {
     const i = this._active.findIndex((a) => a.order.id === orderId);
     if (i < 0) return 'unknown';
     this._active.splice(i, 1);
-    this.lockoutUntil = now + this.opts.cfg.lockout.seconds;
-    this.lockoutActive = true;
+    this.startLockout(now, this.opts.cfg.lockout.seconds, 'cancelled');
     return 'ok';
+  }
+
+  /** Only ever extends: a longer lockout still running is never cut short by a shorter one. */
+  private startLockout(now: number, seconds: number, reason: 'cancelled' | 'missedPickup'): void {
+    const until = now + seconds;
+    if (until >= this.lockoutUntil) this.lockoutReason = reason;
+    this.lockoutUntil = Math.max(this.lockoutUntil, until);
+    this.lockoutActive = true;
   }
 
   /** Pays `n` Coins (fuel); false and no change when the player holds fewer. */
@@ -175,8 +185,19 @@ export class OrderSystem {
       }
     }
 
+    // An order not reached by its pickup deadline fails like a cancel; the lockout it starts blocks this tick's roll.
+    for (let i = this._active.length - 1; i >= 0; i--) {
+      const a = this._active[i] as ActiveOrder;
+      if (now < a.pickupBy || a.prepStartedAt !== null || a.pickedUpAt !== null) continue;
+      this._active.splice(i, 1);
+      const lockoutSeconds = cfg.pickupDeadline.lockoutSeconds;
+      this.startLockout(now, lockoutSeconds, 'missedPickup');
+      events.push({ kind: 'pickupMissed', orderId: a.order.id, lockoutSeconds });
+    }
+
     if (this.lockoutActive && now >= this.lockoutUntil) {
       this.lockoutActive = false;
+      this.lockoutReason = null;
       events.push({ kind: 'lockoutEnded' });
     }
 

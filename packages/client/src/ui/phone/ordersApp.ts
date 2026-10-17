@@ -126,7 +126,10 @@ class OrdersApp {
 
   render(m: HudModel): void {
     this.lockout.hidden = m.lockoutLeft <= 0;
-    if (m.lockoutLeft > 0) setText(this.lockoutText, `No new offers for ${Math.ceil(m.lockoutLeft)} s`);
+    if (m.lockoutLeft > 0) {
+      const text = `No new offers for ${Math.ceil(m.lockoutLeft)} s`;
+      setText(this.lockoutText, m.lockoutReason === 'missedPickup' ? `Missed pickup · ${text.toLowerCase()}` : text);
+    }
 
     syncList(this.offerList, this.offerCards, m.offers, (o) => o.id, (o) => this.offerCard(o), (c, o) => this.updateOffer(c, o));
     this.offersEmpty.hidden = m.offers.length > 0;

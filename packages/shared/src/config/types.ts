@@ -148,6 +148,8 @@ export interface OrdersConfig {
   /** Food orders: seconds the kitchen takes once the courier arrives at the pickup, before the order can be picked up. */
   prep: { foodSeconds: number };
   lockout: { seconds: number };
+  /** Accepted orders must reach their pickup within `seconds` of accepting, or fail and lock offers for `lockoutSeconds`. */
+  pickupDeadline: { seconds: number; lockoutSeconds: number };
   /** `doorMeters` must equal config/city.json `pois.doorSpacing` (the generator and the order picker keep the same gap). */
   spacing: { doorMeters: number; reuseSeconds: number };
   referenceSpeed: number;

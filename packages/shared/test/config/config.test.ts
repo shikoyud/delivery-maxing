@@ -15,6 +15,9 @@ describe('config pins spec values', () => {
     expect(movementConfig.jump).toMatchObject({ height: 1.2, coyoteTime: 0.1, bufferTime: 0.1 });
     expect(movementConfig.mantle.maxHeight).toBe(1.2);
   });
+  it('the pickup deadline is 3 minutes with a 3 minute lockout (shiko, 2026-10-17)', () => {
+    expect(ordersConfig.pickupDeadline).toEqual({ seconds: 180, lockoutSeconds: 180 });
+  });
   it('orders', () => {
     expect(ordersConfig.lockout.seconds).toBe(45);
     expect(ordersConfig.offers).toEqual({ maxShown: 3, lifetimeSeconds: 25, minIntervalSeconds: 18, maxIntervalSeconds: 30, maxPathQueries: 8 });

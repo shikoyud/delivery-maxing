@@ -117,7 +117,10 @@ export class Hud implements HudView {
     this.safe.hidden = m.safeZone === null;
     if (m.safeZone !== null) setText(this.safe, `Safe zone · ${m.safeZone}`);
     this.lockout.hidden = m.lockoutLeft <= 0;
-    if (m.lockoutLeft > 0) setText(this.lockout, `No new offers · ${Math.ceil(m.lockoutLeft)} s`);
+    if (m.lockoutLeft > 0) {
+      const secs = Math.ceil(m.lockoutLeft);
+      setText(this.lockout, m.lockoutReason === 'missedPickup' ? `Missed pickup · no new offers · ${secs} s` : `No new offers · ${secs} s`);
+    }
 
     const n = m.nextStop;
     this.next.hidden = n === null;
@@ -194,6 +197,7 @@ export class Hud implements HudView {
           : `<div class="hud-prep"><div class="hud-prep-bar" style="--progress:${Math.round(o.prep.progress * 100)}%"></div><span>Preparing</span></div>`,
       );
     }
+    if (o.pickup) extra.push(this.timer('Pickup', o.pickup, 'Pickup missed'));
     if (o.timer) extra.push(o.kind === 'food' ? this.timer('Hot', o.timer, 'Cold · no hot bonus') : this.timer('Par', o.timer, 'Over par · no bonus'));
     if (o.express) extra.push(this.timer('Express', o.express, 'Express late · no bonus'));
     if (o.weightKg !== null) extra.push(`<span class="hud-kg">${o.weightKg} kg</span>`);

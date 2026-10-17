@@ -136,6 +136,11 @@ describe('renderOrdersApp', () => {
     expect(row.hidden).toBe(true);
   });
 
+  it('the lockout row names a missed pickup', () => {
+    renderOrdersApp(dom.asHost, model({ lockoutLeft: 173.2, lockoutReason: 'missedPickup' }), cb);
+    expect(dom.host.byClass('phone-lockout')[0]!.textContent).toContain('Missed pickup · no new offers for 174 s');
+  });
+
   it('says the cancel lockout length from config on the Cancel button', () => {
     renderOrdersApp(dom.asHost, model({ orders: [order('o1')] }), cb);
     expect(button(dom.host, 'cancel', 'o1')!.title).toContain(`${ordersConfig.lockout.seconds} s`);
