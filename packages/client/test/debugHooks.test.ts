@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { vec3, type CityMap, type Lot, type Vec3 } from '@dm/shared';
 import { installDebugHooks } from '../src/game/debugHooks';
 import type { Game } from '../src/game/Game';
+import type { Look } from '../src/render/cosmetics';
 
 const lot = { id: 'lot-a', rect: { minX: -5, minZ: -5, maxX: 5, maxZ: 5 }, y: 10, door: vec3(0, 10, -5) } as unknown as Lot;
 const map = {
@@ -91,5 +92,20 @@ describe('debug hooks: economy', () => {
     dm.openMap();
     dm.closeMap();
     expect(log).toEqual(['buy lockoutSkip', 'shop 3', 'lock 7', 'claim', 'openMap', 'closeMap']);
+  });
+});
+
+describe('debug hooks: look', () => {
+  it('look() is null before the first draw, then a copy of the look drawn', () => {
+    (globalThis as { window?: unknown }).window = {};
+    const game = { drawnLook: null } as unknown as Game;
+    installDebugHooks(game);
+    expect(window.__dm!.look()).toBeNull();
+    const drawn: Look = { outfit: { finish: 'gold' }, vehicle: { color: 0xc8323c }, bag: 1, phone: 2 };
+    game.drawnLook = drawn;
+    const seen = window.__dm!.look()!;
+    expect(seen).toEqual(drawn);
+    seen.bag = 9;
+    expect(drawn.bag).toBe(1);
   });
 });

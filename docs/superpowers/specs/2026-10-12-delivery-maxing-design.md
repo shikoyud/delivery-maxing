@@ -217,6 +217,7 @@ Every package door is within 30 m of a road cars can use, and at most 15% of foo
 | Tank range | Motorbike 6 km, car 5 km of driving |
 | Refuel | At any of the 6 gas stations: stop at a pump and hold E. A full tank costs 40 Coins (motorbike) or 80 Coins (car); partial fills cost proportionally. |
 | Empty tank | The vehicle still moves at 3 m/s so the player is never stranded |
+| Fuel can | Bought in the Shop's Coins tab: adds 25% of a tank to the ridden or last-ridden motorbike or car wherever it is, for 1.5 × the pump price of that fuel (motorbike 15 Coins, car 30 Coins). Not for sale without a motorbike or car to fill. |
 | HUD | Fuel gauge while riding; the map (M) shows gas stations |
 
 ## 5. City and POIs
@@ -238,8 +239,10 @@ Coins are off-chain, stored in the database, and cannot be traded or withdrawn.
 
 | Item | Effect |
 |---|---|
-| Fuel | §4.4 |
-| Cosmetics | Outfits, helmets, vehicle colours, bag skins, emotes, phone cases |
+| Fuel | §4.4: pumps, and fuel cans in the Shop |
+| Cosmetics (as built in SP6) | Six colours per slot, the first one free: outfit colours (the courier's main material: Teal, Coral, Sky, Lime, Plum, Charcoal), vehicle paint for every owned ride, the pack car included (Factory, Cherry, Ocean, Sunflower, Mint, Midnight), bag colours (the boxes the courier carries: Cardboard, Crimson, Navy, Olive, Lavender, Snow) and phone cases (the phone's frame: Slate, Rose, Aqua, Lemon, Grape, Pearl), 50 to 200 Coins each. Helmets and emotes wait for models and animations. |
+
+Premium skins (GAME, §6.2) are three finishes, **Gold, Chrome and Neon**, each for the outfit and for vehicle paint (six skins). They show in the Wardrobe once the chain owns them.
 
 ### 6.2 GAME purchases
 
@@ -258,7 +261,7 @@ Other GAME purchases:
 
 | Item | Effect | GAME split |
 |---|---|---|
-| Premium skins | Cosmetic only | 100% burned |
+| Premium skins | Cosmetic only: Gold, Chrome and Neon finishes for the outfit and for vehicle paint (§6.1) | 100% burned |
 | Offer-lockout skip | Ends the cancel or missed-pickup lockout (§3.5) | 100% burned |
 
 USD prices are set in the program's settings by the admin multisig; the values above are the config starting values until the owner sets the real ones.
@@ -278,6 +281,7 @@ USD prices are set in the program's settings by the admin multisig; the values a
 Decided in revision 3 (the "boat": holding the token makes you a better courier, checkably).
 
 - The player locks GAME in the reward program for **7 days**; the lock renews for another 7 days unless the player withdraws after it ends. Locked GAME is not spent.
+- **Withdraw window** (`lock.withdrawWindowHours: 24`): a lock can be withdrawn from the end of its period, and a renewed lock stays withdrawable for the first 24 h of its new period, so a player who comes back after the end can still take it out. After that window it is locked until the next end.
 - Every order payout (§3.6) is multiplied by `1 + 0.3 × min(1, locked_usd ÷ 100)`: +30% at $100 of GAME locked (valued at the keeper's rate when locked), linear below. The cap and the amount are config and program settings.
 - Locking rather than holding means the same tokens cannot boost several wallets, and the boost is readable on-chain by the server.
 - The Wallet app shows the locked amount, the boost and the unlock date.
@@ -323,15 +327,15 @@ The phone replaces the HUB screens. Tab raises it in the courier's hand; the ful
 
 | App | Contents |
 |---|---|
-| Orders | Incoming offers (item, pickup and dropoff names, distance band, weight, timer, reward), active orders, cancel, lockout timer and skip |
-| Garage | Owned vehicles, where each is parked, fuel, switch, summon |
-| Shop | Coins tab (fuel, cosmetics) and Token tab (the four upgrade lines, premium skins, lockout skip) with USD and GAME prices |
-| Wallet | Accrued GAME from orders with each order's payout, the reward vault's balance ("Vault empty" when orders pay no GAME), lock-to-boost (lock, renew, withdraw), Claim button (the player signs and pays the fee), claim history |
-| Wardrobe | Outfits, vehicle colours, bag and phone skins |
+| Orders | Incoming offers (item, business and addressee names with street addresses, distance band, weight, timer, reward) with Accept, active orders with Cancel (a food order being prepared shows its bar), the lockout row (cancelled or missed pickup) with its timer and Skip, which opens the same GAME confirm sheet as the Shop |
+| Garage | All four vehicles: each owned tier with where it is (riding, carried, parked and how far), fuel, its payout range, Switch (on foot: the tier offers, capacity and the payout range follow; refused when the carried orders don't fit) and Summon; tiers not owned show their range and Buy, which opens the Shop's Token tab |
+| Shop | The GAME balance and Coins with the Mock wallet badge. Coins tab: fuel can, outfits, vehicle paint, bags, phone cases (bought on one tap). Token tab: the four upgrade ladders (owned tiers ticked, the next one Buy, later ones locked), premium skins, the lockout skip; prices as "$12 ≈ 50,000 GAME". A GAME Buy opens a confirm sheet (price, "You pay at most …" with the 2% slippage, where the GAME goes, Confirm and Cancel); the row shows "Confirming…" until the chain confirms; a stale rate shows "Prices updating, purchases paused" |
+| Wallet | The wallet address with the Mock wallet badge and the GAME balance; Earned (accrued GAME, Claim, claim history); the reward vault in GAME and USD ("Vault empty · orders pay no GAME"); Boost (the Lock form with the boost previewed, then the locked amount, the boost, the unlock date and Withdraw in the withdraw window); the last payouts (USD, GAME, tier, kind) and purchases (Confirming…, Confirmed, Failed with the reason); Delivery Points, Coins and deliveries. The Claim on the real chain (the player signs and pays the fee) is SP8; the mock claim is instant |
+| Wardrobe | Outfits, vehicle paint, bags and phone cases (§6.1): owned items Equip or show Equipped, Coin items not owned are greyed "In the Shop", premium finishes appear once owned |
 | Leaderboard | Daily and weekly Delivery Points |
 | Settings | Controls, audio, graphics |
 
-**Map (M):** not a phone app (SP5 playtest). M opens a full-screen map of the whole city on foot or riding: routes to the next stops for the current vehicle class, hospitals, gas stations, parked vehicles and offers, with the standard waypoint line (the old GPS Watch). The minimap stays on the HUD.
+**Map (M):** not a phone app (SP5 playtest; the phone has no Map tab, seven apps). M opens a full-screen map of the whole city on foot or riding, at any speed (mouse-wheel zoom 1× to 6× toward the cursor, drag to pan, a legend; M or Esc closes it): routes to the next stops for the current vehicle class, hospitals, gas stations, parked vehicles and offers, with the standard waypoint line (the old GPS Watch). The minimap stays on the HUD.
 
 **HUD (always on screen):** the next stop with distance and arrow, active order timers (a food order being prepared shows a progress bar, not a countdown), the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and the GAME payout.
 
@@ -424,7 +428,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 | 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
 | 4 | **Vehicles** | Built (PR #10). Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
 | 5 | **City v2** | Built (PR #12). The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs. Draw-call and triangle budgets proved on the placeholder city in the sandbox; 60 fps with the pack models awaits the owner's `?perf=1` run. The city is the default map; `?map=greybox` keeps the SP4 test town. |
-| 6 | **Economy** | The revision 3 economy on a browser mock of the chain: the four upgrade lines (Vehicle, Bag, Shoes, Dispatcher) and the Coin shop (fuel, cosmetics), the per-order GAME payout roll, lock-to-boost, the Garage, Wallet and Wardrobe apps; plus the SP5 playtest changes: the full-screen map, the food-prep bar, the skateboard jump, getting off at any speed, WASD vehicle controls and the 3 min pickup deadline. |
+| 6 | **Economy** | Built (PR #14). The revision 3 economy on a browser mock of the chain: the four upgrade lines (Vehicle, Bag, Shoes, Dispatcher) and the Coin shop (fuel, cosmetics), the per-order GAME payout roll, lock-to-boost, the Garage, Wallet and Wardrobe apps; plus the SP5 playtest changes: the full-screen map, the food-prep bar, the skateboard jump, getting off at any speed, WASD vehicle controls and the 3 min pickup deadline. |
 | 7 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation for players and vehicles, server-authoritative thieves, wallet sign-in, Postgres persistence, combat and collisions, anti-cheat, reconnects. |
 | 8 | **Reward program + launch** | The §9 program for real: harvest spike, Anchor program (purchases, locks, payouts, claims), buyback, price keeper, replacing SP6's mock, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 

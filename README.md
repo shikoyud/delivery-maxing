@@ -5,14 +5,17 @@ package orders on your phone, run them from pickup to dropoff across a
 fictional city, and earn Delivery Points and Coins. All names and places are
 invented; no real brands or delivery apps are used.
 
-Status: sub-project 5 (SP5), City v2: single player in the 1.2 × 1.2 km
+Status: sub-project 6 (SP6), Economy: single player in the 1.2 × 1.2 km
 terraced bay city (four levels joined by switchback roads, steep lanes and
 stairs; about 2,600 buildings, four hospitals, six gas stations), on foot or
 on a skateboard, bicycle, motorbike or car. Offers arrive on the phone, you
 accept one, pick it up and deliver it on foot before its timer runs out; every
 pickup and dropoff is a named business or household with a street address.
 You spawn and respawn at the nearest hospital, whose safe zone is marked on the
-HUD. There are no blockchain or token features yet.
+HUD. You start on foot: vehicles, a bigger Bag, faster Shoes and a better
+Dispatcher are bought with GAME in the phone's Shop, and every order pays a
+small GAME reward. All of that runs on a **mock wallet in your browser** (below);
+there is no real chain, token or network call.
 
 The city is the default map. `?map=greybox` loads the SP4 greybox test town
 instead (kept for its vehicle tests); progress is saved per map. Without the
@@ -55,43 +58,74 @@ pnpm install && pnpm dev   # then open the URL Vite prints
 
 | Input | Action |
 | --- | --- |
-| W A S D | Move |
-| Mouse | Look (click the page to lock the pointer) |
-| Space | Jump; climb onto ledges up to chest height. On a vehicle: handbrake |
+| W A S D | On foot: move. On a vehicle: W throttle, S brakes then reverses (car, bicycle, motorbike; the skateboard only brakes), A / D steer, also when stopped (reversing steers like a car) |
+| Mouse | Look (click the page to lock the pointer). On a vehicle the camera orbits freely and eases back behind the ride once you stop moving the mouse; the mouse never steers |
+| Space | Jump; climb onto ledges up to chest height. On the skateboard: ollie (0.8 m). On the bicycle, motorbike and car: handbrake |
 | C | Crouch; crouch-slide while sprinting |
 | Shift | Sprint on / off (toggle); drains the stamina ring top left. Unused on a vehicle |
 | E | Hold at a gas pump, stopped on the motorbike or car, to refuel (Coins) |
-| F | Get on the nearest parked vehicle (within 2.5 m), else put the skateboard down and ride it; F again gets off |
-| Tab | Phone: Orders, Map, Garage (Summon), Wallet, Settings (Respawn) (Esc, Tab or M closes it). On a vehicle only when stopped |
-| M | Map view (the phone opened straight on the Map app) |
+| F | Get on the nearest parked vehicle (within 2.5 m), else put the skateboard down and ride it. F again gets off at any speed: the vehicle parks where it is (the skateboard is picked up) and you step off to the side, keeping up to 12 m/s. Refused only with no room beside the ride, or in the air on anything but the skateboard |
+| Tab | Phone: Orders, Garage, Shop, Wallet, Wardrobe, Leaderboard, Settings (Respawn) (Esc, Tab or M closes it). On a vehicle only when stopped |
+| M | Full-screen map, on foot or riding at any speed: the mouse wheel zooms (1× to 6×, toward the cursor), drag pans; M or Esc closes it |
 | Y | Accept the top offer |
 | F3 | Toggle the debug overlay |
 | F4 | Toggle the map debug view (city): lot ids and roles within 80 m, distance bands, chunks, access zones |
 | `` ` `` (backtick) | Open the dev panel |
 
-Your slots and the package weight you can take follow the vehicle you ride, or
-last rode (`config/vehicles.json`): one order and no packages on foot or on the
-skateboard, packages only on the motorbike and car. Every pickup and hand-over
-is on foot: get off at the door. New offers only arrive while you have a free
-slot. Cancelling an order on the phone blocks new offers for 45 s.
+Your slots and the package weight you can take are the smaller of your Bag
+tier and the cap of the vehicle you ride, or last rode, or switched to in the
+Garage (`config/economy.json`, `config/vehicles.json`): the free Bag holds one
+order and no packages. Every pickup and hand-over is on foot: get off at the
+door. A food order shows a "Preparing" bar at the kitchen until it is ready.
+New offers only arrive while you have a free slot. Cancelling an order blocks
+new offers for 45 s; an order whose pickup is not reached within 3 min fails
+and blocks them for 3 min (the Offer lockout skip in the Shop ends either).
 
 ### Vehicles
 
-All four vehicles are yours from the start (the shop comes in SP6): the
-bicycle, motorbike and car wait in the bay beside the first hospital (Bayview
-General in the city) and the skateboard is carried. Cars stay out of alleys,
-steep lanes, stairs and paths. Holding S while stopped reverses the car; the
-bicycle and motorbike turn round toward it first, and back up at walking pace
-only while a wall stops the turn. The Map app and minimap mark hospitals, gas
-stations and your parked vehicles. On `?map=greybox` the test town has a steep
-lane, stairs, a park path, a boardwalk and two gas stations to try them on.
-The dev panel (backtick) has
-an **Owned** box per vehicle, **Fill all tanks**, **+500 coins** and **Reset
-progress** (zero totals, every vehicle back in the bay).
+A new player owns no vehicle. Buying one in the Shop (Token tab, Vehicle line:
+skateboard, bicycle, motorbike, car, bought in order; each tier owns those
+below it) parks it in the nearest hospital's bay (the skateboard is carried),
+and the Garage app can summon it. Cars stay out of alleys, steep lanes, stairs
+and paths. The map screen and minimap mark hospitals, gas stations and your
+parked vehicles. On `?map=greybox` the test town has a steep lane, stairs, a
+park path, a boardwalk and two gas stations to try them on. The dev panel
+(backtick) has an **Owned** box per vehicle (granted or revoked on the mock
+chain), **Fill all tanks**, **+500 coins** and **Reset progress** (zero totals,
+every owned vehicle back in the bay).
+
+### Mock wallet (no real chain)
+
+Everything priced in GAME runs against `MockChain`, a stand-in for the SP8
+reward program kept in your browser's localStorage under `dm.mockchain.v1`. No
+Solana RPC, keys, token or network request is involved, and every place GAME
+appears carries a **Mock wallet** badge.
+
+- The dev wallet `DEV-WALLET` starts with **600,000 GAME**, at a mock rate of
+  $0.00024 per GAME (about $144: every tier of every line costs $124).
+- Purchases confirm after **2 s**; the Shop row shows "Confirming…" until then.
+  A purchase charges and grants nothing if it fails: above the shown "at most"
+  price (2% slippage), with a stale rate ("Prices updating, purchases paused")
+  or when rejected.
+- Upgrades send 80% of their GAME to the burn and 20% to the **reward vault**,
+  which starts with **$50 of GAME** and pays every order's GAME reward; an
+  empty vault pays none ("Vault empty · no GAME"). Skins and the lockout skip
+  are 100% burned.
+- Rewards accrue in the Wallet; the mock **Claim** moves them to the balance at
+  once. Locking GAME for 7 days boosts every payout (×1.3 at $100 locked); a
+  lock renews unless withdrawn, and a renewed lock can be withdrawn in the
+  first 24 h of its new period.
+- The dev panel's **Economy** folder: +100,000 GAME, the GAME price (a move of
+  more than 20% is refused), Make rate stale, Fail next transaction, the
+  confirm delay, the vault in USD, Advance clock 1 day (locks), and a tier
+  slider per line.
+
+Clear the site's localStorage (or delete `dm.mockchain.v1`) for a fresh wallet.
 
 Add `?debug=1` to the URL to turn on the debug hooks and overlay.
-Points, Coins, deliveries, your vehicles and the last ride persist in your
-browser's localStorage, one save per map: the city starts fresh, and an SP4
+Points, Coins, deliveries, cosmetics, vehicle positions and the last ride
+persist in your browser's localStorage, one save per map (the mock wallet is
+shared by both maps): the city starts fresh, and an SP4
 save stays with `?map=greybox`. Add `?seed=N` to make the offer stream reproducible.
 
 ### Frame-rate check (`?perf=1`)

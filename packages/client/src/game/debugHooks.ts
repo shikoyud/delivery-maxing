@@ -6,6 +6,7 @@ import type { PurchaseOutcome } from '../economy/Purchases';
 import type { ShopRow } from '../ui/phone/shopApp';
 import type { HudNextStop } from '../ui/hudModel';
 import type { CourierDebug } from '../render/courier/CourierView';
+import type { Look } from '../render/cosmetics';
 import type { PhoneApp } from '../ui/phone/Phone';
 import type { MapDebugView } from '../ui/mapDebug';
 import type { Game } from './Game';
@@ -96,6 +97,8 @@ export interface DebugApi {
   claim(): Promise<void>;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
+  /** The cosmetics last drawn on the courier, the rides and the phone (a copy), or null before the first draw. */
+  look(): Look | null;
   /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
   courier(): CourierDebug;
   /** Whether any of the camera's near plane is inside a map solid (a ball reaching the near-plane corners). */
@@ -221,6 +224,7 @@ export function installDebugHooks(game: Game): void {
     lockGame: (g) => game.delivery.lockGame(g),
     claim: () => game.delivery.claim(),
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
+    look: () => (game.drawnLook ? structuredClone(game.drawnLook) : null),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),
     mapKind: () => game.mapKind,

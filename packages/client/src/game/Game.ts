@@ -50,7 +50,7 @@ import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { MockChain } from '../economy/MockChain';
 import { Purchases } from '../economy/Purchases';
 import { equipItem, type Wardrobe } from '../economy/wardrobe';
-import { lookApplier, lookOf } from '../render/cosmetics';
+import { lookApplier, lookOf, type Look } from '../render/cosmetics';
 import { capacityLabel, mountDevPanel, rideOfTier, vehicleTierAfter, type DevPanel } from '../ui/devPanel';
 import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
@@ -123,11 +123,14 @@ export class Game {
   readonly purchases: Purchases;
   /** The Coin cosmetics owned and worn (saved with the progress). */
   wardrobe: Wardrobe;
+  /** The look last drawn on the courier, the rides and the phone (debug API); null before the first. */
+  drawnLook: Look | null = null;
   /** Draws the look on the courier, the rides and the phone, only when it changed. */
   private readonly drawLook = lookApplier((look) => {
     this.courier.applyLook(look);
     this.vehicles.applyLook(look);
     this.delivery.applyLook(look);
+    this.drawnLook = look;
   });
   /** The runtime pack models (public/packs/, git-ignored; boxes and placeholders without them). */
   readonly models: ModelLoader;
