@@ -714,15 +714,6 @@ kbd {
 
 .phone-lockout-text { flex: 1 1 100%; }
 
-.phone-devstub {
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px dashed #557078;
-  font-size: 11px;
-  font-weight: 600;
-  color: #557078;
-}
-
 .phone-empty,
 .phone-note,
 .phone-garage-note,
@@ -763,6 +754,95 @@ kbd {
 }
 
 .phone-summon { background: var(--dm-teal); }
+
+/* Shop (spec §6, §8): two tabs, ladders of tiers, a confirm sheet for GAME items */
+.phone-shop { display: flex; flex-direction: column; gap: 6px; }
+.phone-shop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.phone-mock-badge {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px dashed #b07a00;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b07a00;
+  white-space: nowrap;
+}
+.phone-shop-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 12px; background: #e9e2d3; }
+.phone-shop-tab {
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dm-ink);
+  font: 700 13px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+.phone-shop-tab.active { background: var(--dm-ink); color: #fff; }
+.phone-shop-panel[hidden],
+.phone-shop-paused[hidden],
+.phone-shop-sheet[hidden],
+.phone-shop-swatch[hidden],
+.phone-shop-sheet-note[hidden] { display: none; }
+.phone-shop-paused {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(242, 145, 61, 0.18);
+  font-size: 13px;
+  font-weight: 700;
+}
+.phone-shop-row { flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; }
+.phone-shop-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.phone-shop-label { font-size: 14px; font-weight: 700; }
+.phone-shop-detail { font-size: 12px; color: #557078; }
+.phone-shop-price { font-size: 12px; font-weight: 700; color: #b07a00; }
+.phone-shop-swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--swatch, transparent);
+  border: 2px solid rgba(22, 50, 58, 0.18);
+}
+.phone-shop-swatch.factory { background: conic-gradient(#c8323c 0 33%, #2f6fb5 0 66%, #f2c230 0); }
+.phone-shop-buy { flex: none; align-self: center; margin: 0; background: var(--dm-teal); }
+.phone-shop-row.owned { border-left-color: var(--dm-teal); }
+.phone-shop-row.owned .phone-shop-buy:disabled { background: transparent; color: var(--dm-teal); }
+.phone-shop-row.locked { opacity: 0.55; border-left-color: #b9c4c6; }
+.phone-shop-row.pending { border-left-color: #f2913d; }
+.phone-shop-row.paused { border-left-color: #b9c4c6; }
+.phone-shop-sheet {
+  position: sticky; /* pinned to the bottom of the phone screen while it scrolls */
+  bottom: 0;
+  margin-top: 8px;
+  padding: 8px 0 0;
+}
+.phone-shop-sheet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 -6px 24px rgba(22, 50, 58, 0.28);
+}
+.phone-shop-sheet-card .phone-mock-badge { align-self: flex-start; }
+.phone-shop-sheet-label { font-size: 16px; font-weight: 800; }
+.phone-shop-sheet-price { font-size: 18px; font-weight: 800; color: #b07a00; }
+.phone-shop-sheet-max,
+.phone-shop-sheet-split { font-size: 13px; color: var(--dm-ink); }
+.phone-shop-sheet-note { font-size: 13px; font-weight: 700; color: var(--dm-coral); }
+.phone-shop-sheet-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.phone-shop-sheet-actions .phone-btn { margin: 4px 0 0; }
+.phone-shop-cancel { background: #8a9ba0; }
+.phone-shop-confirm { background: var(--dm-teal); }
 .phone-respawn { background: var(--dm-coral); align-self: flex-start; }
 
 .phone-bindings {

@@ -1,11 +1,12 @@
 import { ordersConfig, type AcceptResult } from '@dm/shared';
 import { clock, el, setText } from '../dom';
 import { BAND_LABEL, KIND_LABEL, pointsText, type HudModel, type HudOffer, type HudOrder, type HudTimer } from '../hudModel';
+import type { ShopRow } from './shopApp';
 
 export interface OrdersCallbacks {
   accept(offerId: string): void;
   cancel(orderId: string): void;
-  /** Dev stub until SP6 (burning GAME, price Pending). */
+  /** Skip: buys the Shop's `lockoutSkip` (GAME, burned) at its live price. */
   skipLockout(): void;
 }
 
@@ -91,11 +92,19 @@ export function orderTimers(o: HudOrder): string[] {
   return out;
 }
 
+/** The Skip button's price or state: the live price to buy, "Confirming…" while pending, the paused message. */
+function skipText(row: ShopRow | undefined): string {
+  if (row?.state === 'pending') return 'Confirming…';
+  if (row?.state === 'buy' || row?.state === 'paused') return row.price.text;
+  return 'unavailable';
+}
+
 /** The Orders app (spec §8): incoming offers with Accept, active orders with Cancel, and the lockout row with skip. */
 class OrdersApp {
   cb: OrdersCallbacks;
   private readonly lockout: HTMLElement;
   private readonly lockoutText: HTMLElement;
+  private readonly skip: HTMLButtonElement;
   private readonly offerList: HTMLElement;
   private readonly offersEmpty: HTMLElement;
   private readonly activeList: HTMLElement;
@@ -109,11 +118,11 @@ class OrdersApp {
     this.lockout = el('div', 'phone-lockout', wrap);
     this.lockout.hidden = true;
     this.lockoutText = el('span', 'phone-lockout-text', this.lockout);
-    const skip = button('phone-skip', 'skip', this.lockout);
-    skip.textContent = 'Skip (burn GAME)';
-    skip.title = 'Ends the offer lockout now. Burning GAME comes with SP6; this is a dev stub.';
-    skip.addEventListener('click', () => this.cb.skipLockout());
-    el('span', 'phone-devstub', this.lockout).textContent = 'dev stub';
+    this.skip = button('phone-skip', 'skip', this.lockout);
+    this.skip.title = 'Ends the offer lockout now; the GAME is burned';
+    this.skip.addEventListener('click', () => {
+      if (!this.skip.disabled) this.cb.skipLockout();
+    });
 
     el('h3', 'phone-section', wrap).textContent = 'Offers';
     this.offerList = el('div', 'phone-list', wrap);
@@ -129,6 +138,10 @@ class OrdersApp {
     if (m.lockoutLeft > 0) {
       const text = `No new offers for ${Math.ceil(m.lockoutLeft)} s`;
       setText(this.lockoutText, m.lockoutReason === 'missedPickup' ? `Missed pickup · ${text.toLowerCase()}` : text);
+      // The Shop's lockout-skip row: its live price, "Confirming…" while it waits for the chain, or why it is paused.
+      const row = m.shop.find((r) => r.itemId === 'lockoutSkip');
+      this.skip.disabled = row?.state !== 'buy';
+      setText(this.skip, `Skip · ${skipText(row)}`);
     }
 
     syncList(this.offerList, this.offerCards, m.offers, (o) => o.id, (o) => this.offerCard(o), (c, o) => this.updateOffer(c, o));

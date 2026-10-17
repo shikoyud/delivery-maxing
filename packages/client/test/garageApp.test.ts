@@ -139,6 +139,9 @@ describe('Garage app', () => {
         closed: () => undefined,
         summon: () => undefined,
         respawn: () => void events.push(...sim.respawnAtHospital().map((e) => e.kind)),
+        shopBuy: () => undefined,
+        shopConfirm: () => undefined,
+        shopCancel: () => undefined,
       },
       ['Escape'],
     );

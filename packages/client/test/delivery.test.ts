@@ -35,7 +35,7 @@ import { clientConfig } from '../src/clientConfig';
 import { DeliveryLoop, MOUNT_REFUSED, simEventHint } from '../src/game/delivery';
 import { createProgressStore, type Progress } from '../src/game/progress';
 import { MockChain } from '../src/economy/MockChain';
-import { defaultWardrobe } from '../src/economy/Purchases';
+import { defaultWardrobe, type PurchaseOutcome, type QuoteView } from '../src/economy/Purchases';
 import { ActionState } from '../src/input/actionState';
 import { gameText, usdText, type HudModel } from '../src/ui/hudModel';
 import type { MapScreenView } from '../src/ui/map/MapScreen';
@@ -78,6 +78,21 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
   /** The reward chain: an in-memory mock wallet on a wall clock (ms) the test moves. */
   const wall = { ms: 1_000_000 };
   const chain = new MockChain(null, economyConfig, { now: () => wall.ms });
+  /** A recording Shop: what Buy and Confirm sent, and what they answer. */
+  const shop = { calls: [] as string[], answer: { ok: true } as PurchaseOutcome };
+  const purchases = {
+    update: () => undefined,
+    quote: (): QuoteView => ({ kind: 'coins', coins: 1, text: '1 Coins' }),
+    pending: () => [],
+    buy: (id: string) => {
+      shop.calls.push(`buy ${id}`);
+      return Promise.resolve(shop.answer);
+    },
+    buyWithCoins: (id: string) => {
+      shop.calls.push(`coins ${id}`);
+      return shop.answer;
+    },
+  };
   /** A recording phone: open/close state, the app, the renders, the callbacks and close keys DeliveryLoop gave it. */
   const phone = {
     isOpen: false,
@@ -136,6 +151,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     bagTier: () => bag.tier,
     dispatcherTier: () => 0,
     chain,
+    purchases: () => purchases,
     wallClock: () => wall.ms,
     now: () => env.now,
     player: () => ({ position: env.position, mode: 'ground', grounded: env.grounded, lastGrounded: env.lastGrounded }),
@@ -223,7 +239,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     const popup = [...popups].reverse().find((p) => p.text.startsWith('Delivered!'))!;
     return { order: offer.order, popup };
   };
-  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states, chain, wall, deliverFood };
+  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states, chain, wall, deliverFood, shop };
 }
 
 describe('DeliveryLoop', () => {
@@ -370,8 +386,29 @@ describe('DeliveryLoop', () => {
     s.phone.cb!.cancel(offer.order.id);
     expect(s.loop.orders.active).toHaveLength(0);
     expect(s.loop.orders.lockoutUntil).toBeGreaterThan(s.env.now);
-    s.phone.cb!.skipLockout();
+    s.loop.skipLockout(); // the dev panel's free skip
     expect(s.loop.orders.lockoutUntil).toBeLessThanOrEqual(s.env.now);
+  });
+
+  it("the Orders app's Skip and the Shop's Confirm send GAME purchases; Buy buys Coin items; refusals pop up", async () => {
+    const s = setup('car');
+    s.phone.cb!.skipLockout();
+    s.phone.cb!.shopConfirm('line.bag.1');
+    s.phone.cb!.shopBuy('cosmetic.outfit.coral');
+    expect(s.shop.calls).toEqual(['buy lockoutSkip', 'buy line.bag.1', 'coins cosmetic.outfit.coral']);
+    s.shop.answer = { ok: false, message: 'Not enough Coins' };
+    s.phone.cb!.shopBuy('cosmetic.outfit.sky');
+    expect(s.popups.at(-1)).toEqual({ text: 'Not enough Coins', lines: [], tone: 'warn' });
+    s.shop.answer = { ok: false, message: 'Prices updating, purchases paused' };
+    s.phone.cb!.shopConfirm('line.bag.1');
+    await Promise.resolve();
+    expect(s.popups.at(-1)!.text).toBe('Prices updating, purchases paused');
+    // The HUD model carries the Shop rows and the spendable balance.
+    s.tick();
+    s.loop.draw(10);
+    const m = s.huds.at(-1)!;
+    expect(m.shop.find((r) => r.itemId === 'line.bag.1')).toBeDefined();
+    expect(m.wallet.balance).toBe(s.chain.balance());
   });
 
   it('draw renders the phone with the HUD model while it is open', () => {

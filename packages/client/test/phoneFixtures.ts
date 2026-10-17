@@ -53,7 +53,8 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     nextStop: null,
     ride: null,
     prompt: null,
-    wallet: { accrued: 0 },
+    wallet: { accrued: 0, balance: 0 },
+    shop: [],
     ...over,
   };
 }

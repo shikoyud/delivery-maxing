@@ -3,6 +3,7 @@ import { el, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
 import { createGarageApp } from './garageApp';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
+import { createShopApp } from './shopApp';
 import { buildStubApp, type StubAppName } from './stubApp';
 import { renderWalletApp } from './walletApp';
 
@@ -28,6 +29,12 @@ export interface PhoneCallbacks extends OrdersCallbacks {
   summon(t: RideTier): void;
   /** Settings: respawn at the nearest hospital (spec §13 Vehicle stuck). */
   respawn(): void;
+  /** Shop: a Coin item's Buy (bought at once). */
+  shopBuy(itemId: string): void;
+  /** Shop: Confirm on a GAME item's confirm sheet (sent to the chain at the live quote). */
+  shopConfirm(itemId: string): void;
+  /** Shop: the confirm sheet was cancelled. */
+  shopCancel(): void;
 }
 
 /** What DeliveryLoop needs from the phone (tests pass a recorder). */
@@ -166,6 +173,12 @@ export class Phone implements PhoneView {
         return { el: root, render: (m) => renderWalletApp(root, m) };
       case 'garage': {
         const view = createGarageApp((t) => this.callbacks.summon(t));
+        root.appendChild(view.el);
+        return { el: root, render: (m, p, h) => view.render(m, p, h) };
+      }
+      case 'shop': {
+        const cb = this.callbacks;
+        const view = createShopApp({ buy: (id) => cb.shopBuy(id), confirm: (id) => cb.shopConfirm(id), cancel: () => cb.shopCancel() });
         root.appendChild(view.el);
         return { el: root, render: (m, p, h) => view.render(m, p, h) };
       }

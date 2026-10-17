@@ -3,11 +3,10 @@ import { el, keyLabel } from '../dom';
 
 type ClientBindings = Record<BindingName, string[]>;
 
-export type StubAppName = 'shop' | 'wardrobe' | 'leaderboard' | 'settings';
+export type StubAppName = 'wardrobe' | 'leaderboard' | 'settings';
 
 /** Apps that are placeholders this sub-project: their name and the sub-project that brings them. */
 export const STUB_APPS: Record<StubAppName, { title: string; sp: number }> = {
-  shop: { title: 'Shop', sp: 6 },
   wardrobe: { title: 'Wardrobe', sp: 6 },
   leaderboard: { title: 'Leaderboard', sp: 7 },
   settings: { title: 'Settings', sp: 3 },

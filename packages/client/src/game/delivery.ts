@@ -59,7 +59,8 @@ import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui
 import { Popups, type PopupSink, type PopupTone } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
 import type { ProgressStore } from './progress';
-import type { Wardrobe } from '../economy/Purchases';
+import { defaultWardrobe, type Purchases, type Wardrobe } from '../economy/Purchases';
+import { shopRows, type ShopRow } from '../ui/phone/shopApp';
 import { RouteCache } from './routes';
 
 export interface DeliveryDeps {
@@ -87,8 +88,11 @@ export interface DeliveryDeps {
   chain: ChainSource;
   /** Wall-clock ms a payout is recorded at (the chain's time); Date.now when absent. */
   wallClock?(): number;
-  /** The Shop's purchases (Game: Purchases), updated each tick at the wall clock; absent (tests): none. */
-  purchases?(): { update(nowMs: number): void } | null;
+  /**
+   * The Shop's purchases (Game: Purchases), updated each tick at the wall clock; the Shop app's rows, Buy and Confirm
+   * go through it. Absent (tests): no Shop rows, and its buttons do nothing.
+   */
+  purchases?(): Pick<Purchases, 'update' | 'quote' | 'pending' | 'buy' | 'buyWithCoins'> | null;
   /** The Coin cosmetics to save (Game: the wardrobe); absent: the stored ones are kept. */
   wardrobe?(): Wardrobe;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
@@ -240,7 +244,11 @@ export class DeliveryLoop {
     const phoneCb: PhoneCallbacks = {
       accept: (id) => void this.accept(id),
       cancel: (id) => void this.cancel(id),
-      skipLockout: () => this.skipLockout(),
+      // The Orders app's Skip buys the lockout skip (GAME) at its live price, as the Shop's Confirm does.
+      skipLockout: () => void this.shopConfirm('lockoutSkip'),
+      shopBuy: (id) => this.shopBuy(id),
+      shopConfirm: (id) => void this.shopConfirm(id),
+      shopCancel: () => undefined,
       summon: (t) => void this.summon(t),
       respawn: () => this.respawn(),
       closed: () => {
@@ -611,7 +619,33 @@ export class DeliveryLoop {
     this.nextHudAt = 0;
   }
 
-  /** Dev / GAME-burn stub (price Pending): end the offer lockout now. */
+  /** The Shop app's rows at sim time `now` (none without purchases). */
+  private shopRows(now: number): ShopRow[] {
+    const p = this.d.purchases?.();
+    if (!p) return [];
+    return shopRows(p, this.d.chain.ownership(), this.d.wardrobe?.() ?? defaultWardrobe(), this.sys.lockoutUntil > now);
+  }
+
+  /** The Shop's Buy on a Coin item: bought now, or a popup saying why not. */
+  shopBuy(itemId: string): void {
+    const p = this.d.purchases?.();
+    if (!p) return;
+    const r = p.buyWithCoins(itemId);
+    if (!r.ok) this.popup(r.message, [], 'warn');
+    this.nextHudAt = 0;
+  }
+
+  /** The Shop's Confirm (and the Orders app's Skip): sends a GAME purchase at the live quote; a refusal pops up. */
+  async shopConfirm(itemId: string): Promise<void> {
+    const p = this.d.purchases?.();
+    if (!p) return;
+    this.nextHudAt = 0;
+    const r = await p.buy(itemId);
+    if (!r.ok) this.popup(r.message, [], 'warn');
+    this.nextHudAt = 0;
+  }
+
+  /** Dev and debug: end the offer lockout now, free (the phone's Skip buys it: shopConfirm). */
   skipLockout(): void {
     this.sys.skipLockout();
     this.nextHudAt = 0;
@@ -648,7 +682,8 @@ export class DeliveryLoop {
       route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
       prompt: this.prompt(),
-      wallet: { accrued: this.d.chain.accrued() },
+      wallet: { accrued: this.d.chain.accrued(), balance: this.d.chain.balance() },
+      shop: this.shopRows(now),
     });
   }
 

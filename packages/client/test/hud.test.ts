@@ -105,7 +105,7 @@ describe('Hud next stop and ride', () => {
     const value = () => one('hud-game').byClass('hud-stat-value')[0]!.textContent;
     hud.update(model(), () => 0);
     expect(value()).toBe('0');
-    hud.update(model({ wallet: { accrued: 1_234_567_890_123 } }), () => 0); // base units: 1,234,567.89 GAME
+    hud.update(model({ wallet: { accrued: 1_234_567_890_123, balance: 0 } }), () => 0); // base units: 1,234,567.89 GAME
     expect(value()).toBe('1,234,567');
     expect(one('hud-game').byClass('hud-stat-label')[0]!.textContent).toBe('GAME');
   });

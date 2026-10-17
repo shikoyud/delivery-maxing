@@ -17,6 +17,7 @@ import {
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import type { GarageRow } from '../src/ui/phone/garageApp';
+import type { ShopRow } from '../src/ui/phone/shopApp';
 import { clientConfig } from '../src/clientConfig';
 import { gameText, hudModel, loadText, promptFor, poiIndex, pointsText, stageText, usdText } from '../src/ui/hudModel';
 
@@ -282,6 +283,27 @@ describe('hudModel next stop and ride', () => {
     expect(m.nextStop!.bearing).toBeCloseTo(0); // north: yaw 0 faces -Z
     const straightAtDoor = Math.atan2(-(door.x - spawn.x), -(door.z - spawn.z));
     expect(Math.abs(straightAtDoor)).toBeGreaterThan(0.1);
+  });
+
+  test('the model carries the Shop rows and the wallet balance; without them, none and 0', () => {
+    const sys = makeSystem('car');
+    const shop: ShopRow[] = [
+      {
+        itemId: 'line.bag.1',
+        tab: 'token',
+        section: 'Bag',
+        label: 'Bag 1',
+        detail: '2 slots · 10 kg',
+        price: { kind: 'game', usd: '$1', game: 4166e6, maxGame: 4250e6, text: '$1 ≈ 4,166 GAME' },
+        state: 'buy',
+      },
+    ];
+    const m = hudModel(sys, map, spawn, 0, null, 1, [], { shop, wallet: { accrued: 5, balance: 600_000 * GAME_UNITS } });
+    expect(m.shop).toEqual(shop);
+    expect(m.wallet).toEqual({ accrued: 5, balance: 600_000 * GAME_UNITS });
+    const bare = hudModel(sys, map, spawn, 0, null);
+    expect(bare.shop).toEqual([]);
+    expect(bare.wallet).toEqual({ accrued: 0, balance: 0 });
   });
 
   it('nextStop is null without active orders; ride carries tier, speed and fuel', () => {

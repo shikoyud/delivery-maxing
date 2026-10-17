@@ -24,6 +24,9 @@ describe('Phone', () => {
         closed: () => void calls.push('closed'),
         summon: (t) => void calls.push(`summon ${t}`),
         respawn: () => void calls.push('respawn'),
+        shopBuy: (id) => void calls.push(`shop buy ${id}`),
+        shopConfirm: (id) => void calls.push(`shop confirm ${id}`),
+        shopCancel: () => void calls.push('shop cancel'),
       },
       ['Escape', 'Tab'],
     );
@@ -149,8 +152,8 @@ describe('Phone', () => {
 
   it('stub apps say when they arrive; settings lists the key bindings from config', () => {
     expect(STUB_APPS).not.toHaveProperty('garage');
+    expect(STUB_APPS).not.toHaveProperty('shop');
     expect(STUB_APPS).toMatchObject({
-      shop: { sp: 6 },
       wardrobe: { sp: 6 },
       leaderboard: { sp: 7 },
       settings: { sp: 3 },
@@ -161,6 +164,27 @@ describe('Phone', () => {
     expect(settings).toContain('Tab');
     expect(settings).toContain(clientConfig.input.bindings.accept[0]!.replace('Key', ''));
     expect(settings).toContain('Esc');
+  });
+
+  it('the Shop app renders the shop rows; Buy and the confirm sheet reach the callbacks', () => {
+    phone.open('shop');
+    expect(view('shop').textContent).not.toContain('Coming in');
+    const game = { kind: 'game', usd: '$1', game: 4166e6, maxGame: 4250e6, text: '$1 ≈ 4,166 GAME' } as const;
+    phone.render(
+      model({
+        shop: [
+          { itemId: 'cosmetic.outfit.coral', tab: 'coins', section: 'Outfits', label: 'Coral outfit', detail: 'Outfit colour', price: { kind: 'coins', coins: 50, text: '50 Coins' }, state: 'buy' },
+          { itemId: 'line.bag.1', tab: 'token', section: 'Bag', label: 'Bag 1', detail: '2 slots · 10 kg', price: game, state: 'buy' },
+        ],
+      }),
+    );
+    const btn = (attr: 'id' | 'action', v: string): FakeElement => view('shop').findAll((e) => e.tagName === 'BUTTON' && e.dataset[attr] === v)[0]!;
+    btn('id', 'cosmetic.outfit.coral').click();
+    btn('id', 'line.bag.1').click();
+    btn('action', 'cancel').click();
+    btn('id', 'line.bag.1').click();
+    btn('action', 'confirm').click();
+    expect(calls).toEqual(['shop buy cosmetic.outfit.coral', 'shop cancel', 'shop confirm line.bag.1']);
   });
 
   it('the Garage app renders the garage rows and Summon reaches the callback', () => {

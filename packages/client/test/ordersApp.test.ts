@@ -1,9 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, test } from 'vitest';
 import { ordersConfig } from '@dm/shared';
 import { acceptBlockedReason, renderOrdersApp } from '../src/ui/phone/ordersApp';
 import { renderWalletApp } from '../src/ui/phone/walletApp';
 import { asEl, installFakeDom, type FakeElement } from './fakeDom';
 import { model, offer, order } from './phoneFixtures';
+import type { ShopRow } from '../src/ui/phone/shopApp';
+
+/** The Shop's lockout-skip row as the HUD model carries it during a lockout. */
+const skipRow = (over: Partial<ShopRow> = {}): ShopRow => ({
+  itemId: 'lockoutSkip',
+  tab: 'token',
+  section: 'Offer lockout',
+  label: 'Offer lockout skip',
+  detail: 'Ends the offer lockout now',
+  price: { kind: 'game', usd: '$0.50', game: 2083e6, maxGame: 2125e6, text: '$0.50 ≈ 2,083 GAME' },
+  state: 'buy',
+  ...over,
+});
 
 describe('acceptBlockedReason', () => {
   it('has copy for every refusal', () => {
@@ -120,20 +133,39 @@ describe('renderOrdersApp', () => {
     expect(calls).toEqual(['cancel o2']);
   });
 
-  it('shows the lockout row only while lockoutLeft > 0, with a dev-stub skip', () => {
+  it('shows the lockout row only while lockoutLeft > 0, with Skip', () => {
     renderOrdersApp(dom.asHost, model(), cb);
     const row = dom.host.byClass('phone-lockout')[0]!;
     expect(row.hidden).toBe(true);
-    renderOrdersApp(dom.asHost, model({ lockoutLeft: 31.4 }), cb);
+    renderOrdersApp(dom.asHost, model({ lockoutLeft: 31.4, shop: [skipRow()] }), cb);
     expect(row.hidden).toBe(false);
     expect(row.textContent).toContain('No new offers for 32 s');
-    const skip = button(dom.host, 'skip')!;
-    expect(skip.textContent).toContain('Skip (burn GAME)');
-    expect(row.textContent).toContain('dev stub');
-    skip.click();
+    expect(row.textContent).not.toContain('dev stub');
+    button(dom.host, 'skip')!.click();
     expect(calls).toEqual(['skip']);
     renderOrdersApp(dom.asHost, model(), cb);
     expect(row.hidden).toBe(true);
+  });
+
+  test('during a lockout the Skip button shows the live lockout-skip price', () => {
+    renderOrdersApp(dom.asHost, model({ lockoutLeft: 31.4, shop: [skipRow()] }), cb);
+    const skip = button(dom.host, 'skip')!;
+    expect(skip.textContent).toBe('Skip · $0.50 ≈ 2,083 GAME');
+    expect(skip.disabled).toBe(false);
+    // The rate moved: the next render shows the new price.
+    renderOrdersApp(dom.asHost, model({ lockoutLeft: 30, shop: [skipRow({ price: { kind: 'game', usd: '$0.50', game: 1736e6, maxGame: 1770e6, text: '$0.50 ≈ 1,736 GAME' } })] }), cb);
+    expect(skip.textContent).toBe('Skip · $0.50 ≈ 1,736 GAME');
+    // Waiting for the chain, then paused by a stale rate: disabled with the reason.
+    renderOrdersApp(dom.asHost, model({ lockoutLeft: 29, shop: [skipRow({ state: 'pending' })] }), cb);
+    expect(skip.textContent).toBe('Skip · Confirming…');
+    expect(skip.disabled).toBe(true);
+    renderOrdersApp(
+      dom.asHost,
+      model({ lockoutLeft: 28, shop: [skipRow({ state: 'paused', price: { kind: 'paused', text: 'Prices updating, purchases paused' } })] }),
+      cb,
+    );
+    expect(skip.textContent).toBe('Skip · Prices updating, purchases paused');
+    expect(skip.disabled).toBe(true);
   });
 
   it('the lockout row names a missed pickup', () => {

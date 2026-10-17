@@ -23,6 +23,7 @@ import { nextCorner, yawTo } from '../game/routes';
 import { keyLabel } from './dom';
 import type { ParkedMarker } from './minimap';
 import type { GarageRow } from './phone/garageApp';
+import type { ShopRow } from './phone/shopApp';
 
 /** A countdown: seconds left (0 once over) and whether the limit has passed. */
 export interface HudTimer {
@@ -109,14 +110,18 @@ export interface HudNav {
   ride?: HudRide | null;
   /** The key prompt line (DeliveryLoop: `promptFor`). */
   prompt?: string | null;
-  /** The wallet (DeliveryLoop: the chain); absent (tests): nothing accrued. */
+  /** The wallet (DeliveryLoop: the chain); absent (tests): nothing accrued, nothing to spend. */
   wallet?: HudWallet;
+  /** The Shop app's rows (DeliveryLoop: shopRows over Purchases); absent (tests): none. */
+  shop?: ShopRow[];
 }
 
 /** The reward wallet as the HUD shows it. */
 export interface HudWallet {
   /** GAME paid out by orders, not yet claimed, in base units (the HUD's top-right GAME figure, spec §8). */
   accrued: number;
+  /** Spendable GAME in base units (the Shop's balance). */
+  balance: number;
 }
 
 export interface HudModel {
@@ -147,6 +152,8 @@ export interface HudModel {
   /** The key prompt line (bottom centre), or null. */
   prompt: string | null;
   wallet: HudWallet;
+  /** The Shop app's rows, live prices and states (spec §6, §8). */
+  shop: ShopRow[];
 }
 
 /** What the key prompt depends on. */
@@ -339,7 +346,8 @@ export function hudModel(
     nextStop: null,
     ride: nav.ride ?? null,
     prompt: nav.prompt ?? null,
-    wallet: { ...(nav.wallet ?? { accrued: 0 }) },
+    wallet: { ...(nav.wallet ?? { accrued: 0, balance: 0 }) },
+    shop: nav.shop ?? [],
   };
   model.nextStop = next?.stop ?? null;
   return model;
