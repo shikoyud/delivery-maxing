@@ -649,7 +649,7 @@ export class DeliveryLoop {
   }
 
   /** The Shop app's rows at sim time `now` (none without purchases). */
-  private shopRows(now: number): ShopRow[] {
+  shopRows(now: number): ShopRow[] {
     const p = this.d.purchases?.();
     if (!p) return [];
     return shopRows(p, this.d.chain.ownership(), this.d.wardrobe?.() ?? defaultWardrobe(), this.sys.lockoutUntil > now);

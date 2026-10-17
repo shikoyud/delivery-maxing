@@ -48,3 +48,45 @@ describe('debug hooks: map', () => {
     expect(window.__dm!.lotAt(vec3(50, 0, 1))).toBeNull();
   });
 });
+
+describe('debug hooks: economy', () => {
+  it('chain(), buy(), shop(), lockGame(), claim() and the map hooks are installed', async () => {
+    (globalThis as { window?: unknown }).window = {};
+    const log: string[] = [];
+    const chain = {
+      balance: () => 5,
+      accrued: () => 2,
+      vault: () => 9,
+      ownership: () => ({ lines: { vehicle: 1 } }),
+      lock: () => null,
+      history: () => [],
+      payouts: () => [],
+      dev: { addGame: () => undefined },
+    };
+    const game = {
+      chain,
+      time: 3,
+      purchases: { buy: async (id: string) => (log.push(`buy ${id}`), { ok: true as const }) },
+      delivery: {
+        shopRows: (now: number) => (log.push(`shop ${now}`), [{ id: 'x' }]),
+        lockGame: (g: number) => void log.push(`lock ${g}`),
+        claim: async () => void log.push('claim'),
+        mapOpen: false,
+        openMap: () => void log.push('openMap'),
+        closeMap: () => void log.push('closeMap'),
+      },
+    } as unknown as Game;
+    installDebugHooks(game);
+    const dm = window.__dm!;
+    expect(dm.chain()).toMatchObject({ balance: 5, accrued: 2, vault: 9, lock: null, history: [], payouts: [] });
+    expect(await dm.buy('lockoutSkip')).toEqual({ ok: true });
+    expect(dm.shop()).toEqual([{ id: 'x' }]);
+    expect(dm.devChain).toBe(chain.dev);
+    dm.lockGame(7);
+    await dm.claim();
+    expect(dm.mapOpen()).toBe(false);
+    dm.openMap();
+    dm.closeMap();
+    expect(log).toEqual(['buy lockoutSkip', 'shop 3', 'lock 7', 'claim', 'openMap', 'closeMap']);
+  });
+});

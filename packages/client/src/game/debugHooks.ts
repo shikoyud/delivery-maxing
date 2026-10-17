@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, CancelResult, Hospital, Lot, MoveMode, Offer, RideTier, Totals, Vec3, VehicleSpot, VehicleTier } from '@dm/shared';
+import type { ChainSource, ShopItemId } from '@dm/shared';
+import type { MockChain } from '../economy/MockChain';
+import type { PurchaseOutcome } from '../economy/Purchases';
+import type { ShopRow } from '../ui/phone/shopApp';
 import type { HudNextStop } from '../ui/hudModel';
 import type { CourierDebug } from '../render/courier/CourierView';
 import type { PhoneApp } from '../ui/phone/Phone';
@@ -70,6 +74,26 @@ export interface DebugApi {
   openMap(): void;
   /** Closes the map screen (as M or Esc does). */
   closeMap(): void;
+  /** The mock chain's state: balance, accrued, vault (base units), ownership, the lock, purchases and payouts (copies). */
+  chain(): {
+    balance: number;
+    accrued: number;
+    vault: number;
+    ownership: ReturnType<ChainSource['ownership']>;
+    lock: ReturnType<ChainSource['lock']>;
+    history: ReturnType<ChainSource['history']>;
+    payouts: ReturnType<ChainSource['payouts']>;
+  };
+  /** Buys a shop item at the current quote (a GAME item confirms after the mock's delay). */
+  buy(itemId: string): Promise<PurchaseOutcome>;
+  /** The Shop app's rows now. */
+  shop(): ShopRow[];
+  /** The mock chain's dev controls (add GAME, set the rate, grant tiers, advance the clock...). */
+  readonly devChain: MockChain['dev'];
+  /** Locks `game` base units (as the Wallet's Lock does). */
+  lockGame(game: number): void;
+  /** Claims the accrued GAME (as the Wallet's Claim does). */
+  claim(): Promise<void>;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
   /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
@@ -179,6 +203,23 @@ export function installDebugHooks(game: Game): void {
     mapOpen: () => game.delivery.mapOpen,
     openMap: () => game.delivery.openMap(),
     closeMap: () => game.delivery.closeMap(),
+    chain: () =>
+      structuredClone({
+        balance: game.chain.balance(),
+        accrued: game.chain.accrued(),
+        vault: game.chain.vault(),
+        ownership: game.chain.ownership(),
+        lock: game.chain.lock(),
+        history: game.chain.history(),
+        payouts: game.chain.payouts(),
+      }),
+    buy: (itemId) => game.purchases.buy(itemId as ShopItemId),
+    shop: () => structuredClone(game.delivery.shopRows(game.time)),
+    get devChain() {
+      return game.chain.dev;
+    },
+    lockGame: (g) => game.delivery.lockGame(g),
+    claim: () => game.delivery.claim(),
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),

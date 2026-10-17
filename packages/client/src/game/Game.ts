@@ -167,7 +167,7 @@ export class Game {
     progress: ProgressStore,
     extras: MapExtras,
     /** The reward chain (the browser mock): it owns the tiers and skins; the dev panel grants through it. */
-    private readonly chain: MockChain,
+    readonly chain: MockChain,
     wardrobe: Wardrobe,
   ) {
     this.progress = progress;
@@ -316,6 +316,12 @@ export class Game {
         fillTanks: () => this.fillTanks(),
         addCoins: (n) => this.delivery.setCoins(this.delivery.orders.totals.coins + n),
         capacityLabel: () => capacityLabel(this.chain.ownership().lines.bag, this.delivery.capacityTier, this.delivery.capacity()),
+      },
+      economy: {
+        dev: chain.dev,
+        rate: () => chain.rate()?.usdPerGame ?? null,
+        tier: (l) => chain.ownership().lines[l],
+        tierMax: (l) => economyConfig.lines[l].usdMicro.length,
       },
       map: {
         kind: map.kind,

@@ -120,6 +120,7 @@ export class MockChain implements ChainSource {
   readonly mock = true;
   private s: State;
   private failNextTx = false;
+  private confirmSeconds: number;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -128,6 +129,7 @@ export class MockChain implements ChainSource {
     private readonly clock: { now(): number },
   ) {
     this.wallet = cfg.mockChain.wallet;
+    this.confirmSeconds = cfg.mockChain.confirmSeconds;
     let loaded: State | null;
     try {
       loaded = storage ? parseState(storage.getItem(MOCK_CHAIN_KEY), cfg) : null;
@@ -213,7 +215,7 @@ export class MockChain implements ChainSource {
   async purchase(itemId: ShopItemId, maxGame: number, nowMs: number): Promise<ChainTx> {
     const tx: StoredTx = {
       id: this.id('tx'), itemId, game: 0, burned: 0, vault: 0, status: 'pending', createdAt: nowMs, maxGame: Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(maxGame))) || 0,
-      settleAt: nowMs + this.cfg.mockChain.confirmSeconds * 1000,
+      settleAt: nowMs + this.confirmSeconds * 1000,
     };
     let error: PurchaseError | null = null;
     if (this.failNextTx) {
@@ -365,6 +367,10 @@ export class MockChain implements ChainSource {
     },
     failNext: (): void => {
       this.failNextTx = true;
+    },
+    /** Sets how long later purchases take to confirm (seconds; not saved). */
+    setConfirmSeconds: (s: number): void => {
+      this.confirmSeconds = Math.max(0, s);
     },
     /** Sets the vault to `usd` dollars of GAME at the current rate (0 empties it). */
     setVaultUsd: (usd: number): void => {

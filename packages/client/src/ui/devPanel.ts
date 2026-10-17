@@ -1,5 +1,6 @@
 import GUI, { type Controller } from 'lil-gui';
-import { RIDE_TIERS, type CarrierCapacity, type RideTier } from '@dm/shared';
+import { GAME_UNITS, LINES, economyConfig, RIDE_TIERS, type CarrierCapacity, type Line, type RideTier } from '@dm/shared';
+import type { MockChain } from '../economy/MockChain';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import type { TeleportTarget } from '../game/mapTargets';
 import { el } from './dom';
@@ -23,6 +24,14 @@ export interface DevPanelHooks {
     addCoins(n: number): void;
     /** The read-only capacity line (see `capacityLabel`). */
     capacityLabel(): string;
+  };
+  /** The "Economy" folder: the mock chain's dev controls and the tiers of each line. */
+  economy: {
+    dev: MockChain['dev'];
+    /** The current GAME price in USD, or null without a rate. */
+    rate(): number | null;
+    tier(line: Line): number;
+    tierMax(line: Line): number;
   };
   /** The "Map" folder: the loaded map's teleport entries and the lot-id view (the city only; null on the greybox). */
   map: {
@@ -51,6 +60,42 @@ export function mapRowItems(targets: TeleportTarget[], teleportTo: (id: string) 
 /** "Bag 2 × bicycle → 3 slots, 25 kg": the Bag tier and the ride, and the capacity they give (spec §3.3). */
 export function capacityLabel(bagTier: number, ride: string, c: CarrierCapacity): string {
   return `Bag ${bagTier} × ${ride} → ${c.slots} slot${c.slots === 1 ? '' : 's'}, ${c.maxPackageKg} kg`;
+}
+
+/** What "+100,000 GAME" adds (whole GAME; the chain takes base units). */
+export const DEV_GAME = 100_000;
+
+export const RATE_REFUSED = 'Rate move over 20% refused';
+
+export interface EconomyActions {
+  addGame(): void;
+  /** Sets the GAME price; returns the refusal text when the move is over the limit, else null. */
+  setRate(usd: number): string | null;
+  makeStale(): void;
+  failNext(): void;
+  setConfirmSeconds(s: number): void;
+  setVaultUsd(usd: number): void;
+  setTier(line: Line, tier: number): void;
+  advanceDay(): void;
+}
+
+/** The Economy folder's actions over the chain's dev controls (pure, so tests drive them without a DOM). */
+export function economyActions(dev: MockChain['dev'], gameUnits: number): EconomyActions {
+  return {
+    addGame: () => dev.addGame(DEV_GAME * gameUnits),
+    setRate: (usd) => (dev.setRate(usd) ? null : RATE_REFUSED),
+    makeStale: () => dev.makeRateStale(),
+    failNext: () => dev.failNext(),
+    setConfirmSeconds: (s) => dev.setConfirmSeconds(s),
+    setVaultUsd: (usd) => dev.setVaultUsd(usd),
+    setTier: (line, tier) => dev.grantTier(line, tier),
+    advanceDay: () => dev.advanceClock(24 * 60 * 60 * 1000),
+  };
+}
+
+/** The Vehicles folder's Owned boxes: checked when owned, locked while the courier rides that tier. */
+export function ownedBoxStates(owned: (t: RideTier) => boolean, riding: RideTier | null): { tier: RideTier; owned: boolean; locked: boolean }[] {
+  return RIDE_TIERS.map((tier) => ({ tier, owned: owned(tier), locked: tier === riding }));
 }
 
 /** What "+500 coins" adds. */
@@ -130,16 +175,49 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
   );
   // Sync from the garage; the ridden vehicle's box is locked (getting off first keeps the state whole).
   const syncVehicles = (): void => {
-    const riding = hooks.vehicles.riding();
-    RIDE_TIERS.forEach((t, i) => {
-      owned[t] = hooks.vehicles.owned(t);
-      boxes[i]!.updateDisplay().enable(t !== riding);
+    ownedBoxStates(hooks.vehicles.owned, hooks.vehicles.riding()).forEach((b, i) => {
+      owned[b.tier] = b.owned;
+      boxes[i]!.updateDisplay().enable(!b.locked);
     });
   };
   const capInfo = { capacity: hooks.vehicles.capacityLabel() };
   const capCtrl = folder.add(capInfo, 'capacity').name('Capacity').disable();
   folder.add({ fill: () => hooks.vehicles.fillTanks() }, 'fill').name('Fill all tanks');
   folder.add({ coins: () => hooks.vehicles.addCoins(DEV_COINS) }, 'coins').name(`+${DEV_COINS} coins`);
+
+  // Economy: the mock chain's dev controls (Decision 1).
+  const eco = hooks.economy;
+  const acts = economyActions(eco.dev, GAME_UNITS);
+  const ecoFolder = gui.addFolder('Economy');
+  const ecoState = { rate: eco.rate() ?? 0, refused: '', confirm: economyConfig.mockChain.confirmSeconds, vault: economyConfig.mockChain.vaultUsdMicro / 1e6 };
+  ecoFolder.add({ add: acts.addGame }, 'add').name(`+${DEV_GAME.toLocaleString('en-US')} GAME`);
+  const refusedCtrl = ecoFolder.add(ecoState, 'refused').name('Rate').disable();
+  refusedCtrl.hide();
+  ecoFolder.add(ecoState, 'rate').name('GAME price (USD)').onFinishChange((usd: number) => {
+    const msg = acts.setRate(usd);
+    ecoState.refused = msg ?? '';
+    refusedCtrl.updateDisplay();
+    refusedCtrl.show(msg !== null);
+    if (msg !== null) {
+      ecoState.rate = eco.rate() ?? 0;
+      ecoFolder.controllers.forEach((c: Controller) => c.updateDisplay());
+    }
+  });
+  ecoFolder.add({ stale: acts.makeStale }, 'stale').name('Make rate stale');
+  ecoFolder.add({ fail: acts.failNext }, 'fail').name('Fail next transaction');
+  ecoFolder.add(ecoState, 'confirm', 0, 30, 1).name('Confirm delay (s)').onChange(acts.setConfirmSeconds);
+  ecoFolder.add(ecoState, 'vault').name('Vault (USD)').onFinishChange(acts.setVaultUsd);
+  ecoFolder.add({ day: acts.advanceDay }, 'day').name('Advance clock 1 day');
+  const tiers = Object.fromEntries(LINES.map((l) => [l, eco.tier(l)])) as Record<Line, number>;
+  const tierCtrls = LINES.map((l) => ecoFolder.add(tiers, l, 0, eco.tierMax(l), 1).name(`Tier · ${l}`).onChange((n: number) => acts.setTier(l, n)));
+  const syncEconomy = (): void => {
+    LINES.forEach((l, i) => {
+      tiers[l] = eco.tier(l);
+      tierCtrls[i]!.updateDisplay();
+    });
+    ecoState.rate = eco.rate() ?? 0;
+    ecoFolder.controllers.forEach((c: Controller) => c.updateDisplay());
+  };
 
   // Map: which map is loaded, a teleport button per hospital and gas station, and the F4 lot-id view.
   const mapFolder = gui.addFolder('Map');
@@ -179,6 +257,7 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
         lotCtrl?.updateDisplay();
         capInfo.capacity = hooks.vehicles.capacityLabel();
         capCtrl.updateDisplay();
+        syncEconomy();
         syncVehicles(); // ownership or the ride may have changed since (debug API, a reset)
         gui.show();
       } else gui.hide();
