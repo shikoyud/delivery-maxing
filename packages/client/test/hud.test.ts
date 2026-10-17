@@ -107,3 +107,19 @@ describe('Hud next stop and ride', () => {
   });
 });
 
+describe('Hud key prompt', () => {
+  it('renders the model prompt and hides when null', () => {
+    const dom = installFakeDom();
+    try {
+      const hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
+      const line = () => dom.host.byClass('hud-prompt')[0]!;
+      hud.update(model({ prompt: 'F · Get off' }), () => 0);
+      expect(line().hidden).toBe(false);
+      expect(line().textContent).toBe('F · Get off');
+      hud.update(model({ prompt: null }), () => 0);
+      expect(line().hidden).toBe(true);
+    } finally {
+      dom.restore();
+    }
+  });
+});

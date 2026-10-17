@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import greyboxJson from '../../../../map/greybox.json';
@@ -26,7 +27,7 @@ let router: NavRouter;
 const bins = {} as Record<VehicleTier, Uint8Array>;
 beforeAll(async () => {
   await initNav();
-  for (const t of NAV_TIERS) bins[t] = new Uint8Array(readFileSync(`${repo}map/nav/greybox-${t}.bin`));
+  for (const t of NAV_TIERS) bins[t] = new Uint8Array(gunzipSync(readFileSync(`${repo}map/nav/greybox-${t}.bin.gz`)));
   router = NavRouter.fromBinaries(bins);
 });
 afterAll(() => router?.destroy());

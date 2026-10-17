@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { MapData, Poi } from '@dm/shared';
+import type { MapData, Poi, Vec3 } from '@dm/shared';
 import { palette } from './palette';
 
 export interface PoiMeshes {
@@ -9,6 +9,11 @@ export interface PoiMeshes {
   setTargets(ids: ReadonlySet<string>): void;
   /** Brightens one marker (the selected offer's stop), or none. */
   setHighlight(id: string | null): void;
+  /**
+   * Per frame: hides the marker the camera is in or touching (its ring stays). A courier with its back to a door
+   * pulls the camera in against the wall, right into the door slab, which would fill the screen.
+   */
+  setCamera(p: Vec3): void;
 }
 
 // Art dimensions (metres). The zone radius comes from the orders config.
@@ -21,6 +26,8 @@ const RING_WIDTH = 0.25;
 const DECAL_Y = 0.03;
 /** How far a targeted marker rises, so stops read from a distance. */
 const TARGET_LIFT = 1.5;
+/** A marker is hidden while the camera is this close to its slab or sign (about the camera's near-plane ball). */
+const CAMERA_CLEAR = 0.4;
 /** Share of white mixed into the highlighted marker. */
 const HIGHLIGHT_MIX = 0.55;
 
@@ -69,11 +76,18 @@ export function buildPoiMeshes(map: MapData, radius: number): PoiMeshes {
   const m = new THREE.Matrix4();
   const targets = new Set<string>();
   let highlight: string | null = null;
+  /** The marker hidden for the camera (-1: none). */
+  let hidden = -1;
+  const lift = (p: Poi): number => (targets.has(p.id) ? TARGET_LIFT : 0);
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
 
   const place = (): void => {
     pois.forEach((p, i) => {
-      const lift = targets.has(p.id) ? TARGET_LIFT : 0;
-      m.makeTranslation(p.position.x, p.position.y + lift, p.position.z);
+      if (i === hidden) {
+        markers.setMatrixAt(i, zero);
+        return;
+      }
+      m.makeTranslation(p.position.x, p.position.y + lift(p), p.position.z);
       markers.setMatrixAt(i, m);
     });
     markers.instanceMatrix.needsUpdate = true;
@@ -111,6 +125,22 @@ export function buildPoiMeshes(map: MapData, radius: number): PoiMeshes {
       if (id === highlight) return;
       highlight = id;
       paint();
+    },
+    setCamera(cam) {
+      // The marker's reach, unrotated: the slab or the sign, whichever is wider, from the ground to the sign's top.
+      const half = Math.max(DOOR_WIDTH / 2, SIGN_SIZE) + CAMERA_CLEAR;
+      const found = pois.findIndex((p) => {
+        const y = p.position.y + lift(p);
+        return (
+          Math.abs(cam.x - p.position.x) <= half &&
+          Math.abs(cam.z - p.position.z) <= half &&
+          cam.y >= y - CAMERA_CLEAR &&
+          cam.y <= y + SIGN_Y + SIGN_SIZE + CAMERA_CLEAR
+        );
+      });
+      if (found === hidden) return;
+      hidden = found;
+      place();
     },
   };
 }

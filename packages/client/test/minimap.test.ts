@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { expandGreybox, type GreyboxSource } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
-import { FUEL_ICON_COLOR, MINIMAP_DEFAULTS, clampToEdge, createMinimap, toMinimap } from '../src/ui/minimap';
+import { FUEL_ICON_COLOR, VEHICLE_ICON_COLOR, MINIMAP_DEFAULTS, clampToEdge, createMinimap, toMinimap } from '../src/ui/minimap';
 import { recordCanvases } from './canvasRecorder';
 import { installFakeDom } from './fakeDom';
 
@@ -49,5 +49,32 @@ describe('createMinimap', () => {
     const c = toMinimap(g.position, player, MINIMAP_DEFAULTS);
     const hit = rec.rects.some((r) => r.style === FUEL_ICON_COLOR && Math.abs(r.x + r.w / 2 - c.x) < 8 && Math.abs(r.y + r.h / 2 - c.y) < 8);
     expect(hit).toBe(true);
+  });
+
+  it('a parked motorbike 50 m away is drawn inside the ring; one 300 m away is clamped to the edge (Decision 15)', () => {
+    const rec = recordCanvases(dom.doc);
+    const map = expandGreybox(greybox as GreyboxSource);
+    const mini = createMinimap(dom.asHost, map);
+    const player = { x: 0, y: 0, z: 0 };
+    const size = MINIMAP_DEFAULTS.sizePx;
+    const glyphs = () => rec.rects.filter((r) => r.style === VEHICLE_ICON_COLOR);
+    const centre = (r: { x: number; y: number; w: number; h: number }) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+
+    mini.render(player, 0, [], [], [{ tier: 'motorbike', position: { x: 50, y: 0, z: 0 } }]);
+    expect(glyphs()).toHaveLength(1);
+    const inside = centre(glyphs()[0]!);
+    const want = toMinimap({ x: 50, y: 0, z: 0 }, player, MINIMAP_DEFAULTS);
+    expect(inside.x).toBeCloseTo(want.x, 0);
+    expect(inside.y).toBeCloseTo(want.y, 0);
+    expect(inside.x).toBeLessThan(size - 8);
+
+    rec.rects.length = 0;
+    mini.render(player, 0, [], [], [{ tier: 'motorbike', position: { x: 0, y: 0, z: -300 } }]);
+    expect(glyphs()).toHaveLength(1);
+    const edge = centre(glyphs()[0]!);
+    const pinned = clampToEdge(toMinimap({ x: 0, y: 0, z: -300 }, player, MINIMAP_DEFAULTS), size, 8);
+    expect(pinned.clamped).toBe(true);
+    expect(edge.x).toBeCloseTo(pinned.x, 0);
+    expect(edge.y).toBeCloseTo(pinned.y, 0); // north, 8 px off the edge
   });
 });

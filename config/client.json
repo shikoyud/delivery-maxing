@@ -8,13 +8,15 @@
         "bicycle": { "distance": 5.5, "height": 2.0, "pivotHeight": 1.6 },
         "motorbike": { "distance": 6.5, "height": 2.2, "pivotHeight": 1.4 },
         "car": { "distance": 8.5, "height": 2.8, "pivotHeight": 1.4 } } } },
-  "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 650, "drawCallBudget": 150,
+  "graphics": { "maxPixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "shadowExtent": 80, "fogNear": 150, "fogFar": 700, "drawCallBudget": 260, "triangleBudget": 1600000,
     "waterLevel": -1.5, "waterMargin": 2000, "lights": { "hemi": 2.1, "sun": 2.4 }, "shadowBias": -0.0005, "shadowNormalBias": 0.05 },
+  "city": { "lodRadii": [160, 370, 700], "relodDistance": 25, "renderRegion": 400, "labelRadius": 80, "modelsBase": "packs/", "loadAheadRadius": 420,
+    "lod1": { "ratio": 0.4, "error": 0.02, "minDrop": 0.3 }, "lod1Fallback": "box" },
   "input": { "mouseSensitivity": 0.0022, "invertY": false, "bindings": {
     "forward": ["KeyW"], "back": ["KeyS"], "left": ["KeyA"], "right": ["KeyD"], "jump": ["Space"], "crouch": ["KeyC"],
     "sprint": ["ShiftLeft", "ShiftRight"], "interact": ["KeyE"], "hit": ["Mouse0"],
     "phone": ["Tab"], "map": ["KeyM"], "accept": ["KeyY"], "mount": ["KeyF"],
-    "devPanel": ["Backquote"], "debugOverlay": ["F3"] } },
+    "devPanel": ["Backquote"], "debugOverlay": ["F3"], "mapDebug": ["F4"] } },
   "courier": { "height": 1.8, "turnEaseRate": 14, "facingMinSpeed": 1.0,
     "crossFade": 0.15, "runSpeedForFullRun": 8, "runMinTimeScale": 0.7,
     "idleSpeed": 0.3, "walkMaxSpeed": 4, "fallSpeed": 2, "airClip": [0.2, 0.36],
@@ -33,5 +35,5 @@
       "crouch": { "drop": 0, "hipDrop": 0.2, "body": [0, 0, 0],
         "bones": { "Abdomen": [-60.0, 0, 0], "UpperLegL": [80.0, 0, 0], "UpperLegR": [80.0, 0, 0], "LowerLegL": [-125.0, 0, 0], "LowerLegR": [-125.0, 0, 0], "UpperArmL": [125, 0, 0], "UpperArmR": [125, 0, 0] } } } },
   "ui": { "popupSeconds": 3.5, "maxPopups": 3, "hudUpdateHz": 12, "waypointPulseHz": 0.8, "timerUrgentSeconds": 10,
-    "routeRefreshSeconds": 0.5, "routeDriftMeters": 5, "hintCooldownSeconds": 3, "fuelLowPct": 20 }
+    "routeRefreshSeconds": 0.5, "routeDriftMeters": 5, "hintCooldownSeconds": 3, "fuelLowPct": 20, "mapWindowMeters": 500 }
 }

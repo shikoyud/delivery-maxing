@@ -32,13 +32,14 @@ describe('access', () => {
     expect(zoneAt(map, vec3(2, 0 + 3, 10))).toBeNull();
   });
 
-  it('baySlot spaces slots along the bay right vector by bays.spacing', () => {
-    const h = { ...testHospital('h'), bay: vec3(10, 0, 20), bayYaw: -Math.PI / 2 };
+  it('baySlot lines slots up behind the first, along the street, by bays.spacing', () => {
+    const h = { ...testHospital('h'), bay: vec3(10, 0, 20), bayYaw: Math.PI };
     const s0 = baySlot(h, 0);
     const s2 = baySlot(h, 2);
     expect(s0.position).toEqual(h.bay);
     expect(Math.hypot(s2.position.x - s0.position.x, s2.position.z - s0.position.z)).toBeCloseTo(8, 6);
-    expect(s2.position.z).toBeCloseTo(28, 6);
+    expect(s2.position.z).toBeCloseTo(12, 6);
+    expect(s2.position.x).toBeCloseTo(10, 6);
     expect(s2.heading).toBe(h.bayYaw);
   });
 });

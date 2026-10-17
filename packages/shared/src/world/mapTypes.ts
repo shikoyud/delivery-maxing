@@ -1,8 +1,12 @@
 import type { AccessKind } from '../config';
 import type { Vec3 } from '../math/vec3';
 
-/** `hospital`: the solid block at a hospital's centre (generated from `GreyboxSource.hospitalBlock`). */
-export type SolidKind = 'ground' | 'building' | 'prop' | 'ramp' | 'hospital';
+/**
+ * `hospital`: the solid block at a hospital's centre (generated from `GreyboxSource.hospitalBlock`).
+ * `road`, `terrain`, `parapet`, `stairs` and `water` belong to the city map (slope bands, beach sand, pier, retaining walls,
+ * staircases, Hillcrest Drive, the cliff and backdrop mountains; the bay's floor, below the out-of-bounds height).
+ */
+export type SolidKind = 'ground' | 'building' | 'prop' | 'ramp' | 'hospital' | 'road' | 'terrain' | 'parapet' | 'stairs' | 'water';
 export interface Solid {
   id: string;
   kind: SolidKind;
@@ -11,7 +15,21 @@ export interface Solid {
   /** XYZ Euler, degrees */
   rotationDeg?: Vec3;
 }
-export type District = 'downtown' | 'harbor' | 'hillside' | 'suburbs';
+export type CityDistrict =
+  | 'docks'
+  | 'beach'
+  | 'harbor'
+  | 'industrial'
+  | 'downtown'
+  | 'market'
+  | 'rowhouses'
+  | 'highstreet'
+  | 'apartments'
+  | 'uptown'
+  | 'hillcrest'
+  | 'slope';
+/** The city districts, plus the two greybox-only names (the greybox map is kept until SP5 retires it). */
+export type District = CityDistrict | 'hillside' | 'suburbs';
 export type PoiRole = 'foodPickup' | 'packagePickup' | 'dropoffFood' | 'dropoffPackage';
 export interface Poi {
   id: string;
@@ -26,6 +44,12 @@ export interface Poi {
   items?: string[];
   /** On package senders: [min, max] parcel weight in kg. */
   weightKg?: [number, number];
+  /** Street address shown with the name (city map). */
+  address?: string;
+  /** The layout lot this POI belongs to (city map). */
+  lotId?: string;
+  /** True for the back door on the upper street of a slope building (food dropoff only). */
+  upper?: boolean;
 }
 export interface Hospital {
   id: string;
@@ -36,7 +60,7 @@ export interface Hospital {
   /** Respawn point and facing */
   spawn: Vec3;
   spawnYaw: number;
-  /** First vehicle parking slot; slot i is `bay + i * bays.spacing` along the bay's right vector. */
+  /** First vehicle parking slot; slot i is `bay + i * bays.spacing` behind it (opposite the facing of `bayYaw`). */
   bay: Vec3;
   /** Facing of parked vehicles (radians, same convention as `spawnYaw`). */
   bayYaw: number;
@@ -64,6 +88,9 @@ export interface OrderRules {
   maxPickupDistance: number;
 }
 export interface MapData {
+  kind: 'greybox' | 'city';
+  /** Side of a collider-paging chunk (world config). */
+  chunkSize: number;
   size: number;
   solids: Solid[];
   pois: Poi[];
@@ -80,7 +107,7 @@ export interface GreyboxDistrict {
   fillChance: number;
 }
 /** `solids` and `accessZones` here are the hand-placed ones. */
-export interface GreyboxSource extends MapData {
+export interface GreyboxSource extends Omit<MapData, 'kind' | 'chunkSize'> {
   seed: number;
   grid: { pitch: number; roadWidth: number; alleyWidth: number };
   districts: GreyboxDistrict[];

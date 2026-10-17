@@ -1,5 +1,4 @@
 import type { OrdersConfig } from '../config/types';
-import type { Poi } from '../world/mapTypes';
 import type { Bonus, Order, OrderKind, WeightClass } from './types';
 
 export function weightClassFor(kg: number, cfg: OrdersConfig['weightClasses']): WeightClass {
@@ -39,9 +38,4 @@ export function scoreOrder(
     if (order.modifier === 'fragile' && outcome.intact) add('fragile');
   }
   return { points, coins, bonuses };
-}
-
-export function orderText(order: Order, pickup: Poi, dropoff: Poi): { pickup: string; dropoff: string } {
-  const kg = order.kind === 'package' && order.weightKg !== null ? ` (${order.weightKg} kg)` : '';
-  return { pickup: `Pick up ${order.item} from ${pickup.name}${kg}`, dropoff: `Deliver to ${dropoff.name}` };
 }

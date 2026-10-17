@@ -1,0 +1,1 @@
+{ "chunkSize": 100, "physics": { "loadRadius": 150, "unloadRadius": 220 } }

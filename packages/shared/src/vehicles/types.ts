@@ -13,4 +13,6 @@ export interface VehicleState {
   airApexY: number;
   /** 0..1; always 1 without a tank. */
   fuel: number;
+  /** Set by stepVehicle: ticks a walking-pace reverser still backs out after its turn was refused (see applyDrive). */
+  backOutTicks?: number;
 }

@@ -1,5 +1,5 @@
 {
-  "offers": { "maxShown": 3, "lifetimeSeconds": 25, "minIntervalSeconds": 18, "maxIntervalSeconds": 30 },
+  "offers": { "maxShown": 3, "lifetimeSeconds": 25, "minIntervalSeconds": 18, "maxIntervalSeconds": 30, "maxPathQueries": 8 },
   "deliveryCooldown": { "minSeconds": 8, "maxSeconds": 10 },
   "prep": { "foodSeconds": 6 },
   "lockout": { "seconds": 45 },

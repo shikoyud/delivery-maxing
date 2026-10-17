@@ -1,0 +1,172 @@
+import type { PoiRole } from './mapTypes';
+
+/** The asset catalog (map/catalog.json): one entry per model of the owner's packs, plus the models the design still lacks. */
+export type CatalogCategory =
+  | 'food'
+  | 'shop'
+  | 'residential'
+  | 'office'
+  | 'civic'
+  | 'leisure'
+  | 'industrial'
+  | 'service'
+  | 'landmark'
+  | 'prop'
+  | 'road'
+  | 'terrain'
+  | 'nature'
+  | 'vehicle'
+  | 'orderItem'
+  | 'courierVehicle'
+  | 'fx';
+
+export type FrontAxis = '+z' | '-z' | '+x' | '-x';
+
+export interface CatalogEntry {
+  id: string;
+  /** Path under the packs folder; null for a model the packs lack */
+  file: string | null;
+  category: CatalogCategory;
+  kind?: string;
+  size: { w: number; h: number; d: number };
+  pivot?: { x: number; z: number; minY: number };
+  tris?: number;
+  bytes?: number;
+  use: 'placed' | 'prop' | 'unused';
+  status?: 'missing' | 'empty';
+  duplicateOf?: string;
+  districts?: string[];
+  poi?: { roles: PoiRole[]; items?: string; weightKg?: [number, number] };
+  /** The side of the model that faces the street */
+  front?: FrontAxis;
+  notes?: string;
+}
+
+export interface AssetCatalog {
+  version: 1;
+  packs: Record<string, string>;
+  entries: CatalogEntry[];
+}
+
+export const BUILDING_CATEGORIES: readonly CatalogCategory[] = [
+  'food',
+  'shop',
+  'residential',
+  'office',
+  'civic',
+  'leisure',
+  'industrial',
+  'service',
+  'landmark',
+];
+
+const CATEGORIES: ReadonlySet<string> = new Set<CatalogCategory>([
+  ...BUILDING_CATEGORIES,
+  'prop',
+  'road',
+  'terrain',
+  'nature',
+  'vehicle',
+  'orderItem',
+  'courierVehicle',
+  'fx',
+]);
+const USES: ReadonlySet<string> = new Set(['placed', 'prop', 'unused']);
+const FRONTS: ReadonlySet<string> = new Set<FrontAxis>(['+z', '-z', '+x', '-x']);
+const STATUSES: ReadonlySet<string> = new Set(['missing', 'empty']);
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Validates map/catalog.json; the plural categories `vehicles`/`props` become `vehicle`/`prop`. Throws naming the offending id. */
+export function parseCatalog(json: unknown): AssetCatalog {
+  if (!isObj(json) || json.version !== 1 || !Array.isArray(json.entries)) throw new Error('catalog: expected { version: 1, entries: [] }');
+  const packs = isObj(json.packs) ? (json.packs as Record<string, string>) : {};
+  const seen = new Set<string>();
+  const entries = json.entries.map((raw: unknown, i): CatalogEntry => {
+    if (!isObj(raw) || typeof raw.id !== 'string') throw new Error(`catalog: entry #${i} has no id`);
+    const id = raw.id;
+    if (seen.has(id)) throw new Error(`catalog: duplicate id ${id}`);
+    seen.add(id);
+    if (raw.file !== null && typeof raw.file !== 'string') throw new Error(`catalog: ${id}: file must be a string or null`);
+    const category = raw.category === 'vehicles' ? 'vehicle' : raw.category === 'props' ? 'prop' : raw.category;
+    if (typeof category !== 'string' || !CATEGORIES.has(category)) throw new Error(`catalog: ${id}: unknown category ${String(raw.category)}`);
+    if (typeof raw.use !== 'string' || !USES.has(raw.use)) throw new Error(`catalog: ${id}: unknown use ${String(raw.use)}`);
+    if (raw.front !== undefined && (typeof raw.front !== 'string' || !FRONTS.has(raw.front)))
+      throw new Error(`catalog: ${id}: unknown front ${String(raw.front)} (expected +z, -z, +x or -x)`);
+    if (raw.status !== undefined && (typeof raw.status !== 'string' || !STATUSES.has(raw.status)))
+      throw new Error(`catalog: ${id}: unknown status ${String(raw.status)} (expected missing or empty)`);
+    // particle-only models have no geometry and so no size in the file: they get a zero size
+    const s = raw.size === undefined && raw.status === 'empty' ? { w: 0, h: 0, d: 0 } : raw.size;
+    if (!isObj(s) || !isNum(s.w) || !isNum(s.h) || !isNum(s.d)) throw new Error(`catalog: ${id}: size must be { w, h, d } numbers`);
+    return { ...raw, category, size: { w: s.w, h: s.h, d: s.d } } as unknown as CatalogEntry;
+  });
+  return { version: 1, packs, entries };
+}
+
+export class CatalogIndex {
+  private readonly byId = new Map<string, CatalogEntry>();
+
+  constructor(readonly catalog: AssetCatalog) {
+    for (const e of catalog.entries) this.byId.set(e.id, e);
+  }
+
+  get(id: string): CatalogEntry {
+    const e = this.byId.get(id);
+    if (!e) throw new Error(`catalog: unknown id ${id}`);
+    return e;
+  }
+
+  has(id: string): boolean {
+    return this.byId.has(id);
+  }
+
+  placedBuildings(): CatalogEntry[] {
+    return this.catalog.entries.filter((e) => e.use === 'placed' && BUILDING_CATEGORIES.includes(e.category));
+  }
+
+  byCategory(c: CatalogCategory): CatalogEntry[] {
+    return this.catalog.entries.filter((e) => e.category === c);
+  }
+}
+
+/** Whether `assets:import` writes a runtime model for `e` (it has a file and is used), so the city may draw one. */
+export function hasRuntimeModel(e: CatalogEntry): boolean {
+  return e.file !== null && e.use !== 'unused';
+}
+
+/**
+ * Material names in the runtime model files (`assets:import` writes them, the client's model loader reads them):
+ * `tex:<file>` samples textures/<file>; `flat` is vertex-coloured; the loader folds a textured model's untextured parts
+ * into its texture's material as `tex:<file>+flat`.
+ */
+export const MATERIAL_TEX_PREFIX = 'tex:';
+export const MATERIAL_FLAT = 'flat';
+export const MATERIAL_FOLDED_SUFFIX = '+flat';
+
+/** `public/packs/manifest.json`, written by `pnpm assets:import`: the ids it wrote and whether each has a LOD1 file. */
+export interface PackManifest {
+  version: 1;
+  models: Record<string, { lod1: boolean }>;
+}
+
+/**
+ * How `assets:import` makes LOD1 files (config/client.json `city.lod1`): meshopt simplification toward `ratio` of the
+ * triangles within `error` (a share of the model's size), kept only when it drops at least `minDrop` of them.
+ */
+export interface Lod1Options {
+  ratio: number;
+  error: number;
+  minDrop: number;
+}
+
+const up = (v: number): number => Math.ceil(v * 2 - 1e-9) / 2;
+
+/**
+ * Lot footprint of a building: w along the street and d deep, rounded up to 0.5 m (city design section 7.2). A model
+ * whose front is ±x is turned a quarter to face the street, so its z extent is the frontage: w and d swap.
+ */
+export function lotSize(e: CatalogEntry): { w: number; d: number } {
+  const sideways = e.front === '+x' || e.front === '-x';
+  return sideways ? { w: up(e.size.d), d: up(e.size.w) } : { w: up(e.size.w), d: up(e.size.d) };
+}

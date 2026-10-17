@@ -28,6 +28,8 @@ const hospital = (id: string, x: number) => ({
 });
 
 const testMap = (): MapData => ({
+  kind: 'greybox',
+  chunkSize: 100,
   size: 600,
   solids: [{ id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(600, 1, 600) }],
   pois: [],
@@ -38,6 +40,9 @@ const testMap = (): MapData => ({
 });
 
 const parked = (tier: RideTier, x: number, z: number, fuel = 1): SavedVehicle => ({ tier, spot: { kind: 'parked', position: vec3(x, 0, z), heading: 0 }, fuel });
+
+/** A parked vehicle's position (the Map app and minimap markers): where it stands, at its body's height. */
+const at = (x: number, z: number) => expect.objectContaining({ x, z });
 
 async function makeGarage(saved: SavedVehicle[]) {
   const map = testMap();
@@ -65,10 +70,10 @@ describe('Garage app', () => {
     const player = vec3(0, 0, 0);
     const rows = garageRows(garage, player, 0);
     expect(rows).toEqual([
-      { tier: 'skateboard', status: 'carried', distance: null, fuel: null, summon: 'carried', readyIn: 0 },
-      { tier: 'bicycle', status: 'parked', distance: 60, fuel: null, summon: 'tooClose', readyIn: 0 },
-      { tier: 'motorbike', status: 'parked', distance: 240, fuel: 0.4, summon: 'ok', readyIn: 0 },
-      { tier: 'car', status: 'parked', distance: 150, fuel: 0.75, summon: 'ok', readyIn: 0 },
+      { tier: 'skateboard', status: 'carried', position: null, distance: null, fuel: null, summon: 'carried', readyIn: 0 },
+      { tier: 'bicycle', status: 'parked', position: at(0, 60), distance: 60, fuel: null, summon: 'tooClose', readyIn: 0 },
+      { tier: 'motorbike', status: 'parked', position: at(0, -240), distance: 240, fuel: 0.4, summon: 'ok', readyIn: 0 },
+      { tier: 'car', status: 'parked', position: at(150, 0), distance: 150, fuel: 0.75, summon: 'ok', readyIn: 0 },
     ]);
 
     const app = createGarageApp(() => undefined);

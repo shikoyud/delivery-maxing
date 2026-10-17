@@ -28,8 +28,11 @@ export function forbiddenZoneAt(map: MapData, tier: VehicleTier, p: Vec3): Acces
   return z && !accessAllowed(tier, z.kind) ? z : null;
 }
 
-/** Parking slot `i` at a hospital: spaced along the bay's right vector, facing `bayYaw`. */
+/**
+ * Parking slot `i` at a hospital: facing `bayYaw` (along the street), in a row nose-to-tail behind the first slot,
+ * `bays.spacing` apart. (A row abreast across the street would fill the road and the courier's spawn path.)
+ */
 export function baySlot(h: Hospital, i: number, cfg: RidingConfig = ridingConfig): { position: Vec3; heading: number } {
-  const right = vec3(Math.cos(h.bayYaw), 0, -Math.sin(h.bayYaw));
-  return { position: add(h.bay, scale(right, i * cfg.bays.spacing)), heading: h.bayYaw };
+  const behind = vec3(Math.sin(h.bayYaw), 0, Math.cos(h.bayYaw));
+  return { position: add(h.bay, scale(behind, i * cfg.bays.spacing)), heading: h.bayYaw };
 }

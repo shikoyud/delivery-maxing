@@ -120,7 +120,8 @@ describe('Refueller', () => {
     expect(end).toMatchObject({ kind: 'refuelled', reason: 'coins', cost: 30 });
     expect(v.fuel).toBeCloseTo(30 / 80, 6);
     expect(coins).toBeGreaterThanOrEqual(0);
-    expect(all.filter((e) => e.kind === 'refuelled')).toHaveLength(1);
+    // Exact list: no refuelRefused for the rest of the press, even though E stays held for 400 ticks.
+    expect(all).toEqual([{ kind: 'refuelStarted' }, { kind: 'refuelled', cost: 30, fuel: v.fuel, reason: 'coins' }]);
   });
 
   test('never charges more than held for awkward balances', () => {
@@ -143,6 +144,22 @@ describe('Refueller', () => {
     const bike = state('bicycle', 1);
     expect(run(bike, ridingConfig.rides.bicycle, 500, 30).all).toEqual([]);
     expect(bike.fuel).toBe(1);
+  });
+
+  test('holding E with 0 Coins emits refuelRefused once, then nothing while held (playtest issue 2)', () => {
+    const v = state('car', 0.2);
+    const rf = new Refueller();
+    const t = (holding: boolean) => rf.tick(v, car, { ...base, holding, coins: 0 });
+    expect(t(true)).toEqual([{ kind: 'refuelRefused', reason: 'noCoins' }]);
+    for (let k = 0; k < 9; k++) expect(t(true)).toEqual([]);
+    t(false);
+    expect(t(true)).toEqual([{ kind: 'refuelRefused', reason: 'noCoins' }]);
+    expect(v.fuel).toBe(0.2);
+  });
+
+  test('a full tank, or E without being at a pump, is not a refusal', () => {
+    expect(run(state('car', 1), car, 0, 10).all).toEqual([]);
+    expect(run(state('car', 0.2), car, 0, 10, { atPump: false }).all).toEqual([]);
   });
 
   test('moving mid-session ends it with reason moved', () => {

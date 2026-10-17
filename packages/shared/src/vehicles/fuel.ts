@@ -28,6 +28,8 @@ export function pumpAt(map: MapData, p: Vec3, radius: number): { stationId: stri
 
 export type RefuelEvent =
   | { kind: 'refuelStarted' }
+  /** E held at a pump with room in the tank, and the first tick cannot be paid: once per press. */
+  | { kind: 'refuelRefused'; reason: 'noCoins' }
   | { kind: 'refuelled'; cost: number; fuel: number; reason: 'full' | 'released' | 'coins' | 'moved' };
 
 export interface RefuelContext {
@@ -50,10 +52,13 @@ const EPS = 1e-9;
 export class Refueller {
   private active = false;
   private accrued = 0;
+  /** A refusal was reported for this press of E (cleared when E is released). */
+  private refused = false;
 
   tick(v: VehicleState, spec: RideSpec, ctx: RefuelContext): RefuelEvent[] {
     const tank = spec.fuel;
     if (!tank) return [];
+    if (!ctx.holding) this.refused = false;
     const events: RefuelEvent[] = [];
     const can = ctx.holding && ctx.atPump && ctx.stopped;
     if (this.active && !can) {
@@ -66,6 +71,10 @@ export class Refueller {
     const next = this.accrued + tank.fullTankCoins * add;
     if (Math.ceil(next - EPS) > ctx.coins) {
       if (this.active) this.end(v, events, 'coins');
+      else if (!this.refused) {
+        this.refused = true;
+        events.push({ kind: 'refuelRefused', reason: 'noCoins' });
+      }
       return events;
     }
     if (!this.active) {
@@ -79,6 +88,7 @@ export class Refueller {
   }
 
   private end(v: VehicleState, events: RefuelEvent[], reason: 'full' | 'released' | 'coins' | 'moved'): void {
+    if (reason === 'coins') this.refused = true; // the cut-short fill said it; no refusal until E is released
     events.push({ kind: 'refuelled', cost: Math.ceil(this.accrued - EPS), fuel: v.fuel, reason });
     this.active = false;
     this.accrued = 0;

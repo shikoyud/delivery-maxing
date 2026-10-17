@@ -16,8 +16,8 @@ export interface HudView {
 /**
  * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals and load top
  * right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the next-stop
- * arrow (name and route distance) over the safe-zone and lockout chips; bottom left while riding the speed and, on the
- * motorbike and car, the fuel gauge.
+ * arrow (name and route distance) over the safe-zone and lockout chips; bottom centre the key prompt; bottom left
+ * while riding the speed and, on the motorbike and car, the fuel gauge.
  */
 export class Hud implements HudView {
   private readonly orders: HTMLElement;
@@ -36,6 +36,7 @@ export class Hud implements HudView {
   private readonly ride: HTMLElement;
   private readonly speed: HTMLElement;
   private readonly fuel: HTMLElement;
+  private readonly prompt: HTMLElement;
   /** The next stop's world yaw (null: none), the camera yaw last aimed with, and the arrow angle last written. */
   private bearing: number | null = null;
   private cameraYaw = 0;
@@ -80,6 +81,8 @@ export class Hud implements HudView {
     this.lockout = el('div', 'hud-chip hud-lockout', chips);
     this.safe.hidden = true;
     this.lockout.hidden = true;
+    this.prompt = el('div', 'hud-prompt', root);
+    this.prompt.hidden = true;
     this.offers = el('div', 'hud-offers', root);
     this.ride = el('div', 'hud-ride', root);
     this.ride.hidden = true;
@@ -124,6 +127,9 @@ export class Hud implements HudView {
       setText(this.nextDistance, `${n.distance} m`);
       this.aim(this.cameraYaw);
     }
+
+    this.prompt.hidden = m.prompt === null;
+    if (m.prompt !== null) setText(this.prompt, m.prompt);
 
     const r = m.ride;
     this.ride.hidden = r === null;

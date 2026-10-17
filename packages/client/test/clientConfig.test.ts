@@ -3,6 +3,33 @@ import { movementConfig, RIDE_TIERS } from '@dm/shared';
 import { clientConfig } from '../src/clientConfig';
 
 describe('clientConfig', () => {
+  it('city LOD radii; the fog ends at the outermost ring; budgets', () => {
+    // Invariants only, so a config-only retune (the owner's ?perf=1 run) needs no test edit. LOD0 ≤ 160 m and
+    // LOD1 ≤ 370 m are the spec's limits; the shipped radii sit below them to fit the budgets with the pack models.
+    const [lod0, lod1, lod2] = clientConfig.city.lodRadii as [number, number, number];
+    expect(clientConfig.city.lodRadii).toHaveLength(3);
+    expect(lod0).toBeGreaterThan(0);
+    expect(lod1).toBeGreaterThan(lod0);
+    expect(lod2).toBeGreaterThan(lod1);
+    expect(lod0).toBeLessThanOrEqual(160);
+    expect(lod1).toBeLessThanOrEqual(370);
+    expect(clientConfig.graphics.fogFar).toBe(lod2);
+    // models are requested before their lots enter the LOD1 ring
+    expect(clientConfig.city.loadAheadRadius).toBeGreaterThan(lod1);
+    expect(clientConfig.city.relodDistance).toBeGreaterThan(0);
+    expect(clientConfig.city.renderRegion).toBeGreaterThan(0);
+    expect(clientConfig.city.labelRadius).toBeGreaterThan(0);
+    expect(clientConfig.city.modelsBase).toBe('packs/');
+    const { ratio, error, minDrop } = clientConfig.city.lod1;
+    for (const v of [ratio, error, minDrop]) {
+      expect(v).toBeGreaterThan(0);
+      expect(v).toBeLessThan(1);
+    }
+    expect(clientConfig.city.lod1Fallback).toBe('box');
+    expect(clientConfig.graphics.drawCallBudget).toBeGreaterThan(0);
+    expect(clientConfig.graphics.triangleBudget).toBeGreaterThan(0);
+  });
+
   it('water sits below the ground top and above the out-of-bounds height', () => {
     expect(clientConfig.graphics.waterLevel).toBeLessThan(0);
     expect(clientConfig.graphics.waterLevel).toBeGreaterThan(movementConfig.fall.outOfBoundsY);

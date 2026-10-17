@@ -26,8 +26,10 @@ export function enterAir(state: PlayerState, cfg: MovementConfig): void {
  */
 export function applyTriggers(state: PlayerState, body: PlayerBody, map: MapData, cfg: MovementConfig, garage: Garage): SimEvent[] {
   const feet = state.position;
-  const limit = map.size / 2 + cfg.fall.boundsMargin;
-  if (feet.y < cfg.fall.outOfBoundsY || Math.abs(feet.x) > limit || Math.abs(feet.z) > limit) {
+  // The greybox island is centred on the origin; the city spans 0..size in x and z.
+  const lo = (map.kind === 'city' ? 0 : -map.size / 2) - cfg.fall.boundsMargin;
+  const hi = lo + map.size + 2 * cfg.fall.boundsMargin;
+  if (feet.y < cfg.fall.outOfBoundsY || feet.x < lo || feet.x > hi || feet.z < lo || feet.z > hi) {
     const hospital = nearestHospital(map, state.lastGrounded);
     const tier = state.riding;
     if (tier) {

@@ -16,7 +16,7 @@ const zeroRng: Rng = () => 0;
 const cfgWith = (kind: 'food' | 'package', modifier: 'none' | 'express' | 'fragile' = 'none'): OrdersConfig => ({
   ...ordersConfig,
   // These tests pin the original pacing; the prep and cooldown tests below opt in to the live values.
-  offers: { maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15 },
+  offers: { maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15, maxPathQueries: 8 },
   deliveryCooldown: { minSeconds: 0, maxSeconds: 0 },
   prep: { foodSeconds: 0 },
   mix: {

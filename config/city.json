@@ -1,0 +1,186 @@
+{
+  "size": 1200,
+  "seed": 1,
+  "street": 12,
+  "avenue": 15,
+  "alley": 4,
+  "crossStreetFirst": 12,
+  "crossStreetPitch": 108,
+  "crossStreets": 11,
+  "eastEdgeStreetX": 1188,
+  "levels": {
+    "L0": { "y": 2, "z0": 0, "z1": 270 },
+    "L1": { "y": 10, "z0": 310, "z1": 560 },
+    "L2": { "y": 24, "z0": 620, "z1": 820 },
+    "L3": { "y": 38, "z0": 880, "z1": 1040 },
+    "ridge": { "y": 48, "z0": 1070, "z1": 1180 }
+  },
+  "bands": {
+    "A": { "z0": 270, "z1": 310, "y0": 2, "y1": 10 },
+    "B": { "z0": 560, "z1": 620, "y0": 10, "y1": 24 },
+    "C": { "z0": 820, "z1": 880, "y0": 24, "y1": 38 },
+    "D": { "z0": 1040, "z1": 1070, "y0": 38, "y1": 48 }
+  },
+  "blockDepth": { "dense": 48, "alley": 30 },
+  "openEvery": 3,
+  "districtSplits": {
+    "L1": { "industrialMaxX": 330, "downtownMaxX": 760 },
+    "L2": { "rowhousesMaxX": 400, "highstreetMaxX": 800 }
+  },
+  "blockFill": {
+    "minGap": 4.2,
+    "denseDistricts": ["downtown"],
+    "openDistricts": ["industrial", "rowhouses", "apartments", "uptown"],
+    "sportsInset": 6,
+    "sportsSpacing": 20,
+    "parkingInset": 3,
+    "sportsAssets": ["mega/FootballPlayground_01", "mega/BasketballPlayground_01"],
+    "parkingAsset": "mega/ParkingZone_01"
+  },
+  "terrain": {
+    "slabThickness": 1,
+    "terrainThickness": 3,
+    "l0Ground": [
+      { "id": "docks", "x0": 0, "x1": 380, "z0": 110 },
+      { "id": "beach", "x0": 380, "x1": 820, "z0": 200 },
+      { "id": "harbor", "x0": 820, "x1": 1200, "z0": 120 }
+    ]
+  },
+  "switchback": { "gradePct": 9, "legLength": 80, "legLengthShallow": 50, "landing": 14, "landingShallow": 10, "width": 12, "thickness": 0.4, "deepBandMin": 50 },
+  "steepLane": { "gradePct": 14, "width": 6, "zoneStep": 6, "thickness": 0.4 },
+  "stairs": { "width": 4, "rise": 0.25, "tread": 0.35, "landingEvery": 12, "landingDepth": 2 },
+  "parapet": { "height": 1, "thickness": 0.3, "mouthClearance": 1 },
+  "slopeBands": {
+    "switchbackK": { "A": [1, 5, 9], "B": [2, 6, 10], "C": [1, 5, 9], "D": [3, 8] },
+    "laneK": { "A": [3, 7], "B": [0, 4, 8], "C": [3, 7, 10], "D": [0, 6] },
+    "laneOffset": 40,
+    "laneShift": 30,
+    "stairX": {
+      "A": [70, 330, 500, 650, 820, 1050],
+      "B": [60, 170, 280, 390, 500, 610, 720, 830, 940, 1050],
+      "C": [60, 170, 280, 500, 610, 720, 830, 940, 1050, 1150],
+      "D": [120, 450, 760, 1000, 1150]
+    },
+    "stairShift": 25,
+    "gapMargin": 2,
+    "slopeLots": { "bands": ["B", "C"], "x0": 6, "endMargin": 8, "slot": 8, "chance": 0.45, "skip": 3, "spacing": 0.5, "clearance": 2 }
+  },
+  "hospital": { "asset": "mega/Hospital_01", "lot": 27, "safeRadius": 18, "bayOffset": 3.6, "bayBack": 2, "spawnOffset": 2, "behindGap": 2, "rowMargin": 2 },
+  "gasStation": {
+    "lotW": 18,
+    "lotD": 15,
+    "canopy": { "asset": "mega/Gas_Station_02", "x": 2, "z": 2 },
+    "kiosk": { "asset": "mega/SmallMarket_01", "x": 11, "z": 4 },
+    "pumpSpacing": 4
+  },
+  "hillcrest": {
+    "lot": 15,
+    "depth": 16,
+    "driveZ": 1118,
+    "driveAmplitude": 22,
+    "drivePeriod": 420,
+    "driveWidth": 10,
+    "driveStep": 10,
+    "x0": 4,
+    "slot": 16,
+    "endMargin": 16,
+    "setback": 1,
+    "mouthClearance": 4,
+    "parkX0": 560,
+    "parkX1": 660,
+    "parkZ0": 1075,
+    "parkZ1": 1175,
+    "gas": { "name": "Ridge Fuel", "x": 898, "z": 1076 },
+    "cliff": { "z0": 1180, "z1": 1200, "y": 60 }
+  },
+  "docks": {
+    "quayZ": 110,
+    "railZ0": 236,
+    "railZ1": 246,
+    "railX1": 340,
+    "yard": { "x0": 20, "z0": 120, "x1": 200, "z1": 184 },
+    "containerCols": 8,
+    "containerRows": 4,
+    "containers": { "asset": "missing/Container_01", "x0": 26, "z0": 126, "dx": 21, "dz": 15, "stackMax": 3 },
+    "craneAsset": "missing/Crane_01",
+    "cranes": [{ "x": 40, "z": 98 }, { "x": 120, "z": 98 }],
+    "buildings": [
+      { "asset": "missing/Warehouse_01", "x": 215, "z": 130, "facing": "W" },
+      { "asset": "missing/Warehouse_01", "x": 215, "z": 160, "facing": "W" },
+      { "asset": "mega/Factory_05", "x": 250, "z": 196, "facing": "S" },
+      { "asset": "mega/Factory_03", "x": 275, "z": 196, "facing": "S" },
+      { "asset": "mega/Factory_01", "x": 300, "z": 140, "facing": "S" },
+      { "asset": "mega/Factory_04", "x": 315, "z": 165, "facing": "S" },
+      { "asset": "mega/Factory_02", "x": 330, "z": 140, "facing": "S" },
+      { "asset": "mega/Station_01", "x": 120, "z": 234, "facing": "N" },
+      { "asset": "mega/Factory_03", "x": 30, "z": 200, "facing": "S" },
+      { "asset": "mega/Factory_05", "x": 60, "z": 200, "facing": "S" }
+    ],
+    "street": { "x0": 200, "x1": 212, "z0": 120 },
+    "lanes": [{ "x0": 0, "x1": 200, "z0": 112, "z1": 118 }, { "x0": 0, "x1": 380, "z0": 186, "z1": 192 }],
+    "gas": { "name": "Dockside Fuel", "x": 348, "z": 228 }
+  },
+  "beach": {
+    "x0": 380,
+    "x1": 820,
+    "boardwalkZ0": 200,
+    "boardwalkZ1": 208,
+    "sandY": 1,
+    "sandStep": 10,
+    "shoreZ": 110,
+    "crescent": 70,
+    "bars": { "assets": ["trop/Bar_01", "trop/Bar_02"], "x0": 392, "x1": 800, "slot": 34, "every": 3, "gap": 2 },
+    "hotels": { "x0": 382, "x1": 812, "maxD": 44, "gap": 3 },
+    "ferrisWheel": { "asset": "trop/Ferris_wheel_01", "x": 790, "z": 150 }
+  },
+  "harbor": {
+    "quayZ": 120,
+    "x0": 832,
+    "x1": 1188,
+    "pierX": 995,
+    "pierWidth": 12,
+    "pierZ0": 30,
+    "breakwater": { "x0": 1120, "x1": 1200, "z0": 60, "z1": 72, "armX0": 1188 },
+    "lighthouse": { "asset": "trop/Lighthouse_01", "name": "Lighthouse", "x": 1150 },
+    "marina": { "x0": 840, "z0": 70, "x1": 980, "z1": 118, "y": 0 },
+    "quayStreet": { "z0": 170, "z1": 182 },
+    "alley": { "z0": 210, "z1": 214 },
+    "rows": [{ "z": 170, "facing": "N", "maxD": 36 }, { "z": 255, "facing": "N", "maxD": 30 }, { "z": 182, "facing": "S", "maxD": 26 }]
+  },
+  "landmarks": {
+    "hospitals": [
+      { "name": "Bayview General", "at": "L1:1:0" },
+      { "name": "Harbor Clinic", "at": "L1:9:0" },
+      { "name": "Midtown Medical", "at": "L2:8:0" },
+      { "name": "Uptown Hospital", "at": "L3:1:0" }
+    ],
+    "gas": [
+      { "name": "Bayview Fuel", "at": "L1:0:1", "side": "W" },
+      { "name": "Harbor Pumps", "at": "L1:10:1", "side": "E" },
+      { "name": "Midtown Gas", "at": "L2:5:1", "side": "W" },
+      { "name": "Uptown Fuel", "at": "L3:7:1", "side": "W" }
+    ],
+    "civic": [
+      { "asset": "mega/CityHall_01", "name": "City Hall", "at": "L1:5:0" },
+      { "asset": "mega/Police_01", "name": "Police Station", "at": "L1:4:1" },
+      { "asset": "mega/FireStation_01", "name": "Fire Station", "at": "L2:3:1" },
+      { "asset": "mega/Church_01", "name": "Church", "at": "L3:5:0" },
+      { "asset": "missing/School_01", "name": "School", "at": "L2:6:2" },
+      { "asset": "missing/PostOffice_01", "name": "Post Office", "at": "L2:2:0" }
+    ],
+    "plaza": { "fillerDepth": 20, "sideGap": 3, "backGap": 4, "backMin": 6 }
+  },
+  "edges": {
+    "curvedRoadOverlap": 0.5,
+    "mountains": { "depth": 150, "height": 90, "thickness": 20, "spans": [[0, 400], [400, 800], [800, 1200]] },
+    "water": { "top": -6, "thickness": 1, "z1": 200 }
+  },
+  "pois": { "foodPickupCap": 100, "packagePickupCap": 60, "target": 800, "doorSpacing": 12 },
+  "door": { "offset": 0.5 },
+  "orderRules": {
+    "bands": { "shortMax": 350, "mediumMax": 800 },
+    "foodDropoff": { "min": 150, "max": 800 },
+    "packageDropoff": { "min": 150, "max": 1600 },
+    "maxPickupDistance": 400
+  }
+}

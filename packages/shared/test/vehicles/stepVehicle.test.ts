@@ -7,6 +7,7 @@ import type { SimEvent } from '../../src/movement/types';
 import { forbiddenZoneAt } from '../../src/world/access';
 import type { MapData } from '../../src/world/mapTypes';
 import { createPhysicsWorld, initRapier, type PhysicsWorld } from '../../src/world/physicsWorld';
+import { facing } from '../../src/movement/ground';
 import { stepVehicle } from '../../src/vehicles/stepVehicle';
 import type { VehicleState } from '../../src/vehicles/types';
 import { VehicleBody } from '../../src/vehicles/VehicleBody';
@@ -32,6 +33,11 @@ const fixtureMap = (): MapData => ({
     box('step2', vec3(60, 0.375, -20.75), vec3(4, 0.75, 0.3)),
     box('ledge', vec3(-60, 4.5, 0), vec3(20, 9, 20), { kind: 'building' }),
     box('sideWall', vec3(81, 2, -10), vec3(2, 4, 40), { kind: 'building' }),
+    // Wedge fixtures (playtest issue 1): a wall along x with its face at z = 59.2 (0.3 m from a motorbike at z = 60);
+    // a second one at z = 89.2 plus a wall across x with its face at x = 1.4 (0.3 m past the nose of a +x motorbike).
+    box('wedgeLeft', vec3(0, 2, 58.2), vec3(20, 4, 2), { kind: 'building' }),
+    box('wedge2Left', vec3(0, 2, 88.2), vec3(20, 4, 2), { kind: 'building' }),
+    box('wedge2Ahead', vec3(2.4, 2, 90), vec3(2, 4, 12), { kind: 'building' }),
   ],
   accessZones: [{ id: 'alley-x', kind: 'alley', rect: { minX: 30, minZ: -40, maxX: 34, maxZ: -20 }, minY: 0, maxY: 0 }],
 });
@@ -48,6 +54,13 @@ const input = (forward: number, strafe = 0): InputFrame => {
   const i = emptyInput();
   i.move = { x: strafe, y: forward };
   i.look = { yaw: 0, pitch: 0 };
+  return i;
+};
+
+/** Forward/back input with the camera looking along `yaw`. */
+const inputYaw = (forward: number, yaw: number): InputFrame => {
+  const i = input(forward);
+  i.look = { yaw, pitch: 0 };
   return i;
 };
 
@@ -113,7 +126,8 @@ describe('stepVehicle', () => {
     const ev = r.run(90, input(1), (v) => expect(forbiddenZoneAt(map, 'car', v.position)).toBeNull());
     const blocked = ev.filter((e) => e.kind === 'accessBlocked');
     expect(blocked).toEqual([{ kind: 'accessBlocked', zone: 'alley' }]);
-    expect(r.v.position.z).toBeCloseTo(-19.95, 3);
+    // The nose (2.2 m ahead of the centre) stops 0.05 m before the zone edge at z = -20.
+    expect(r.v.position.z).toBeCloseTo(-20 + 2.2 + 0.05, 3);
     expect(crashes(ev)).toHaveLength(0);
     r.body.destroy();
   });
@@ -155,5 +169,43 @@ describe('stepVehicle', () => {
     expect((landed[0] as { fallHeight: number }).fallHeight).toBeCloseTo(9, 0);
     expect(r.v.position.y).toBeLessThan(0.05);
     r.body.destroy();
+  });
+
+  test('a stopped motorbike beside a wall turns the long way round and drives off (playtest issue 1)', () => {
+    // Heading +X, wall 0.3 m to its left; W with the camera behind (wish = -X).
+    const r = rig('motorbike', vec3(0, 0, 60), -Math.PI / 2);
+    r.run(90, inputYaw(1, Math.PI / 2));
+    const toGo = Math.abs(Math.atan2(Math.sin(r.v.heading - Math.PI / 2), Math.cos(r.v.heading - Math.PI / 2)));
+    expect(toGo).toBeLessThan(0.2);
+    expect(Math.hypot(r.v.position.x, r.v.position.z - 60)).toBeGreaterThan(3);
+    r.body.destroy();
+  });
+
+  test('a stopped motorbike with a wall ahead and one beside it backs out on S', () => {
+    const r = rig('motorbike', vec3(0, 0, 90), -Math.PI / 2);
+    let minSpeed = 0;
+    r.run(60, inputYaw(-1, -Math.PI / 2), (v) => {
+      const f = facing(v.heading);
+      minSpeed = Math.min(minSpeed, v.velocity.x * f.x + v.velocity.z * f.z);
+    });
+    expect(r.v.position.x).toBeLessThan(-1.5);
+    expect(minSpeed).toBeGreaterThanOrEqual(-2.5 - 1e-9);
+    r.body.destroy();
+  });
+
+  test('the car still reverses at reverseSpeed and the skateboard never reverses', () => {
+    const car = rig('car', vec3(40, 0, 40));
+    car.run(90, input(-1));
+    const cf = facing(car.v.heading);
+    expect(car.v.velocity.x * cf.x + car.v.velocity.z * cf.z).toBeCloseTo(-6, 6);
+    car.body.destroy();
+    const board = rig('skateboard', vec3(40, 0, 70));
+    let minSpeed = 0;
+    board.run(60, input(-1), (v) => {
+      const f = facing(v.heading);
+      minSpeed = Math.min(minSpeed, v.velocity.x * f.x + v.velocity.z * f.z);
+    });
+    expect(minSpeed).toBeGreaterThanOrEqual(-1e-9);
+    board.body.destroy();
   });
 });

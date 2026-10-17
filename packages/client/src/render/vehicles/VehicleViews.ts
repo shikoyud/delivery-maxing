@@ -1,7 +1,14 @@
 import * as THREE from 'three';
-import { lerpVec3, RIDE_TIERS, ridingConfig, type Garage, type RideTier, type Vec3, type VehicleSpot } from '@dm/shared';
+import { lerpVec3, RIDE_TIERS, ridingConfig, type CatalogEntry, type Garage, type RideTier, type Vec3, type VehicleSpot } from '@dm/shared';
 import { lerpAngle } from '../../game/interpolation';
-import { buildVehicleMesh } from './vehicleMeshes';
+import type { ModelLoader } from '../city/modelLoader';
+import { buildVehicleMesh, carModel } from './vehicleMeshes';
+
+/** Where the pack car comes from: the model loader and the car's catalog entry. */
+export interface VehicleModels {
+  loader: ModelLoader;
+  car: CatalogEntry;
+}
 
 interface View {
   root: THREE.Group;
@@ -18,7 +25,8 @@ const UP = new THREE.Vector3(0, 1, 0);
  * owned. Each is interpolated between the state before the last tick (beforeStep) and the current one, like the
  * courier, so the ridden vehicle and its rider move together; it yaws to the heading and pitches to the ground normal.
  * A summon, tow, mount or dismount moves a vehicle in one go: snap() (and any spot change) draws it at its new place
- * without sweeping across the map.
+ * without sweeping across the map. With `models`, the car's placeholder is swapped for the pack car once it has
+ * loaded (and stays when it is missing).
  */
 export class VehicleViews {
   private readonly views: Record<RideTier, View>;
@@ -27,7 +35,9 @@ export class VehicleViews {
   private readonly tilt = new THREE.Quaternion();
   private readonly normal = new THREE.Vector3();
 
-  constructor(scene: THREE.Scene) {
+  private carPending: VehicleModels | null;
+
+  constructor(scene: THREE.Scene, models?: VehicleModels) {
     const views = {} as Record<RideTier, View>;
     for (const t of RIDE_TIERS) {
       const root = buildVehicleMesh(t, ridingConfig.rides[t]);
@@ -36,6 +46,8 @@ export class VehicleViews {
       views[t] = { root, prev: { x: 0, y: 0, z: 0 }, prevHeading: 0, prevSpot: null };
     }
     this.views = views;
+    this.carPending = models ?? null;
+    models?.loader.request(models.car.id);
   }
 
   /** The vehicle's mesh (tests, screenshots). */
@@ -55,6 +67,7 @@ export class VehicleViews {
 
   /** Per frame: `alpha` (0..1) is how far the frame is between the last two ticks. */
   update(garage: Garage, alpha: number): void {
+    if (this.carPending) this.swapCar(this.carPending);
     const owned = garage.owned();
     for (const t of RIDE_TIERS) {
       const view = this.views[t];
@@ -73,6 +86,22 @@ export class VehicleViews {
       view.root.quaternion.multiplyQuaternions(this.tilt, this.yaw);
     }
     this.snapNext = false;
+  }
+
+  /** Replaces the car placeholder's mesh with the pack car once it is loaded; gives up when it is missing. */
+  private swapCar(models: VehicleModels): void {
+    const state = models.loader.get(models.car.id);
+    if (state === 'loading') return;
+    this.carPending = null;
+    const model = carModel(models.loader, models.car);
+    if (!model) return;
+    const root = this.views.car.root;
+    for (const child of [...root.children]) {
+      root.remove(child);
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) mesh.geometry.dispose();
+    }
+    root.add(model);
   }
 
   private record(view: View, garage: Garage, t: RideTier): void {

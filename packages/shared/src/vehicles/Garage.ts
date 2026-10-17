@@ -34,15 +34,17 @@ export const restsCarried = (t: RideTier): boolean => t === 'skateboard';
 
 /**
  * All four vehicles owned (Decision 2): the skateboard carried, the others parked in bay slots 0–2 of the first
- * hospital, full tanks.
+ * hospital, full tanks. The slots run nose-to-tail behind slot 0, so the biggest goes in front: the car in slot 0 has
+ * nothing ahead of it (in the last slot it was boxed in by the motorbike 0.7 m from its nose), and the two-wheelers
+ * behind it can back out (Task 1).
  */
 export function defaultGarage(map: MapData, cfg: RidingConfig = ridingConfig): SavedVehicle[] {
   const h = map.hospitals[0];
   if (!h) throw new Error('map has no hospitals');
-  let slot = 0;
+  const parkOrder = RIDE_TIERS.filter((t) => !restsCarried(t)).reverse();
   return RIDE_TIERS.map((tier) => ({
     tier,
-    spot: restsCarried(tier) ? { kind: 'carried' } : { kind: 'parked', ...baySlot(h, slot++, cfg) },
+    spot: restsCarried(tier) ? { kind: 'carried' } : { kind: 'parked', ...baySlot(h, parkOrder.indexOf(tier), cfg) },
     fuel: 1,
   }));
 }
