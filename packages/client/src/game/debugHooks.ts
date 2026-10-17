@@ -39,6 +39,8 @@ export interface DebugApi {
   capacityTier(): VehicleTier;
   /** Sets the tier last ridden (capacity on foot follows it), as if the courier had just got off it. */
   setLastRide(t: RideTier | null): void;
+  /** The Garage app's Switch: on foot, offers and capacity follow `t` (refused while riding or when the orders don't fit). */
+  switchTo(t: RideTier): { ok: true } | { ok: false; message: string };
   /** Parks `tier` next to the player (owning it first if need be) and mounts it; any current ride is left first. */
   ride(tier: RideTier): void;
   /** The owned vehicles: where each is, its world position and its tank (0..1). */
@@ -150,6 +152,7 @@ export function installDebugHooks(game: Game): void {
     setLastRide: (t) => {
       game.sim.state.lastRide = t;
     },
+    switchTo: (t) => game.delivery.switchTo(t),
     ride: (tier) => game.rideNow(tier),
     vehicles: () =>
       game.sim.garage.owned().map((tier) => ({

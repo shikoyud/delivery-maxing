@@ -245,6 +245,7 @@ export class Game {
         speed: horizontalLength(this.sim.state.velocity),
         mountCandidate: () => this.sim.mountCandidate(),
       }),
+      setLastRide: (t) => void (this.sim.state.lastRide = t),
       // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
       distance: (a, b) => nav.distance('walk', a, b),
       ...(extras.distances ? { table: extras.distances } : {}),
@@ -257,7 +258,7 @@ export class Game {
       phoneChanged: (open) => this.phoneChanged(open),
       vehicles: {
         // Rows and summon both measure from the feet on the ground (an airborne courier's last grounded position).
-        rows: (now) => garageRows(sim.garage, sim.state.grounded ? sim.state.position : sim.state.lastGrounded, now),
+        rows: (now) => garageRows(sim.garage, sim.state.grounded ? sim.state.position : sim.state.lastGrounded, now, sim.state.riding ?? sim.state.lastRide),
         state: (t) => sim.garage.state(t),
         summon: (t, now) => {
           const s = sim.state;

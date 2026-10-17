@@ -27,6 +27,7 @@ describe('Phone', () => {
         shopBuy: (id) => void calls.push(`shop buy ${id}`),
         shopConfirm: (id) => void calls.push(`shop confirm ${id}`),
         shopCancel: () => void calls.push('shop cancel'),
+        switchRide: (t) => void calls.push(`switch ${t}`),
       },
       ['Escape', 'Tab'],
     );
@@ -193,8 +194,8 @@ describe('Phone', () => {
     phone.render(
       model({
         garage: [
-          { tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 0.5, summon: 'ok', readyIn: 0 },
-          { tier: 'bicycle', status: 'parked', position: { x: 0, y: 0, z: 40 }, distance: 40, fuel: null, summon: 'tooClose', readyIn: 0 },
+          { tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 0.5, summon: 'ok', readyIn: 0, owned: true, active: false, fuelText: null, range: '' },
+          { tier: 'bicycle', status: 'parked', position: { x: 0, y: 0, z: 40 }, distance: 40, fuel: null, summon: 'tooClose', readyIn: 0, owned: true, active: false, fuelText: null, range: '' },
         ],
       }),
     );

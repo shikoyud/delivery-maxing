@@ -1066,3 +1066,10 @@ kbd {
     max-width: 45%;
   }
 }
+
+/* Garage rows (Task 17): payout range, Switch and Buy */
+.phone-garage-range { color: var(--dm-ink); opacity: 0.7; font-size: 12px; }
+.phone-switch { background: var(--dm-coral); }
+.phone-switch:disabled { background: var(--dm-teal); opacity: 0.6; }
+.phone-buy { background: var(--dm-coral); }
+.phone-garage-row [hidden] { display: none; }

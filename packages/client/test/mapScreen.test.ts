@@ -200,7 +200,7 @@ describe('MapScreen', () => {
       const screen2 = screenFor(city);
       screen2.open();
       screen2.render(
-        model({ garage: [{ tier: 'skateboard', status: 'carried', position: null, distance: null, fuel: null, summon: 'carried', readyIn: 0 }], parked: [] }),
+        model({ garage: [{ tier: 'skateboard', status: 'carried', position: null, distance: null, fuel: null, summon: 'carried', readyIn: 0, owned: true, active: false, fuelText: null, range: '' }], parked: [] }),
         player,
         0,
       );

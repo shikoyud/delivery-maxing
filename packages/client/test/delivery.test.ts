@@ -26,6 +26,7 @@ import {
   type Vec3,
   type VehicleState,
   economyConfig,
+  effectiveCapacity,
   maxPointsFor,
   rollPayoutUsd,
   usdToGame,
@@ -157,6 +158,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     now: () => env.now,
     player: () => ({ position: env.position, mode: 'ground', grounded: env.grounded, lastGrounded: env.lastGrounded }),
     rider: () => ({ riding: rider.riding, lastRide: rider.lastRide, speed: rider.speed, mountCandidate: () => rider.candidate }),
+    setLastRide: (t) => void (rider.lastRide = t),
     distance,
     ui: {
       hud: { update: (m) => void huds.push(m) },
@@ -174,7 +176,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     },
     phoneChanged: (open) => void phone.changes.push(open),
     vehicles: {
-      rows: () => [{ tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn }],
+      rows: () => [{ tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn, owned: true, active: false, fuelText: 'Fuel 100%', range: '' }],
       summon: (t, now) => {
         vehicles.calls.push(`summon ${t} at ${now}`);
         return vehicles.result;
@@ -244,6 +246,42 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
 }
 
 describe('DeliveryLoop', () => {
+  test('Switch to the car on foot makes offers, capacity and the payout range follow the car', () => {
+    const s = setup('bicycle');
+    expect(s.loop.capacityTier).toBe('bicycle');
+    expect(s.loop.switchTo('car')).toEqual({ ok: true });
+    expect(s.rider.lastRide).toBe('car');
+    expect(s.loop.capacityTier).toBe('car');
+    expect(s.loop.capacity()).toEqual(effectiveCapacity(s.bag.tier, 'car'));
+    s.tick();
+    expect(s.loop.orders.capacity).toEqual(effectiveCapacity(s.bag.tier, 'car'));
+    const offer = s.waitForOffer();
+    expect(s.loop.accept(offer.order.id)).toBe('ok');
+    expect(s.loop.orders.active[0]!.tier).toBe('car'); // paid from the car's range
+  });
+
+  test('Switch to the bicycle with two packages is refused with the copy (§3.3)', () => {
+    const s = setup('car');
+    // Four orders: more than the bicycle's slots (it caps the car's six at three).
+    for (let i = 0; i < 4000 && s.loop.orders.active.length < 4; i++) {
+      const o = s.loop.orders.offers[0];
+      if (o) s.loop.accept(o.order.id);
+      else s.tick();
+    }
+    expect(s.loop.orders.active.length).toBe(4);
+    expect(s.loop.switchTo('bicycle')).toEqual({ ok: false, message: "Your orders don't fit on the bicycle" });
+    expect(s.rider.lastRide).toBe('car');
+    expect(s.popups.at(-1)).toMatchObject({ text: "Your orders don't fit on the bicycle", tone: 'warn' });
+  });
+
+  test('Switch while riding says "Get off first"', () => {
+    const s = setup('car');
+    s.rider.riding = 'car';
+    expect(s.loop.switchTo('bicycle')).toEqual({ ok: false, message: 'Get off first' });
+    expect(s.rider.lastRide).toBe('car');
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Get off first', tone: 'warn' });
+  });
+
   it('Y (accept.pressed) in beforeStep accepts the first offer', () => {
     const s = setup('car');
     s.waitForOffer();

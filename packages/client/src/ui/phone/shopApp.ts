@@ -403,6 +403,7 @@ export function createShopApp(cb: ShopCallbacks): PhoneAppView {
 
   return {
     el: root,
+    focus: () => showTab('token'),
     render: (m: HudModel) => {
       setText(balance, `${gameText(m.wallet.balance)} GAME · ${m.totals.coins} Coins`);
       for (const [name, s] of sections) {

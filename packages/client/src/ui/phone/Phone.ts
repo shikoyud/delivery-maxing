@@ -29,6 +29,8 @@ export interface PhoneCallbacks extends OrdersCallbacks {
   summon(t: RideTier): void;
   /** Settings: respawn at the nearest hospital (spec §13 Vehicle stuck). */
   respawn(): void;
+  /** Garage: Switch offers, capacity and the payout range to `t` (on foot). */
+  switchRide(t: RideTier): void;
   /** Shop: a Coin item's Buy (bought at once). */
   shopBuy(itemId: string): void;
   /** Shop: Confirm on a GAME item's confirm sheet, paying at most the `maxGame` it showed. */
@@ -46,12 +48,16 @@ export interface PhoneView {
   show(app: PhoneApp): void;
   /** `player`/`heading` feed the Garage app (distances). */
   render(model: HudModel, player: Vec3, heading: number): void;
+  /** Brings the view's main tab to the front (the Shop: Token); called after the phone shows the app. */
+  focus?(): void;
 }
 
 /** An app view the phone hosts: its element and how it draws a model. */
 export interface PhoneAppView {
   el: HTMLElement;
   render(model: HudModel, player: Vec3, heading: number): void;
+  /** Brings the view's main tab to the front (the Shop: Token); called after the phone shows the app. */
+  focus?(): void;
 }
 
 /**
@@ -163,6 +169,12 @@ export class Phone implements PhoneView {
     if (this.open_) this.views.get(this.current)!.render(model, player, heading);
   }
 
+  /** The Garage's "Buy in the Shop": the Shop app on its Token tab. */
+  openShopTokens(): void {
+    this.show('shop');
+    this.views.get('shop')!.focus?.();
+  }
+
   private buildApp(app: PhoneApp): PhoneAppView {
     const root = el('section', 'phone-app', this.screen);
     root.dataset.app = app;
@@ -172,7 +184,7 @@ export class Phone implements PhoneView {
       case 'wallet':
         return { el: root, render: (m) => renderWalletApp(root, m) };
       case 'garage': {
-        const view = createGarageApp((t) => this.callbacks.summon(t));
+        const view = createGarageApp((t) => this.callbacks.summon(t), { switchTo: (t) => this.callbacks.switchRide(t), buy: () => this.openShopTokens() });
         root.appendChild(view.el);
         return { el: root, render: (m, p, h) => view.render(m, p, h) };
       }
@@ -180,7 +192,7 @@ export class Phone implements PhoneView {
         const cb = this.callbacks;
         const view = createShopApp({ buy: (id) => cb.shopBuy(id), confirm: (id, max) => cb.shopConfirm(id, max), cancel: () => cb.shopCancel() });
         root.appendChild(view.el);
-        return { el: root, render: (m, p, h) => view.render(m, p, h) };
+        return { el: root, render: (m, p, h) => view.render(m, p, h), focus: () => view.focus?.() };
       }
       case 'settings':
         buildStubApp(root, app, () => this.callbacks.respawn());

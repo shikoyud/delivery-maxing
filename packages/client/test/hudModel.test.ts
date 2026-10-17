@@ -323,6 +323,10 @@ describe('hudModel next stop and ride', () => {
       fuel: null,
       summon: 'ok',
       readyIn: 0,
+      owned: true,
+      active: false,
+      fuelText: null,
+      range: '',
     });
     const rows = [
       row('skateboard', 'carried', null),

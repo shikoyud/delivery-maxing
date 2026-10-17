@@ -80,6 +80,8 @@ export interface DeliveryDeps {
    * speed (m/s), and what F would mount now on foot.
    */
   rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
+  /** Sets the tier last ridden (Game: sim.state.lastRide): the Garage app's Switch on foot. */
+  setLastRide?(t: RideTier): void;
   /** The owned Bag tier (Game: the chain's `ownership().lines.bag`); it and the ride set the capacity (spec §3.3). */
   bagTier(): number;
   /** The owned Dispatcher tier (Game: the chain's `ownership().lines.dispatcher`); it sets how many offers, how often, how good. */
@@ -250,6 +252,7 @@ export class DeliveryLoop {
       shopConfirm: (id, maxGame) => void this.shopConfirm(id, maxGame),
       shopCancel: () => undefined,
       summon: (t) => void this.summon(t),
+      switchRide: (t) => void this.switchTo(t),
       respawn: () => this.respawn(),
       closed: () => {
         this.d.actions.releaseAll();
@@ -593,6 +596,27 @@ export class DeliveryLoop {
     }
     this.nextHudAt = 0;
     return result;
+  }
+
+  /**
+   * Garage app Switch (decision 6): on foot, the tier offers, capacity and the payout range follow `t`. Refused while
+   * riding ("Get off first") and when the active orders would not fit the capacity `t` caps (spec §3.3).
+   */
+  switchTo(t: RideTier): { ok: true } | { ok: false; message: string } {
+    const refuse = (message: string): { ok: false; message: string } => {
+      this.popups.show(message, [], 'warn');
+      return { ok: false, message };
+    };
+    if (this.d.rider().riding !== null) return refuse('Get off first');
+    const row = this.d.vehicles?.rows(this.d.now()).find((r) => r.tier === t);
+    if (!this.d.setLastRide || (row && !row.owned)) return refuse(`You don't have the ${TIER_LABEL[t]}`);
+    if (!this.sys.canSwitchCapacity(effectiveCapacity(this.d.bagTier(), t))) return refuse(`Your orders don't fit on the ${TIER_LABEL[t]}`);
+    this.d.setLastRide(t);
+    this.sys.setCapacity(this.capacity());
+    this.popups.show(`Offers now for the ${TIER_LABEL[t]}`, [], 'info');
+    this.save();
+    this.nextHudAt = 0;
+    return { ok: true };
   }
 
   /**
