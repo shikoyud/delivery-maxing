@@ -299,16 +299,25 @@ export class PlayerSim {
     s.pitch = input.look.pitch;
     s.sprinting = false;
     s.stamina = Math.min(this.cfg.stamina.max, s.stamina + this.cfg.stamina.regenPerSecond * this.dt);
-    s.jumpPressAge = null; // Space is the handbrake
+    const spec = g.cfg.rides[tier];
+    // Space ollies a ride with a jumpHeight, with the on-foot jump buffer and coyote time; on any other it is the handbrake.
+    if (spec.jumpHeight !== null) ageJumpBuffer(s, input, this.cfg);
+    else s.jumpPressAge = null;
     const v = g.state(tier);
     const events = stepVehicle(v, g.body(tier), input, {
       map: this.map,
-      spec: g.cfg.rides[tier],
+      spec,
       gravity: this.cfg.gravity,
       dt: this.dt,
       crashSpeed: ordersConfig.fragile.crashSpeed,
+      jump: { pressAge: s.jumpPressAge, coyote: s.airTicks <= coyoteTicks(this.cfg) },
     });
     this.mirrorVehicle(v);
+    if (events.some((e) => e.kind === 'jumped')) {
+      // As tryJump: the press is spent and the coyote window is over (no second jump in the air).
+      s.jumpPressAge = null;
+      s.airTicks = coyoteTicks(this.cfg) + 1;
+    }
     return events;
   }
 

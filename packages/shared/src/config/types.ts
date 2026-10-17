@@ -58,6 +58,8 @@ export interface RideSpec {
   maxStepHeight: number;
   maxSlopeClimbDeg: number;
   fuel: { rangeMeters: number; fullTankCoins: number } | null;
+  /** Space jumps this high (m), with the on-foot coyote time and jump buffer; null: Space is the handbrake (Decision 10). */
+  jumpHeight: number | null;
 }
 
 export interface RidingConfig {

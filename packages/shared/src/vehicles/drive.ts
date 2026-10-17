@@ -15,16 +15,16 @@ export interface DriveInput {
 }
 
 /**
- * Drive input of one frame: W/S throttle, A/D steer, Space (jump) the handbrake. Each axis is taken at full strength:
+ * Drive input of one frame: W/S throttle, A/D steer, Space (jump) the handbrake on a ride that does not jump
+ * (`spec.jumpHeight` null; the skateboard ollies instead and has no handbrake, Decision 10). Each axis is taken at full strength:
  * the move vector (normalised by the input layer, so W+A is (-0.707, 0.707)) is rescaled so its larger axis keeps
  * the vector's length, so W+A is full throttle and full steer, while a single axis or a partial stick is unchanged.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Task 4: Space is the handbrake only where spec.jumpHeight is null
 export function driveInput(input: InputFrame, spec: RideSpec): DriveInput {
   const { x, y } = input.move;
   const big = Math.max(Math.abs(x), Math.abs(y));
   const k = big > 0 ? Math.min(1, Math.hypot(x, y)) / big : 0;
-  return { throttle: y * k, steer: 0 - x * k, handbrake: input.jump.held };
+  return { throttle: y * k, steer: 0 - x * k, handbrake: spec.jumpHeight === null && input.jump.held };
 }
 
 /** The tier's spec top speed; the empty-tank crawl speed when a tank exists and is empty. */

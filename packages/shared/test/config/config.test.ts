@@ -45,6 +45,10 @@ describe('config pins spec values', () => {
     expect(ridingConfig.riding.mountReachHeight).toBe(1.5);
     expect(ridingConfig.summon).toMatchObject({ minDistance: 100, cooldownSeconds: 60 });
   });
+  it('only the skateboard jumps (Decision 10)', () => {
+    expect(ridingConfig.rides.skateboard.jumpHeight).toBe(0.8);
+    for (const t of ['bicycle', 'motorbike', 'car'] as const) expect(ridingConfig.rides[t].jumpHeight).toBeNull();
+  });
   it('the camera-relative turn-first keys are gone (Decision 7)', () => {
     expect('backInputDot' in ridingConfig.riding).toBe(false);
     expect('turnFirstMaxReverse' in ridingConfig.riding).toBe(false);

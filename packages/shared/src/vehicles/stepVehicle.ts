@@ -21,11 +21,17 @@ export interface VehicleStepContext {
   dt: number;
   /** Wall impacts above this speed (m/s) emit `crashed` (ordersConfig.fragile.crashSpeed). */
   crashSpeed: number;
+  /**
+   * The jump of a ride with a `jumpHeight` (the skateboard ollie, Decision 10), from PlayerSim's on-foot timers:
+   * `pressAge` is the ticks since a buffered Space press (null when none; PlayerSim expires it past the jump buffer),
+   * `coyote` is true while the ride left the ground no more than the coyote window ago. Absent: no jump.
+   */
+  jump?: { pressAge: number | null; coyote: boolean };
 }
 
 /**
  * One fixed step of a ridden vehicle: drive (grounded only; no air control) → tryTurn (a blocked turn keeps the
- * old heading) → gravity → clipToAccess → body.move → remove blocked velocity (walls and access edges) → crash
+ * old heading) → jump (a ride with a jumpHeight, grounded or within coyote, with a buffered press) → gravity → clipToAccess → body.move → remove blocked velocity (walls and access edges) → crash
  * check → landing → fuel burn. Mutates `v`; returns this step's events.
  */
 export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFrame, ctx: VehicleStepContext): SimEvent[] {
@@ -43,14 +49,23 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   //    turn in the air.
   if (delta !== 0) v.heading = body.tryTurn(delta);
 
-  // 3. Gravity, integrated exactly for a constant acceleration (as PlayerSim does).
+  // 3. Jump: take-off speed sqrt(2·g·jumpHeight) up, the horizontal velocity kept. The caller consumes the press.
+  const jumpHeight = ctx.spec.jumpHeight;
+  if (jumpHeight !== null && ctx.jump && ctx.jump.pressAge !== null && (v.grounded || ctx.jump.coyote)) {
+    v.velocity = vec3(v.velocity.x, Math.sqrt(2 * gravity * jumpHeight), v.velocity.z);
+    v.grounded = false;
+    v.airApexY = v.position.y;
+    events.push({ kind: 'jumped' });
+  }
+
+  // 4. Gravity, integrated exactly for a constant acceleration (as PlayerSim does).
   const vy0 = v.velocity.y;
   const dy = vy0 * dt - 0.5 * gravity * dt * dt;
   v.velocity = vec3(v.velocity.x, vy0 - gravity * dt, v.velocity.z);
   const wanted = vec3(v.velocity.x * dt, dy, v.velocity.z * dt);
 
-  // 4. Access walls. The event fires once per arrival, not on every tick the vehicle is held against the edge: a
-  //    vehicle blocked last tick starts this one with no velocity across the edge (step 6 removed it) and, resting
+  // 5. Access walls. The event fires once per arrival, not on every tick the vehicle is held against the edge: a
+  //    vehicle blocked last tick starts this one with no velocity across the edge (step 7 removed it) and, resting
   //    at the edge, clips to no movement across it.
   const clip = clipToAccess(ctx.map, v.tier, v.position, wanted, accessProbes(ctx.spec, v.heading));
   if (clip.zone && clip.normal) {
@@ -60,19 +75,19 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
     if (wasMovingIn || advanced) events.push({ kind: 'accessBlocked', zone: clip.zone.kind });
   }
 
-  // 5. Collide-and-slide move.
+  // 6. Collide-and-slide move.
   const desired = clip.move;
   const move = body.move(desired, v.velocity.y <= 0);
   v.position = body.feet;
 
-  // 6–7. Remove velocity into walls and the access edge; a fast wall impact is a crash.
+  // 7–8. Remove velocity into walls and the access edge; a fast wall impact is a crash.
   const impact = removeBlockedVelocity(v, move, desired, clip.normal);
   if (impact > ctx.crashSpeed) events.push({ kind: 'crashed', speed: impact });
 
-  // 8. Landing and apex tracking.
+  // 9. Landing and apex tracking.
   resolveLanding(v, move, events);
 
-  // 9. Fuel burn by the horizontal distance actually moved; the tank running dry is announced once.
+  // 10. Fuel burn by the horizontal distance actually moved; the tank running dry is announced once.
   v.fuel = burnFuel(v.fuel, Math.hypot(v.position.x - startX, v.position.z - startZ), ctx.spec);
   if (fuelBefore > 0 && v.fuel <= 0) events.push({ kind: 'fuelEmpty', tier: v.tier });
 

@@ -125,10 +125,11 @@ describe('drive model', () => {
     expect(driveInput(frame(0, 0), spec)).toEqual({ throttle: 0, steer: 0, handbrake: false });
   });
 
-  test('driveInput: throttle is move.y, steer is -move.x, Space is the handbrake', () => {
+  test('driveInput: throttle is move.y, steer is -move.x, Space is the handbrake (not on the skateboard: it ollies)', () => {
     const i = frame(0.5, 0, 2);
     i.jump.held = true;
     expect(driveInput(i, ridingConfig.rides.car)).toEqual({ throttle: 0, steer: -0.5, handbrake: true });
+    expect(driveInput(i, ridingConfig.rides.skateboard)).toEqual({ throttle: 0, steer: -0.5, handbrake: false });
     expect(driveInput(frame(0, -1), ridingConfig.rides.car)).toEqual({ throttle: -1, steer: 0, handbrake: false });
   });
 

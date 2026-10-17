@@ -153,6 +153,121 @@ describe('riding', () => {
   });
 });
 
+describe('the skateboard ollie (Decision 10)', () => {
+  const JUMP = ridingConfig.rides.skateboard.jumpHeight as number;
+  const BOARD_R = ridingConfig.rides.skateboard.collider.radius;
+  const jumped = (ev: { kind: string }[]) => ev.some((e) => e.kind === 'jumped');
+
+  /** Rides the skateboard along -Z from (0, y, 300) and coasts it down to just at or under `target` m/s. */
+  async function rolling(target: number, solids: Solid[] = [], y = 0): Promise<Harness> {
+    const h = await makeSim({ size: 800, spawn: vec3(0, y, 300), solids, garage: [skateboard] });
+    mount(h, 'skateboard');
+    h.runUntil((s) => speed(s) >= target, seconds(10), { forward: 1 });
+    h.runUntil((s) => speed(s) <= target, seconds(2));
+    expect(h.sim.state.grounded).toBe(true);
+    return h;
+  }
+
+  test('Space on the skateboard jumps 0.8 m and keeps the forward speed', async () => {
+    const h = await rolling(10);
+    const startY = h.sim.state.position.y;
+    const ev = h.tick({}, ['jump']);
+    expect(jumped(ev)).toBe(true);
+    expect(h.sim.state.grounded).toBe(false);
+    let apex = h.sim.state.position.y;
+    let landing: number | null = null;
+    for (let i = 0; i < seconds(2) && landing === null; i++) {
+      const e = h.tick({});
+      apex = Math.max(apex, h.sim.state.position.y);
+      if (e.some((x) => x.kind === 'landed')) landing = speed(h.sim.state);
+    }
+    expect(apex - startY).toBeGreaterThanOrEqual(0.75);
+    expect(apex - startY).toBeLessThanOrEqual(0.85);
+    expect(landing).not.toBeNull();
+    expect(Math.abs((landing as number) - 10)).toBeLessThan(0.1);
+    expect(h.sim.state.riding).toBe('skateboard');
+  });
+
+  test('the skateboard clears a 0.5 m curb with an ollie and is stopped by it without', async () => {
+    const face = 250;
+    const curb = box('curb', vec3(0, 0.25, face - 100), vec3(20, 0.5, 200)); // z from 50 to 250, top at 0.5
+    const front = (h: Harness) => h.sim.state.position.z - BOARD_R - face; // distance from the board's front to the face
+
+    const without = await rolling(10, [curb]);
+    for (let i = 0; i < seconds(4); i++) {
+      without.tick({ forward: 1 });
+      expect(without.sim.state.position.z).toBeGreaterThan(face);
+    }
+    expect(without.sim.state.position.y).toBeCloseTo(0, 2);
+    expect(speed(without.sim.state)).toBeLessThan(1);
+
+    const ollie = await rolling(10, [curb]);
+    ollie.runUntil((s) => s.position.z - BOARD_R - face <= 2, seconds(10));
+    expect(front(ollie)).toBeGreaterThan(1.5);
+    expect(jumped(ollie.tick({}, ['jump']))).toBe(true);
+    ollie.run(seconds(2), { forward: 1 });
+    const s = ollie.sim.state;
+    expect(s.grounded).toBe(true);
+    expect(s.position.z).toBeLessThan(face - 10);
+    expect(s.position.y).toBeCloseTo(0.5, 2);
+    expect(speed(s)).toBeGreaterThan(9);
+  });
+
+  test('a press 80 ms before landing jumps on landing (buffer); 80 ms after leaving a ledge still jumps (coyote)', async () => {
+    const early = seconds(0.08); // 2 ticks
+    const tooEarly = seconds(0.2);
+
+    // Buffer. A reference ollie counts the ticks to its landing; the same ollie then presses Space `n` ticks before.
+    const ref = await rolling(10);
+    ref.tick({}, ['jump']);
+    let toLanding = 0;
+    for (let landed = false; !landed && toLanding < seconds(2); toLanding++) landed = ref.tick({}).some((e) => e.kind === 'landed');
+    expect(ref.sim.state.grounded).toBe(true);
+    const pressBeforeLanding = async (n: number) => {
+      const h = await rolling(10);
+      expect(jumped(h.tick({}, ['jump']))).toBe(true);
+      h.run(toLanding - 1 - n);
+      expect(jumped(h.tick({}, ['jump']))).toBe(false); // in the air: no double jump
+      const ev = h.run(n + 2);
+      expect(ev.some((e) => e.kind === 'landed')).toBe(true);
+      return jumped(ev);
+    };
+    expect(await pressBeforeLanding(early)).toBe(true);
+    expect(await pressBeforeLanding(tooEarly)).toBe(false);
+
+    // Coyote. Off the end of a 2 m ledge (z from 100 to 310), Space `n` ticks after the board leaves it.
+    const ledge = box('ledge', vec3(0, 1, 205), vec3(20, 2, 210));
+    const pressAfterLeaving = async (n: number) => {
+      const h = await rolling(10, [ledge], 2);
+      h.runUntil((s) => !s.grounded, seconds(30), { forward: 1 });
+      expect(h.sim.state.position.z).toBeLessThan(100.5);
+      h.run(n);
+      expect(h.sim.state.grounded).toBe(false);
+      const ev = h.tick({}, ['jump']);
+      return jumped(ev) && h.sim.state.velocity.y > 0;
+    };
+    expect(await pressAfterLeaving(early)).toBe(true);
+    expect(await pressAfterLeaving(tooEarly)).toBe(false);
+    expect(JUMP).toBe(0.8);
+  });
+
+  test('Space on the car is the handbrake, never a jump', async () => {
+    const h = await makeSim({ size: 800, spawn: vec3(2, 0, 300), garage: [skateboard, parked('car', vec3(0, 0, 300))] });
+    mount(h, 'car');
+    h.runUntil((s) => speed(s) >= 15, seconds(10), { forward: 1 });
+    const v0 = speed(h.sim.state);
+    const ev = h.tick({ forward: 1 }, ['jump']);
+    expect(jumped(ev)).toBe(false);
+    expect(speed(h.sim.state)).toBeCloseTo(v0 - ridingConfig.rides.car.handbrakeDecel / cfg.tickRate, 6);
+    for (let i = 0; i < seconds(1); i++) {
+      expect(jumped(h.tick({ forward: 1, jump: true }, i % 5 === 0 ? ['jump'] : []))).toBe(false);
+      expect(h.sim.state.grounded).toBe(true);
+      expect(h.sim.state.velocity.y).toBe(0);
+    }
+    expect(speed(h.sim.state)).toBeLessThan(v0 - 5);
+  });
+});
+
 describe('getting off at any speed (Decision 9, Review Focus 4)', () => {
   const RIDES = ridingConfig.rides;
   const DT = 1 / cfg.tickRate;
@@ -247,16 +362,13 @@ describe('getting off at any speed (Decision 9, Review Focus 4)', () => {
   });
 
   test('F mid-ollie on the skateboard: board carried, courier airborne with the board velocity, lands normally', async () => {
-    // No ollie yet (Task 4): the board at 12 m/s is lifted 0.3 m with 3 m/s up, as an ollie leaves the ground,
-    // over a 0.15 m curb about 2 m ahead.
+    // The board at 12 m/s ollies a 0.15 m curb about 2 m ahead.
     const curb = box('curb', vec3(0, 0.075, 0), vec3(6, 0.15, 400)); // z from -200 to 200, top at 0.15
     const h = await atTopSpeed('skateboard', 12, [curb]);
     h.runUntil((s) => s.position.z < 202, seconds(30), { forward: 1 }); // just short of the curb
     const p = h.sim.state.position;
     expect(p.y).toBeCloseTo(0, 2);
-    const v0 = h.sim.garage.state('skateboard').velocity;
-    h.sim.teleport(vec3(p.x, p.y + 0.3, p.z), vec3(v0.x, 3, v0.z));
-    h.tick({});
+    expect(h.tick({}, ['jump'])).toContainEqual({ kind: 'jumped' });
     expect(h.sim.state.grounded).toBe(false);
     const v = { ...h.sim.garage.state('skateboard').velocity };
     expect(v.y).toBeGreaterThan(0);
