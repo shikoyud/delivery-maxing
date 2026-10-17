@@ -100,6 +100,11 @@ function publicTx(t: StoredTx): ChainTx {
   return tx;
 }
 
+/** A frozen copy of `o` (ownership() hands out the same one until it changes). */
+function snapshot(o: Ownership): Ownership {
+  return Object.freeze({ lines: Object.freeze({ ...o.lines }), skins: Object.freeze([...o.skins]) as ShopItemId[] });
+}
+
 /** Drops the oldest settled entries beyond the limit. */
 function trim<T>(list: T[], pending: (x: T) => boolean = () => false): void {
   while (list.length > HISTORY_LIMIT) {
@@ -121,6 +126,8 @@ export class MockChain implements ChainSource {
   private failNextTx = false;
   private confirmSeconds: number;
   private readonly listeners = new Set<() => void>();
+  /** ownership() as a frozen snapshot, replaced only when the lines or skins change (callers may memoise by identity). */
+  private owned: Ownership;
 
   constructor(
     private readonly storage: ChainStorage | null,
@@ -136,6 +143,7 @@ export class MockChain implements ChainSource {
       loaded = null;
     }
     this.s = loaded ?? this.fresh();
+    this.owned = snapshot(this.s.ownership);
   }
 
   private fresh(): State {
@@ -157,8 +165,11 @@ export class MockChain implements ChainSource {
     };
   }
 
-  /** Saves the state and tells the listeners. */
+  /** Saves the state, refreshes the ownership snapshot when it changed, and tells the listeners. */
   private changed(): void {
+    const o = this.s.ownership;
+    const same = LINES.every((l) => o.lines[l] === this.owned.lines[l]) && o.skins.length === this.owned.skins.length && o.skins.every((x, i) => x === this.owned.skins[i]);
+    if (!same) this.owned = snapshot(o);
     if (this.storage) {
       try {
         this.storage.setItem(MOCK_CHAIN_KEY, JSON.stringify(this.s));
@@ -166,7 +177,13 @@ export class MockChain implements ChainSource {
         // Storage full or blocked: the wallet lives in memory for this session.
       }
     }
-    for (const l of [...this.listeners]) l();
+    for (const l of [...this.listeners]) {
+      try {
+        l();
+      } catch (err) {
+        console.error(err); // one listener's bug must not stop the others or the change
+      }
+    }
   }
 
   private id(prefix: string): string {
@@ -182,7 +199,8 @@ export class MockChain implements ChainSource {
   accrued(): number { return this.s.accrued; }
   vault(): number { return this.s.vault; }
   rate(): Rate | null { return this.rateAt(this.clock.now()); }
-  ownership(): Ownership { return { lines: { ...this.s.ownership.lines }, skins: [...this.s.ownership.skins] }; }
+  /** The same frozen object until ownership changes. */
+  ownership(): Ownership { return this.owned; }
   lock(): Lock | null { return this.s.lock ? { ...this.s.lock } : null; }
   history(): readonly ChainTx[] { return this.s.txs.map(publicTx); }
   payouts(): readonly Payout[] { return this.s.payouts.map((p) => ({ ...p, ...(p.detail ? { detail: { ...p.detail } } : {}) })); }
@@ -267,22 +285,30 @@ export class MockChain implements ChainSource {
         dirty = true;
       }
     }
+    if (this.renewLock(nowMs) || dirty) this.changed();
+  }
+
+  /** Renews the lock for every period that ended by `nowMs` (lock.days > 0 is asserted at load); true when it did. */
+  private renewLock(nowMs: number): boolean {
     const lock = this.s.lock;
     const period = this.cfg.lock.days * 24 * HOUR_MS;
+    let renewed = false;
     while (lock && nowMs >= lock.unlocksAt) {
       lock.lockedAt = lock.unlocksAt;
       lock.unlocksAt += period;
       this.s.lockRenewed = true;
-      dirty = true;
+      renewed = true;
     }
-    if (dirty) this.changed();
+    return renewed;
   }
 
   accrue(p: Omit<Payout, 'id' | 'paid' | 'game'>): Payout {
-    // usdMicro already includes the boost (rollPayoutUsd applied it); `boost` is only recorded.
-    const due = usdToGame(p.usdMicro, { usdPerGame: p.usdPerGame, updatedAt: p.at }, 'payout');
+    // usdMicro already includes the boost (rollPayoutUsd applied it); `boost` is only recorded. It is stored as a whole,
+    // non-negative amount: anything else would fail parseState and a reload would start a fresh wallet.
+    const usdMicro = Number.isFinite(p.usdMicro) ? Math.max(0, Math.round(p.usdMicro)) : 0;
+    const due = usdToGame(usdMicro, { usdPerGame: p.usdPerGame, updatedAt: p.at }, 'payout');
     const paid = due <= this.s.vault;
-    const payout: Payout = { ...p, id: this.id('pay'), game: paid ? due : 0, paid };
+    const payout: Payout = { ...p, usdMicro, id: this.id('pay'), game: paid ? due : 0, paid };
     if (paid) {
       this.s.vault -= due;
       this.s.accrued += due;
@@ -308,8 +334,12 @@ export class MockChain implements ChainSource {
     return { ok: true };
   }
 
-  /** Allowed from `unlocksAt` and, once the lock has renewed, for `withdrawWindowHours` after the period that ended. */
+  /**
+   * Allowed from `unlocksAt` and, once the lock has renewed, for `withdrawWindowHours` after the period that ended. An
+   * overdue lock is renewed first (as tick would), so a late check never sees a period that already rolled over.
+   */
   withdrawable(nowMs: number): boolean {
+    if (this.renewLock(nowMs)) this.changed();
     const lock = this.s.lock;
     if (!lock) return false;
     const inWindow = this.s.lockRenewed && nowMs < lock.lockedAt + this.cfg.lock.withdrawWindowHours * HOUR_MS;

@@ -73,6 +73,7 @@ export interface ChainSource {
   /** GAME the reward vault holds. */
   vault(): number;
   rate(): Rate | null;
+  /** The same object until ownership changes (callers may memoise on its identity); read-only, never mutate it. */
   ownership(): Ownership;
   lock(): Lock | null;
   /** Purchases, oldest first (the last 200). */

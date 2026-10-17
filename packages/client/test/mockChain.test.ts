@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { economyConfig, GAME_UNITS, quote, usdToGame, type ChainTx } from '@dm/shared';
 import { MOCK_CHAIN_KEY, MockChain } from '../src/economy/MockChain';
 
@@ -262,5 +262,107 @@ describe('MockChain', () => {
     const ok = memoryStorage();
     new MockChain(ok, cfg, clock).dev.addGame(GAME_UNITS);
     expect(new MockChain(ok, cfg, clock).balance()).toBe(START + GAME_UNITS);
+  });
+
+  test('a skin confirms 100% burned (no vault share), joins ownership.skins, and a second buy is refused as owned', async () => {
+    const { chain, clock } = setup();
+    const vault0 = chain.vault();
+    const q = shopQuote(chain, cfg.skinUsdMicro, clock.t);
+    await chain.purchase('skin.vehicle.gold', q.maxGame, clock.t);
+    clock.t += CONFIRM_MS;
+    chain.tick(clock.t);
+    const tx = chain.history().at(-1)!;
+    expect(tx).toMatchObject({ itemId: 'skin.vehicle.gold', status: 'confirmed', game: q.game, burned: q.game, vault: 0 });
+    expect(chain.vault()).toBe(vault0);
+    expect(chain.balance()).toBe(START - q.game);
+    expect(chain.ownership().skins).toEqual(['skin.vehicle.gold']);
+    const again = await chain.purchase('skin.vehicle.gold', q.maxGame, clock.t);
+    expect(again).toMatchObject({ status: 'failed', error: 'owned', game: 0 });
+    expect(chain.balance()).toBe(START - q.game);
+  });
+
+  test('the history keeps the last 200 payouts and purchases; a pending purchase is never dropped', async () => {
+    const { chain, clock, storage } = setup();
+    const base = { luck: 0.5, quality: 0.5, usdPerGame: cfg.mockChain.usdPerGame, boost: 1, at: clock.t, usdMicro: 5_000 };
+    for (let i = 0; i < 205; i++) chain.accrue({ ...base, orderId: `o${i}` });
+    expect(chain.payouts()).toHaveLength(200);
+    expect(chain.payouts()[0]!.orderId).toBe('o5');
+    expect(chain.payouts().at(-1)!.orderId).toBe('o204');
+
+    const pending = await chain.purchase('line.bag.1', Number.MAX_SAFE_INTEGER, clock.t); // settles in 2 s
+    chain.dev.setConfirmSeconds(0);
+    for (let i = 0; i < 205; i++) await chain.purchase('nope', 0, clock.t); // each fails at once
+    const ids = chain.history().map((t) => t.id);
+    expect(ids).toHaveLength(200);
+    expect(ids[0]).toBe(pending.id);
+    expect(setup(storage).chain.history()).toHaveLength(200); // and it reloads
+  });
+
+  test('a payout rounds down: the vault never pays a base unit more than the USD rolled', () => {
+    const { chain, clock } = setup();
+    // $10 at $0.00024 is 41,666,666,666.67 base units
+    const p = chain.accrue({ orderId: 'o1', usdMicro: 10_000_000, luck: 0, quality: 0, usdPerGame: 0.00024, boost: 1, at: clock.t });
+    expect(p.game).toBe(41_666_666_666);
+  });
+
+  test('a negative or non-integer usdMicro is recorded as a whole, non-negative amount, so the saved wallet still loads', () => {
+    const { chain, clock, storage } = setup();
+    const base = { luck: 0.5, quality: 0.5, usdPerGame: cfg.mockChain.usdPerGame, boost: 1, at: clock.t };
+    expect(chain.accrue({ ...base, orderId: 'neg', usdMicro: -120_000 })).toMatchObject({ usdMicro: 0, game: 0 });
+    expect(chain.accrue({ ...base, orderId: 'nan', usdMicro: Number.NaN })).toMatchObject({ usdMicro: 0, game: 0 });
+    expect(chain.accrue({ ...base, orderId: 'frac', usdMicro: 120_000.4 })).toMatchObject({ usdMicro: 120_000 });
+    chain.dev.addGame(7);
+    const reloaded = setup(storage).chain;
+    expect(reloaded.balance()).toBe(START + 7); // not a fresh wallet
+    expect(reloaded.payouts().map((x) => x.orderId)).toEqual(['neg', 'nan', 'frac']);
+  });
+
+  test('withdraw renews an overdue lock first: past the window after its end it is tooEarly even before any tick', () => {
+    const { chain, clock } = setup();
+    expect(chain.lockGame(GAME_UNITS, clock.t)).toEqual({ ok: true });
+    const windowMs = cfg.lock.withdrawWindowHours * 3_600_000;
+    const late = T0 + 7 * DAY + windowMs + 1; // no tick ran since the lock
+    expect(chain.withdrawable(late)).toBe(false);
+    expect(chain.withdrawLock(late)).toEqual({ ok: false, reason: 'tooEarly' });
+    expect(chain.lock()).toMatchObject({ lockedAt: T0 + 7 * DAY, unlocksAt: T0 + 14 * DAY });
+    // within the window after the end it may still be withdrawn
+    const { chain: c2 } = setup();
+    c2.lockGame(GAME_UNITS, T0);
+    expect(c2.withdrawLock(T0 + 7 * DAY + windowMs - 1)).toEqual({ ok: true });
+  });
+
+  test('a listener that throws neither stops the others nor the change', () => {
+    const { chain } = setup();
+    let after = 0;
+    chain.subscribe(() => {
+      throw new Error('boom');
+    });
+    chain.subscribe(() => void after++);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => chain.dev.addGame(5)).not.toThrow();
+    expect(err).toHaveBeenCalledTimes(1);
+    err.mockRestore();
+    expect(after).toBe(1);
+    expect(chain.balance()).toBe(START + 5);
+  });
+
+  test('ownership() is the same object until ownership changes, and is frozen', async () => {
+    const { chain, clock } = setup();
+    const a = chain.ownership();
+    expect(Object.isFrozen(a) && Object.isFrozen(a.lines) && Object.isFrozen(a.skins)).toBe(true);
+    chain.dev.addGame(5); // a change that leaves ownership alone
+    chain.accrue({ orderId: 'o1', usdMicro: 1, luck: 0, quality: 0, usdPerGame: cfg.mockChain.usdPerGame, boost: 1, at: clock.t });
+    expect(chain.ownership()).toBe(a);
+    await chain.purchase('line.bag.1', Number.MAX_SAFE_INTEGER, clock.t);
+    expect(chain.ownership()).toBe(a); // pending: nothing owned yet
+    clock.t += CONFIRM_MS;
+    chain.tick(clock.t);
+    const b = chain.ownership();
+    expect(b).not.toBe(a);
+    expect(b.lines.bag).toBe(1);
+    expect(a.lines.bag).toBe(0); // the old snapshot is unchanged
+    chain.dev.grantTier('vehicle', 2);
+    expect(chain.ownership()).not.toBe(b);
+    expect(chain.ownership().lines.vehicle).toBe(2);
   });
 });
