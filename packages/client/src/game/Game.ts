@@ -8,6 +8,7 @@ import {
   createPagedPhysicsWorld,
   createPhysicsWorld,
   defaultGarage,
+  economyConfig,
   RIDE_TIERS,
   findRoadSpot,
   horizontalLength,
@@ -17,6 +18,7 @@ import {
   vec3,
   worldConfig,
   type CatalogIndex,
+  type ChainSource,
   type CityMap,
   type DistanceTable,
   type MapData,
@@ -47,7 +49,8 @@ import { VehicleViews } from '../render/vehicles/VehicleViews';
 import { CAR_MODEL_ID } from '../render/vehicles/vehicleMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
-import { mountDevPanel, type DevPanel } from '../ui/devPanel';
+import { MockChain } from '../economy/MockChain';
+import { capacityLabel, mountDevPanel, type DevPanel } from '../ui/devPanel';
 import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
@@ -160,6 +163,8 @@ export class Game {
     model: CourierModel | null,
     progress: ProgressStore,
     extras: MapExtras,
+    /** The reward chain (the browser mock); Task 13 extends what it feeds. */
+    private readonly chain: ChainSource,
   ) {
     this.progress = progress;
     this.prevPosition = { ...sim.state.position };
@@ -223,6 +228,7 @@ export class Game {
       progress: this.progress,
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
+      bagTier: () => this.chain.ownership().lines.bag,
       player: () => this.sim.state,
       rider: () => ({
         riding: this.sim.state.riding,
@@ -277,6 +283,7 @@ export class Game {
         setOwned: (t, owned) => this.setOwned(t, owned),
         fillTanks: () => this.fillTanks(),
         addCoins: (n) => this.delivery.setCoins(this.delivery.orders.totals.coins + n),
+        capacityLabel: () => capacityLabel(this.chain.ownership().lines.bag, this.delivery.capacityTier, this.delivery.capacity()),
       },
       map: {
         kind: map.kind,
@@ -356,7 +363,8 @@ export class Game {
     // The tier last ridden (capacity and offers follow it), only while it is still owned.
     sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
     const extras = { catalog: loaded.catalog, distances: loaded.distances };
-    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras);
+    const chain = new MockChain(browserStorage(), economyConfig, { now: () => Date.now() });
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras, chain);
     // Closing or hiding the tab mid-ride keeps the vehicle's spot and the fuel it burnt.
     saveWhenLeaving(window, document, () => game.delivery.save());
     if (opts.debug) installDebugHooks(game);

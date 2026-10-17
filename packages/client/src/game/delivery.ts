@@ -9,13 +9,14 @@ import {
   playerZones,
   pumpAt,
   ridingConfig,
-  vehicleCapacity,
+  effectiveCapacity,
   type AcceptResult,
   type AccessKind,
   type ButtonState,
   type ActiveOrder,
   type Bonus,
   type CancelResult,
+  type CarrierCapacity,
   type DistanceTable,
   type InputFrame,
   type MapData,
@@ -69,6 +70,8 @@ export interface DeliveryDeps {
    * speed (m/s), and what F would mount now on foot.
    */
   rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
+  /** The owned Bag tier (Game: the chain's `ownership().lines.bag`); it and the ride set the capacity (spec §3.3). */
+  bagTier(): number;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
   /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
@@ -254,7 +257,7 @@ export class DeliveryLoop {
         rules: this.d.map.orderRules,
         cfg: ordersConfig,
         rng: this.rng,
-        capacity: vehicleCapacity(this.capacityTier),
+        capacity: this.capacity(),
         totals,
       },
       this.d.now(),
@@ -264,6 +267,11 @@ export class DeliveryLoop {
   /** The player's order state (rebuilt by resetProgress). */
   get orders(): OrderSystem {
     return this.sys;
+  }
+
+  /** The effective capacity (spec §3.3): the Bag tier's slots and kg, each capped by the ride (or the last ride). */
+  capacity(): CarrierCapacity {
+    return effectiveCapacity(this.d.bagTier(), this.capacityTier);
   }
 
   /** The capacity tier: the ride, else the last ride, else walking. */
@@ -405,7 +413,7 @@ export class DeliveryLoop {
     if (r.riding !== null) return true;
     const tier = r.mountCandidate();
     if (tier === null) return true;
-    const cap = vehicleCapacity(tier);
+    const cap = effectiveCapacity(this.d.bagTier(), tier);
     if (this.sys.canSwitchCapacity(cap)) return true;
     const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
     this.popups.show(`Can't ride the ${TIER_LABEL[tier]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
@@ -424,7 +432,7 @@ export class DeliveryLoop {
       const text = simEventHint(e, ridden, this.d.map);
       if (text) this.hint(text, now);
     }
-    this.sys.setCapacity(vehicleCapacity(this.capacityTier));
+    this.sys.setCapacity(this.capacity());
     const events = this.sys.onSimEvents(simEvents);
     const before = [...this.sys.active];
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);

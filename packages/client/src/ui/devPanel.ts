@@ -1,5 +1,5 @@
 import GUI, { type Controller } from 'lil-gui';
-import { RIDE_TIERS, type RideTier } from '@dm/shared';
+import { RIDE_TIERS, type CarrierCapacity, type RideTier } from '@dm/shared';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import type { TeleportTarget } from '../game/mapTargets';
 import { el } from './dom';
@@ -21,6 +21,8 @@ export interface DevPanelHooks {
     fillTanks(): void;
     /** "+500 coins" (the amount is `DEV_COINS`). */
     addCoins(n: number): void;
+    /** The read-only capacity line (see `capacityLabel`). */
+    capacityLabel(): string;
   };
   /** The "Map" folder: the loaded map's teleport entries and the lot-id view (the city only; null on the greybox). */
   map: {
@@ -44,6 +46,11 @@ export function mapRowItems(targets: TeleportTarget[], teleportTo: (id: string) 
     kind: t.kind,
     run: () => teleportTo(t.id),
   }));
+}
+
+/** "Bag 2 × bicycle → 3 slots, 25 kg": the Bag tier and the ride, and the capacity they give (spec §3.3). */
+export function capacityLabel(bagTier: number, ride: string, c: CarrierCapacity): string {
+  return `Bag ${bagTier} × ${ride} → ${c.slots} slot${c.slots === 1 ? '' : 's'}, ${c.maxPackageKg} kg`;
 }
 
 /** What "+500 coins" adds. */
@@ -129,6 +136,8 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
       boxes[i]!.updateDisplay().enable(t !== riding);
     });
   };
+  const capInfo = { capacity: hooks.vehicles.capacityLabel() };
+  const capCtrl = folder.add(capInfo, 'capacity').name('Capacity').disable();
   folder.add({ fill: () => hooks.vehicles.fillTanks() }, 'fill').name('Fill all tanks');
   folder.add({ coins: () => hooks.vehicles.addCoins(DEV_COINS) }, 'coins').name(`+${DEV_COINS} coins`);
 
@@ -168,6 +177,8 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
       if (gui._hidden) {
         lotState.show = lotIds?.get() ?? false; // F4 may have changed it
         lotCtrl?.updateDisplay();
+        capInfo.capacity = hooks.vehicles.capacityLabel();
+        capCtrl.updateDisplay();
         syncVehicles(); // ownership or the ride may have changed since (debug API, a reset)
         gui.show();
       } else gui.hide();

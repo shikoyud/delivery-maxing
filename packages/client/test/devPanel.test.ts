@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { expandGreybox, type GreyboxSource, type MapData } from '@dm/shared';
+import { effectiveCapacity, expandGreybox, type GreyboxSource, type MapData } from '@dm/shared';
 import greyboxJson from '../../../map/greybox.json';
 import cityJson from '../../../map/city.layout.json';
-import { mapRowItems } from '../src/ui/devPanel';
+import { capacityLabel, mapRowItems } from '../src/ui/devPanel';
 import { teleportTargets } from '../src/game/mapTargets';
 
 const grey = expandGreybox(greyboxJson as GreyboxSource);
@@ -29,5 +29,12 @@ describe('dev panel Map row', () => {
     items[items.length - 1]!.run();
     expect(calls).toEqual(['hospital-bayview-general', 'gas-ridge-fuel']);
     expect(items[0]!.label).toMatch(/^Teleport to /);
+  });
+});
+
+describe('capacityLabel', () => {
+  it('shows the Bag tier, the ride and the capacity they give', () => {
+    expect(capacityLabel(2, 'bicycle', effectiveCapacity(2, 'bicycle'))).toBe('Bag 2 × bicycle → 3 slots, 25 kg');
+    expect(capacityLabel(0, 'walk', effectiveCapacity(0, 'walk'))).toBe('Bag 0 × walk → 1 slot, 0 kg');
   });
 });

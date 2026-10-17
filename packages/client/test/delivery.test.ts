@@ -56,6 +56,8 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
   const huds: HudModel[] = [];
   const env = { now: 0, position: { ...map.hospitals[0]!.spawn } as Vec3, grounded: true, lastGrounded: undefined as Vec3 | undefined };
   /** What the sim reports: the ridden and last ridden tier, and what F would mount on foot. */
+  /** The owned Bag tier (the top one: the ride alone caps the load, as before Task 10). */
+  const bag = { tier: 5 };
   const rider = { riding: null as RideTier | null, lastRide, speed: 0, candidate: null as RideTier | null };
   /** A recording garage: what summon answers, the cooldown left, and the calls summon and respawn got. */
   const vehicles = { result: 'ok' as SummonResult, readyIn: 0, calls: [] as string[] };
@@ -122,6 +124,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     actions,
     progress,
     seed: 11,
+    bagTier: () => bag.tier,
     now: () => env.now,
     player: () => ({ position: env.position, mode: 'ground', grounded: env.grounded, lastGrounded: env.lastGrounded }),
     rider: () => ({ riding: rider.riding, lastRide: rider.lastRide, speed: rider.speed, mountCandidate: () => rider.candidate }),
@@ -199,7 +202,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     for (let i = 0; i < Math.round(seconds / TICK); i++) tick();
   };
   const poiPos = (id: string): Vec3 => ({ ...map.pois.find((p) => p.id === id)!.position });
-  return { loop, env, rider, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states };
+  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states };
 }
 
 describe('DeliveryLoop', () => {
@@ -515,6 +518,58 @@ describe('DeliveryLoop', () => {
     s.rider.lastRide = 'bicycle';
     s.tick();
     expect(s.loop.orders.capacity).toEqual(vehicleCapacity('bicycle'));
+  });
+
+  test('Bag 0 on foot: one slot, no packages; Bag 3 on the motorbike: 4 slots, 50 kg; Bag 5 on the bicycle: 3 slots, 25 kg', () => {
+    const s = setup(null);
+    s.bag.tier = 0;
+    s.tick();
+    expect(s.loop.capacity()).toEqual({ slots: 1, maxPackageKg: 0 });
+    expect(s.loop.orders.capacity).toEqual({ slots: 1, maxPackageKg: 0 });
+    s.bag.tier = 3;
+    s.rider.riding = 'motorbike';
+    s.rider.lastRide = 'motorbike';
+    s.tick();
+    expect(s.loop.orders.capacity).toEqual({ slots: 4, maxPackageKg: 50 });
+    s.bag.tier = 5;
+    s.rider.riding = 'bicycle';
+    s.rider.lastRide = 'bicycle';
+    s.tick();
+    expect(s.loop.orders.capacity).toEqual({ slots: 3, maxPackageKg: 25 });
+    s.loop.draw(100);
+    expect(s.huds.at(-1)!.load).toMatchObject({ slots: 3, maxPackageKg: 25 });
+  });
+
+  test('buying a Bag tier mid-game raises the capacity on the next tick without dropping orders', () => {
+    const s = setup('car');
+    s.bag.tier = 1;
+    s.tick();
+    expect(s.loop.orders.capacity.slots).toBe(2);
+    for (let n = 0; n < 2; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
+    const ids = s.loop.orders.active.map((a) => a.order.id);
+    expect(ids).toHaveLength(2);
+    s.bag.tier = 2;
+    s.tick();
+    expect(s.loop.orders.capacity.slots).toBe(3);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual(ids);
+    expect(s.loop.orders.freeSlots()).toBe(1);
+  });
+
+  test('switching to a vehicle whose cap is below the carried load is refused (§3.3)', () => {
+    const s = setup('bicycle');
+    s.bag.tier = 2;
+    s.tick();
+    for (let n = 0; n < 3; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
+    const ids = s.loop.orders.active.map((a) => a.order.id);
+    expect(ids).toHaveLength(3);
+    s.rider.candidate = 'skateboard';
+    s.tick(false, false, false, { mount: true });
+    expect(s.simFrames.at(-1)!.mount).toEqual({ held: false, pressed: false });
+    expect(s.popups.at(-1)).toEqual({ text: "Can't ride the skateboard", lines: ["Your orders don't fit: 2 slots and 10 kg"], tone: 'warn' });
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual(ids);
+    s.rider.candidate = 'car';
+    s.tick(false, false, false, { mount: true });
+    expect(s.simFrames.at(-1)!.mount.pressed).toBe(true);
   });
 
   it('Review Focus 5: after a tow, carried orders are kept and the Fragile break popup shows once', () => {
