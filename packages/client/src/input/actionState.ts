@@ -25,6 +25,8 @@ export class ActionState {
   private readonly latched = new Set<ButtonAction>();
   private yaw = 0;
   private pitch = 0;
+  /** Mouse yaw turned since the last takeYawDelta (radians). */
+  private yawDelta = 0;
 
   constructor(
     private readonly input: ClientConfig['input'],
@@ -69,6 +71,7 @@ export class ActionState {
   mouseMove(dx: number, dy: number): void {
     const k = this.input.mouseSensitivity;
     this.yaw -= dx * k;
+    this.yawDelta -= dx * k;
     this.pitch -= (this.input.invertY ? -dy : dy) * k;
     this.pitch = this.clampPitch(this.pitch);
   }
@@ -87,6 +90,13 @@ export class ActionState {
 
   private clampPitch(p: number): number {
     return Math.min(this.pitchMaxRad, Math.max(this.pitchMinRad, p));
+  }
+
+  /** The mouse yaw turned since the last call (the ride camera orbits by it); resets to 0. */
+  takeYawDelta(): number {
+    const d = this.yawDelta;
+    this.yawDelta = 0;
+    return d;
   }
 
   look(): { yaw: number; pitch: number } {

@@ -85,4 +85,8 @@ describe('clientConfig', () => {
     expect(clientConfig.ui.fuelLowPct).toBeGreaterThan(0);
     expect(clientConfig.ui.fuelLowPct).toBeLessThan(100);
   });
+
+  it('ride camera: recenters after 1.5 s above 2 m/s at rate 3', () => {
+    expect(clientConfig.camera.ride).toEqual({ recenterDelay: 1.5, recenterRate: 3, recenterMinSpeed: 2 });
+  });
 });

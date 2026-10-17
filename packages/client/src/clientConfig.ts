@@ -16,6 +16,8 @@ export interface ClientConfig {
     near: number;
     far: number;
     chase: ChaseConfig;
+    /** The mouse orbits the camera around a ride; it swings back behind after a pause (decision 8). */
+    ride: { recenterDelay: number; recenterRate: number; recenterMinSpeed: number };
   };
   graphics: {
     maxPixelRatio: number;

@@ -1575,3 +1575,26 @@ test('playtest screenshots: city overview, each avenue, a switchback, a steep la
   expect(await page.evaluate(() => window.__dm!.cityStats()!.models)).toBe(0); // placeholder boxes only
   expect(errors).toEqual([]);
 });
+
+test('on the car the mouse looks around but W drives along the heading (Review Focus 5)', async ({ page }) => {
+  const errors = await boot(page, SEED);
+  await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
+  await page.evaluate(() => window.__dm!.ride('car'));
+  expect(await page.evaluate(() => window.__dm!.player().riding)).toBe('car');
+  const before = await page.evaluate(() => window.__dm!.player());
+  // The mouse looks behind the car.
+  await page.evaluate((h) => window.__dm!.setLook(h + Math.PI, 0), before.heading);
+  await page.keyboard.down('KeyW');
+  const t0 = await page.evaluate(() => window.__dm!.tick);
+  await page.waitForFunction(([t, n]) => window.__dm!.tick - t >= 2 * n, [t0, TICK_RATE] as const);
+  await page.keyboard.up('KeyW');
+  const after = await page.evaluate(() => window.__dm!.player());
+  expect(Math.abs(Math.atan2(Math.sin(after.heading - before.heading), Math.cos(after.heading - before.heading)))).toBeLessThan(0.01);
+  const dx = after.position.x - before.position.x;
+  const dz = after.position.z - before.position.z;
+  expect(Math.hypot(dx, dz)).toBeGreaterThan(2);
+  // Yaw 0 faces −Z: the car moved along (−sin h, −cos h).
+  const along = (dx * -Math.sin(before.heading) + dz * -Math.cos(before.heading)) / Math.hypot(dx, dz);
+  expect(along).toBeGreaterThan(0.98);
+  expect(errors).toEqual([]);
+});

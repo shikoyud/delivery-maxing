@@ -136,6 +136,16 @@ describe('ActionState', () => {
   });
 });
 
+describe('ActionState.takeYawDelta', () => {
+  it('returns the mouse yaw turned since the last call, then resets', () => {
+    const a = make();
+    a.mouseMove(10, 0);
+    a.mouseMove(5, 0);
+    expect(a.takeYawDelta()).toBeCloseTo(-15 * clientConfig.input.mouseSensitivity, 12);
+    expect(a.takeYawDelta()).toBe(0);
+  });
+});
+
 describe('ActionState.setLook', () => {
   it('sets yaw and clamps pitch', () => {
     const a = make();

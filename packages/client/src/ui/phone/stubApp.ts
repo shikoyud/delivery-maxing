@@ -71,5 +71,7 @@ export function buildStubApp(
     if (codes.length) row(BINDING_LABEL[name], codes.map(keyLabel).join(' / '));
   }
   row('Look', 'Mouse');
+  row('Steer', 'A / D');
+  row('Throttle / brake', 'W / S');
   row('Close phone', ['Esc', ...bindings.phone.map(keyLabel)].join(' / '));
 }

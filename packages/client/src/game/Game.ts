@@ -28,6 +28,7 @@ import {
 import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
+import { RideLook } from '../input/rideLook';
 import { easeToward } from '../render/cameraRig';
 import robotUrl from '../../../../assets/models/RobotExpressive.glb?url';
 import { ChaseCamera, clampPivotHeight, pivotHeightFor, type RayCast } from '../render/chaseCamera';
@@ -136,6 +137,9 @@ export class Game {
   private readonly camDir = new THREE.Vector3();
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
+  /** The camera yaw on a ride: the mouse orbits it, and it swings back behind the heading. */
+  private readonly rideLook = new RideLook(clientConfig.camera.ride);
+  private rideCamActive = false;
   private lastFrameMs: number | null = null;
   /** CityView.update's cost (ms), smoothed (the F3 overlay); null until the city has drawn a frame. */
   private cityUpdateMs: number | null = null;
@@ -513,6 +517,7 @@ export class Game {
     this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
     this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
+    this.rideCamActive = false;
     this.chase.snap();
     this.courier.snap();
     this.vehicles.snap();
@@ -538,10 +543,25 @@ export class Game {
     const s = this.sim.state;
     const cc = this.cfg.camera;
     const feet = lerpVec3(this.prevPosition, s.position, alpha);
-    const look = this.actions.look();
+    const speed = horizontalLength(s.velocity);
+    const mouseYaw = this.actions.takeYawDelta();
+    let look = this.actions.look();
+    if (s.riding !== null) {
+      if (!this.rideCamActive) {
+        // Getting on: the camera stays where it was (its yaw is already in the look).
+        this.rideLook.mount(look.yaw, s.heading);
+        this.rideCamActive = true;
+      }
+      look = { yaw: this.rideLook.update(mouseYaw, s.heading, speed, dt), pitch: look.pitch };
+    } else if (this.rideCamActive) {
+      // Getting off: the on-foot camera starts where the ride camera was.
+      this.actions.setLook(this.rideLook.update(0, s.heading, 0, 0), look.pitch);
+      this.rideCamActive = false;
+      look = this.actions.look();
+    }
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
-    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s.riding);
+    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, speed, s.riding);
     this.delivery.setCamera(this.renderer.camera.position);
     if (this.cityView) {
       const t0 = performance.now();
