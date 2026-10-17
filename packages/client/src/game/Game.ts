@@ -229,6 +229,7 @@ export class Game {
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
       bagTier: () => this.chain.ownership().lines.bag,
+      dispatcherTier: () => this.chain.ownership().lines.dispatcher,
       player: () => this.sim.state,
       rider: () => ({
         riding: this.sim.state.riding,

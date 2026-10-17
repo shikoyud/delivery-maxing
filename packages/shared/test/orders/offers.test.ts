@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import { ordersConfig } from '../../src/config';
 import { vec3 } from '../../src/math/vec3';
 import { DistanceTable } from '../../src/orders/distanceTable';
+import { dispatcherTuning } from '../../src/economy/dispatcher';
 import { generateOffer, type OfferContext } from '../../src/orders/offers';
 import { mulberry32 } from '../../src/util/rng';
 import { streetDistance } from '../../src/world/distance';
@@ -23,6 +24,7 @@ function ctx(over: Partial<OfferContext> = {}): OfferContext {
     blockedDoors: [],
     recentlyUsed: new Set(),
     nextId: () => `o${++n}`,
+    dispatcher: dispatcherTuning(0),
     ...over,
   };
 }
@@ -234,5 +236,36 @@ describe('generateOffer', () => {
       const none = new DistanceTable(pickups.map((p) => p.id), dropoffs.map((d) => d.id), new Float32Array(30 * 30).fill(Infinity));
       expect(generateOffer(ctx({ pois: pois(), cfg: onlyKind('food'), table: none }))).toBeNull();
     });
+  });
+});
+
+describe('the Dispatcher shapes offers', () => {
+  test('at Dispatcher 5, over 2,000 rolls, long orders and modified packages come up about 2.5x and 2x as often as at tier 0', () => {
+    // one medium (200 m) and one long (500 m, bands 150/350) dropoff
+    const pois = (): Poi[] => [
+      { id: 'ps', position: vec3(0, 0, 60), district: 'downtown', kind: 'counter', name: 'Parcels', roles: ['packagePickup'], items: ['parcel'], weightKg: [5, 5] },
+      { id: 'dp-mid', position: vec3(200, 0, 60), district: 'downtown', kind: 'door', name: '1 Mid St', roles: ['dropoffPackage'] },
+      { id: 'dp-long', position: vec3(500, 0, 60), district: 'downtown', kind: 'door', name: '2 Long St', roles: ['dropoffPackage'] },
+    ];
+    const cfg = { ...onlyKind('package'), mix: { ...onlyKind('package').mix, modifierWeights: { none: 5, express: 2, fragile: 2 } } };
+    const tally = (tier: number) => {
+      const rng = mulberry32(2024);
+      let long = 0;
+      let modified = 0;
+      for (let i = 0; i < 2000; i++) {
+        const o = generateOffer(ctx({ pois: pois(), cfg, rng, dispatcher: dispatcherTuning(tier), rules: { ...offerRules, packageDropoff: { min: 100, max: 600 } } }))!;
+        if (o.band === 'long') long++;
+        if (o.modifier) modified++;
+      }
+      return { long, modified };
+    };
+    const t0 = tally(0);
+    const t5 = tally(5);
+    // weights multiply odds, not shares, so compare odds ratios
+    const odds = (p: number) => p / (1 - p);
+    expect(odds(t5.long / 2000) / odds(t0.long / 2000)).toBeGreaterThan(2.5 * 0.75);
+    expect(odds(t5.long / 2000) / odds(t0.long / 2000)).toBeLessThan(2.5 * 1.25);
+    expect(odds(t5.modified / 2000) / odds(t0.modified / 2000)).toBeGreaterThan(2 * 0.75);
+    expect(odds(t5.modified / 2000) / odds(t0.modified / 2000)).toBeLessThan(2 * 1.25);
   });
 });

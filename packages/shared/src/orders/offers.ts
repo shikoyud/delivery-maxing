@@ -1,3 +1,4 @@
+import type { DispatcherTuning } from '../economy/dispatcher';
 import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
 import { pickWeighted, shuffle, type Rng } from '../util/rng';
@@ -26,6 +27,8 @@ export interface OfferContext {
   /** Door ids used within reuseSeconds (reuse). */
   recentlyUsed: ReadonlySet<string>;
   nextId: () => string;
+  /** The owned Dispatcher tier's tuning: the long band and the modifiers roll more often (Decision 16). */
+  dispatcher: DispatcherTuning;
 }
 
 const pickOne = <T>(items: T[], rng: Rng): T => items[Math.floor(rng() * items.length)] as T;
@@ -89,7 +92,12 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number, bu
       .map((d) => ({ poi: d, distance: ctx.table?.get(pickup.id, d.id) ?? ctx.distance(pickup.position, d.position) }))
       .filter(({ distance }) => distance >= window.min && distance <= window.max);
     if (dropoffs.length === 0) continue;
-    const { poi: dropoff, distance } = pickOne(dropoffs, rng);
+    // the long band's weight scales with the Dispatcher tier (Decision 16); at tier 0 every dropoff weighs 1
+    const weights = dropoffs.map(({ distance }) => (bandFor(distance, rules.bands) === 'long' ? ctx.dispatcher.longWeightScale : 1));
+    let r = rng() * weights.reduce((a, b) => a + b, 0);
+    let at = 0;
+    while (at < weights.length - 1 && (r -= weights[at] as number) >= 0) at++;
+    const { poi: dropoff, distance } = dropoffs[at] as (typeof dropoffs)[number];
 
     // a quantity and concrete things for the catalog phrase ("2 baguettes and a sourdough"); the greybox's own words as they are
     const item = pickup.items && pickup.items.length > 0 ? itemPhrase(pickOne(pickup.items, rng), rng) : pickup.name;
@@ -98,7 +106,9 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number, bu
     if (kind === 'package') {
       const [lo, hi] = pickup.weightKg as [number, number];
       weightKg = Math.min(Math.round((lo + rng() * (hi - lo)) * 10) / 10, remainingKg);
-      const m = pickWeighted(rng, cfg.mix.modifierWeights);
+      const w = cfg.mix.modifierWeights;
+      const k = ctx.dispatcher.modifierWeightScale;
+      const m = pickWeighted(rng, { none: w.none, express: w.express * k, fragile: w.fragile * k });
       modifier = m === 'none' ? null : m;
     }
     return {

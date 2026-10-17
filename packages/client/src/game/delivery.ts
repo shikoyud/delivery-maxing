@@ -9,6 +9,7 @@ import {
   playerZones,
   pumpAt,
   ridingConfig,
+  dispatcherTuning,
   effectiveCapacity,
   type AcceptResult,
   type AccessKind,
@@ -72,6 +73,8 @@ export interface DeliveryDeps {
   rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
   /** The owned Bag tier (Game: the chain's `ownership().lines.bag`); it and the ride set the capacity (spec §3.3). */
   bagTier(): number;
+  /** The owned Dispatcher tier (Game: the chain's `ownership().lines.dispatcher`); it sets how many offers, how often, how good. */
+  dispatcherTier(): number;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
   /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
@@ -259,6 +262,7 @@ export class DeliveryLoop {
         rng: this.rng,
         capacity: this.capacity(),
         totals,
+        dispatcher: () => dispatcherTuning(this.d.dispatcherTier()),
       },
       this.d.now(),
     );

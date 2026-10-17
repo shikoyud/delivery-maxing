@@ -125,6 +125,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     progress,
     seed: 11,
     bagTier: () => bag.tier,
+    dispatcherTier: () => 0,
     now: () => env.now,
     player: () => ({ position: env.position, mode: 'ground', grounded: env.grounded, lastGrounded: env.lastGrounded }),
     rider: () => ({ riding: rider.riding, lastRide: rider.lastRide, speed: rider.speed, mountCandidate: () => rider.candidate }),

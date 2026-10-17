@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { ordersConfig } from '../../src/config';
 import type { OrdersConfig } from '../../src/config/types';
+import { dispatcherTuning } from '../../src/economy/dispatcher';
 import { vec3 } from '../../src/math/vec3';
 import { OrderSystem, type OrderEvent, type OrderSystemOptions } from '../../src/orders/OrderSystem';
 import type { CarrierCapacity } from '../../src/orders/types';
@@ -464,5 +465,34 @@ describe('spendCoins', () => {
     expect(os.totals.coins).toBe(50);
     expect(os.spendCoins(30)).toBe(true);
     expect(os.totals.coins).toBe(20);
+  });
+});
+
+describe('the Dispatcher tier', () => {
+  const manyFood = (): Poi[] => [
+    ...Array.from({ length: 6 }, (_, i): Poi => ({ id: `fp-${i}`, position: vec3(15 * i, 0, 0), district: 'downtown', kind: 'counter', name: `Snacks ${i}`, roles: ['foodPickup'], items: ['wrap'] })),
+    ...Array.from({ length: 6 }, (_, i): Poi => ({ id: `df-${i}`, position: vec3(-200 - 15 * i, 0, 0), district: 'downtown', kind: 'door', name: `${i} West St`, roles: ['dropoffFood'] })),
+  ];
+  const offered = (tier: number, seconds: number) => {
+    const cfg = { ...cfgWith('food'), offers: { ...cfgWith('food').offers, lifetimeSeconds: 1e6 } };
+    const sys = makeSystem({ pois: manyFood(), cfg, dispatcher: () => dispatcherTuning(tier) });
+    let peak = 0;
+    let count = 0;
+    for (let t = 0; t <= seconds; t += 0.5) {
+      count += sys.update(t, offerPlayer, nowhere).filter((e) => e.kind === 'offered').length;
+      peak = Math.max(peak, sys.offers.length);
+    }
+    return { peak, count };
+  };
+  test('Dispatcher 5 shows up to 5 offers and rolls them twice as often as tier 0', () => {
+    expect(offered(0, 200).peak).toBe(3);
+    expect(offered(5, 200).peak).toBe(5);
+    // with room to spare, tier 5 (interval x0.5) rolls twice as often: first rolls at 4 s vs 8 s, 4 s vs 8 s apart
+    const sys0 = makeSystem({ pois: manyFood(), dispatcher: () => dispatcherTuning(0) });
+    const sys5 = makeSystem({ pois: manyFood(), dispatcher: () => dispatcherTuning(5) });
+    expect(sys0.nextOfferAt).toBe(8);
+    expect(sys5.nextOfferAt).toBe(4);
+    sys5.update(4, offerPlayer, nowhere);
+    expect(sys5.nextOfferAt).toBe(8);
   });
 });

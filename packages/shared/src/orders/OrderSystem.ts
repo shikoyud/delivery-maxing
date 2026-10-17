@@ -1,3 +1,4 @@
+import { dispatcherTuning, type DispatcherTuning } from '../economy/dispatcher';
 import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
 import { NO_MODS, type SimEvent, type StatModifiers } from '../movement/types';
@@ -42,6 +43,8 @@ export interface OrderSystemOptions {
   rng: Rng;
   capacity: CarrierCapacity;
   totals?: Totals;
+  /** The owned Dispatcher tier's tuning, read each tick (Game: the chain's tier); absent: tier 0. */
+  dispatcher?: () => DispatcherTuning;
 }
 
 /** Per-player order state: offers on the phone, accepted orders, lockout and totals (spec §3.2–§3.5). */
@@ -78,9 +81,13 @@ export class OrderSystem {
     return this._active;
   }
 
+  private tuning(): DispatcherTuning {
+    return this.opts.dispatcher ? this.opts.dispatcher() : dispatcherTuning(0);
+  }
+
   private interval(): number {
     const { minIntervalSeconds: lo, maxIntervalSeconds: hi } = this.opts.cfg.offers;
-    return lo + this.opts.rng() * (hi - lo);
+    return (lo + this.opts.rng() * (hi - lo)) * this.tuning().intervalScale;
   }
 
   canSwitchCapacity(c: CarrierCapacity): boolean {
@@ -201,7 +208,7 @@ export class OrderSystem {
       events.push({ kind: 'lockoutEnded' });
     }
 
-    if (now >= this.nextOfferAt && this._offers.length < cfg.offers.maxShown && this.freeSlots() > 0 && now >= this.lockoutUntil) {
+    if (now >= this.nextOfferAt && this._offers.length < this.tuning().maxShown && this.freeSlots() > 0 && now >= this.lockoutUntil) {
       const order = generateOffer({
         pois: this.opts.pois,
         distance: this.opts.distance,
@@ -216,6 +223,7 @@ export class OrderSystem {
         blockedDoors: this.blockedDoors(),
         recentlyUsed: this.recentlyUsed(now),
         nextId: () => `o${++this.idCounter}`,
+        dispatcher: this.tuning(),
       });
       if (order) {
         this._offers.push({ order, offeredAt: now, expiresAt: now + cfg.offers.lifetimeSeconds });
