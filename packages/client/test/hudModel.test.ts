@@ -157,7 +157,11 @@ describe('hudModel', () => {
     m = hudModel(sys, map, pickup.position, arrive + 1, null);
     o = m.orders[0]!;
     expect(o.stage).toBe(`Waiting for ${offer.order.item} at ${pickup.name}`);
-    expect(o.prep!.secondsLeft).toBeCloseTo(prep - 1);
+    expect(o.prep!.progress).toBeCloseTo(1 / prep);
+    expect(o.prep!.ready).toBe(false);
+    expect(hudModel(sys, map, pickup.position, arrive, null).orders[0]!.prep).toEqual({ progress: 0, ready: false });
+    expect(hudModel(sys, map, pickup.position, arrive + prep / 2, null).orders[0]!.prep!.progress).toBeCloseTo(0.5);
+    expect(hudModel(sys, map, pickup.position, arrive + prep + 5, null).orders[0]!.prep).toEqual({ progress: 1, ready: true });
     expect(o.timer).toBeNull();
 
     const tp = arrive + prep;
@@ -168,6 +172,7 @@ describe('hudModel', () => {
     expect(o.stage).toBe(`Deliver to ${dropoff.name}`);
     expect(o.targetName).toBe(dropoff.name);
     expect(o.target).toEqual(dropoff.position);
+    expect(o.prep).toBeNull();
     expect(o.timer!.secondsLeft).toBeCloseTo(offer.order.timeLimit - 4);
     expect(o.timer!.late).toBe(false);
 

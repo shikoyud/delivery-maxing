@@ -187,7 +187,13 @@ export class Hud implements HudView {
 
   private orderRow(o: HudOrder, color: number): string {
     const extra: string[] = [];
-    if (o.prep) extra.push(o.prep.secondsLeft > 0 ? `<span class="hud-timer">Ready ${clock(o.prep.secondsLeft)}</span>` : '<span class="hud-prep-ready">Ready for pickup</span>');
+    if (o.prep) {
+      extra.push(
+        o.prep.ready
+          ? '<span class="hud-prep-ready">Ready for pickup</span>'
+          : `<div class="hud-prep"><div class="hud-prep-bar" style="--progress:${Math.round(o.prep.progress * 100)}%"></div><span>Preparing</span></div>`,
+      );
+    }
     if (o.timer) extra.push(o.kind === 'food' ? this.timer('Hot', o.timer, 'Cold · no hot bonus') : this.timer('Par', o.timer, 'Over par · no bonus'));
     if (o.express) extra.push(this.timer('Express', o.express, 'Express late · no bonus'));
     if (o.weightKg !== null) extra.push(`<span class="hud-kg">${o.weightKg} kg</span>`);

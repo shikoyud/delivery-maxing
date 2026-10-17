@@ -302,7 +302,8 @@ describe('DeliveryLoop', () => {
     expect(s.loop.carriedCount()).toBe(0);
     s.goTo(offer.order.pickupPoiId);
     expect(s.loop.carriedCount()).toBe(1);
-    expect(s.popups.some((p) => p.text === `Preparing ${offer.order.item}`)).toBe(true);
+    const prepPopup = s.popups.find((p) => p.text === `Preparing ${offer.order.item}`);
+    expect(prepPopup?.lines).toEqual(['Wait at the counter']);
     expect(s.popups.at(-1)!.text).toBe(`Picked up ${offer.order.item}`);
     s.goTo(offer.order.dropoffPoiId);
     expect(s.loop.carriedCount()).toBe(0);

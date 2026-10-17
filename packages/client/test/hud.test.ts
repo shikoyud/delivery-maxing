@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Hud } from '../src/ui/hud';
 import { installFakeDom } from './fakeDom';
-import { model, offer } from './phoneFixtures';
+import { model, offer, order } from './phoneFixtures';
 
 describe('Hud offer toasts', () => {
   let dom: ReturnType<typeof installFakeDom>;
@@ -121,5 +121,34 @@ describe('Hud key prompt', () => {
     } finally {
       dom.restore();
     }
+  });
+});
+
+describe('Hud food prep bar', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  let hud: Hud;
+  const rowHtml = (): string => dom.host.byClass('hud-active')[0]!.innerHTML;
+
+  beforeEach(() => {
+    dom = installFakeDom();
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
+  });
+  afterEach(() => dom.restore());
+
+  it('a preparing order shows a bar at its progress and no seconds', () => {
+    hud.update(model({ orders: [order('a', { prep: { progress: 0.5, ready: false } })] }), () => 0);
+    const html = rowHtml();
+    expect(html).toContain('hud-prep-bar');
+    expect(html).toContain('--progress:50%');
+    expect(html).toContain('Preparing');
+    const prep = html.slice(html.indexOf('class="hud-prep"'));
+    expect(prep.slice(0, prep.indexOf('</span>'))).not.toMatch(/\d+:\d\d/);
+    expect(html).not.toContain('hud-prep-ready');
+  });
+
+  it('a ready order shows "Ready for pickup"', () => {
+    hud.update(model({ orders: [order('a', { prep: { progress: 1, ready: true } })] }), () => 0);
+    expect(rowHtml()).toContain('Ready for pickup');
+    expect(rowHtml()).not.toContain('hud-prep-bar');
   });
 });

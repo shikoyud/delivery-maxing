@@ -42,8 +42,8 @@ export interface HudOrder {
   distance: number;
   /** The current tier's route to the current target (the Map app draws it), or null (no navmesh, unreachable). */
   route: RouteToDoor | null;
-  /** Food being prepared at the pickup: counts down to ready. Null before arrival and after pickup. */
-  prep: HudTimer | null;
+  /** Food being prepared at the pickup: how far along (0..1) and whether it is ready. Null before arrival and after pickup. */
+  prep: { progress: number; ready: boolean } | null;
   /** Hot (food) or par (package) time; null before pickup (timers start at pickup, spec §3.2). */
   timer: HudTimer | null;
   /** Express packages only, after pickup. */
@@ -222,6 +222,12 @@ export function stageText(a: ActiveOrder, pois: PoiIndex): string {
     : dropoffText(pois.get(order.dropoffPoiId));
 }
 
+function prepProgress(startedAt: number, readyAt: number, now: number): { progress: number; ready: boolean } {
+  const span = readyAt - startedAt;
+  const progress = span > 0 ? Math.min(1, Math.max(0, (now - startedAt) / span)) : 1;
+  return { progress, ready: progress >= 1 };
+}
+
 function countdown(limit: number, elapsed: number): HudTimer {
   return { secondsLeft: Math.max(0, limit - elapsed), late: elapsed > limit };
 }
@@ -271,7 +277,7 @@ export function hudModel(
         kind: order.kind,
         item: order.item,
         stage: readyAt !== null && now < readyAt ? `Waiting for ${order.item} at ${pois.get(order.pickupPoiId).name}` : stageText(a, pois),
-        prep: readyAt === null ? null : { secondsLeft: Math.max(0, readyAt - now), late: false },
+        prep: readyAt === null ? null : prepProgress(a.prepStartedAt!, readyAt, now),
         targetName: targetPoi.name,
         target: { ...target },
         distance: Math.round(length),

@@ -645,7 +645,7 @@ export class DeliveryLoop {
     switch (e.kind) {
       case 'prepStarted': {
         const a = this.sys.active.find((x) => x.order.id === e.orderId);
-        if (a) this.popups.show(`Preparing ${a.order.item}`, [`Ready in ${Math.ceil(e.readySeconds)} s`], 'info');
+        if (a) this.popups.show(`Preparing ${a.order.item}`, ['Wait at the counter'], 'info');
         this.nextHudAt = 0;
         break;
       }
