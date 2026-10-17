@@ -299,10 +299,16 @@ describe('promptFor', () => {
     [{ riding: 'bicycle', stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
     [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'Get on to refuel'],
     [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: false, phoneOpen: false }, null],
-    [{ riding: 'car', stopped: false, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, null],
+    [{ riding: 'car', stopped: false, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
     [{ riding: null, stopped: true, mountCandidate: 'car', atPump: false, ownsFuelledRide: true, phoneOpen: true }, null],
   ] as const)('promptFor %j', (c, text) => {
     expect(promptFor({ ...ctx, ...c })).toBe(text);
+  });
+  test('the prompt says "F · Get off" while riding at any speed', () => {
+    // Decision 9: no speed limit on getting off; refuelling still needs the ride stopped.
+    for (const riding of ['skateboard', 'bicycle', 'motorbike', 'car'] as const) {
+      for (const atPump of [false, true]) expect(promptFor({ ...ctx, riding, stopped: false, atPump }), riding).toBe('F · Get off');
+    }
   });
   test('nothing to say on foot with nothing near', () => {
     expect(promptFor(ctx)).toBeNull();

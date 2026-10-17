@@ -68,7 +68,6 @@ export interface RidingConfig {
     /** A parked vehicle more than this far above or below the feet (m) is out of reach for F. */
     mountReachHeight: number;
     stoppedSpeed: number;
-    dismountMaxSpeed: number;
     dismountGap: number;
     emptyTankSpeed: number;
   };

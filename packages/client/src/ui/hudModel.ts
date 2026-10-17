@@ -138,7 +138,7 @@ export interface HudModel {
 /** What the key prompt depends on. */
 export interface PromptContext {
   riding: RideTier | null;
-  /** At or under ridingConfig.riding.stoppedSpeed. */
+  /** At or under ridingConfig.riding.stoppedSpeed (refuelling needs it; getting off does not). */
   stopped: boolean;
   /** What F would mount now on foot. */
   mountCandidate: RideTier | null;
@@ -152,8 +152,9 @@ export interface PromptContext {
 }
 
 /**
- * The key hint for the moment (Decision 5), or null: nothing to do, riding fast, or the phone is up. The key letters
- * are the first `mount` and `interact` bindings.
+ * The key hint for the moment (Decision 5), or null: nothing to do, or the phone is up. Riding, it is "Get off" at
+ * any speed (Decision 9), or "Refuel" when stopped at a pump with room in the tank. The key letters are the first
+ * `mount` and `interact` bindings.
  */
 export function promptFor(
   c: PromptContext,
@@ -162,8 +163,7 @@ export function promptFor(
   if (c.phoneOpen) return null;
   const mount = keyLabel(bindings.mount[0] ?? 'KeyF');
   if (c.riding !== null) {
-    if (!c.stopped) return null;
-    const refuel = c.atPump && !c.tankFull && ridingConfig.rides[c.riding].fuel;
+    const refuel = c.stopped && c.atPump && !c.tankFull && ridingConfig.rides[c.riding].fuel;
     return refuel ? `Hold ${keyLabel(bindings.interact[0] ?? 'KeyE')} · Refuel` : `${mount} · Get off`;
   }
   if (c.mountCandidate !== null) return `${mount} · Ride the ${c.mountCandidate}`;

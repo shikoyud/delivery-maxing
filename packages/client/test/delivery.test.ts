@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import * as THREE from 'three';
 import {
   emptyInput,
@@ -18,7 +18,7 @@ import {
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { clientConfig } from '../src/clientConfig';
-import { DeliveryLoop, simEventHint } from '../src/game/delivery';
+import { DeliveryLoop, MOUNT_REFUSED, simEventHint } from '../src/game/delivery';
 import { createProgressStore, type Progress } from '../src/game/progress';
 import { ActionState } from '../src/input/actionState';
 import type { HudModel } from '../src/ui/hudModel';
@@ -656,7 +656,7 @@ describe('DeliveryLoop', () => {
     s.states.car.fuel = 0.5;
     expect(s.loop.prompt()).toBe('Hold E · Refuel');
     s.rider.speed = 9;
-    expect(s.loop.prompt()).toBeNull();
+    expect(s.loop.prompt()).toBe('F · Get off'); // moving: no refuel, but F gets off at any speed (Decision 9)
     s.rider.speed = 0;
     s.rider.riding = null;
     expect(s.loop.prompt()).toBe('Get on to refuel');
@@ -705,7 +705,6 @@ describe('DeliveryLoop', () => {
 describe('simEventHint (final review 3)', () => {
   it('maps sim events to hints: get-off refusals, tow, empty tank, access per zone kind for the ridden tier', () => {
     expect(simEventHint({ kind: 'mountRefused', reason: 'noRoom' }, 'car', map)).toBe('No room to get off');
-    expect(simEventHint({ kind: 'mountRefused', reason: 'tooFast' }, 'car', map)).toBe('Slow down to get off');
     expect(simEventHint({ kind: 'mountRefused', reason: 'airborne' }, 'skateboard', map)).toBe('Land first');
     expect(simEventHint({ kind: 'towed', tier: 'car', hospitalId: 'harbor-hospital' }, null, map)).toBe('Car towed to Harbor Clinic bay');
     expect(simEventHint({ kind: 'fuelEmpty', tier: 'motorbike' }, 'motorbike', map)).toBe('Out of fuel');
@@ -715,6 +714,12 @@ describe('simEventHint (final review 3)', () => {
     expect(simEventHint({ kind: 'accessBlocked', zone: 'path' }, 'motorbike', map)).toBe("Motorbikes can't use paths");
     expect(simEventHint({ kind: 'jumped' }, null, map)).toBeNull();
     expect(simEventHint({ kind: 'mounted', tier: 'car' }, 'car', map)).toBeNull();
+  });
+
+  test('no refusal copy says "Slow down"', () => {
+    // Decision 9: F gets off at any speed; only no room or the air refuse it.
+    expect(Object.keys(MOUNT_REFUSED).sort()).toEqual(['airborne', 'noRoom']);
+    for (const copy of Object.values(MOUNT_REFUSED)) expect(copy).not.toMatch(/slow down/i);
   });
 
   it('afterStep shows each hint once per hintCooldownSeconds', () => {

@@ -139,9 +139,9 @@ const ACCESS_PHRASE: Record<AccessKind, string> = {
   path: 'use paths',
 };
 
-const MOUNT_REFUSED: Record<Extract<SimEvent, { kind: 'mountRefused' }>['reason'], string> = {
+/** The hint for each refused get-off (Decision 9: F gets off at any speed, so none asks to slow down). */
+export const MOUNT_REFUSED: Record<Extract<SimEvent, { kind: 'mountRefused' }>['reason'], string> = {
   noRoom: 'No room to get off',
-  tooFast: 'Slow down to get off',
   airborne: 'Land first',
 };
 

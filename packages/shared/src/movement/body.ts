@@ -119,6 +119,33 @@ export class PlayerBody {
   }
 
   /**
+   * True when a standing capsule slides from feet `from` to feet `to` in a straight line without touching anything
+   * but this player and `ignore` (e.g. the vehicle being left): no wall, rail or post stands between them. The test
+   * capsule is shrunk by FIT_SKIN like fitsAt's, and only contact the slide moves into counts, so a start already
+   * touching something it moves away from is clear.
+   */
+  pathClear(from: Vec3, to: Vec3, ignore: Collider): boolean {
+    const { rapier, world } = this.physics;
+    const d = vec3(to.x - from.x, to.y - from.y, to.z - from.z);
+    const center = this.centerOf(from, false);
+    const hit = world.castShape(
+      center,
+      { x: 0, y: 0, z: 0, w: 1 },
+      d,
+      new rapier.Capsule(this.halfHeight(false), this.cfg.capsule.radius - FIT_SKIN),
+      0,
+      1,
+      false,
+      undefined,
+      undefined,
+      this.collider,
+      undefined,
+      (c) => c.handle !== ignore.handle,
+    );
+    return hit === null;
+  }
+
+  /**
    * The courier's collider is disabled while riding (the vehicle collides instead). Steps the world so scene queries
    * see the change at once.
    */

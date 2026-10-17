@@ -184,13 +184,14 @@ export class PlayerSim {
   }
 
   /**
-   * F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding. While the vehicle is
-   * airborne F is refused (`mountRefused 'airborne'`), so nothing is ever left parked in the air.
+   * F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding, at any speed. In the air
+   * only the skateboard gets off (it is carried); any other ride refuses (`mountRefused 'airborne'`), so nothing is
+   * ever left parked in the air.
    */
   private toggleMount(events: SimEvent[]): void {
     const tier = this.state.riding;
     if (tier) {
-      if (this.garage.state(tier).grounded) this.dismount(tier, events);
+      if (this.garage.state(tier).grounded || restsCarried(tier)) this.dismount(tier, events);
       else events.push({ kind: 'mountRefused', reason: 'airborne' });
       return;
     }
@@ -233,19 +234,17 @@ export class PlayerSim {
   }
 
   /**
-   * Gets off the grounded `tier` at no more than riding.dismountMaxSpeed (else `mountRefused 'tooFast'`). The
-   * skateboard is picked up and the courier stands where it was, when a standing courier fits there; any other
-   * vehicle stays parked where it stopped and the courier steps off at the first free spot of dismountSpots. No room
-   * to stand: `mountRefused 'noRoom'`, still riding.
+   * Gets off `tier` at any speed (Decision 9). The skateboard is picked up and the courier is where it was, when a
+   * standing courier fits there, grounded or in the air as the board was. Any other (grounded) vehicle is parked
+   * where it is, stopped, and the courier steps off at the first spot of dismountSpots a standing courier fits and
+   * reaches from the vehicle in a straight line (never through a wall or rail). No such spot: `mountRefused 'noRoom'`,
+   * still riding. The courier keeps the ride's horizontal velocity, clamped to speedCap, and in the air its vertical
+   * velocity.
    */
   private dismount(tier: RideTier, events: SimEvent[]): void {
     const s = this.state;
     const g = this.garage;
     const v = g.state(tier);
-    if (horizontalLength(v.velocity) > g.cfg.riding.dismountMaxSpeed) {
-      events.push({ kind: 'mountRefused', reason: 'tooFast' });
-      return;
-    }
     let feet: Vec3 | undefined;
     if (restsCarried(tier)) {
       // The board's own collider stands where the courier would: test the spot with it out of the way.
@@ -253,17 +252,24 @@ export class PlayerSim {
       board.setEnabled(false);
       if (this.body.fitsAt(v.position, false)) feet = v.position;
       else board.setEnabled(true);
-    } else feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false));
+    } else {
+      const vehicle = g.body(tier).collider;
+      feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false) && this.body.pathClear(v.position, p, vehicle));
+    }
     if (!feet) {
       events.push({ kind: 'mountRefused', reason: 'noRoom' });
       return;
     }
+    const grounded = v.grounded;
+    const flat = clampHorizontal(vec3(v.velocity.x, 0, v.velocity.z), this.cfg.speedCap);
+    const velocity = vec3(flat.x, grounded ? 0 : v.velocity.y, flat.z);
     g.leave(tier);
     s.riding = null;
     this.body.setEnabled(true);
     this.body.setFeet(feet);
     s.position = this.body.feet;
-    s.velocity = vec3(0, 0, 0);
+    s.velocity = velocity;
+    if (!grounded) enterAir(s, this.cfg);
     events.push({ kind: 'dismounted', tier });
   }
 

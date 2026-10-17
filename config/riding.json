@@ -10,7 +10,7 @@
       "collider": { "shape": "lengthwise", "radius": 0.95, "halfLength": 1.25, "height": 1.9 }, "maxStepHeight": 0.2, "maxSlopeClimbDeg": 20, "fuel": { "rangeMeters": 5000, "fullTankCoins": 80 } }
   },
   "access": { "walk": ["alley", "steepLane", "stairs", "path"], "skateboard": ["alley", "path"], "bicycle": ["alley", "steepLane", "path"], "motorbike": ["alley", "steepLane"], "car": [] },
-  "riding": { "mountRadius": 2.5, "mountReachHeight": 1.5, "stoppedSpeed": 0.5, "dismountMaxSpeed": 2, "dismountGap": 0.3, "emptyTankSpeed": 3 },
+  "riding": { "mountRadius": 2.5, "mountReachHeight": 1.5, "stoppedSpeed": 0.5, "dismountGap": 0.3, "emptyTankSpeed": 3 },
   "refuel": { "pumpRadius": 3, "tankPerSecond": 0.25 },
   "summon": { "minDistance": 100, "cooldownSeconds": 60, "minClearance": 3, "searchRadius": 60, "ringSamples": 16 },
   "bays": { "spacing": 4 }
