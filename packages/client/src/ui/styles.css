@@ -513,6 +513,7 @@ kbd {
   align-items: center;
   gap: 8px;
   pointer-events: none;
+  z-index: 17; /* over the phone (15) and the map screen (16): a purchase's popup must show while the Shop is open */
 }
 
 .popup {
@@ -537,6 +538,11 @@ kbd {
 }
 
 .popup-good .popup-title { color: #137a71; }
+
+.popup .popup-mock-badge {
+  display: inline-block;
+  margin-top: 6px;
+}
 
 .popup-line {
   margin-top: 3px;

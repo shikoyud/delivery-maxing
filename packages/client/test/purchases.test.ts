@@ -47,7 +47,7 @@ function setup(opts: { coins?: number; vehicleTier?: number } = {}) {
     saves: 0,
     left: [] as RideTier[],
   };
-  const popups: { title: string; lines: string[]; tone: string }[] = [];
+  const popups: { title: string; lines: string[]; tone: string; mock?: boolean }[] = [];
   const purchases = new Purchases(chain, {
     garage,
     orders,
@@ -58,7 +58,7 @@ function setup(opts: { coins?: number; vehicleTier?: number } = {}) {
     ridden: () => env.ridden,
     lastRide: () => env.lastRide,
     save: () => void env.saves++,
-    popup: (title, lines = [], tone = 'info') => void popups.push({ title, lines, tone }),
+    popup: (title, lines = [], tone = 'info', mock = false) => void popups.push({ title, lines, tone, mock }),
     now: () => clock.t,
     removing: (t) => void env.left.push(t),
   });
@@ -101,7 +101,7 @@ describe('Purchases', () => {
     expect(s.garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
     expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
     expect(s.garage.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
-    expect(s.popups.at(-1)).toMatchObject({ title: 'Car bought · parked at Downtown General' });
+    expect(s.popups.at(-1)).toMatchObject({ title: 'Car bought · parked at Downtown General', mock: true });
     // No overlap with the motorbike behind it: slot spacing exceeds both half extents (5.5 m slots).
     const gap = ridingConfig.bays.spacing - halfExtent('car') - halfExtent('motorbike');
     expect(gap).toBeGreaterThan(0);
@@ -160,7 +160,7 @@ describe('Purchases', () => {
     expect(s.purchases.pending()).toEqual([]);
     expect(s.garage.owned()).toEqual([]);
     expect(s.chain.balance()).toBe(balance);
-    expect(s.popups.at(-1)).toMatchObject({ title: 'The price moved. Nothing was charged; check the new price.', tone: 'warn' });
+    expect(s.popups.at(-1)).toMatchObject({ title: 'The price moved. Nothing was charged; check the new price.', tone: 'warn', mock: true });
 
     // A rejected one fails at once.
     s.chain.dev.failNext();
@@ -251,6 +251,7 @@ describe('Purchases', () => {
     expect(s.env.wardrobe.owned).toEqual(['cosmetic.outfit.teal', 'cosmetic.vehicle.factory', 'cosmetic.bag.cardboard', 'cosmetic.phone.slate']);
     expect(s.purchases.quote('cosmetic.outfit.coral')).toEqual({ kind: 'coins', coins: 50, text: '50 Coins' });
     expect(s.purchases.buyWithCoins('cosmetic.outfit.coral')).toEqual({ ok: true });
+    expect(s.popups.at(-1)).toMatchObject({ title: 'Coral outfit bought', mock: false }); // Coins: no Mock wallet badge
     expect(s.env.wardrobe.owned).toContain('cosmetic.outfit.coral');
     expect(s.orders.totals.coins).toBe(10);
     expect(s.env.saves).toBeGreaterThan(0);

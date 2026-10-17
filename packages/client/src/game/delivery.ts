@@ -241,6 +241,9 @@ export class DeliveryLoop {
   /** One refuelling session per ridden vehicle: replaced (its session settled) when the ride changes. */
   private refueller = new Refueller();
   private refuelTier: RideTier | null = null;
+  /** capacity() and statModifiers() are read every tick: each is rebuilt only when what it depends on changed. */
+  private capMemo: { bag: number; tier: VehicleTier; cap: CarrierCapacity } | null = null;
+  private modsMemo: { base: StatModifiers; shoes: number; mods: StatModifiers } | null = null;
 
   constructor(private readonly d: DeliveryDeps) {
     this.rng = mulberry32(d.seed);
@@ -317,7 +320,13 @@ export class DeliveryLoop {
 
   /** The effective capacity (spec §3.3): the Bag tier's slots and kg, each capped by the ride (or the last ride). */
   capacity(): CarrierCapacity {
-    return effectiveCapacity(this.d.bagTier(), this.capacityTier);
+    const bag = this.d.bagTier();
+    const tier = this.capacityTier;
+    const m = this.capMemo;
+    if (m && m.bag === bag && m.tier === tier) return m.cap;
+    const cap = effectiveCapacity(bag, tier);
+    this.capMemo = { bag, tier, cap };
+    return cap;
   }
 
   /** The capacity tier: the ride, else the last ride, else walking. */
@@ -337,7 +346,14 @@ export class DeliveryLoop {
   }
 
   statModifiers(): StatModifiers {
-    return { ...this.sys.statModifiers(), sprintMul: shoesSprintMul(this.d.chain.ownership().lines.shoes) };
+    const base = this.sys.statModifiers();
+    const shoes = this.d.chain.ownership().lines.shoes;
+    const m = this.modsMemo;
+    const same = m !== null && m.shoes === shoes && (m.base === base || (m.base.speedMul === base.speedMul && m.base.jumpHeightMul === base.jumpHeightMul && m.base.sprintMul === base.sprintMul && m.base.canSprint === base.canSprint));
+    if (same) return m.mods;
+    const mods = { ...base, sprintMul: shoesSprintMul(shoes) };
+    this.modsMemo = { base, shoes, mods };
+    return mods;
   }
 
   /** Whether the phone is up (the sim then gets only the look, and Y is ignored: accept with the phone's buttons). */
@@ -393,7 +409,7 @@ export class DeliveryLoop {
 
   /**
    * The input the sim sees this tick. M toggles the map screen at any speed (Decision 11); while it is open the sim
-   * gets only the look (no move, brake, jump, F or Y) and the phone key does nothing. The phone key toggles the phone,
+   * gets only the look (no move, jump, F or Y) with the same brake hold as the phone below, and the phone key does nothing. The phone key toggles the phone,
    * but while riding faster than ridingConfig.riding.stoppedSpeed it only says "Stop to use the phone" (spec §8:
    * notifications only while riding); M with the phone open is the phone's close key, so it does not open the map.
    * Y accepts the top offer here, riding or not, before afterStep's update, so an accept on an offer's expiry tick
@@ -411,12 +427,7 @@ export class DeliveryLoop {
       if (this.phone.isOpen) this.closePhone();
       else if (this.phoneAllowed()) this.openPhone();
     } else if (frame.map.pressed && !this.phone.isOpen) this.openMap();
-    if (this.mapScreen.isOpen) {
-      const look = emptyInput();
-      look.look = frame.look;
-      return look;
-    }
-    if (!this.phone.isOpen) {
+    if (!this.phone.isOpen && !this.mapScreen.isOpen) {
       this.interact = frame.interact;
       if (frame.accept.pressed) {
         const top = this.sys.offers[0];
@@ -425,6 +436,7 @@ export class DeliveryLoop {
       if (frame.mount.pressed && !this.canMount()) return { ...frame, mount: { held: false, pressed: false } };
       return frame;
     }
+    // The phone or the map is up: only the look, and a ride is held on its brake so it does not coast away.
     const idle = emptyInput();
     idle.look = frame.look;
     const tier = this.d.rider().riding;
@@ -490,9 +502,9 @@ export class DeliveryLoop {
     this.d.purchases?.()?.update(this.d.wallClock?.() ?? Date.now());
   }
 
-  /** A popup (Purchases: bought, parked, failed). */
-  popup(title: string, lines: string[] = [], tone: PopupTone = 'info'): void {
-    this.popups.show(title, lines, tone);
+  /** A popup (Purchases: bought, parked, failed); `mock` when it is about GAME (the Mock wallet badge). */
+  popup(title: string, lines: string[] = [], tone: PopupTone = 'info', mock = false): void {
+    this.popups.show(title, lines, tone, mock);
     this.nextHudAt = 0;
   }
 
@@ -623,7 +635,7 @@ export class DeliveryLoop {
     };
     if (this.d.rider().riding !== null) return refuse('Get off first');
     const row = this.d.vehicles?.rows(this.d.now()).find((r) => r.tier === t);
-    if (!this.d.setLastRide || (row && !row.owned)) return refuse(`You don't have the ${TIER_LABEL[t]}`);
+    if (!this.d.setLastRide || !row?.owned) return refuse(`You don't have the ${TIER_LABEL[t]}`);
     if (!this.sys.canSwitchCapacity(effectiveCapacity(this.d.bagTier(), t))) return refuse(`Your orders don't fit on the ${TIER_LABEL[t]}`);
     this.d.setLastRide(t);
     this.sys.setCapacity(this.capacity());
@@ -641,12 +653,22 @@ export class DeliveryLoop {
     const v = this.d.vehicles;
     if (!v) return;
     const simEvents = v.respawn();
-    const before = [...this.sys.active];
-    for (const e of this.sys.onSimEvents(simEvents)) this.announce(e, before);
+    this.offTickEvents(simEvents);
     const r = simEvents.find((e): e is Extract<SimEvent, { kind: 'respawned' }> => e.kind === 'respawned');
     const name = r ? this.d.map.hospitals.find((h) => h.id === r.hospitalId)?.name : undefined;
     if (name) this.popups.show(`Respawned at ${name}`, [], 'info');
     this.closePhone();
+    this.nextHudAt = 0;
+  }
+
+  /**
+   * Sim events raised between ticks (Game: getting off a vehicle the chain removed, a progress reset, rideNow; the
+   * Settings respawn): handled as afterStep handles a tick's, so a `respawned` event breaks a carried Fragile.
+   */
+  offTickEvents(simEvents: SimEvent[]): void {
+    if (simEvents.length === 0) return;
+    const before = [...this.sys.active];
+    for (const e of this.sys.onSimEvents(simEvents)) this.announce(e, before);
     this.nextHudAt = 0;
   }
 
@@ -684,7 +706,7 @@ export class DeliveryLoop {
     if (!p) return;
     this.nextHudAt = 0;
     const r = await p.buy(itemId, maxGame);
-    if (!r.ok) this.popup(r.message, [], 'warn');
+    if (!r.ok) this.popup(r.message, [], 'warn', true);
     this.nextHudAt = 0;
   }
 
@@ -695,28 +717,28 @@ export class DeliveryLoop {
   /** The Wallet's Claim: the accrued GAME moves to the balance (instant on the mock, Decision 3). */
   async claim(): Promise<void> {
     const r = await this.d.chain.claim(this.wallMs());
-    if (r.ok) this.popup(`Claimed ${gameText(r.game)} GAME`, ['Added to your balance'], 'good');
-    else this.popup('Nothing to claim yet', ['Deliver orders to earn GAME'], 'warn');
+    if (r.ok) this.popup(`Claimed ${gameText(r.game)} GAME`, ['Added to your balance'], 'good', true);
+    else this.popup('Nothing to claim yet', ['Deliver orders to earn GAME'], 'warn', true);
   }
 
   /** The Wallet's Lock: locks `game` base units for lock.days days (spec §6.4); a refusal pops up. */
   lockGame(game: number): void {
     const r = this.d.chain.lockGame(game, this.wallMs());
     if (!r.ok) {
-      this.popup(r.reason === 'locked' ? 'GAME is already locked' : 'Not enough GAME to lock', [], 'warn');
+      this.popup(r.reason === 'locked' ? 'GAME is already locked' : 'Not enough GAME to lock', [], 'warn', true);
       return;
     }
     const lock = this.d.chain.lock();
     const boost = boostText(boostMultiplier(lock ? lock.usdMicroAtLock : 0));
-    this.popup(`Locked ${gameText(game)} GAME for ${economyConfig.lock.days} days`, [`${boost} boost on every order`], 'good');
+    this.popup(`Locked ${gameText(game)} GAME for ${economyConfig.lock.days} days`, [`${boost} boost on every order`], 'good', true);
   }
 
   /** The Wallet's Withdraw: the locked GAME back to the balance once the period has ended; too early pops up. */
   withdrawLock(): void {
     const lock = this.d.chain.lock();
     const r = this.d.chain.withdrawLock(this.wallMs());
-    if (r.ok) this.popup(`Withdrew ${gameText(lock?.game ?? 0)} GAME`, ['The boost ends'], 'good');
-    else this.popup(r.reason === 'none' ? 'No GAME is locked' : 'The lock has not ended yet', [], 'warn');
+    if (r.ok) this.popup(`Withdrew ${gameText(lock?.game ?? 0)} GAME`, ['The boost ends'], 'good', true);
+    else this.popup(r.reason === 'none' ? 'No GAME is locked' : 'The lock has not ended yet', [], 'warn', true);
   }
 
   /** Dev and debug: end the offer lockout now, free (the phone's Skip buys it: shopConfirm). */
@@ -861,8 +883,8 @@ export class DeliveryLoop {
     if (p === null) return [];
     if (!p.paid) return ['Vault empty · no GAME'];
     const lines = [`+${usdText(p.usdMicro)} ≈ ${gameText(p.game)} GAME`];
-    const boost = Number(p.boost.toFixed(2));
-    if (boost > 1) lines.push(`×${boost} boost`); // shown only above ×1.00 once rounded
+    const boost = boostText(p.boost);
+    if (boost !== boostText(1)) lines.push(`${boost} boost`); // shown only above ×1.00 once rounded
     return lines;
   }
 
@@ -891,12 +913,14 @@ export class DeliveryLoop {
       case 'completed': {
         this.save();
         const done = before.find((a) => a.order.id === e.orderId);
-        const lines = this.payoutLines(this.payOut(e, this.wallMs(), done?.order.kind ?? null));
+        const payout = this.payOut(e, this.wallMs(), done?.order.kind ?? null);
+        const lines = this.payoutLines(payout);
         lines.push(...e.bonuses.map((b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[b])} · +${ordersConfig.coins[b]} coins`));
         if (!e.inTime) lines.push(done?.order.kind === 'food' ? 'Cold · no hot bonus' : 'Over par · no bonus');
         if (e.expressOnTime === false) lines.push('Express late · no bonus');
         if (done?.order.modifier === 'fragile' && !done.fragileIntact) lines.push('Fragile damaged · no bonus');
-        this.popups.show(`Delivered! +${pointsText(e.points)} · +${e.coins} coins`, lines);
+        // The GAME line (paid, or "Vault empty · no GAME") carries the Mock wallet badge (Decision 1).
+        this.popups.show(`Delivered! +${pointsText(e.points)} · +${e.coins} coins`, lines, 'good', payout !== null);
         this.nextHudAt = 0;
         break;
       }

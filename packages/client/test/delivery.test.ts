@@ -51,6 +51,8 @@ interface Popup {
   text: string;
   lines: string[];
   tone: string;
+  /** Present (true) only on a popup carrying the Mock wallet badge. */
+  mock?: true;
 }
 
 /**
@@ -69,7 +71,8 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
   const bag = { tier: 5 };
   const rider = { riding: null as RideTier | null, lastRide, speed: 0, candidate: null as RideTier | null };
   /** A recording garage: what summon answers, the cooldown left, and the calls summon and respawn got. */
-  const vehicles = { result: 'ok' as SummonResult, readyIn: 0, calls: [] as string[] };
+  /** `owned`: the tiers the Garage rows list (the car by default). */
+  const vehicles = { result: 'ok' as SummonResult, readyIn: 0, calls: [] as string[], owned: ['car'] as RideTier[] };
   /** Each ride's dynamic state (refuelling reads and fills `fuel`). */
   const states = Object.fromEntries(
     (['skateboard', 'bicycle', 'motorbike', 'car'] as RideTier[]).map((tier): [RideTier, VehicleState] => [
@@ -168,7 +171,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     distance,
     ui: {
       hud: { update: (m) => void huds.push(m) },
-      popups: { show: (text, lines = [], tone = 'good') => void popups.push({ text, lines, tone }) },
+      popups: { show: (text, lines = [], tone = 'good', mock = false) => void popups.push({ text, lines, tone, ...(mock ? { mock: true as const } : {}) }) },
       phone: (cb, closeCodes) => {
         phone.cb = cb;
         phone.closeCodes = closeCodes;
@@ -182,7 +185,8 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     },
     phoneChanged: (open) => void phone.changes.push(open),
     vehicles: {
-      rows: () => [{ tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn, owned: true, active: false, fuelText: 'Fuel 100%', range: '' }],
+      rows: () =>
+        vehicles.owned.map((tier) => ({ tier, status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn, owned: true, active: false, fuelText: 'Fuel 100%', range: '' })),
       summon: (t, now) => {
         vehicles.calls.push(`summon ${t} at ${now}`);
         return vehicles.result;
@@ -268,6 +272,7 @@ describe('DeliveryLoop', () => {
 
   test('Switch to the bicycle with two packages is refused with the copy (§3.3)', () => {
     const s = setup('car');
+    s.vehicles.owned = ['bicycle', 'car'];
     // Four orders: more than the bicycle's slots (it caps the car's six at three).
     for (let i = 0; i < 4000 && s.loop.orders.active.length < 4; i++) {
       const o = s.loop.orders.offers[0];
@@ -278,6 +283,12 @@ describe('DeliveryLoop', () => {
     expect(s.loop.switchTo('bicycle')).toEqual({ ok: false, message: "Your orders don't fit on the bicycle" });
     expect(s.rider.lastRide).toBe('car');
     expect(s.popups.at(-1)).toMatchObject({ text: "Your orders don't fit on the bicycle", tone: 'warn' });
+  });
+
+  test('Switch to a tier the Garage does not list is refused as not owned', () => {
+    const s = setup('car');
+    expect(s.loop.switchTo('motorbike')).toEqual({ ok: false, message: "You don't have the motorbike" });
+    expect(s.rider.lastRide).toBe('car');
   });
 
   test('Switch while riding says "Get off first"', () => {
@@ -341,7 +352,7 @@ describe('DeliveryLoop', () => {
     expect(s.phone.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.phone, ...clientConfig.input.bindings.map]);
   });
 
-  test('M opens the map while riding at 20 m/s; the sim then gets no move input; M closes it', () => {
+  test('M opens the map while riding at 20 m/s; the sim then gets only the look and the brake hold; M closes it', () => {
     const s = setup('car');
     s.rider.riding = 'car';
     s.rider.speed = 20;
@@ -354,7 +365,8 @@ describe('DeliveryLoop', () => {
     expect(s.phone.changes).toEqual([true]); // the pointer lock is released, as for the phone
     expect(s.actions.sampleTick().move).toEqual({ x: 0, y: 0 }); // W was released
     expect(s.mapScreen.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.map]);
-    // The sim gets only the look: no move, no brake, jump, F or Y.
+    // The sim gets only the look and, as with the phone, the car's handbrake held so it does not coast away (no move,
+    // jump press, F or Y).
     const frame = emptyInput();
     frame.move = { x: 0, y: 1 };
     frame.look = { yaw: 1.5, pitch: 0.2 };
@@ -363,7 +375,13 @@ describe('DeliveryLoop', () => {
     frame.accept = { held: true, pressed: true };
     frame.phone = { held: true, pressed: true };
     const out = s.loop.beforeStep(frame);
-    expect(out).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 } });
+    expect(out).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 }, jump: { held: true, pressed: false } });
+    // On the skateboard (it ollies on Space) the hold is S.
+    s.rider.riding = 'skateboard';
+    expect(s.loop.beforeStep(frame)).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 }, move: { x: 0, y: -1 } });
+    s.rider.riding = null;
+    expect(s.loop.beforeStep(frame)).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 } }); // on foot: only the look
+    s.rider.riding = 'car';
     expect(s.loop.phoneOpen).toBe(false); // Tab does not open the phone over the map
     expect(s.loop.orders.active).toHaveLength(0);
     expect(s.loop.prompt()).toBeNull();
@@ -448,7 +466,7 @@ describe('DeliveryLoop', () => {
     s.shop.answer = { ok: false, message: 'Prices updating, purchases paused' };
     s.phone.cb!.shopConfirm('line.bag.1', 4250);
     await Promise.resolve();
-    expect(s.popups.at(-1)!.text).toBe('Prices updating, purchases paused');
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Prices updating, purchases paused', mock: true });
     // The HUD model carries the spendable balance; the Shop rows only while the phone shows them.
     s.tick();
     s.loop.draw(10);
@@ -656,6 +674,21 @@ describe('DeliveryLoop', () => {
     expect(s.loop.statModifiers()).toMatchObject({ speedMul: 1, canSprint: true });
     lines.shoes = 5;
     expect(s.loop.statModifiers().sprintMul).toBeCloseTo(1.175, 10);
+    // Read every tick: the same object until the Shoes tier (or a carried Heavy) changes it.
+    expect(s.loop.statModifiers()).toBe(s.loop.statModifiers());
+  });
+
+  test('capacity() is rebuilt only when the Bag tier or the capacity tier changes', () => {
+    const s = setup('car');
+    const first = s.loop.capacity();
+    expect(s.loop.capacity()).toBe(first);
+    s.bag.tier = 1;
+    const smaller = s.loop.capacity();
+    expect(smaller).not.toBe(first);
+    expect(smaller).toEqual(effectiveCapacity(1, 'car'));
+    s.rider.lastRide = 'bicycle';
+    expect(s.loop.capacity()).toEqual(effectiveCapacity(1, 'bicycle'));
+    expect(s.loop.capacity()).toBe(s.loop.capacity());
   });
 
   test('buying a Bag tier mid-game raises the capacity on the next tick without dropping orders', () => {
@@ -802,6 +835,20 @@ describe('DeliveryLoop', () => {
     expect(s.popups.filter((p) => p.text === 'Fragile package damaged')).toHaveLength(1);
     expect(s.popups.at(-1)!.text).toBe(`Respawned at ${map.hospitals[0]!.name}`);
     expect(s.phone.isOpen).toBe(false);
+  });
+
+  it('a respawn from getting off between ticks (leaveRide found no spot) breaks a carried Fragile once', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.modifier === 'fragile');
+    s.loop.accept(offer.order.id);
+    s.goTo(offer.order.pickupPoiId);
+    expect(s.loop.carriedCount()).toBe(1);
+    s.loop.offTickEvents([]); // nothing raised: nothing happens
+    expect(s.loop.orders.active[0]!.fragileIntact).toBe(true);
+    s.loop.offTickEvents([{ kind: 'respawned', hospitalId: map.hospitals[0]!.id }]);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([offer.order.id]);
+    expect(s.loop.orders.active[0]!.fragileIntact).toBe(false);
+    expect(s.popups.filter((p) => p.text === 'Fragile package damaged')).toHaveLength(1);
   });
 
   it('Tab at 8 m/s on the car does not open the phone and shows the hint; at rest it opens and the car holds still', () => {
@@ -1033,6 +1080,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
     expect(popup.lines.some((l) => l.includes('boost'))).toBe(false);
     expect(popup.lines.some((l) => l.startsWith('Still hot'))).toBe(true);
+    expect(popup.mock).toBe(true); // the GAME line carries the Mock wallet badge (Decision 1)
     // The HUD's top-right GAME figure is the accrued balance.
     s.loop.draw(1000);
     expect(s.huds.at(-1)!.wallet.accrued).toBe(p!.game);
@@ -1051,7 +1099,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(p!.usdMicro / rollPayoutUsd({ ...roll, boost: 1 }, economyConfig)).toBeCloseTo(1.3, 4);
     expect(p!.game).toBe(usdToGame(p!.usdMicro, rate, 'payout'));
     expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
-    expect(popup.lines[1]).toBe('×1.3 boost');
+    expect(popup.lines[1]).toBe('×1.30 boost'); // boostText, as the Wallet shows it
   });
 
   it('with the vault short the popup says "Vault empty · no GAME" and nothing accrues (Review Focus 5)', () => {
@@ -1069,6 +1117,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(s.loop.orders.totals.coins).toBeGreaterThan(0);
     expect(first.popup.text).toMatch(/^Delivered! \+\d+ pts · \+\d+ coins$/);
     expect(first.popup.lines[0]).toBe('Vault empty · no GAME');
+    expect(first.popup.mock).toBe(true);
     expect(first.popup.lines.some((l) => l.includes('≈'))).toBe(false);
     // The dev panel refills the vault: the next order pays normally.
     s.chain.dev.setVaultUsd(50);
@@ -1094,12 +1143,12 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     await Promise.resolve();
     expect(s.chain.accrued()).toBe(0);
     expect(s.chain.balance()).toBe(balance + p.game);
-    expect(s.popups.at(-1)).toMatchObject({ text: `Claimed ${gameText(p.game)} GAME`, tone: 'good' });
+    expect(s.popups.at(-1)).toMatchObject({ text: `Claimed ${gameText(p.game)} GAME`, tone: 'good', mock: true });
     expect(s.reloadChain().balance()).toBe(balance + p.game);
     expect(s.reloadChain().claims()).toEqual([{ game: p.game, at: s.wall.ms }]);
     // Nothing left to claim.
     await s.loop.claim();
-    expect(s.popups.at(-1)).toMatchObject({ text: 'Nothing to claim yet', tone: 'warn' });
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Nothing to claim yet', tone: 'warn', mock: true });
 
     // Lock 100,000 GAME for 7 days: out of the balance, saved, and the model shows it.
     const units = 100_000 * GAME_UNITS;
@@ -1108,9 +1157,9 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(s.chain.lock()).toMatchObject({ game: units, lockedAt });
     expect(s.chain.balance()).toBe(balance + p.game - units);
     expect(s.reloadChain().lock()).toEqual(s.chain.lock());
-    expect(s.popups.at(-1)).toMatchObject({ text: `Locked ${gameText(units)} GAME for ${economyConfig.lock.days} days`, lines: ['×1.07 boost on every order'] });
+    expect(s.popups.at(-1)).toMatchObject({ text: `Locked ${gameText(units)} GAME for ${economyConfig.lock.days} days`, lines: ['×1.07 boost on every order'], mock: true });
     s.phone.cb!.lockGame(units); // one lock at a time
-    expect(s.popups.at(-1)).toMatchObject({ text: 'GAME is already locked', tone: 'warn' });
+    expect(s.popups.at(-1)).toMatchObject({ text: 'GAME is already locked', tone: 'warn', mock: true });
     s.phone.isOpen = true;
     s.loop.draw(1000);
     expect(s.phone.renders.at(-1)!.wallet.lock).toMatchObject({ game: units, boostText: '×1.07', canWithdraw: false });
@@ -1118,14 +1167,14 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     // Withdraw before the 7 days is refused; after them it returns the GAME, saved.
     s.phone.cb!.withdrawLock();
     expect(s.chain.lock()).not.toBeNull();
-    expect(s.popups.at(-1)!.tone).toBe('warn');
+    expect(s.popups.at(-1)).toMatchObject({ tone: 'warn', mock: true });
     s.wall.ms = lockedAt + economyConfig.lock.days * 86_400_000;
     s.phone.cb!.withdrawLock();
     expect(s.chain.lock()).toBeNull();
     expect(s.chain.balance()).toBe(balance + p.game);
     expect(s.reloadChain().lock()).toBeNull();
     expect(s.reloadChain().balance()).toBe(balance + p.game);
-    expect(s.popups.at(-1)).toMatchObject({ text: `Withdrew ${gameText(units)} GAME`, tone: 'good' });
+    expect(s.popups.at(-1)).toMatchObject({ text: `Withdrew ${gameText(units)} GAME`, tone: 'good', mock: true });
   });
 
   it('a stale rate converts at the last good rate', () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Hud } from '../src/ui/hud';
+import { Popups } from '../src/ui/popups';
 import { installFakeDom } from './fakeDom';
 import { model, offer, order } from './phoneFixtures';
 import { emptyWallet } from '../src/ui/hudModel';
@@ -196,5 +197,24 @@ describe('Hud food prep bar', () => {
     hud.update(model({ orders: [order('a', { prep: { progress: 1, ready: true } })] }), () => 0);
     expect(rowHtml()).toContain('Ready for pickup');
     expect(rowHtml()).not.toContain('hud-prep-bar');
+  });
+});
+
+describe('Popups', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  beforeEach(() => {
+    dom = installFakeDom();
+    (globalThis as { window?: unknown }).window ??= { setTimeout: () => 0 };
+  });
+  afterEach(() => dom.restore());
+
+  it('a popup naming GAME carries the Mock wallet badge; others do not (Decision 1)', () => {
+    const popups = new Popups(dom.asHost, 3, 4);
+    popups.show('Claimed 500 GAME', ['Added to your balance'], 'good', true);
+    popups.show('Offer accepted', [], 'info');
+    const [game, plain] = dom.host.byClass('popup');
+    expect(game!.byClass('phone-mock-badge')).toHaveLength(1);
+    expect(game!.byClass('phone-mock-badge')[0]!.textContent).toBe('Mock wallet');
+    expect(plain!.byClass('phone-mock-badge')).toHaveLength(0);
   });
 });

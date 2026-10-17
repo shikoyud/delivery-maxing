@@ -66,7 +66,7 @@ import {
 import { teleportTargets, teleportToTarget } from './mapTargets';
 import { browserStorage, createProgressStore, ownedGarage, saveWhenLeaving, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
-import { interpolationStart } from './interpolation';
+import { interpolationStart, lerpAngle } from './interpolation';
 import { loadMap, type MapKind } from './mapLoader';
 import { garageRows } from '../ui/phone/garageApp';
 import type { PerfResult } from './perf';
@@ -150,12 +150,14 @@ export class Game {
   /** Access-zone volumes, shown with the F3 overlay. */
   private readonly accessZones: THREE.Group;
   private prevPosition: Vec3;
+  /** The heading before the last tick: the ride camera follows the heading interpolated like the feet. */
+  private prevHeading: number;
   /** Scratch vector for the camera's yaw (the HUD arrow). */
   private readonly camDir = new THREE.Vector3();
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
   /** The camera yaw on a ride: the mouse orbits it, and it swings back behind the heading. */
-  private readonly rideLook = new RideLook(clientConfig.camera.ride);
+  private readonly rideLook = new RideLook(this.cfg.camera.ride);
   private rideCamActive = false;
   private lastFrameMs: number | null = null;
   /** CityView.update's cost (ms), smoothed (the F3 overlay); null until the city has drawn a frame. */
@@ -184,6 +186,7 @@ export class Game {
     this.progress = progress;
     this.wardrobe = wardrobe;
     this.prevPosition = { ...sim.state.position };
+    this.prevHeading = sim.state.heading;
     const chase = this.cfg.camera.chase;
     this.actions = new ActionState(
       this.cfg.input,
@@ -257,7 +260,10 @@ export class Game {
         speed: horizontalLength(this.sim.state.velocity),
         mountCandidate: () => this.sim.mountCandidate(),
       }),
-      setLastRide: (t) => void (this.sim.state.lastRide = t),
+      // Only an owned tier (DeliveryLoop.switchTo already refuses others; a stale row must not set a lost tier).
+      setLastRide: (t) => {
+        if (this.sim.garage.owned().includes(t)) this.sim.state.lastRide = t;
+      },
       // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
       distance: (a, b) => nav.distance('walk', a, b),
       ...(extras.distances ? { table: extras.distances } : {}),
@@ -301,10 +307,10 @@ export class Game {
       ridden: () => sim.state.riding,
       lastRide: () => sim.state.lastRide,
       save: () => delivery.save(),
-      popup: (title, lines, tone) => delivery.popup(title, lines, tone),
+      popup: (title, lines, tone, mock) => delivery.popup(title, lines, tone, mock),
       now: () => Date.now(),
       removing: (t) => {
-        if (sim.state.riding === t) sim.leaveRide();
+        if (sim.state.riding === t) this.offTick(sim.leaveRide());
         if (sim.state.lastRide === t) sim.state.lastRide = null;
       },
       changed: () => this.vehicles.snap(),
@@ -483,6 +489,7 @@ export class Game {
     this.sim.teleport(vec3(p.x, p.y, p.z), vec3(v.x, v.y, v.z));
     this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
+    this.prevHeading = this.sim.state.heading;
     this.courier.snap();
     this.chase.snap();
     this.vehicles.snap();
@@ -526,7 +533,7 @@ export class Game {
    * afresh at the first hospital's bay slots in order with a full tank, no last ride, summon ready.
    */
   private resetGarage(): void {
-    this.sim.leaveRide();
+    this.offTick(this.sim.leaveRide());
     const g = this.sim.garage;
     const hospital = this.map.hospitals[0]!;
     const owned = [...g.owned()];
@@ -542,8 +549,9 @@ export class Game {
     const g = this.sim.garage;
     if (!g.owned().includes(tier)) this.setOwned(tier, true);
     // Park ahead of the courier by half the mount radius (leaves any current ride first).
-    this.sim.rideNow(tier, g.cfg.riding.mountRadius / 2);
+    const events = this.sim.rideNow(tier, g.cfg.riding.mountRadius / 2);
     this.afterTeleport();
+    this.delivery.offTickEvents(events);
     this.delivery.save();
   }
 
@@ -607,6 +615,7 @@ export class Game {
   private afterTeleport(): void {
     this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
+    this.prevHeading = this.sim.state.heading;
     this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
     this.rideCamActive = false;
     this.chase.snap();
@@ -614,9 +623,19 @@ export class Game {
     this.vehicles.snap();
   }
 
+  /**
+   * Sim events from outside a tick (leaveRide when a vehicle is removed or progress is reset): a respawn at the
+   * nearest hospital (no spot to get off) snaps the camera and views and breaks a carried Fragile, as in step().
+   */
+  private offTick(events: SimEvent[]): void {
+    if (events.some((e) => e.kind === 'respawned')) this.afterTeleport();
+    this.delivery.offTickEvents(events);
+  }
+
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
+    const headingBefore = this.sim.state.heading;
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
@@ -625,6 +644,7 @@ export class Game {
     const events = this.sim.step(frame, mods, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
+    this.prevHeading = headingBefore;
     if (events.some((e) => e.kind === 'respawned')) this.afterTeleport();
     this.tick++;
     return events;
@@ -636,17 +656,19 @@ export class Game {
     const feet = lerpVec3(this.prevPosition, s.position, alpha);
     const speed = horizontalLength(s.velocity);
     const mouseYaw = this.actions.takeYawDelta();
+    // The heading between the last two ticks, as the feet are (else the ride camera turns in 30 Hz steps).
+    const heading = lerpAngle(this.prevHeading, s.heading, alpha);
     let look = this.actions.look();
     if (s.riding !== null) {
       if (!this.rideCamActive) {
-        // Getting on: the camera stays where it was (its yaw is already in the look).
-        this.rideLook.mount(look.yaw, s.heading);
+        // Getting on: the camera stays where it was. The look already holds this frame's mouse yaw, which update adds.
+        this.rideLook.mount(look.yaw - mouseYaw, heading);
         this.rideCamActive = true;
       }
-      look = { yaw: this.rideLook.update(mouseYaw, s.heading, speed, dt), pitch: look.pitch };
+      look = { yaw: this.rideLook.update(mouseYaw, heading, speed, dt), pitch: look.pitch };
     } else if (this.rideCamActive) {
-      // Getting off: the on-foot camera starts where the ride camera was.
-      this.actions.setLook(this.rideLook.update(0, s.heading, 0, 0), look.pitch);
+      // Getting off: the on-foot camera starts where the ride camera was, with this frame's mouse yaw.
+      this.actions.setLook(this.rideLook.update(mouseYaw, heading, 0, 0), look.pitch);
       this.rideCamActive = false;
       look = this.actions.look();
     }

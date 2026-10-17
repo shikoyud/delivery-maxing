@@ -42,7 +42,8 @@ export interface PurchaseDeps {
   ridden(): RideTier | null;
   lastRide(): RideTier | null;
   save(): void;
-  popup(title: string, lines?: string[], tone?: PopupTone): void;
+  /** `mock`: the popup is about a GAME purchase (the Mock wallet badge). */
+  popup(title: string, lines?: string[], tone?: PopupTone, mock?: boolean): void;
   /** Wall-clock ms (the chain's clock); Date.now when absent. */
   now?(): number;
   /** Called before a tier the chain no longer owns leaves the garage (Game: gets off it, forgets it as the last ride). */
@@ -177,7 +178,7 @@ export class Purchases {
         continue;
       }
       if (tx.status === 'confirmed') this.grant(item);
-      else this.deps.popup(this.message(tx.error ?? 'rejected', item), [], 'warn');
+      else this.deps.popup(this.message(tx.error ?? 'rejected', item), [], 'warn', true);
     }
   }
 
@@ -196,16 +197,16 @@ export class Purchases {
       if (changed) d.changed?.();
       const ride = vehicleOfTier(item.tier) as RideTier;
       const spot = d.garage.spot(ride);
-      d.popup(spot.kind === 'parked' ? `${item.label} bought · parked at ${this.parkedAt(spot.position)}` : `${item.label} bought`);
+      d.popup(spot.kind === 'parked' ? `${item.label} bought · parked at ${this.parkedAt(spot.position)}` : `${item.label} bought`, [], 'info', true);
       d.save();
       return;
     }
     if (item.kind === 'lockoutSkip') {
       d.orders.skipLockout();
-      d.popup('Offer lockout skipped', ['New offers are coming']);
+      d.popup('Offer lockout skipped', ['New offers are coming'], 'info', true);
       return;
     }
-    d.popup(`${item.label} bought`);
+    d.popup(`${item.label} bought`, [], 'info', true);
   }
 
   /** The hospital whose bay `p` is nearest (where a bought vehicle parked). */
