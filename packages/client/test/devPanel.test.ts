@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_UNITS, effectiveCapacity, expandGreybox, type GreyboxSource, type MapData } from '@dm/shared';
+import { GAME_UNITS, RIDE_TIERS, economyConfig, effectiveCapacity, tierOfVehicle, expandGreybox, type GreyboxSource, type MapData, type RideTier } from '@dm/shared';
 import greyboxJson from '../../../map/greybox.json';
 import cityJson from '../../../map/city.layout.json';
-import type { MockChain } from '../src/economy/MockChain';
-import { capacityLabel, economyActions, mapRowItems, ownedBoxStates } from '../src/ui/devPanel';
+import { MockChain } from '../src/economy/MockChain';
+import { capacityLabel, economyActions, mapRowItems, ownedBoxStates, rideOfTier, vehicleTierAfter } from '../src/ui/devPanel';
 import { teleportTargets } from '../src/game/mapTargets';
 
 const grey = expandGreybox(greyboxJson as GreyboxSource);
@@ -40,51 +40,98 @@ describe('capacityLabel', () => {
   });
 });
 
-describe('dev panel Economy folder', () => {
-  const calls: unknown[][] = [];
-  const dev = {
-    addGame: (n: number) => void calls.push(['addGame', n]),
-    setRate: (r: number) => {
-      calls.push(['setRate', r]);
-      return r <= 0.0003;
-    },
-    makeRateStale: () => void calls.push(['stale']),
-    failNext: () => void calls.push(['failNext']),
-    setConfirmSeconds: (s: number) => void calls.push(['confirm', s]),
-    setVaultUsd: (u: number) => void calls.push(['vault', u]),
-    grantTier: (l: string, t: number) => void calls.push(['grant', l, t]),
-    advanceClock: (ms: number) => void calls.push(['clock', ms]),
-  } as unknown as MockChain['dev'];
+describe('dev panel Economy folder (real MockChain)', () => {
+  const T0 = 1_760_000_000_000;
+  function setup() {
+    const data = new Map<string, string>();
+    const storage = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+    const clock = { t: T0, now() { return this.t; } };
+    const chain = new MockChain(storage, economyConfig, clock);
+    return { chain, clock, acts: economyActions(chain.dev, GAME_UNITS) };
+  }
 
-  it('adds GAME, sets the rate, makes it stale, fails the next tx, sets the vault and grants tiers through the hooks', () => {
-    calls.length = 0;
-    const a = economyActions(dev, GAME_UNITS);
-    a.addGame();
-    expect(a.setRate(0.00025)).toBeNull();
-    expect(a.setRate(0.01)).toBe('Rate move over 20% refused');
-    a.makeStale();
-    a.failNext();
-    a.setConfirmSeconds(5);
-    a.setVaultUsd(10);
-    a.setTier('bag', 2);
-    a.advanceDay();
-    expect(calls).toEqual([
-      ['addGame', 100_000 * GAME_UNITS],
-      ['setRate', 0.00025],
-      ['setRate', 0.01],
-      ['stale'],
-      ['failNext'],
-      ['confirm', 5],
-      ['vault', 10],
-      ['grant', 'bag', 2],
-      ['clock', 86_400_000],
-    ]);
+  it('+100,000 GAME lands in the balance', () => {
+    const { chain, acts } = setup();
+    const before = chain.balance();
+    acts.addGame();
+    expect(chain.balance()).toBe(before + 100_000 * GAME_UNITS);
   });
 
-  it('Owned boxes grant and revoke vehicle tiers on the chain; locked while riding that tier', () => {
-    const boxes = ownedBoxStates((t) => t === 'bicycle', 'bicycle');
-    expect(boxes.find((b) => b.tier === 'bicycle')).toEqual({ tier: 'bicycle', owned: true, locked: true });
+  it('a rate move over 20% is refused and the rate stays; a small one is applied', () => {
+    const { chain, acts } = setup();
+    const rate = chain.rate()!.usdPerGame;
+    expect(acts.setRate(rate * 1.5)).toBe('Rate move over 20% refused');
+    expect(chain.rate()!.usdPerGame).toBe(rate);
+    expect(acts.setRate(rate * 1.1)).toBeNull();
+    expect(chain.rate()!.usdPerGame).toBeCloseTo(rate * 1.1, 12);
+  });
+
+  it('Make rate stale ages the rate; Fail next transaction fails the next purchase', async () => {
+    const { chain, clock, acts } = setup();
+    acts.makeStale();
+    expect(clock.t - chain.rate()!.updatedAt).toBeGreaterThanOrEqual(economyConfig.rate.maxAgeSeconds * 1000);
+    expect(acts.setRate(economyConfig.mockChain.usdPerGame)).toBeNull();
+    expect(clock.t - chain.rate()!.updatedAt).toBeLessThan(economyConfig.rate.maxAgeSeconds * 1000);
+    acts.failNext();
+    const tx = await chain.purchase('line.vehicle.1', Number.MAX_SAFE_INTEGER, clock.t);
+    expect(tx.status).toBe('failed');
+  });
+
+  it('Confirm delay changes when a new purchase settles', async () => {
+    const { chain, clock, acts } = setup();
+    acts.setConfirmSeconds(10);
+    await chain.purchase('line.vehicle.1', Number.MAX_SAFE_INTEGER, clock.t);
+    chain.tick(clock.t + 9_999);
+    expect(chain.history()[0]!.status).toBe('pending');
+    chain.tick(clock.t + 10_000);
+    expect(chain.history()[0]!.status).toBe('confirmed');
+  });
+
+  it('Vault (USD) and the tier sliders change vault() and ownership()', () => {
+    const { chain, acts } = setup();
+    acts.setVaultUsd(120);
+    expect(chain.vault() * chain.rate()!.usdPerGame / GAME_UNITS).toBeCloseTo(120, 3);
+    expect(acts.setTier('bag', 2)).toBe(true);
+    expect(chain.ownership().lines.bag).toBe(2);
+    acts.setTier('bag', 0);
+    expect(chain.ownership().lines.bag).toBe(0);
+  });
+
+  it('Advance clock 1 day moves a lock one day closer', () => {
+    const { chain, clock, acts } = setup();
+    chain.lockGame(1000 * GAME_UNITS, clock.t);
+    const end = chain.lock()!.unlocksAt;
+    acts.advanceDay();
+    expect(chain.lock()!.unlocksAt).toBe(end - 86_400_000);
+  });
+});
+
+describe('Owned boxes', () => {
+  const [t1, t2] = RIDE_TIERS.filter((t) => tierOfVehicle(t) >= 1).sort((a, b) => tierOfVehicle(a) - tierOfVehicle(b)) as [RideTier, RideTier];
+
+  it('grant and revoke vehicle tiers on the real chain through vehicleTierAfter', () => {
+    const chain = new MockChain(null, economyConfig, { now: () => 0 });
+    const apply = (t: RideTier, on: boolean, riding: RideTier | null): boolean => {
+      const next = vehicleTierAfter(chain.ownership().lines.vehicle, t, on, riding);
+      if (next === null) return false;
+      chain.dev.grantTier('vehicle', next);
+      return true;
+    };
+    expect(apply(t2, true, null)).toBe(true);
+    expect(chain.ownership().lines.vehicle).toBe(tierOfVehicle(t2)); // owning t2 owns the tiers below
+    expect(apply(t2, false, null)).toBe(true);
+    expect(chain.ownership().lines.vehicle).toBe(tierOfVehicle(t2) - 1);
+    expect(rideOfTier(tierOfVehicle(t1))).toBe(t1);
+  });
+
+  it('refuses a revoke while riding that tier or a higher one, and locks that box', () => {
+    const chain = new MockChain(null, economyConfig, { now: () => 0 });
+    chain.dev.grantTier('vehicle', tierOfVehicle(t2));
+    expect(vehicleTierAfter(tierOfVehicle(t2), t1, false, t2)).toBeNull();
+    expect(vehicleTierAfter(tierOfVehicle(t2), t2, false, t2)).toBeNull();
+    expect(vehicleTierAfter(tierOfVehicle(t2), t2, false, t1)).toBe(tierOfVehicle(t2) - 1);
+    const boxes = ownedBoxStates((t) => tierOfVehicle(t) <= chain.ownership().lines.vehicle, t2);
+    expect(boxes.find((b) => b.tier === t2)).toMatchObject({ owned: true, locked: true });
     expect(boxes.filter((b) => b.locked)).toHaveLength(1);
-    expect(ownedBoxStates(() => false, null).every((b) => !b.locked && !b.owned)).toBe(true);
   });
 });

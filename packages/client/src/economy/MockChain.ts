@@ -368,6 +368,8 @@ export class MockChain implements ChainSource {
     failNext: (): void => {
       this.failNextTx = true;
     },
+    /** The confirm delay in seconds. */
+    confirmSeconds: (): number => this.confirmSeconds,
     /** Sets how long later purchases take to confirm (seconds; not saved). */
     setConfirmSeconds: (s: number): void => {
       this.confirmSeconds = Math.max(0, s);

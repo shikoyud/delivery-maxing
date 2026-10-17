@@ -80,6 +80,9 @@ describe('debug hooks: economy', () => {
     const dm = window.__dm!;
     expect(dm.chain()).toMatchObject({ balance: 5, accrued: 2, vault: 9, lock: null, history: [], payouts: [] });
     expect(await dm.buy('lockoutSkip')).toEqual({ ok: true });
+    const snap = dm.chain();
+    (snap.ownership as { lines: Record<string, number> }).lines.vehicle = 99;
+    expect(dm.chain().ownership.lines.vehicle).toBe(1);
     expect(dm.shop()).toEqual([{ id: 'x' }]);
     expect(dm.devChain).toBe(chain.dev);
     dm.lockGame(7);

@@ -1,5 +1,5 @@
 import GUI, { type Controller } from 'lil-gui';
-import { GAME_UNITS, LINES, economyConfig, RIDE_TIERS, type CarrierCapacity, type Line, type RideTier } from '@dm/shared';
+import { GAME_UNITS, LINES, tierOfVehicle, RIDE_TIERS, type CarrierCapacity, type Line, type RideTier } from '@dm/shared';
 import type { MockChain } from '../economy/MockChain';
 import { FIXED_MOVEMENT_KEYS, overridesLabel, type DevSettings } from '../game/devSettings';
 import type { TeleportTarget } from '../game/mapTargets';
@@ -32,6 +32,12 @@ export interface DevPanelHooks {
     rate(): number | null;
     tier(line: Line): number;
     tierMax(line: Line): number;
+    /** Sets a line's tier; the vehicle line goes through the garage (Game.setOwned), refused (false) while riding a tier that would go. */
+    setTier(line: Line, tier: number): boolean;
+    confirmSeconds(): number;
+    vaultUsd(): number;
+    /** Calls `listener` after every chain change; returns the unsubscriber. */
+    subscribe(listener: () => void): () => void;
   };
   /** The "Map" folder: the loaded map's teleport entries and the lot-id view (the city only; null on the greybox). */
   map: {
@@ -75,12 +81,12 @@ export interface EconomyActions {
   failNext(): void;
   setConfirmSeconds(s: number): void;
   setVaultUsd(usd: number): void;
-  setTier(line: Line, tier: number): void;
+  setTier(line: Line, tier: number): boolean;
   advanceDay(): void;
 }
 
 /** The Economy folder's actions over the chain's dev controls (pure, so tests drive them without a DOM). */
-export function economyActions(dev: MockChain['dev'], gameUnits: number): EconomyActions {
+export function economyActions(dev: MockChain['dev'], gameUnits: number, setTier: (line: Line, tier: number) => boolean = (l, t) => (dev.grantTier(l, t), true)): EconomyActions {
   return {
     addGame: () => dev.addGame(DEV_GAME * gameUnits),
     setRate: (usd) => (dev.setRate(usd) ? null : RATE_REFUSED),
@@ -88,9 +94,24 @@ export function economyActions(dev: MockChain['dev'], gameUnits: number): Econom
     failNext: () => dev.failNext(),
     setConfirmSeconds: (s) => dev.setConfirmSeconds(s),
     setVaultUsd: (usd) => dev.setVaultUsd(usd),
-    setTier: (line, tier) => dev.grantTier(line, tier),
+    setTier,
     advanceDay: () => dev.advanceClock(24 * 60 * 60 * 1000),
   };
+}
+
+/**
+ * The vehicle line's tier after granting or revoking `t` (Decision 15: owning `t` owns every tier below it; removing
+ * it removes the tiers above too), or null when refused: revoking while riding a tier that would go.
+ */
+export function vehicleTierAfter(current: number, t: RideTier, owned: boolean, riding: RideTier | null): number | null {
+  const tier = tierOfVehicle(t);
+  if (!owned && riding !== null && tierOfVehicle(riding) >= tier) return null;
+  return owned ? Math.max(current, tier) : Math.min(current, tier - 1);
+}
+
+/** The ride a vehicle tier number stands for (1..n), or null. */
+export function rideOfTier(n: number): RideTier | null {
+  return RIDE_TIERS.find((t) => tierOfVehicle(t) === n) ?? null;
 }
 
 /** The Vehicles folder's Owned boxes: checked when owned, locked while the courier rides that tier. */
@@ -187,9 +208,9 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
 
   // Economy: the mock chain's dev controls (Decision 1).
   const eco = hooks.economy;
-  const acts = economyActions(eco.dev, GAME_UNITS);
+  const acts = economyActions(eco.dev, GAME_UNITS, eco.setTier);
   const ecoFolder = gui.addFolder('Economy');
-  const ecoState = { rate: eco.rate() ?? 0, refused: '', confirm: economyConfig.mockChain.confirmSeconds, vault: economyConfig.mockChain.vaultUsdMicro / 1e6 };
+  const ecoState = { rate: eco.rate() ?? 0, refused: '', confirm: eco.confirmSeconds(), vault: eco.vaultUsd() };
   ecoFolder.add({ add: acts.addGame }, 'add').name(`+${DEV_GAME.toLocaleString('en-US')} GAME`);
   const refusedCtrl = ecoFolder.add(ecoState, 'refused').name('Rate').disable();
   refusedCtrl.hide();
@@ -209,15 +230,23 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
   ecoFolder.add(ecoState, 'vault').name('Vault (USD)').onFinishChange(acts.setVaultUsd);
   ecoFolder.add({ day: acts.advanceDay }, 'day').name('Advance clock 1 day');
   const tiers = Object.fromEntries(LINES.map((l) => [l, eco.tier(l)])) as Record<Line, number>;
-  const tierCtrls = LINES.map((l) => ecoFolder.add(tiers, l, 0, eco.tierMax(l), 1).name(`Tier · ${l}`).onChange((n: number) => acts.setTier(l, n)));
+  const tierCtrls = LINES.map((l) => ecoFolder.add(tiers, l, 0, eco.tierMax(l), 1).name(`Tier · ${l}`).onChange((n: number) => {
+    if (!acts.setTier(l, n)) syncEconomy();
+  }));
   const syncEconomy = (): void => {
     LINES.forEach((l, i) => {
       tiers[l] = eco.tier(l);
       tierCtrls[i]!.updateDisplay();
     });
     ecoState.rate = eco.rate() ?? 0;
+    ecoState.confirm = eco.confirmSeconds();
+    ecoState.vault = eco.vaultUsd();
     ecoFolder.controllers.forEach((c: Controller) => c.updateDisplay());
+    syncVehicles();
   };
+  eco.subscribe(() => {
+    if (!gui._hidden) syncEconomy();
+  });
 
   // Map: which map is loaded, a teleport button per hospital and gas station, and the F4 lot-id view.
   const mapFolder = gui.addFolder('Map');
@@ -257,8 +286,7 @@ export function mountDevPanel(settings: DevSettings, hooks: DevPanelHooks): DevP
         lotCtrl?.updateDisplay();
         capInfo.capacity = hooks.vehicles.capacityLabel();
         capCtrl.updateDisplay();
-        syncEconomy();
-        syncVehicles(); // ownership or the ride may have changed since (debug API, a reset)
+        syncEconomy(); // ownership or the ride may have changed since (debug API, a reset)
         gui.show();
       } else gui.hide();
     },

@@ -15,7 +15,7 @@ import {
   movementConfig,
   vec3,
   worldConfig,
-  tierOfVehicle,
+  GAME_UNITS,
   type CatalogIndex,
   type CityMap,
   type DistanceTable,
@@ -51,7 +51,7 @@ import { MockChain } from '../economy/MockChain';
 import { Purchases } from '../economy/Purchases';
 import { equipItem, type Wardrobe } from '../economy/wardrobe';
 import { lookOf } from '../render/cosmetics';
-import { capacityLabel, mountDevPanel, type DevPanel } from '../ui/devPanel';
+import { capacityLabel, mountDevPanel, rideOfTier, vehicleTierAfter, type DevPanel } from '../ui/devPanel';
 import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
@@ -325,6 +325,10 @@ export class Game {
         rate: () => chain.rate()?.usdPerGame ?? null,
         tier: (l) => chain.ownership().lines[l],
         tierMax: (l) => economyConfig.lines[l].usdMicro.length,
+        setTier: (l, n) => (l === 'vehicle' ? this.setVehicleTier(n) : (chain.dev.grantTier(l, n), true)),
+        confirmSeconds: () => chain.dev.confirmSeconds(),
+        vaultUsd: () => (chain.vault() * (chain.rate()?.usdPerGame ?? 0)) / GAME_UNITS,
+        subscribe: (fn) => chain.subscribe(fn),
       },
       map: {
         kind: map.kind,
@@ -488,14 +492,20 @@ export class Game {
    * Purchases moves the garage along: a granted one parks at the nearest hospital's bay with a full tank. Saved.
    */
   setOwned(t: RideTier, owned: boolean): boolean {
-    const tier = tierOfVehicle(t);
-    const riding = this.sim.state.riding;
-    if (!owned && riding !== null && tierOfVehicle(riding) >= tier) return false;
-    const current = this.chain.ownership().lines.vehicle;
-    this.chain.dev.grantTier('vehicle', owned ? Math.max(current, tier) : Math.min(current, tier - 1));
+    const next = vehicleTierAfter(this.chain.ownership().lines.vehicle, t, owned, this.sim.state.riding);
+    if (next === null) return false;
+    this.chain.dev.grantTier('vehicle', next);
     this.vehicles.snap();
     this.delivery.save();
     return true;
+  }
+
+  /** Dev panel's vehicle tier slider: moves the line to tier `n` through setOwned (garage, riding guard, save). */
+  setVehicleTier(n: number): boolean {
+    const current = this.chain.ownership().lines.vehicle;
+    if (n === current) return true;
+    const t = rideOfTier(n > current ? n : n + 1);
+    return t === null ? false : this.setOwned(t, n > current);
   }
 
   /** Dev panel: every owned tank full. Saved. */
