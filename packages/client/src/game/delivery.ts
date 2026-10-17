@@ -16,6 +16,7 @@ import {
   type ActiveOrder,
   type Bonus,
   type CancelResult,
+  type DistanceTable,
   type InputFrame,
   type MapData,
   type MoveMode,
@@ -41,7 +42,7 @@ import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
 import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoints';
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
-import { hudModel, poiIndex, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, type HudModel } from '../ui/hudModel';
 import { createMinimap } from '../ui/minimap';
 import { createMapApp } from '../ui/phone/mapApp';
 import { MapProjection } from '../ui/phone/mapProjection';
@@ -71,6 +72,8 @@ export interface DeliveryDeps {
   rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
+  /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
+  table?: DistanceTable;
   /**
    * Door routes for the HUD arrow, the stops' distances and the Map app (Game: the NavRouter), cached for
    * ui.routeRefreshSeconds. Absent (tests): straight lines.
@@ -220,7 +223,7 @@ export class DeliveryLoop {
     if (d.ui) this.phone = d.ui.phone(phoneCb, closeCodes);
     else {
       const phone = new Phone(d.host, phoneCb, closeCodes);
-      phone.setMapApp(createMapApp(d.map, new MapProjection(d.map.size, 512), this.colorIndex));
+      phone.setMapApp(createMapApp(d.map, MapProjection.forMap(d.map, 512), this.colorIndex));
       this.phone = phone;
     }
     this.minimap = d.ui ? null : createMinimap(d.host, d.map);
@@ -233,6 +236,7 @@ export class DeliveryLoop {
       {
         pois: this.d.map.pois,
         distance: this.d.distance,
+        ...(this.d.table ? { table: this.d.table } : {}),
         rules: this.d.map.orderRules,
         cfg: ordersConfig,
         rng: this.rng,
@@ -417,12 +421,18 @@ export class DeliveryLoop {
 
   private pay(events: RefuelEvent[]): void {
     for (const e of events) {
+      if (e.kind === 'refuelRefused') {
+        this.nextHudAt = 0;
+        this.popups.show('No Coins for fuel', [], 'warn');
+        continue;
+      }
       if (e.kind !== 'refuelled') continue;
       this.nextHudAt = 0;
       if (e.cost <= 0) continue;
       this.sys.spendCoins(e.cost);
       this.save();
       this.popups.show(`Refuelled · −${e.cost} coins`, [], 'info');
+      if (e.reason === 'coins') this.popups.show(`Out of Coins · tank ${Math.round(e.fuel * 100)} %`, [], 'warn');
     }
   }
 
@@ -548,7 +558,32 @@ export class DeliveryLoop {
     return hudModel(this.sys, this.d.map, p, now, name, this.d.stamina?.() ?? 1, rows, {
       route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
+      prompt: this.prompt(),
     });
+  }
+
+  /** The key prompt now (hud-prompt): F to ride or get off, E to refuel, a pump hint on foot; null with the phone up. */
+  prompt(): string | null {
+    const r = this.d.rider();
+    const rows = this.d.vehicles?.rows(this.d.now()) ?? [];
+    const fuel = r.riding === null || !this.d.vehicles ? undefined : this.d.vehicles.state(r.riding).fuel;
+    return promptFor(
+      {
+        riding: r.riding,
+        stopped: r.speed <= ridingConfig.riding.stoppedSpeed,
+        mountCandidate: r.riding === null ? r.mountCandidate() : null,
+        atPump: pumpAt(this.d.map, this.d.player().position, ridingConfig.refuel.pumpRadius) !== null,
+        tankFull: fuel !== undefined && fuel >= 1,
+        ownsFuelledRide: rows.some((x) => x.fuel !== null),
+        phoneOpen: this.phone.isOpen,
+      },
+      this.d.cfg.input.bindings,
+    );
+  }
+
+  /** Hides the POI marker the rendered camera is in (Game calls it per frame, after the chase camera moved). */
+  setCamera(p: Vec3): void {
+    this.poiMeshes.setCamera(p);
   }
 
   /** Per frame: waypoint beams and POI markers for each order's current stop; the HUD at hudUpdateHz. */
@@ -572,6 +607,7 @@ export class DeliveryLoop {
       this.d.player().heading ?? 0,
       targets.map((position, i) => ({ position, colorIndex: colorIndices[i] ?? 0 })),
       this.sys.offers.map((o) => pois.target(o.order.pickupPoiId)),
+      parkedOf(this.d.vehicles?.rows(this.d.now()) ?? []),
     );
 
     this.hud.aim?.(this.d.cameraYaw?.() ?? 0);

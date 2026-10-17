@@ -1,9 +1,11 @@
+import { ridingConfig } from '../config';
 import type { RideSpec } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
 import { vec3, type Vec3 } from '../math/vec3';
 import type { MoveResult } from '../movement/kinematicMover';
 import type { SimEvent } from '../movement/types';
 import type { MapData } from '../world/mapTypes';
+import { clampTurn, facing, wrapAngle } from '../movement/ground';
 import { clipToAccess } from './accessClip';
 import { applyDrive, driveInput, vehicleTopSpeed } from './drive';
 import { burnFuel } from './fuel';
@@ -36,10 +38,19 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   const fuelBefore = v.fuel;
 
   // 1. Drive.
-  if (v.grounded) applyDrive(v, driveInput(input), ctx.spec, vehicleTopSpeed(v), gravity, dt);
+  const turn = v.grounded ? applyDrive(v, driveInput(input), ctx.spec, vehicleTopSpeed(v), gravity, dt) : null;
 
-  // 2. Turn the collider; a turn into an obstacle is refused and the heading stays.
-  if (!body.tryTurn(v.heading)) v.heading = body.heading;
+  // 2. Turn the collider toward the wish: the short way, else the long way, else it stays (and `turnBlocked` lets a
+  //    slow two-wheeler back out for a moment instead). No turn in the air.
+  if (turn && turn.wishHeading !== null) {
+    const before = body.heading;
+    const shortWay = clampTurn(before, turn.wishHeading, turn.maxTurn);
+    v.heading = body.tryTurnToward(turn.wishHeading, turn.maxTurn);
+    const refused = Math.abs(wrapAngle(v.heading - shortWay)) > 1e-9;
+    v.backOutTicks = refused ? Math.round(ridingConfig.riding.backOutSeconds / dt) : Math.max(0, (v.backOutTicks ?? 0) - 1);
+  } else if (turn) {
+    v.backOutTicks = 0;
+  }
 
   // 3. Gravity, integrated exactly for a constant acceleration (as PlayerSim does).
   const vy0 = v.velocity.y;
@@ -50,7 +61,7 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   // 4. Access walls. The event fires once per arrival, not on every tick the vehicle is held against the edge: a
   //    vehicle blocked last tick starts this one with no velocity across the edge (step 6 removed it) and, resting
   //    at the edge, clips to no movement across it.
-  const clip = clipToAccess(ctx.map, v.tier, v.position, wanted);
+  const clip = clipToAccess(ctx.map, v.tier, v.position, wanted, accessProbes(ctx.spec, v.heading));
   if (clip.zone && clip.normal) {
     const n = clip.normal;
     const wasMovingIn = -(arriving.x * n.x + arriving.z * n.z) > BLOCK_EPS;
@@ -75,6 +86,14 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   if (fuelBefore > 0 && v.fuel <= 0) events.push({ kind: 'fuelEmpty', tier: v.tier });
 
   return events;
+}
+
+/** Nose and tail of a lengthwise collider, relative to the feet, so access walls stop its ends rather than its centre. */
+function accessProbes(spec: RideSpec, heading: number): Vec3[] {
+  if (spec.collider.shape !== 'lengthwise') return [];
+  const reach = spec.collider.halfLength + spec.collider.radius;
+  const f = facing(heading);
+  return [vec3(f.x * reach, 0, f.z * reach), vec3(-f.x * reach, 0, -f.z * reach)];
 }
 
 /**

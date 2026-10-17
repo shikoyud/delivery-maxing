@@ -56,6 +56,8 @@ interface OfferCard {
   kind: HTMLElement;
   time: HTMLElement;
   pickup: HTMLElement;
+  /** The dropoff's name, with its address line under it */
+  dropoffName: HTMLElement;
   dropoff: HTMLElement;
   reward: HTMLElement;
   accept: HTMLButtonElement;
@@ -143,7 +145,8 @@ class OrdersApp {
       kind: el('span', 'phone-kind', top),
       time: el('span', 'phone-time', top),
       pickup: el('div', 'phone-card-text', card),
-      dropoff: el('div', 'phone-card-text', card),
+      dropoffName: el('div', 'phone-card-text phone-card-name', card),
+      dropoff: el('div', 'phone-card-text phone-card-address', card),
       reward: el('div', 'phone-reward', card),
       accept: button('phone-accept', 'accept', card),
     };
@@ -159,6 +162,8 @@ class OrdersApp {
     setText(c.kind, `${KIND_LABEL[o.kind]} · ${BAND_LABEL[o.band]}${kg}`);
     setText(c.time, clock(o.secondsLeft));
     setText(c.pickup, o.pickupText);
+    c.dropoffName.hidden = o.dropoffName === null;
+    setText(c.dropoffName, o.dropoffName ?? '');
     setText(c.dropoff, o.dropoffText);
     setText(c.reward, `up to +${pointsText(o.reward.points)} · +${o.reward.coins} coins`);
     const blocked = acceptBlockedReason(o.acceptStatus);

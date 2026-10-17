@@ -2,6 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import clientJson from '../../../config/client.json' with { type: 'json' };
+import perfJson from '../../../config/perf.json' with { type: 'json' };
+import ridingJson from '../../../config/riding.json' with { type: 'json' };
+import cityLayout from '../../../map/city.layout.json' with { type: 'json' };
 import type {} from '../src/game/debugHooks';
 
 const artifacts = fileURLToPath(new URL('../e2e-artifacts/', import.meta.url));
@@ -13,15 +16,16 @@ mkdirSync(sp3, { recursive: true });
 const sp4 = fileURLToPath(new URL('../../../docs/playtest/sp4/', import.meta.url));
 mkdirSync(sp4, { recursive: true });
 
-/** Opens the game in debug mode and waits for the first frame; returns the console errors seen. */
+/** Opens the SP4 greybox town (?map=greybox) in debug mode and waits for the first frame; returns the console errors seen. */
 async function boot(page: Page, query = ''): Promise<string[]> {
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`?debug=1${query}`);
+  await page.goto(`?debug=1&map=greybox${query}`);
   await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.__dm!.mapKind())).toBe('greybox');
   return errors;
 }
 
@@ -714,8 +718,8 @@ test('F at the spawn bay mounts the car; 12 s of W reaches 28 m/s and never more
   expect(car.spot).toBe('parked');
   const hospital = (await page.evaluate(() => window.__dm!.hospitals()))[0]!;
   expect(flat(car.position, hospital.center)).toBeLessThan(hospital.safeRadius + 10); // at the spawn hospital's bay
-  // On foot 2 m off the car's side (nearer the car than the motorbike in the next slot), then F.
-  const feet = { x: car.position.x, y: 0, z: car.position.z - 2 };
+  // On foot 2 m off the car's side (bays face along the street, Decision 6: its side is x), then F.
+  const feet = { x: car.position.x - 2, y: 0, z: car.position.z };
   await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, { ...car.position, y: 1 }] as const);
   await page.evaluate(() => window.__dm!.advance(3));
   await pressF(page, 'car');
@@ -754,9 +758,12 @@ test('the car stops at an alley mouth; the motorbike rides through', async ({ pa
   await rideFrom(page, 'car', start, west);
   await hold(page, ['KeyW'], 5 * TICK_RATE);
   const car = await player(page);
-  console.log(`car at the alley mouth: x ${car.position.x.toFixed(3)}, speed ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(3)} m/s`);
-  expect(car.position.x).toBeGreaterThanOrEqual(94);
-  expect(car.position.x).toBeLessThan(95);
+  // The nose probe (SP5 Task 1) holds the car's nose, halfLength + radius ahead of its centre, at the mouth.
+  const c = ridingJson.rides.car.collider;
+  const nose = car.position.x - (c.halfLength + c.radius);
+  console.log(`car at the alley mouth: x ${car.position.x.toFixed(3)}, nose ${nose.toFixed(3)}, speed ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(3)} m/s`);
+  expect(nose).toBeGreaterThanOrEqual(94);
+  expect(nose).toBeLessThan(95);
   expect(Math.hypot(car.velocity.x, car.velocity.z)).toBeLessThan(0.5);
   expect(errors).toEqual([]);
 });
@@ -1038,5 +1045,533 @@ test('playtest screenshots: the four rides and the test town', async ({ page }) 
     await waitCameraSettled(page);
     await page.screenshot({ path: `${sp4}${tier}.png` });
   }
+  expect(errors).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// SP5: the city (the default map). Run with the packs absent (Review Focus 1): every lot is a category-coloured box.
+// Driving and walking are timed in sim ticks (__dm.advance with the keys held), as the SP4 tests.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** SP5 playtest screenshots are committed: placeholder boxes only (no pack model appears in them). */
+const sp5 = fileURLToPath(new URL('../../../docs/playtest/sp5/', import.meta.url));
+mkdirSync(sp5, { recursive: true });
+
+type Facing = 'N' | 'S' | 'E' | 'W';
+const lots = new Map(cityLayout.lots.map((l) => [l.id, l]));
+const connector = (id: string) => cityLayout.connectors.find((c) => c.id === id)!;
+const road = (name: string) => cityLayout.roads.find((r) => r.name === name)!;
+const midZ = (r: { rect: { minZ: number; maxZ: number } }): number => (r.rect.minZ + r.rect.maxZ) / 2;
+/** Outward (street-side) unit vector of a lot's door side. */
+const OUT: Record<Facing, { x: number; z: number }> = { N: { x: 0, z: 1 }, S: { x: 0, z: -1 }, E: { x: 1, z: 0 }, W: { x: -1, z: 0 } };
+const EAST_YAW = yawTo({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
+const WEST_YAW = yawTo({ x: 0, y: 0, z: 0 }, { x: -1, y: 0, z: 0 });
+const NORTH_YAW = yawTo({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
+const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+
+/**
+ * Opens the city (the default map) in debug mode and waits for the first frame; returns the console errors and
+ * warnings seen, and every HTTP response of 400 or more.
+ */
+async function bootCity(page: Page, query = ''): Promise<{ errors: string[]; warnings: string[]; failed: string[] }> {
+  const out = { errors: [] as string[], warnings: [] as string[], failed: [] as string[] };
+  page.on('console', (m) => {
+    if (m.type() === 'error') out.errors.push(m.text());
+    if (m.type() === 'warning') out.warnings.push(m.text());
+  });
+  page.on('pageerror', (e) => out.errors.push(e.message));
+  page.on('response', (r) => {
+    if (r.status() >= 400) out.failed.push(`${r.status()} ${r.url()}`);
+  });
+  await page.goto(`?debug=1${query}`);
+  await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.__dm!.mapKind())).toBe('city');
+  await page.waitForFunction(() => window.__dm!.player().mode === 'ground');
+  return out;
+}
+
+/** Ground point `m` metres out from a lot's door on its street side, and the door itself. */
+function doorApproach(lotId: string, m: number): { feet: P; door: P } {
+  const lot = lots.get(lotId)!;
+  const door = lot.door!;
+  const o = OUT[lot.facing as Facing];
+  return { feet: { x: door.x + o.x * m, y: door.y, z: door.z + o.z * m }, door: { ...door } };
+}
+
+/**
+ * On foot `m` m out from a lot's door, facing it, then W for at most `maxSeconds` (the building stops the courier at
+ * the door); with `untilDelivered`, only until a delivery is counted. Returns the seconds walked, or −1 when
+ * `untilDelivered` and nothing was delivered.
+ */
+async function walkToDoor(page: Page, lotId: string, m: number, maxSeconds: number, untilDelivered = false): Promise<number> {
+  const { feet, door } = doorApproach(lotId, m);
+  await page.evaluate(([f, d]) => window.__dm!.viewpoint(f, { ...d, y: d.y + 1.2 }), [feet, door] as const);
+  await page.evaluate(() => window.__dm!.advance(3));
+  await page.keyboard.down('KeyW');
+  const took = await page.evaluate(
+    ([rate, max, until]) => {
+      const before = window.__dm!.totals().deliveries;
+      for (let i = 0; i < max * rate; i++) {
+        window.__dm!.advance(1);
+        if (until && window.__dm!.totals().deliveries > before) return i / rate;
+      }
+      return until ? -1 : max;
+    },
+    [TICK_RATE, maxSeconds, untilDelivered] as const,
+  );
+  await page.keyboard.up('KeyW');
+  return took;
+}
+
+/** Sets the held movement keys to exactly `keys` (W, S, Space), changing only what differs. */
+async function setKeys(page: Page, held: Set<string>, keys: string[]): Promise<void> {
+  for (const k of [...held]) {
+    if (!keys.includes(k)) {
+      await page.keyboard.up(k);
+      held.delete(k);
+    }
+  }
+  for (const k of keys) {
+    if (!held.has(k)) {
+      await page.keyboard.down(k);
+      held.add(k);
+    }
+  }
+}
+
+/**
+ * Drives the current ride with the camera looking along `yaw`: W up to `vmax`, coasting above it and S well above it,
+ * one sim tick at a time, until `until(position)` holds (at most `maxSeconds`). Returns every position passed.
+ */
+async function driveUntil(page: Page, yaw: number, vmax: number, until: (p: P) => boolean, maxSeconds = 30): Promise<P[]> {
+  const held = new Set<string>();
+  const path: P[] = [];
+  await page.evaluate((y) => window.__dm!.setLook(y, -0.2), yaw);
+  try {
+    for (let i = 0; i < maxSeconds * TICK_RATE; i++) {
+      const s = await player(page);
+      path.push(s.position);
+      if (until(s.position)) return path;
+      const v = Math.hypot(s.velocity.x, s.velocity.z);
+      await setKeys(page, held, v > vmax + 2 ? ['KeyS'] : v > vmax ? [] : ['KeyW']);
+      await page.evaluate(() => window.__dm!.advance(1));
+    }
+  } finally {
+    await setKeys(page, held, []);
+  }
+  throw new Error(`driveUntil: not there after ${maxSeconds} s (at ${JSON.stringify(path.at(-1))})`);
+}
+
+/** A shot from the air: the player is put at `feet` and falls; taken after a few frames (a fall well under a metre). */
+async function cityAirShot(page: Page, feet: P, target: P, file: string): Promise<void> {
+  await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, target] as const);
+  await waitTicks(page, 3);
+  await page.screenshot({ path: `${sp5}${file}` });
+}
+
+/** A shot on the ground: on foot at `feet` looking at `target`, once the camera has settled. */
+async function cityGroundShot(page: Page, feet: P, target: P, file: string): Promise<void> {
+  await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [feet, target] as const);
+  await page.evaluate(() => window.__dm!.advance(3));
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp5}${file}` });
+}
+
+test('the default URL loads the city; ?map=greybox loads the SP4 test town', async ({ page }) => {
+  const { errors } = await bootCity(page);
+  const hospitals = await page.evaluate(() => window.__dm!.hospitals().map((h) => h.name));
+  expect(hospitals).toEqual(cityLayout.hospitals.map((h) => h.name));
+  expect((await page.evaluate(() => window.__dm!.loadedChunks())).length).toBeGreaterThan(0);
+  await page.goto('?debug=1&map=greybox');
+  await page.waitForFunction(() => window.__dm?.ready === true, undefined, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.__dm!.mapKind())).toBe('greybox');
+  expect(await page.evaluate(() => window.__dm!.loadedChunks())).toEqual([]);
+  expect(await page.evaluate(() => window.__dm!.cityStats())).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test('city: loads, renders and reports ready with no console errors and at most one "model missing" warning per id (Review Focus 1)', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { errors, warnings, failed } = await bootCity(page);
+  await expect(page.locator('canvas.game-canvas')).toBeVisible();
+  // Spawn at Bayview General, inside its safe zone; then a few places around the city, so more lots come into view.
+  const spawn = cityLayout.hospitals[0]!;
+  const p = (await player(page)).position;
+  expect(flat(p, spawn.spawn)).toBeLessThan(1);
+  expect(p.y).toBeCloseTo(spawn.spawn.y, 1);
+  expect(await page.evaluate(() => window.__dm!.safeZone())).toBe(spawn.id);
+  for (const id of ['gas-ridge-fuel', 'hospital-midtown-medical', 'gas-dockside-fuel', 'bayview-general']) {
+    await page.evaluate((t) => window.__dm!.teleportTo(t), id);
+    await waitTicks(page, 6);
+    expect((await player(page)).mode).toBe('ground');
+  }
+  const stats = await page.evaluate(() => window.__dm!.cityStats());
+  console.log(`city: ${JSON.stringify(stats)}; warnings ${JSON.stringify(warnings)}`);
+  // The packs are absent: no model is loaded and every lot is a box, without one request for a model file.
+  expect(stats!.models).toBe(0);
+  expect(stats!.blocks).toBeGreaterThan(0);
+  const missing = warnings.filter((w) => w.startsWith('model missing:'));
+  expect(new Set(missing).size).toBe(missing.length);
+  expect(warnings.filter((w) => w.startsWith('pack models not installed'))).toHaveLength(1);
+  expect(failed).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('city: draw calls and triangles within the config budgets at every perf-route viewpoint', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { errors } = await bootCity(page);
+  for (const [i, vp] of perfJson.route.entries()) {
+    await page.evaluate(([f, t]) => window.__dm!.viewpoint(f, t), [vp.feet, vp.target] as const);
+    await waitTicks(page, 4);
+    const info = await page.evaluate(() => window.__dm!.renderInfo());
+    console.log(`perf viewpoint ${i} (${vp.feet.x}, ${vp.feet.y}, ${vp.feet.z}): ${info.calls} draw calls, ${info.triangles} triangles`);
+    expect(info.calls).toBeGreaterThan(0);
+    expect(info.calls).toBeLessThanOrEqual(clientJson.graphics.drawCallBudget);
+    expect(info.triangles).toBeLessThanOrEqual(clientJson.graphics.triangleBudget);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('city: an offer appears, the car drives Bayview Avenue to the pickup, the courier delivers on foot (names and addresses in the Orders app)', async ({ page }) => {
+  test.setTimeout(180_000);
+  const { errors } = await bootCity(page, SEED);
+  await hideOverlay(page);
+  // The first offer whose pickup is on Bayview's level (L1, y 10), so the avenue leads to it.
+  const id = await page.evaluate(
+    ([rate]) => {
+      for (let i = 0; i < 120 * rate; i++) {
+        const o = window.__dm!.offers().find((x) => window.__dm!.poiPosition(x.order.pickupPoiId).y === 10);
+        if (o) return o.order.id;
+        window.__dm!.advance(1);
+      }
+      return null;
+    },
+    [TICK_RATE] as const,
+  );
+  expect(id, 'no offer with a pickup on L1 in 120 s').not.toBeNull();
+  // The Orders app names the business and the addressee and gives the street addresses.
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  const offer = await page.evaluate((o) => window.__dm!.offers().find((x) => x.order.id === o)!.order, id!);
+  const pickupLot = lots.get(offer.pickupPoiId)!;
+  const dropLot = lots.get(offer.dropoffPoiId)!;
+  const card = page.locator('.phone-offer').filter({ hasText: pickupLot.name! });
+  await expect(card).toHaveCount(1);
+  await expect(card.locator('.phone-card-text').first()).toContainText(`from ${pickupLot.name}, ${pickupLot.address}`);
+  await expect(card.locator('.phone-card-name')).toHaveText(dropLot.name!);
+  await expect(card.locator('.phone-card-address')).toContainText(dropLot.address!);
+  console.log(`offer ${offer.id}: ${offer.kind} from ${pickupLot.name}, ${pickupLot.address} to ${dropLot.name}, ${dropLot.address}`);
+  await page.screenshot({ path: `${sp5}orders-app.png` });
+  await card.locator('.phone-accept').click();
+  await page.waitForFunction(() => window.__dm!.active().length === 1);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+
+  // In the car on Bayview Avenue beside the hospital, toward the pickup, flat out along the avenue until level with it.
+  const avenue = road('Bayview Avenue');
+  const pickupX = pickupLot.door!.x;
+  const startX = cityLayout.hospitals[0]!.spawn.x;
+  const dir = Math.sign(pickupX - startX) || 1;
+  await rideFrom(page, 'car', { x: startX, y: avenue.y, z: midZ(avenue) }, { x: startX + dir * 50, y: avenue.y + 1, z: midZ(avenue) });
+  const path = await driveUntil(page, dir > 0 ? EAST_YAW : WEST_YAW, 28, (q) => dir * (q.x - pickupX) > -30, 40);
+  await brakeToStop(page);
+  const car = await player(page);
+  console.log(`drove ${flat(path[0]!, car.position).toFixed(1)} m along ${avenue.name} to x ${car.position.x.toFixed(1)}`);
+  expect(car.riding).toBe('car');
+  expect(car.position.z).toBeGreaterThan(avenue.rect.minZ);
+  expect(car.position.z).toBeLessThan(avenue.rect.maxZ);
+  expect(Math.min(...path.map((q) => q.y))).toBeGreaterThanOrEqual(avenue.y - 0.1);
+  // Every pickup is on foot: off, then walk to the door and wait the prep time.
+  await pressF(page, null);
+  await walkToDoor(page, offer.pickupPoiId, 5, 2);
+  await page.evaluate((n) => window.__dm!.advance(n), PICKUP_TICKS);
+  expect(await page.evaluate(() => window.__dm!.active()[0]!.pickedUpAt)).not.toBeNull();
+  // The dropoff on foot: walked in from the street to its door.
+  const walked = await walkToDoor(page, offer.dropoffPoiId, 6, 6, true);
+  const totals = await page.evaluate(() => window.__dm!.totals());
+  console.log(`delivered to ${dropLot.name} on foot after ${walked.toFixed(2)} s: ${totals.points} points, ${totals.coins} coins`);
+  expect(walked).toBeGreaterThanOrEqual(0);
+  expect(totals.deliveries).toBe(1);
+  expect((await player(page)).riding).toBeNull();
+  await expect(page.locator('.popup', { hasText: 'Delivered!' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Band B's connectors (Bayview, L1 at y 10, up to Midtown, L2 at y 24, over z 560..620). Their geometry is
+ * terrainSolids.ts's (switchbackGeometry, steepLaneGeometry) for the committed layout, copied here because the e2e
+ * runner cannot load the shared config modules: conn-B-switchback-0 (x 228, legLength 80) has its legs from x 234 over
+ * a 77.8 m run at z 574 and 606; conn-B-steepLane-0 (x 52) starts at (52, 562.51) and runs (0.8352, 0.5499).
+ */
+const BAND_B = cityLayout.bands.B;
+const SW_B0 = { id: 'conn-B-switchback-0', xs: 234, run: 77.78, legZ: [574, 606] as const };
+const LANE_B0 = { id: 'conn-B-steepLane-0', start: { x: 52, z: 562.51 }, dir: { x: 0.8352, z: 0.5499 } };
+const STAIRS_B1 = { id: 'conn-B-stairs-1' };
+
+test('city: a staircase is walked, a steep lane ridden on the bicycle, a switchback driven in the car', async ({ page }) => {
+  test.setTimeout(240_000);
+  const { errors } = await bootCity(page);
+  const L1 = BAND_B.y0;
+  const L2 = BAND_B.y1;
+  const above = (p: P) => p.z > BAND_B.z1 + 5;
+
+  // Stairs: on foot from Bayview Terrace straight north up the steps onto Midtown.
+  const stairs = connector(STAIRS_B1.id);
+  expect(stairs.kind).toBe('stairs');
+  await page.evaluate(([x, y, z]) => window.__dm!.viewpoint({ x, y, z }, { x, y: y + 1.6, z: z + 20 }), [stairs.x, L1, BAND_B.z0 - 5] as const);
+  await page.evaluate(() => window.__dm!.advance(3));
+  await page.keyboard.down('KeyW');
+  const walked = await page.evaluate(
+    ([rate, z1]) => {
+      for (let i = 0; i < 40 * rate; i++) {
+        window.__dm!.advance(1);
+        if (window.__dm!.player().position.z > z1 + 5) return i / rate;
+      }
+      return -1;
+    },
+    [TICK_RATE, BAND_B.z1] as const,
+  );
+  await page.keyboard.up('KeyW');
+  const top = await player(page);
+  console.log(`walked up ${stairs.id} in ${walked.toFixed(2)} s to (${top.position.x.toFixed(1)}, ${top.position.y.toFixed(2)}, ${top.position.z.toFixed(1)})`);
+  expect(walked).toBeGreaterThan(0);
+  expect(top.position.y).toBeCloseTo(L2, 1);
+  expect(top.riding).toBeNull();
+
+  // Steep lane: on the bicycle from 14 m before its foot, along the lane onto Midtown.
+  const lane = connector(LANE_B0.id);
+  expect(lane.kind).toBe('steepLane');
+  expect(lane.x).toBe(LANE_B0.start.x);
+  const { start, dir } = LANE_B0;
+  const before = { x: start.x - 14 * dir.x, y: L1, z: start.z - 14 * dir.z };
+  await rideFrom(page, 'bicycle', before, { x: before.x + 30 * dir.x, y: L1 + 3, z: before.z + 30 * dir.z });
+  const lanePath = await driveUntil(page, yawTo({ x: 0, y: 0, z: 0 }, { x: dir.x, y: 0, z: dir.z }), 12, above, 40);
+  const bike = await player(page);
+  console.log(`bicycle up ${lane.id}: ${lanePath.length} ticks, at (${bike.position.x.toFixed(1)}, ${bike.position.y.toFixed(2)}, ${bike.position.z.toFixed(1)})`);
+  expect(bike.riding).toBe('bicycle');
+  expect(bike.position.y).toBeCloseTo(L2, 1);
+  await brakeToStop(page);
+  await page.evaluate(() => window.__dm!.setLook(2.4, -0.25));
+  await waitCameraSettled(page);
+  await hideOverlay(page);
+  await page.screenshot({ path: `${artifacts}sp5-steep-lane-top.png` });
+  await page.keyboard.press('F3');
+
+  // Switchback: in the car, east up the first leg onto the hairpin, north across it, west up the second leg, north
+  // onto Midtown. Each leg climbs at 9 %.
+  const sw = connector(SW_B0.id);
+  expect(sw.kind).toBe('switchback');
+  await rideFrom(page, 'car', { x: sw.x, y: L1, z: SW_B0.legZ[0] }, { x: sw.x + 30, y: L1 + 1, z: SW_B0.legZ[0] });
+  const leg = await driveUntil(page, EAST_YAW, 12, (p) => p.x > SW_B0.xs + SW_B0.run + 3);
+  const climb = leg.filter((p) => p.x > SW_B0.xs + 10 && p.x < SW_B0.xs + SW_B0.run - 10);
+  const grade = (climb.at(-1)!.y - climb[0]!.y) / (climb.at(-1)!.x - climb[0]!.x);
+  console.log(`car up the first leg of ${sw.id}: grade ${(grade * 100).toFixed(2)} %, hairpin at y ${leg.at(-1)!.y.toFixed(2)}`);
+  expect(grade).toBeCloseTo(0.09, 2);
+  expect(leg.at(-1)!.y).toBeCloseTo((L1 + L2) / 2, 1);
+  await brakeToStop(page);
+  await driveUntil(page, NORTH_YAW, 4, (p) => p.z > SW_B0.legZ[1] - 1);
+  await driveUntil(page, WEST_YAW, 12, (p) => p.x < SW_B0.xs - 1);
+  await brakeToStop(page);
+  await driveUntil(page, NORTH_YAW, 6, above);
+  const car = await player(page);
+  console.log(`car on Midtown at (${car.position.x.toFixed(1)}, ${car.position.y.toFixed(2)}, ${car.position.z.toFixed(1)})`);
+  expect(car.riding).toBe('car');
+  expect(car.position.y).toBeCloseTo(L2, 1);
+  expect(errors).toEqual([]);
+});
+
+test('city: Review Focus 5 — the car crosses the avenue at top speed without falling through', async ({ page }) => {
+  test.setTimeout(180_000);
+  const { errors } = await bootCity(page);
+  const avenue = road('Bayview Avenue');
+  const z = midZ(avenue);
+  await rideFrom(page, 'car', { x: 20, y: avenue.y, z }, { x: 80, y: avenue.y + 1, z });
+  await page.evaluate((y) => window.__dm!.setLook(y, -0.2), EAST_YAW);
+  // Full throttle east, every tick sampled in one synchronous run: the chunks page in ahead of the car as it goes.
+  await page.keyboard.down('KeyW');
+  const run = await page.evaluate(
+    ([rate, endX]) => {
+      let minY = Infinity;
+      let maxSpeed = 0;
+      let ticks = 0;
+      const chunks = new Set<string>();
+      for (; ticks < 80 * rate; ticks++) {
+        const v = window.__dm!.advance(1)[0]!;
+        const p = window.__dm!.player();
+        if (p.riding !== 'car') break;
+        minY = Math.min(minY, p.position.y);
+        maxSpeed = Math.max(maxSpeed, v);
+        for (const c of window.__dm!.loadedChunks()) chunks.add(c);
+        if (p.position.x >= endX) break;
+      }
+      return { minY, maxSpeed, ticks, x: window.__dm!.player().position.x, chunks: chunks.size, riding: window.__dm!.player().riding };
+    },
+    [TICK_RATE, avenue.rect.maxX - 60] as const,
+  );
+  await page.keyboard.up('KeyW');
+  await brakeToStop(page);
+  const end = await player(page);
+  console.log(`Bayview Avenue at full throttle: ${run.ticks} ticks to x ${run.x.toFixed(1)}, max ${run.maxSpeed.toFixed(3)} m/s, min y ${run.minY.toFixed(3)}, ${run.chunks} chunks loaded on the way, stopped at x ${end.position.x.toFixed(1)}`);
+  expect(run.riding).toBe('car');
+  expect(run.x).toBeGreaterThanOrEqual(avenue.rect.maxX - 60);
+  expect(run.maxSpeed).toBeGreaterThan(27.9);
+  expect(run.maxSpeed).toBeLessThanOrEqual(28 + 1e-6);
+  expect(run.minY).toBeGreaterThanOrEqual(avenue.y - 0.1);
+  expect(end.position.y).toBeCloseTo(avenue.y, 1);
+  expect(end.position.x).toBeLessThanOrEqual(avenue.rect.maxX);
+  // The colliders were paged along the way: the chunks at the start are unloaded behind the car.
+  expect(await page.evaluate(() => window.__dm!.loadedChunks().length)).toBeLessThanOrEqual(25);
+  expect(run.chunks).toBeGreaterThan(25);
+  expect(errors).toEqual([]);
+});
+
+/** Counts the Map app canvas's pixels of each colour (#rrggbb). */
+const canvasColours = (page: Page, colours: string[]): Promise<number[]> =>
+  page.locator('.phone-map-canvas').evaluate((c, cols) => {
+    const canvas = c as HTMLCanvasElement;
+    const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+    const want = cols.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+    const n = cols.map(() => 0);
+    for (let i = 0; i < data.length; i += 4) {
+      want.forEach(([r, g, b], k) => {
+        if (data[i] === r && data[i + 1] === g && data[i + 2] === b) n[k]!++;
+      });
+    }
+    return n;
+  }, colours);
+
+test('city: F4 shows the debug view with lot labels; the Map app shows hospitals, gas stations and a parked car', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { errors } = await bootCity(page);
+  await hideOverlay(page);
+  expect(await page.evaluate(() => window.__dm!.mapDebugVisible())).toBe(false);
+  // F4, standing on Bayview Avenue in front of the hospital: labels for the lots within 80 m.
+  await page.evaluate(() => window.__dm!.viewpoint({ x: 139.5, y: 10, z: 316 }, { x: 139.5, y: 14, z: 345 }));
+  await page.keyboard.press('F4');
+  await page.waitForFunction(() => window.__dm!.mapDebugVisible());
+  await waitTicks(page, 4);
+  const dbg = await page.evaluate(() => window.__dm!.mapDebug()!);
+  console.log(`F4: ${dbg.labels.length} labels (${dbg.labels.slice(0, 3).join(' | ')} ...), ${dbg.beams} beams, ${dbg.chunks} chunks, zones ${JSON.stringify(dbg.zones)}`);
+  expect(dbg.visible).toBe(true);
+  expect(dbg.labels.length).toBeGreaterThan(0);
+  expect(dbg.labels.every((l) => /lot-L1-/.test(l))).toBe(true);
+  const me = (await player(page)).position;
+  const near = cityLayout.lots.filter((l) => flat(me, { x: (l.rect.minX + l.rect.maxX) / 2, y: 0, z: (l.rect.minZ + l.rect.maxZ) / 2 }) < 60);
+  expect(dbg.labels.some((l) => near.some((n) => l.includes(n.id)))).toBe(true);
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp5}debug-view.png` });
+  await page.keyboard.press('F4');
+  await page.waitForFunction(() => !window.__dm!.mapDebugVisible());
+
+  // The Map app at the spawn: Bayview General's red cross, Bayview Fuel's icon and the car parked in the bay.
+  await page.evaluate((h) => window.__dm!.teleportTo(h), cityLayout.hospitals[0]!.id);
+  await waitTicks(page, 3);
+  expect((await vehicle(page, 'car')).spot).toBe('parked');
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => window.__dm!.phoneOpen());
+  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await waitTicks(page, 6);
+  const [hospital, fuel, parked] = await canvasColours(page, ['#d63a3a', '#f2a33a', '#2f8f83']);
+  console.log(`Map app pixels: hospital ${hospital}, fuel ${fuel}, parked vehicles ${parked}`);
+  expect(hospital).toBeGreaterThan(0);
+  expect(fuel).toBeGreaterThan(0);
+  expect(parked).toBeGreaterThan(0);
+  await page.screenshot({ path: `${sp5}map-app.png` });
+  expect(errors).toEqual([]);
+});
+
+test('prompts: "F · Ride the car" at the bay, "Hold E · Refuel" at a pump, "No Coins for fuel" with 0 Coins', async ({ page }) => {
+  const { errors } = await bootCity(page);
+  await hideOverlay(page);
+  // On foot beside the car parked in Bayview General's bay.
+  const car = await vehicle(page, 'car');
+  expect(flat(car.position, cityLayout.hospitals[0]!.bay)).toBeLessThan(0.5);
+  await page.evaluate(([c]) => window.__dm!.viewpoint({ x: c.x, y: c.y, z: c.z - 2 }, { ...c, y: c.y + 1 }), [car.position] as const);
+  await page.evaluate(() => window.__dm!.advance(3));
+  expect(await page.evaluate(() => window.__dm!.prompt())).toBe('F · Ride the car');
+  await expect(page.locator('.hud-prompt')).toHaveText('F · Ride the car');
+  await pressF(page, 'car');
+
+  // In the car, stopped beside Bayview Fuel's west pump, with a half tank and no Coins.
+  const station = cityLayout.gasStations.find((g) => g.id === 'gas-bayview-fuel')!;
+  const pump = station.pumps[0]!;
+  await page.evaluate(([p]) => window.__dm!.teleport({ x: p.x, y: p.y + 0.05, z: p.z - 2.5 }), [pump] as const);
+  await page.evaluate(() => {
+    window.__dm!.advance(10);
+    window.__dm!.setFuel('car', 0.5);
+    window.__dm!.setCoins(0);
+  });
+  expect(await page.evaluate(() => window.__dm!.prompt())).toBe('Hold E · Refuel');
+  await expect(page.locator('.hud-prompt')).toHaveText('Hold E · Refuel');
+  await hold(page, ['KeyE'], TICK_RATE);
+  await expect(page.locator('.popup-title', { hasText: 'No Coins for fuel' })).toBeVisible();
+  expect((await vehicle(page, 'car')).fuel).toBeCloseTo(0.5, 6);
+  // With Coins the same pump fills the tank.
+  await page.evaluate(() => window.__dm!.setCoins(100));
+  await hold(page, ['KeyE'], 3 * TICK_RATE);
+  expect((await vehicle(page, 'car')).fuel).toBeCloseTo(1, 6);
+  await expect(page.locator('.popup-title', { hasText: 'Refuelled' })).toBeVisible();
+  await page.evaluate((y) => window.__dm!.setLook(y, -0.3), yawTo({ x: pump.x + 9, y: 0, z: pump.z - 12 }, pump));
+  await waitCameraSettled(page);
+  await page.screenshot({ path: `${sp5}gas-station.png` });
+  expect(errors).toEqual([]);
+});
+
+test('a stopped motorbike beside the parked car turns around and drives away (playtest issue 1)', async ({ page }) => {
+  const { errors } = await bootCity(page);
+  const car = await vehicle(page, 'car');
+  const c = ridingJson.rides.car.collider;
+  const m = ridingJson.rides.motorbike.collider;
+  // On the motorbike alongside the car in the bay, both facing west, 0.3 m between them.
+  const beside = { x: car.position.x, y: car.position.y, z: car.position.z - (c.radius + m.radius + 0.3) };
+  await rideFrom(page, 'motorbike', { x: beside.x + 3, y: beside.y, z: beside.z }, { x: beside.x - 20, y: beside.y + 1, z: beside.z });
+  await page.evaluate(([b]) => window.__dm!.teleport({ ...b, y: b.y + 0.05 }), [beside] as const);
+  await page.evaluate(() => window.__dm!.advance(5));
+  const start = await player(page);
+  expect(start.riding).toBe('motorbike');
+  expect(Math.abs(wrap(start.heading - WEST_YAW))).toBeLessThan(0.1);
+  // W with the camera looking back east: the bike turns round on the spot and rides off east.
+  await page.evaluate((y) => window.__dm!.setLook(y, -0.2), EAST_YAW);
+  await hold(page, ['KeyW'], 3 * TICK_RATE);
+  const end = await player(page);
+  const moved = flat(end.position, start.position);
+  console.log(`motorbike beside the car: heading ${start.heading.toFixed(2)} → ${end.heading.toFixed(2)}, moved ${moved.toFixed(2)} m to x ${end.position.x.toFixed(1)}`);
+  expect(Math.abs(wrap(end.heading - EAST_YAW))).toBeLessThan(0.2);
+  expect(end.position.x - start.position.x).toBeGreaterThan(3);
+  expect(flat((await vehicle(page, 'car')).position, car.position)).toBeLessThan(0.01); // the car did not move
+  expect(errors).toEqual([]);
+});
+
+test('playtest screenshots: city overview, each avenue, a switchback, a steep lane, stairs, the docks, the beach, Old Harbor, Hillcrest, a hospital bay, a gas station, the Map app, the debug view', async ({ page }) => {
+  test.setTimeout(240_000);
+  const { errors } = await bootCity(page);
+  await hideOverlay(page);
+  // The gas station (with the pump prompt), the Map app and the debug view are taken by the tests above.
+  const air: [string, P, P][] = [
+    ['city-overview.png', { x: 600, y: 250, z: 5 }, { x: 600, y: 0, z: 650 }],
+    ['switchback.png', { x: 250, y: 45, z: 530 }, { x: 285, y: 12, z: 592 }], // conn-B-switchback-0
+    ['steep-lane.png', { x: 115, y: 34, z: 548 }, { x: 95, y: 16, z: 592 }], // conn-B-steepLane-0
+    ['stairs.png', { x: 182, y: 30, z: 554 }, { x: 170, y: 17, z: 596 }], // conn-B-stairs-1
+    ['docks.png', { x: 200, y: 45, z: 300 }, { x: 150, y: 0, z: 120 }],
+    ['old-harbor.png', { x: 985, y: 25, z: 150 }, { x: 1100, y: 0, z: 70 }], // the pier and the lighthouse on the breakwater
+  ];
+  for (const [file, feet, target] of air) await cityAirShot(page, feet, target, file);
+  const along = (name: string, file: string): [string, P, P] => {
+    const r = road(name);
+    return [file, { x: 40, y: r.y, z: midZ(r) }, { x: 600, y: r.y + 1.5, z: midZ(r) }];
+  };
+  const hillcrest = cityLayout.curvedRoads[0]!.polyline;
+  const ground: [string, P, P][] = [
+    along('Harbor Road', 'avenue-harbor-road.png'),
+    along('Bayview Avenue', 'avenue-bayview.png'),
+    along('Midtown Avenue', 'avenue-midtown.png'),
+    along('Uptown Avenue', 'avenue-uptown.png'),
+    ['beach-boardwalk.png', { x: 420, y: 2, z: 204 }, { x: 800, y: 3, z: 120 }],
+    ['hillcrest-drive.png', hillcrest[10]!, { ...hillcrest[20]!, y: hillcrest[20]!.y + 2 }],
+    // Bayview General from the avenue: the hospital and the car, motorbike and bicycle parked in its bay.
+    ['hospital-bay.png', { x: 145, y: 10, z: 315 }, { x: 158, y: 11.5, z: 327 }],
+  ];
+  for (const [file, feet, target] of ground) await cityGroundShot(page, feet, target, file);
+  expect(await page.evaluate(() => window.__dm!.cityStats()!.models)).toBe(0); // placeholder boxes only
   expect(errors).toEqual([]);
 });

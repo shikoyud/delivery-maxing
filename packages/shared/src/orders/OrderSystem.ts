@@ -5,6 +5,7 @@ import type { Rng } from '../util/rng';
 import type { PathDistance } from '../world/distance';
 import type { OrderRules, Poi } from '../world/mapTypes';
 import type { PlayerZones } from '../world/zones';
+import type { DistanceTable } from './distanceTable';
 import { generateOffer } from './offers';
 import { scoreOrder } from './rules';
 import type { ActiveOrder, Bonus, CarrierCapacity, Offer } from './types';
@@ -33,6 +34,8 @@ export interface Totals {
 export interface OrderSystemOptions {
   pois: Poi[];
   distance: PathDistance;
+  /** Build-time pickup→dropoff distances (the city); offers fall back to `distance` without it. */
+  table?: DistanceTable;
   rules: OrderRules;
   cfg: OrdersConfig;
   rng: Rng;
@@ -181,6 +184,7 @@ export class OrderSystem {
       const order = generateOffer({
         pois: this.opts.pois,
         distance: this.opts.distance,
+        table: this.opts.table,
         rules: this.opts.rules,
         cfg,
         rng: this.opts.rng,

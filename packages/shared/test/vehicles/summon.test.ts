@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import greyboxJson from '../../../../map/greybox.json';
@@ -24,7 +25,7 @@ let garage: Garage;
 beforeAll(async () => {
   await initNav();
   const bins = {} as Record<VehicleTier, Uint8Array>;
-  for (const t of NAV_TIERS) bins[t] = new Uint8Array(readFileSync(`${repo}map/nav/greybox-${t}.bin`));
+  for (const t of NAV_TIERS) bins[t] = new Uint8Array(gunzipSync(readFileSync(`${repo}map/nav/greybox-${t}.bin.gz`)));
   router = NavRouter.fromBinaries(bins);
 });
 afterAll(() => router?.destroy());
@@ -48,7 +49,7 @@ describe('summon', () => {
   test('a car 240 m away comes to a spot ≥ 3 m from the player, on the car mesh, outside alleys', () => {
     const was = { ...garage.state('car').position };
     const player = vec3(100, 0, 156);
-    expect(flat(player, was)).toBeGreaterThan(235);
+    expect(flat(player, was)).toBeGreaterThan(230);
     expect(summon('car', player, 0, 0.7)).toBe('ok');
     const spot = garage.spot('car');
     expect(spot.kind).toBe('parked');

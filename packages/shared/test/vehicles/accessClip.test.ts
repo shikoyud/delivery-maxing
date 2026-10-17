@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { vec3 } from '../../src/math/vec3';
 import { forbiddenZoneAt } from '../../src/world/access';
 import type { MapData } from '../../src/world/mapTypes';
-import { clipToAccess } from '../../src/vehicles/accessClip';
+import { ACCESS_CLIP_GAP, clipToAccess } from '../../src/vehicles/accessClip';
 import { emptyMap } from '../world/fixtures';
 
 /** An alley from x 0..4, z -20..0 (y 0); its +Z edge is at z = 0. */
@@ -54,5 +54,25 @@ describe('clipToAccess', () => {
     const move = vec3(-0.4, 0, -0.4);
     const r = clipToAccess(map(), 'car', vec3(4.45, 0, 0.35), move);
     expect(r).toEqual({ move, zone: null, normal: null });
+  });
+
+  test('the car nose probe stops the car before its nose enters an alley (playtest smaller things)', () => {
+    const m: MapData = {
+      ...emptyMap(),
+      accessZones: [{ id: 'alley-n', kind: 'alley', rect: { minX: -2, minZ: -30, maxX: 2, maxZ: -10 }, minY: 0, maxY: 0 }],
+    };
+    const reach = 1.25 + 0.95;
+    const from = vec3(0, 0, -7);
+    const move = vec3(0, 0, -2);
+    // Without probes the centre may drive on until it is itself at the edge.
+    expect(clipToAccess(m, 'car', from, move).zone).toBeNull();
+    const r = clipToAccess(m, 'car', from, move, [vec3(0, 0, -reach), vec3(0, 0, reach)]);
+    expect(r.zone?.id).toBe('alley-n');
+    expect(r.normal).toEqual(vec3(0, 0, 1));
+    expect(from.z + r.move.z).toBeGreaterThanOrEqual(-7.8 + ACCESS_CLIP_GAP - 1e-9);
+    expect(from.z + r.move.z).toBeCloseTo(-7.8 + ACCESS_CLIP_GAP, 9);
+    // A nose already inside the zone is never blocked, so the car can drive out.
+    const out = clipToAccess(m, 'car', vec3(0, 0, -8.5), vec3(0, 0, 1), [vec3(0, 0, -reach)]);
+    expect(out.zone).toBeNull();
   });
 });

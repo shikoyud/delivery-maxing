@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Vec3 } from '@dm/shared';
 import type { ClientConfig } from '../clientConfig';
 import { palette } from './palette';
+import { installRadialFog } from './radialFog';
 
 /** Owns the three.js renderer, scene, camera, lights, fog, sky and water. */
 export class Renderer {
@@ -18,6 +19,7 @@ export class Renderer {
     cam: ClientConfig['camera'],
     mapSize: number,
   ) {
+    installRadialFog(); // before any material compiles
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, gfx.maxPixelRatio));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -64,15 +66,22 @@ export class Renderer {
     this.resize();
   }
 
+  /** Unit vector from the ground toward the sun. */
+  sunDirection(): Vec3 {
+    return { x: this.sunOffset.x, y: this.sunOffset.y, z: this.sunOffset.z };
+  }
+
   /** Keeps the sun's shadow camera centred on `focus`, snapped to whole shadow texels to avoid shimmering. */
   followShadow(focus: Vec3): void {
     const texel = (this.gfx.shadowExtent * 2) / this.gfx.shadowMapSize;
     const snap = (v: number): number => Math.round(v / texel) * texel;
     const fx = snap(focus.x);
+    const fy = snap(focus.y);
     const fz = snap(focus.z);
     const d = this.gfx.shadowExtent * 2;
-    this.sun.target.position.set(fx, 0, fz);
-    this.sun.position.set(fx + this.sunOffset.x * d, this.sunOffset.y * d, fz + this.sunOffset.z * d);
+    // centred at the focus height too, so the shadow box follows the player up the terraces
+    this.sun.target.position.set(fx, fy, fz);
+    this.sun.position.set(fx + this.sunOffset.x * d, fy + this.sunOffset.y * d, fz + this.sunOffset.z * d);
   }
 
   render(): void {

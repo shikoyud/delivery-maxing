@@ -46,6 +46,7 @@
    "bytes": 226872,
    "category": "shop",
    "kind": "Auto repair garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -81,6 +82,7 @@
    "bytes": 458944,
    "category": "food",
    "kind": "Bakery, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -112,6 +114,7 @@
    "bytes": 124668,
    "category": "office",
    "kind": "Small bank branch",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -142,6 +145,7 @@
    "bytes": 343544,
    "category": "office",
    "kind": "Bank tower, 20 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -172,6 +176,7 @@
    "bytes": 949300,
    "category": "leisure",
    "kind": "Fenced sports court",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "openlot"
@@ -201,6 +206,7 @@
    "bytes": 567280,
    "category": "food",
    "kind": "Burger restaurant",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -233,6 +239,7 @@
    "bytes": 257124,
    "category": "food",
    "kind": "Cafe with roof terrace",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -265,6 +272,7 @@
    "bytes": 398740,
    "category": "landmark",
    "kind": "Church with spire, 31 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "uptown",
@@ -296,6 +304,7 @@
    "bytes": 398740,
    "category": "landmark",
    "kind": "Church with spire, 31 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "uptown",
@@ -327,6 +336,7 @@
    "bytes": 398740,
    "category": "landmark",
    "kind": "Church with spire, 31 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "uptown",
@@ -358,6 +368,7 @@
    "bytes": 367724,
    "category": "leisure",
    "kind": "Cinema",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown",
@@ -389,6 +400,7 @@
    "bytes": 521040,
    "category": "civic",
    "kind": "City hall with steps",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -419,6 +431,7 @@
    "bytes": 497432,
    "category": "civic",
    "kind": "City hall with steps",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -449,6 +462,7 @@
    "bytes": 497436,
    "category": "civic",
    "kind": "City hall with steps",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -479,6 +493,7 @@
    "bytes": 225916,
    "category": "food",
    "kind": "Coffee shop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -511,6 +526,7 @@
    "bytes": 225908,
    "category": "food",
    "kind": "Coffee shop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -543,6 +559,7 @@
    "bytes": 380524,
    "category": "industrial",
    "kind": "Construction site (concrete frame)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -574,6 +591,7 @@
    "bytes": 597336,
    "category": "industrial",
    "kind": "Construction site (concrete frame)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -605,6 +623,7 @@
    "bytes": 279824,
    "category": "food",
    "kind": "Donut shop",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -684,6 +703,7 @@
    "bytes": 273772,
    "category": "industrial",
    "kind": "Factory with loading doors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "docks",
@@ -743,6 +763,7 @@
    "bytes": 260072,
    "category": "industrial",
    "kind": "Factory with loading doors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "docks",
@@ -778,6 +799,7 @@
    "bytes": 282860,
    "category": "civic",
    "kind": "Fire station",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -809,6 +831,7 @@
    "bytes": 923160,
    "category": "leisure",
    "kind": "Fenced sports court",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "openlot"
@@ -838,6 +861,7 @@
    "bytes": 225724,
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -861,6 +885,7 @@
    "bytes": 382388,
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -884,6 +909,7 @@
    "bytes": 225720,
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -907,6 +933,7 @@
    "bytes": 382388,
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -930,6 +957,7 @@
    "bytes": 225720,
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -953,6 +981,7 @@
    "bytes": 382388,
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -976,6 +1005,7 @@
    "bytes": 407480,
    "category": "civic",
    "kind": "Hospital with car park and helipad (spawn + safe zone)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hospital"
@@ -1006,6 +1036,7 @@
    "bytes": 245612,
    "category": "residential",
    "kind": "Small brick hotel, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -1037,6 +1068,7 @@
    "bytes": 245612,
    "category": "residential",
    "kind": "Small brick hotel, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -1068,6 +1100,7 @@
    "bytes": 261108,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1100,6 +1133,7 @@
    "bytes": 261176,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1132,6 +1166,7 @@
    "bytes": 264484,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1164,6 +1199,7 @@
    "bytes": 264484,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1196,6 +1232,7 @@
    "bytes": 284736,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1228,6 +1265,7 @@
    "bytes": 284736,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1260,6 +1298,7 @@
    "bytes": 317200,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1292,6 +1331,7 @@
    "bytes": 317200,
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1324,6 +1364,7 @@
    "bytes": 240476,
    "category": "residential",
    "kind": "Narrow townhouse, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -1354,6 +1395,7 @@
    "bytes": 270276,
    "category": "residential",
    "kind": "Narrow townhouse, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -1384,6 +1426,7 @@
    "bytes": 260060,
    "category": "residential",
    "kind": "Narrow townhouse, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -1414,6 +1457,7 @@
    "bytes": 284900,
    "category": "residential",
    "kind": "Narrow townhouse, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -1444,6 +1488,7 @@
    "bytes": 279052,
    "category": "residential",
    "kind": "Townhouse, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -1474,6 +1519,7 @@
    "bytes": 287616,
    "category": "residential",
    "kind": "Townhouse, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -1504,6 +1550,7 @@
    "bytes": 279072,
    "category": "residential",
    "kind": "Townhouse, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -1534,6 +1581,7 @@
    "bytes": 290704,
    "category": "residential",
    "kind": "Brownstone with stoop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "uptown",
@@ -1564,6 +1612,7 @@
    "bytes": 290704,
    "category": "residential",
    "kind": "Brownstone with stoop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "uptown",
@@ -1594,6 +1643,7 @@
    "bytes": 290704,
    "category": "residential",
    "kind": "Brownstone with stoop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "uptown",
@@ -1624,6 +1674,7 @@
    "bytes": 434420,
    "category": "residential",
    "kind": "Walk-up with stoop, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1654,6 +1705,7 @@
    "bytes": 434420,
    "category": "residential",
    "kind": "Walk-up with stoop, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1684,6 +1736,7 @@
    "bytes": 434644,
    "category": "residential",
    "kind": "Walk-up with stoop, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -1714,6 +1767,7 @@
    "bytes": 321612,
    "category": "office",
    "kind": "Glass office block, 18 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown",
@@ -1744,6 +1798,7 @@
    "bytes": 322288,
    "category": "office",
    "kind": "Glass office block, 18 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown",
@@ -1774,6 +1829,7 @@
    "bytes": 321612,
    "category": "office",
    "kind": "Glass office block, 18 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown",
@@ -1804,6 +1860,7 @@
    "bytes": 421016,
    "category": "residential",
    "kind": "Loft over garages, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -1834,6 +1891,7 @@
    "bytes": 421020,
    "category": "residential",
    "kind": "Loft over garages, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -1864,6 +1922,7 @@
    "bytes": 421020,
    "category": "residential",
    "kind": "Loft over garages, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -1894,6 +1953,7 @@
    "bytes": 1332616,
    "category": "residential",
    "kind": "L-shaped apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -1924,6 +1984,7 @@
    "bytes": 1333180,
    "category": "residential",
    "kind": "L-shaped apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -1954,6 +2015,7 @@
    "bytes": 520640,
    "category": "residential",
    "kind": "Apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -1985,6 +2047,7 @@
    "bytes": 521480,
    "category": "residential",
    "kind": "Apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -2016,6 +2079,7 @@
    "bytes": 447988,
    "category": "office",
    "kind": "Glass office tower, 32 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2045,6 +2109,7 @@
    "bytes": 447600,
    "category": "office",
    "kind": "Glass office tower, 32 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2074,6 +2139,7 @@
    "bytes": 447600,
    "category": "office",
    "kind": "Glass office tower, 32 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2103,6 +2169,7 @@
    "bytes": 577308,
    "category": "office",
    "kind": "Spire tower, 64 m (skyline landmark)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2132,6 +2199,7 @@
    "bytes": 576912,
    "category": "office",
    "kind": "Spire tower, 64 m (skyline landmark)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2161,6 +2229,7 @@
    "bytes": 576916,
    "category": "office",
    "kind": "Spire tower, 64 m (skyline landmark)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2190,6 +2259,7 @@
    "bytes": 647868,
    "category": "office",
    "kind": "Glass office tower, 38 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2219,6 +2289,7 @@
    "bytes": 647868,
    "category": "office",
    "kind": "Glass office tower, 38 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2248,6 +2319,7 @@
    "bytes": 644980,
    "category": "office",
    "kind": "Glass office tower, 38 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2277,6 +2349,7 @@
    "bytes": 227400,
    "category": "office",
    "kind": "Glass office tower, 26 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2306,6 +2379,7 @@
    "bytes": 227396,
    "category": "office",
    "kind": "Glass office tower, 26 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2335,6 +2409,7 @@
    "bytes": 227400,
    "category": "office",
    "kind": "Glass office tower, 26 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2364,6 +2439,7 @@
    "bytes": 495560,
    "category": "office",
    "kind": "Wide glass tower 24 x 24 m, 39 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2393,6 +2469,7 @@
    "bytes": 495004,
    "category": "office",
    "kind": "Wide glass tower 24 x 24 m, 39 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2422,6 +2499,7 @@
    "bytes": 523840,
    "category": "office",
    "kind": "Wide glass tower 24 x 24 m, 39 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2451,6 +2529,7 @@
    "bytes": 523392,
    "category": "office",
    "kind": "Wide glass tower 24 x 24 m, 39 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown"
@@ -2480,6 +2559,7 @@
    "bytes": 177964,
    "category": "office",
    "kind": "Small office building",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown",
@@ -2512,6 +2592,7 @@
    "bytes": 563252,
    "category": "residential",
    "kind": "Apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -2543,6 +2624,7 @@
    "bytes": 553940,
    "category": "residential",
    "kind": "Apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -2574,6 +2656,7 @@
    "bytes": 1367552,
    "category": "residential",
    "kind": "L-shaped apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -2604,6 +2687,7 @@
    "bytes": 1346576,
    "category": "residential",
    "kind": "L-shaped apartment block, 6 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "apartments",
@@ -2634,6 +2718,7 @@
    "bytes": 275596,
    "category": "residential",
    "kind": "Old brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -2665,6 +2750,7 @@
    "bytes": 276084,
    "category": "residential",
    "kind": "Old brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -2696,6 +2782,7 @@
    "bytes": 299844,
    "category": "residential",
    "kind": "Old brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -2727,6 +2814,7 @@
    "bytes": 324212,
    "category": "residential",
    "kind": "Old brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -2758,6 +2846,7 @@
    "bytes": 435768,
    "category": "residential",
    "kind": "Loft over garages, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -2788,6 +2877,7 @@
    "bytes": 346552,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -2820,6 +2910,7 @@
    "bytes": 219244,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -2852,6 +2943,7 @@
    "bytes": 246528,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -2884,6 +2976,7 @@
    "bytes": 123448,
    "category": "food",
    "kind": "Corner kiosk",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -2916,6 +3009,7 @@
    "bytes": 357160,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -2945,6 +3039,7 @@
    "bytes": 326360,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -2974,6 +3069,7 @@
    "bytes": 336332,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3026,6 +3122,7 @@
    "bytes": 222892,
    "category": "service",
    "kind": "Two-deck car park, 24 x 12 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown",
@@ -3050,6 +3147,7 @@
    "bytes": 498644,
    "category": "food",
    "kind": "Pizzeria",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3082,6 +3180,7 @@
    "bytes": 250084,
    "category": "civic",
    "kind": "Police station with helipad",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "downtown",
@@ -3113,6 +3212,7 @@
    "bytes": 170644,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3145,6 +3245,7 @@
    "bytes": 170644,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3177,6 +3278,7 @@
    "bytes": 170516,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3209,6 +3311,7 @@
    "bytes": 170648,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3241,6 +3344,7 @@
    "bytes": 180584,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3273,6 +3377,7 @@
    "bytes": 155552,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3305,6 +3410,7 @@
    "bytes": 155436,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3337,6 +3443,7 @@
    "bytes": 155552,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3369,6 +3476,7 @@
    "bytes": 155552,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3401,6 +3509,7 @@
    "bytes": 155552,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3433,6 +3542,7 @@
    "bytes": 224364,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3465,6 +3575,7 @@
    "bytes": 224368,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3497,6 +3608,7 @@
    "bytes": 224364,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3529,6 +3641,7 @@
    "bytes": 224364,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3561,6 +3674,7 @@
    "bytes": 258740,
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3593,6 +3707,7 @@
    "bytes": 116156,
    "category": "food",
    "kind": "Corner kiosk",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3625,6 +3740,7 @@
    "bytes": 116160,
    "category": "food",
    "kind": "Corner kiosk",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3657,6 +3773,7 @@
    "bytes": 116156,
    "category": "food",
    "kind": "Corner kiosk",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3689,6 +3806,7 @@
    "bytes": 116156,
    "category": "food",
    "kind": "Corner kiosk",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -3721,6 +3839,7 @@
    "bytes": 614864,
    "category": "industrial",
    "kind": "Rail station / freight shed",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "docks"
@@ -3755,6 +3874,7 @@
    "bytes": 267572,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3784,6 +3904,7 @@
    "bytes": 269620,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3813,6 +3934,7 @@
    "bytes": 269904,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3842,6 +3964,7 @@
    "bytes": 316824,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3871,6 +3994,7 @@
    "bytes": 316824,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3900,6 +4024,7 @@
    "bytes": 316824,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3929,6 +4054,7 @@
    "bytes": 288672,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3958,6 +4084,7 @@
    "bytes": 288672,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -3987,6 +4114,7 @@
    "bytes": 274928,
    "category": "residential",
    "kind": "Detached house with porch and garage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "hillcrest"
@@ -4016,6 +4144,7 @@
    "bytes": 222516,
    "category": "shop",
    "kind": "Neighbourhood supermarket",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -4053,6 +4182,7 @@
    "bytes": 222512,
    "category": "shop",
    "kind": "Neighbourhood supermarket",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -4090,6 +4220,7 @@
    "bytes": 258668,
    "category": "shop",
    "kind": "Large 24/7 store, 24 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -4126,6 +4257,7 @@
    "bytes": 258668,
    "category": "shop",
    "kind": "Large 24/7 store, 24 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "industrial",
@@ -4162,6 +4294,7 @@
    "bytes": 393768,
    "category": "food",
    "kind": "Sushi bar, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -11939,6 +12072,7 @@
    "bytes": 535592,
    "category": "food",
    "kind": "Beach bar kiosk",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach"
@@ -11968,6 +12102,7 @@
    "bytes": 639672,
    "category": "food",
    "kind": "Beach bar kiosk",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach"
@@ -11997,6 +12132,7 @@
    "bytes": 450876,
    "category": "food",
    "kind": "Burger restaurant",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12030,6 +12166,7 @@
    "duplicateOf": "mega/Cafe_01",
    "category": "food",
    "kind": "Cafe with roof terrace",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12063,6 +12200,7 @@
    "duplicateOf": "mega/Coffe_02",
    "category": "food",
    "kind": "Coffee shop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12096,6 +12234,7 @@
    "duplicateOf": "mega/Coffe_02",
    "category": "food",
    "kind": "Coffee shop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12129,6 +12268,7 @@
    "duplicateOf": "mega/Donuts_01",
    "category": "food",
    "kind": "Donut shop",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12162,6 +12302,7 @@
    "duplicateOf": "mega/Gas_Station_01",
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -12186,6 +12327,7 @@
    "duplicateOf": "mega/Gas_Station_02",
    "category": "service",
    "kind": "Fuel canopy with pumps (no shop)",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "gas"
@@ -12210,6 +12352,7 @@
    "duplicateOf": "mega/Hotel_01",
    "category": "residential",
    "kind": "Small brick hotel, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12242,6 +12385,7 @@
    "duplicateOf": "mega/Hotel_01",
    "category": "residential",
    "kind": "Small brick hotel, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12273,6 +12417,7 @@
    "bytes": 239304,
    "category": "residential",
    "kind": "Two-storey motel strip",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12304,6 +12449,7 @@
    "bytes": 239304,
    "category": "residential",
    "kind": "Two-storey motel strip",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12335,6 +12481,7 @@
    "bytes": 239308,
    "category": "residential",
    "kind": "Two-storey motel strip",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12366,6 +12513,7 @@
    "bytes": 2234756,
    "category": "residential",
    "kind": "Beach resort hotel, 39 x 27 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach"
@@ -12396,6 +12544,7 @@
    "bytes": 2234756,
    "category": "residential",
    "kind": "Beach resort hotel, 39 x 27 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach"
@@ -12426,6 +12575,7 @@
    "bytes": 2234756,
    "category": "residential",
    "kind": "Beach resort hotel, 39 x 27 m",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach"
@@ -12456,6 +12606,7 @@
    "bytes": 1247260,
    "category": "residential",
    "kind": "Seaside hotel, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12487,6 +12638,7 @@
    "bytes": 1247260,
    "category": "residential",
    "kind": "Seaside hotel, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12518,6 +12670,7 @@
    "bytes": 1247260,
    "category": "residential",
    "kind": "Seaside hotel, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12550,6 +12703,7 @@
    "duplicateOf": "mega/House_01",
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -12583,6 +12737,7 @@
    "duplicateOf": "mega/House_05",
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -12616,6 +12771,7 @@
    "duplicateOf": "mega/House_07",
    "category": "residential",
    "kind": "Brick walk-up, 4-5 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "bayview",
@@ -12649,6 +12805,7 @@
    "duplicateOf": "mega/House_11",
    "category": "residential",
    "kind": "Narrow townhouse, 2 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "rowhouses",
@@ -12679,6 +12836,7 @@
    "bytes": 312972,
    "category": "residential",
    "kind": "Beach cottage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12709,6 +12867,7 @@
    "bytes": 312964,
    "category": "residential",
    "kind": "Beach cottage",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "beach",
@@ -12739,6 +12898,7 @@
    "bytes": 407836,
    "category": "residential",
    "kind": "Seaside apartment block, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "harbor",
@@ -12769,6 +12929,7 @@
    "bytes": 407872,
    "category": "residential",
    "kind": "Seaside apartment block, 4 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "harbor",
@@ -12799,6 +12960,7 @@
    "bytes": 236220,
    "category": "landmark",
    "kind": "Lighthouse with keeper's hut",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "harbor"
@@ -12846,6 +13008,7 @@
    "bytes": 663584,
    "category": "food",
    "kind": "Pizzeria",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12879,6 +13042,7 @@
    "duplicateOf": "mega/SmallHouse_01",
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12912,6 +13076,7 @@
    "duplicateOf": "mega/SmallHouse_06",
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12945,6 +13110,7 @@
    "duplicateOf": "mega/SmallHouse_11",
    "category": "shop",
    "kind": "Single-storey storefront with awning",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -12977,6 +13143,7 @@
    "bytes": 312596,
    "category": "shop",
    "kind": "Neighbourhood supermarket",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -13037,6 +13204,7 @@
    "bytes": 497160,
    "category": "food",
    "kind": "Wok noodle shop, 3 floors",
+   "front": "+z",
    "use": "placed",
    "districts": [
     "market",
@@ -20434,6 +20602,7 @@
    "file": null,
    "category": "shop",
    "kind": "Post office / parcel depot",
+   "front": "+z",
    "use": "placed",
    "status": "missing",
    "size": {
@@ -20459,6 +20628,7 @@
    "file": null,
    "category": "industrial",
    "kind": "Dockside warehouse with loading bays",
+   "front": "+z",
    "use": "placed",
    "status": "missing",
    "size": {
@@ -20484,6 +20654,7 @@
    "file": null,
    "category": "civic",
    "kind": "School with yard",
+   "front": "+z",
    "use": "placed",
    "status": "missing",
    "size": {

@@ -3,7 +3,7 @@ import { initNav, NavRouter, vec3, type MapData } from '@dm/shared';
 import { exportNavMesh } from 'recast-navigation';
 import { buildTierNavMesh, readGreyboxMap, readNavBinaries } from '../../src/nav/build';
 import { REPO } from '../../src/nav/files';
-import { validateGreyboxNav } from '../../src/nav/validate';
+import { validateMapNav } from '../../src/nav/validate';
 
 const map = readGreyboxMap(REPO);
 const routers: NavRouter[] = [];
@@ -12,9 +12,9 @@ beforeAll(initNav);
 afterAll(() => routers.forEach((r) => r.destroy()));
 
 test('the committed greybox passes the validator with no messages', () => {
-  const router = NavRouter.fromBinaries(readNavBinaries(REPO));
+  const router = NavRouter.fromBinaries(readNavBinaries(REPO, 'greybox'));
   routers.push(router);
-  expect(validateGreyboxNav(map, router)).toEqual([]);
+  expect(validateMapNav(map, router)).toEqual([]);
 });
 
 test('moving a package door 60 m from any car road produces exactly one message naming it', () => {
@@ -33,10 +33,10 @@ test('moving a package door 60 m from any car road produces exactly one message 
     pois: map.pois.map((p) => (p.id === door ? { ...p, position: vec3(150, 0, 358) } : p)),
   };
   const walk = buildTierNavMesh(moved, 'walk');
-  const router = NavRouter.fromBinaries({ ...readNavBinaries(REPO), walk: exportNavMesh(walk) });
+  const router = NavRouter.fromBinaries({ ...readNavBinaries(REPO, 'greybox'), walk: exportNavMesh(walk) });
   walk.destroy();
   routers.push(router);
-  const messages = validateGreyboxNav(moved, router);
+  const messages = validateMapNav(moved, router);
   expect(messages).toHaveLength(1);
   expect(messages[0]).toContain(door);
   expect(messages[0]).toMatch(/package door is \d+\.\d m on foot/);

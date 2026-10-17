@@ -1,5 +1,6 @@
-import type { RideTier } from '@dm/shared';
+import type { Lod1Options, RideTier, Vec3 } from '@dm/shared';
 import clientJson from '../../../config/client.json';
+import perfJson from '../../../config/perf.json';
 
 export interface ClientConfig {
   camera: {
@@ -23,7 +24,9 @@ export interface ClientConfig {
     shadowExtent: number;
     fogNear: number;
     fogFar: number;
+    /** Draw calls and triangles allowed in view (spec §11; e2e and ?perf=1 check them). */
     drawCallBudget: number;
+    triangleBudget: number;
     /** Water plane height (m): below the ground top (0) and above movement fall.outOfBoundsY. */
     waterLevel: number;
     /** How far the water extends past the island edge on each side (m). */
@@ -32,6 +35,7 @@ export interface ClientConfig {
     shadowBias: number;
     shadowNormalBias: number;
   };
+  city: CityRenderConfig;
   input: {
     mouseSensitivity: number;
     invertY: boolean;
@@ -57,8 +61,46 @@ export interface ClientConfig {
     hintCooldownSeconds: number;
     /** The HUD fuel gauge turns to the warning colour at or below this tank share (%). */
     fuelLowPct: number;
+    /** The phone Map app on the city shows a window this many metres wide, centred on the player (the greybox shows all of it). */
+    mapWindowMeters: number;
   };
 }
+
+/** How the city is drawn (city design §7, §8). Distances in metres, horizontal from the player. */
+export interface CityRenderConfig {
+  /** LOD rings: pack models at LOD0 within [0], LOD1 within [1]; placeholder block boxes out to [2] (= graphics.fogFar). */
+  lodRadii: number[];
+  /** The player moves this far before the LOD rings are recomputed. */
+  relodDistance: number;
+  /** Side of the square render regions the roads, terrain and ground are merged into. */
+  renderRegion: number;
+  /** Lot ids show as labels in the map debug view (Decision 7) within this radius. */
+  labelRadius: number;
+  /** Where `pnpm assets:import` puts the runtime pack models, relative to the site base (public/packs/). */
+  modelsBase: string;
+  /** Lots this near request their models, so they have loaded by the time they enter lodRadii[1]. */
+  loadAheadRadius: number;
+  /**
+   * How `pnpm assets:import` makes LOD1 files: meshopt simplification toward `ratio` of the triangles within `error`
+   * (a share of the model's size), kept only when it drops at least `minDrop` of them (else LOD1 draws LOD0).
+   */
+  lod1: Lod1Config;
+  /**
+   * In the LOD1 ring (lodRadii[0]..[1]), a lot whose model has no LOD1 file stays its placeholder box (`box`) or draws
+   * its full LOD0 model (`lod0`). Most pack models simplify too little to get a LOD1 file, so `lod0` costs one
+   * InstancedMesh and every LOD0 triangle per such id out to lodRadii[1].
+   */
+  lod1Fallback: Lod1Fallback;
+}
+
+export type Lod1Fallback = 'box' | 'lod0';
+
+function lod1Fallback(v: string): Lod1Fallback {
+  if (v !== 'box' && v !== 'lod0') throw new Error(`config/client.json city.lod1Fallback: expected "box" or "lod0", got ${v}`);
+  return v;
+}
+
+export type Lod1Config = Lod1Options;
 
 /** Third-person chase camera (spec §4 "Camera", rulings R9 and R10). Lengths in metres, rates in 1/s. */
 export interface ChaseConfig {
@@ -140,6 +182,33 @@ export interface CourierConfig {
 
 export type BindingName =
   | 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch' | 'sprint'
-  | 'interact' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay';
+  | 'interact' | 'hit' | 'phone' | 'map' | 'accept' | 'mount' | 'devPanel' | 'debugOverlay' | 'mapDebug';
 
-export const clientConfig: ClientConfig = clientJson;
+/**
+ * The ?perf=1 flythrough (config/perf.json): street and terrace views over the city. The run's `seconds` are split
+ * equally across the route entries; each starts at its `feet` and glides toward its `target` at `speed`, looking at it.
+ */
+export interface PerfConfig {
+  route: { feet: Vec3; target: Vec3 }[];
+  /** Flythrough length (s, all entries together) and glide speed (m/s) toward each entry's target. */
+  seconds: number;
+  speed: number;
+  /** The run passes when the overall p95 frame time is at most this (ms): 60 Hz frames read ~16.7 ms, a dropped one ~33 ms. */
+  p95TargetMs: number;
+  /** Frames from the start of the run left out of the statistics (shader compiles, first uploads), s. */
+  warmupSeconds: number;
+  /** The first this-many frames after each teleport to the next viewpoint are left out (the jump itself). */
+  teleportSkipFrames: number;
+  /** Fewer counted frames than this and the run reports "too few frames" instead of PASS or FAIL. */
+  minFrames: number;
+}
+
+function checkPerf(cfg: PerfConfig): PerfConfig {
+  if (cfg.route.length === 0) throw new Error('config/perf.json: route is empty');
+  if (!(cfg.seconds > 0) || !(cfg.speed >= 0)) throw new Error('config/perf.json: seconds must be > 0 and speed >= 0');
+  return cfg;
+}
+
+export const perfConfig: PerfConfig = checkPerf(perfJson);
+
+export const clientConfig: ClientConfig = { ...clientJson, city: { ...clientJson.city, lod1Fallback: lod1Fallback(clientJson.city.lod1Fallback) } };

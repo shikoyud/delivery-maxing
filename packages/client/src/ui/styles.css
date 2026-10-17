@@ -327,6 +327,26 @@ kbd {
 .hud-safe { background: rgba(31, 158, 147, 0.9); }
 .hud-lockout { background: rgba(242, 113, 102, 0.92); }
 
+/* Key prompt, bottom centre, in the popups' style. */
+.hud-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(22, 50, 58, 0.88);
+  color: var(--dm-paper);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+  pointer-events: none;
+}
+
+.hud-prompt[hidden] { display: none; }
+
 /* Riding, bottom left: speed, and the fuel gauge on the motorbike and car (--fuel is the tank share). */
 .hud-ride {
   position: absolute;
@@ -626,6 +646,13 @@ kbd {
   font-weight: 600;
 }
 
+/* the dropoff's household or business name, its address line under it */
+.phone-card-name {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #557078;
+}
+
 .phone-reward {
   font-size: 13px;
   font-weight: 700;
@@ -767,4 +794,61 @@ kbd {
   text-align: center;
   font-size: 12px;
   color: #557078;
+}
+
+/* ---------- ?perf=1 flythrough ---------- */
+
+.perf-overlay {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  max-width: min(560px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 12px 16px 14px;
+  border-radius: 10px;
+  background: rgba(22, 50, 58, 0.96);
+  color: var(--dm-paper);
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+  font-variant-numeric: tabular-nums;
+  z-index: 25;
+}
+
+.perf-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.perf-lines,
+.perf-json {
+  margin: 0;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.perf-json {
+  margin-top: 10px;
+  padding: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+}
+
+.perf-copy {
+  margin-top: 10px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dm-teal);
+  color: #fff;
+  font: 700 14px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.perf-title.fail {
+  color: #ff9a8f;
 }

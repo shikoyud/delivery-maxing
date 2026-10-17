@@ -76,4 +76,21 @@ describe('buildPoiMeshes', () => {
     pm.setHighlight(null);
     expect(colorOf(m, 0)).toBe(hex(palette.poiFood));
   });
+
+  it('setCamera hides the marker the camera is in (a camera backed against a wall at a door), and only while it is', () => {
+    const pm = buildPoiMeshes(testMap, 3);
+    const m = markersOf(pm.group);
+    const scaleOf = (i: number): number => {
+      const mat = new THREE.Matrix4();
+      m.getMatrixAt(i, mat);
+      return new THREE.Vector3().setFromMatrixScale(mat).x;
+    };
+    pm.setCamera(vec3(10.1, 1.9, 0.2)); // inside the pkg door slab's reach
+    expect(scaleOf(1)).toBe(0);
+    expect([0, 2, 3].map(scaleOf)).toEqual([1, 1, 1]);
+    pm.setCamera(vec3(10, 1.9, 3)); // 3 m out: drawn again
+    expect([0, 1, 2, 3].map(scaleOf)).toEqual([1, 1, 1, 1]);
+    pm.setCamera(vec3(10, 8, 0)); // above the sign
+    expect(scaleOf(1)).toBe(1);
+  });
 });

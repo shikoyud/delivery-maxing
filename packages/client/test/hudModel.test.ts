@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import {
   OrderSystem,
   expandGreybox,
@@ -15,7 +15,9 @@ import {
   type VehicleTier,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
-import { hudModel, loadText, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
+import type { GarageRow } from '../src/ui/phone/garageApp';
+import { clientConfig } from '../src/clientConfig';
+import { hudModel, loadText, promptFor, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
 
 const map = expandGreybox(greybox as GreyboxSource);
 const spawn = map.hospitals[0]!.spawn;
@@ -89,6 +91,7 @@ describe('hudModel', () => {
     expect(card.pickupText).toContain(pickup.name);
     expect(card.pickupText).toContain(offer.order.item);
     expect(card.dropoffText).toBe(`Deliver to ${dropoff.name}`);
+    expect(card.dropoffName).toBeNull(); // greybox POIs have no address: the sentence already names the door
     expect(card.band).toBe(offer.order.band);
     expect(card.weightKg).toBe(offer.order.weightKg);
     expect(card.secondsLeft).toBeCloseTo(offer.expiresAt - (t + 5));
@@ -96,6 +99,26 @@ describe('hudModel', () => {
     expect(card.reward).toEqual({ points: best.points, coins: best.coins });
     const base = scoreOrder(offer.order, { inTime: false, expressOnTime: false, intact: false }, ordersConfig);
     expect(card.reward.points).toBeGreaterThan(base.points + 1); // time bonus plus the modifier bonus
+  });
+
+  it('city offers name the pickup with its address, and the dropoff by address with the name on its own line', () => {
+    const city = { ...map, pois: map.pois.map((p, i) => ({ ...p, address: `${i + 1} Test St` })) };
+    const sys = new OrderSystem(
+      { pois: city.pois, distance: streetDistance, rules: city.orderRules, cfg: ordersConfig, rng: mulberry32(7), capacity: vehiclesConfig.car },
+      0,
+    );
+    let found: Offer | undefined;
+    for (let t = 0; t < 5000 && !found; t += 0.5) {
+      sys.update(t, spawn, nowhere);
+      found = sys.offers[0];
+    }
+    const m = hudModel(sys, city, spawn, 0, null);
+    const card = m.offers[0]!;
+    const pickup = poiIndex(city).get(found!.order.pickupPoiId);
+    const dropoff = poiIndex(city).get(found!.order.dropoffPoiId);
+    expect(card.pickupText).toContain(`from ${pickup.name}, ${pickup.address}.`);
+    expect(card.dropoffName).toBe(dropoff.name);
+    expect(card.dropoffText).toBe(`Deliver to ${dropoff.address}`);
   });
 
   it("offers carry the phone's accept status (OrderSystem.canAccept at that time)", () => {
@@ -120,7 +143,7 @@ describe('hudModel', () => {
     let m = hudModel(sys, map, spawn, t + 3, null);
     let o = m.orders[0]!;
     expect(o).toMatchObject({ id: offer.order.id, kind: 'food', item: offer.order.item, targetName: pickup.name, timer: null, express: null, weightKg: null, fragileIntact: null });
-    expect(o.stage).toBe(`Pick up ${offer.order.item} from ${pickup.name}`);
+    expect(o.stage).toBe(`Pick up ${offer.order.item} from ${pickup.name}.`);
     expect(o.stage).toBe(stageText(sys.active[0]!, pois));
     expect(o.target).toEqual(pickup.position);
     expect(o.distance).toBe(Math.round(Math.hypot(spawn.x - pickup.position.x, spawn.y - pickup.position.y, spawn.z - pickup.position.z)));
@@ -238,5 +261,59 @@ describe('hudModel next stop and ride', () => {
     const m = hudModel(sys, map, spawn, 0, null, 1, [], { ride: { tier: 'car', speed: 21.3, fuel: 0.4 } });
     expect(m.nextStop).toBeNull();
     expect(m.ride).toEqual({ tier: 'car', speed: 21.3, fuel: 0.4 });
+  });
+
+  test('parked lists only parked vehicles with their positions (Decision 15)', () => {
+    const sys = makeSystem('car');
+    const row = (tier: GarageRow['tier'], status: GarageRow['status'], position: Vec3 | null): GarageRow => ({
+      tier,
+      status,
+      position,
+      distance: position ? 50 : null,
+      fuel: null,
+      summon: 'ok',
+      readyIn: 0,
+    });
+    const rows = [
+      row('skateboard', 'carried', null),
+      row('bicycle', 'riding', null),
+      row('motorbike', 'parked', { x: 40, y: 10, z: 320 }),
+      row('car', 'parked', { x: 120, y: 10, z: 318 }),
+    ];
+    const m = hudModel(sys, map, spawn, 0, null, 1, rows);
+    expect(m.parked).toEqual([
+      { tier: 'motorbike', position: { x: 40, y: 10, z: 320 } },
+      { tier: 'car', position: { x: 120, y: 10, z: 318 } },
+    ]);
+    expect(m.parked[0]!.position).not.toBe(rows[2]!.position); // a copy
+    expect(hudModel(sys, map, spawn, 0, null).parked).toEqual([]);
+  });
+});
+
+describe('promptFor', () => {
+  const ctx = { riding: null, stopped: true, mountCandidate: null, atPump: false, tankFull: false, ownsFuelledRide: true, phoneOpen: false };
+  test.each([
+    [{ riding: null, stopped: true, mountCandidate: 'car', atPump: false, ownsFuelledRide: true, phoneOpen: false }, 'F · Ride the car'],
+    [{ riding: 'car', stopped: true, mountCandidate: null, atPump: false, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
+    [{ riding: 'car', stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'Hold E · Refuel'],
+    [{ riding: 'bicycle', stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
+    [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'Get on to refuel'],
+    [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: false, phoneOpen: false }, null],
+    [{ riding: 'car', stopped: false, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, null],
+    [{ riding: null, stopped: true, mountCandidate: 'car', atPump: false, ownsFuelledRide: true, phoneOpen: true }, null],
+  ] as const)('promptFor %j', (c, text) => {
+    expect(promptFor({ ...ctx, ...c })).toBe(text);
+  });
+  test('nothing to say on foot with nothing near', () => {
+    expect(promptFor(ctx)).toBeNull();
+  });
+  test('no refuel prompt at a pump when the tank is full: F to get off instead', () => {
+    expect(promptFor({ ...ctx, riding: 'car', atPump: true, tankFull: true })).toBe('F · Get off');
+  });
+  test('the key letters follow the bindings', () => {
+    const bindings = { ...clientConfig.input.bindings, mount: ['KeyG'], interact: ['KeyR'] };
+    expect(promptFor({ ...ctx, mountCandidate: 'car' }, bindings)).toBe('G · Ride the car');
+    expect(promptFor({ ...ctx, riding: 'car' }, bindings)).toBe('G · Get off');
+    expect(promptFor({ ...ctx, riding: 'car', atPump: true }, bindings)).toBe('Hold R · Refuel');
   });
 });

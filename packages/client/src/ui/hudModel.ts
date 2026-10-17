@@ -1,6 +1,8 @@
 import {
+  dropoffText,
   ordersConfig,
   orderText,
+  pickupText,
   scoreOrder,
   type AcceptResult,
   type ActiveOrder,
@@ -9,12 +11,16 @@ import {
   type OrderKind,
   type OrderSystem,
   type Poi,
+  ridingConfig,
   type RideTier,
   type RouteToDoor,
   type Totals,
   type Vec3,
 } from '@dm/shared';
+import { clientConfig } from '../clientConfig';
 import { nextCorner, yawTo } from '../game/routes';
+import { keyLabel } from './dom';
+import type { ParkedMarker } from './minimap';
 import type { GarageRow } from './phone/garageApp';
 
 /** A countdown: seconds left (0 once over) and whether the limit has passed. */
@@ -27,7 +33,7 @@ export interface HudOrder {
   id: string;
   kind: OrderKind;
   item: string;
-  /** "Pick up {item} from {pickup}" before pickup, "Deliver to {dropoff}" after. */
+  /** "Pick up {item} from {pickup name}, {address}." before pickup, "Deliver to {dropoff address}" after. */
   stage: string;
   /** Name of the current target (pickup, then dropoff). */
   targetName: string;
@@ -53,6 +59,9 @@ export interface HudOffer {
   pickupText: string;
   /** Where the pickup is (the Map app's hollow dot). */
   pickup: Vec3;
+  /** The dropoff's household or business name, shown above `dropoffText`; null when the door has no address (greybox). */
+  dropoffName: string | null;
+  /** "Deliver to {address}" (the name when there is no address). */
   dropoffText: string;
   band: Band;
   weightKg: number | null;
@@ -95,6 +104,8 @@ export interface HudNav {
   /** The current tier's route from the player to a target's door, or null; absent (tests): straight lines. */
   route?(targetId: string, door: Vec3): RouteToDoor | null;
   ride?: HudRide | null;
+  /** The key prompt line (DeliveryLoop: `promptFor`). */
+  prompt?: string | null;
 }
 
 export interface HudModel {
@@ -111,6 +122,8 @@ export interface HudModel {
   stamina: number;
   /** The owned vehicles (the Garage app). */
   garage: GarageRow[];
+  /** The owned vehicles parked in the world, where they stand (the Map app's and minimap's markers, Decision 15). */
+  parked: ParkedMarker[];
   /**
    * The active order whose current target has the shortest route for the current tier (ties: the oldest order);
    * null without active orders.
@@ -118,6 +131,50 @@ export interface HudModel {
   nextStop: HudNextStop | null;
   /** Null on foot. */
   ride: HudRide | null;
+  /** The key prompt line (bottom centre), or null. */
+  prompt: string | null;
+}
+
+/** What the key prompt depends on. */
+export interface PromptContext {
+  riding: RideTier | null;
+  /** At or under ridingConfig.riding.stoppedSpeed. */
+  stopped: boolean;
+  /** What F would mount now on foot. */
+  mountCandidate: RideTier | null;
+  /** Within ridingConfig.refuel.pumpRadius of a pump. */
+  atPump: boolean;
+  /** The ridden vehicle's tank is full (nothing to refuel). */
+  tankFull: boolean;
+  /** The garage holds a ride with a tank. */
+  ownsFuelledRide: boolean;
+  phoneOpen: boolean;
+}
+
+/**
+ * The key hint for the moment (Decision 5), or null: nothing to do, riding fast, or the phone is up. The key letters
+ * are the first `mount` and `interact` bindings.
+ */
+export function promptFor(
+  c: PromptContext,
+  bindings: { mount: readonly string[]; interact: readonly string[] } = clientConfig.input.bindings,
+): string | null {
+  if (c.phoneOpen) return null;
+  const mount = keyLabel(bindings.mount[0] ?? 'KeyF');
+  if (c.riding !== null) {
+    if (!c.stopped) return null;
+    const refuel = c.atPump && !c.tankFull && ridingConfig.rides[c.riding].fuel;
+    return refuel ? `Hold ${keyLabel(bindings.interact[0] ?? 'KeyE')} · Refuel` : `${mount} · Get off`;
+  }
+  if (c.mountCandidate !== null) return `${mount} · Ride the ${c.mountCandidate}`;
+  return c.atPump && c.ownsFuelledRide ? 'Get on to refuel' : null;
+}
+
+/** The parked rows' tiers and positions (copies), in row order; carried and ridden vehicles have no marker. */
+export function parkedOf(rows: readonly GarageRow[]): ParkedMarker[] {
+  const out: ParkedMarker[] = [];
+  for (const r of rows) if (r.status === 'parked' && r.position) out.push({ tier: r.tier, position: { ...r.position } });
+  return out;
 }
 
 /** "1 pt", "N pts". */
@@ -159,9 +216,10 @@ export function poiIndex(map: MapData): PoiIndex {
 
 /** The instruction for an order's current stop. */
 export function stageText(a: ActiveOrder, pois: PoiIndex): string {
+  const { order } = a;
   return a.pickedUpAt === null
-    ? `Pick up ${a.order.item} from ${pois.get(a.order.pickupPoiId).name}`
-    : `Deliver to ${pois.get(a.order.dropoffPoiId).name}`;
+    ? pickupText(pois.get(order.pickupPoiId), order.item, order.kind === 'package' ? order.weightKg : null)
+    : dropoffText(pois.get(order.dropoffPoiId));
 }
 
 function countdown(limit: number, elapsed: number): HudTimer {
@@ -225,13 +283,15 @@ export function hudModel(
       };
     }),
     offers: orders.offers.map(({ order, expiresAt }): HudOffer => {
-      const text = orderText(order, pois.get(order.pickupPoiId), pois.get(order.dropoffPoiId));
+      const dropoff = pois.get(order.dropoffPoiId);
+      const text = orderText(order, pois.get(order.pickupPoiId), dropoff);
       const best = scoreOrder(order, { inTime: true, expressOnTime: true, intact: true }, ordersConfig);
       return {
         id: order.id,
         kind: order.kind,
         pickupText: text.pickup,
         pickup: pois.target(order.pickupPoiId),
+        dropoffName: dropoff.address ? dropoff.name : null,
         dropoffText: text.dropoff,
         band: order.band,
         weightKg: order.weightKg,
@@ -243,8 +303,10 @@ export function hudModel(
     safeZone,
     stamina,
     garage,
+    parked: parkedOf(garage),
     nextStop: null,
     ride: nav.ride ?? null,
+    prompt: nav.prompt ?? null,
   };
   model.nextStop = next?.stop ?? null;
   return model;

@@ -1,4 +1,4 @@
-import type { MapData, Vec3 } from '@dm/shared';
+import type { MapData, RideTier, Vec3 } from '@dm/shared';
 import { slotColor } from '../render/waypoints';
 import { el } from './dom';
 
@@ -38,6 +38,40 @@ export function clampToEdge(pt: { x: number; y: number }, sizePx: number, margin
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
+/** Fill colour of the hospital cross (minimap and Map app). */
+export const HOSPITAL_ICON_COLOR = '#d63a3a';
+
+/** Fill colour of a parked vehicle's body glyph (minimap and Map app, Decision 15). */
+export const VEHICLE_ICON_COLOR = '#2f8f83';
+
+/** A parked owned vehicle (HudModel.parked). */
+export interface ParkedMarker {
+  tier: RideTier;
+  position: Vec3;
+}
+
+/** Body width and height of each tier's glyph, as shares of its size: the car a wide box, the two-wheelers slimmer. */
+const GLYPH: Record<RideTier, { w: number; h: number }> = {
+  car: { w: 1, h: 0.55 },
+  motorbike: { w: 0.9, h: 0.32 },
+  bicycle: { w: 0.85, h: 0.22 },
+  skateboard: { w: 0.7, h: 0.18 },
+};
+
+/** A parked vehicle's glyph centred on (x, y), `size` px wide: a dark outline, the teal body and two dark wheels. */
+export function drawVehicleIcon(ctx: CanvasRenderingContext2D, tier: RideTier, x: number, y: number, size: number): void {
+  const g = GLYPH[tier];
+  const w = size * g.w;
+  const h = Math.max(2, size * g.h);
+  const wheel = Math.max(2, size * 0.22);
+  ctx.fillStyle = '#16323a';
+  ctx.fillRect(x - w / 2 - 1, y - h / 2 - 1, w + 2, h + 2);
+  ctx.fillRect(x - w / 2 + wheel * 0.3, y + h / 2 - 1, wheel, wheel * 0.8);
+  ctx.fillRect(x + w / 2 - wheel * 1.3, y + h / 2 - 1, wheel, wheel * 0.8);
+  ctx.fillStyle = VEHICLE_ICON_COLOR;
+  ctx.fillRect(x - w / 2, y - h / 2, w, h);
+}
+
 /** Fill colour of the gas-station fuel icon (minimap and Map app). */
 export const FUEL_ICON_COLOR = '#f2a33a';
 
@@ -57,14 +91,18 @@ export function drawFuelIcon(ctx: CanvasRenderingContext2D, x: number, y: number
 
 /**
  * The always-on minimap, bottom right: a player-centred, north-up cut of the city. Buildings and hospital blocks are
- * boxes, hospitals a red cross, gas stations a fuel icon, offer pickups hollow dots, each active order's current stop a dot in its waypoint
+ * boxes, hospitals a red cross, gas stations a fuel icon, parked owned vehicles a vehicle glyph (clamped to the
+ * edge when out of range, so a parked ride always shows its direction), offer pickups hollow dots, each active order's current stop a dot in its waypoint
  * colour (clamped to the edge when out of range). Without a 2D context (tests) it draws nothing.
  */
 export function createMinimap(
   host: HTMLElement,
   map: MapData,
   opts: MinimapOptions = MINIMAP_DEFAULTS,
-): { el: HTMLElement; render(player: Vec3, heading: number, targets: MinimapTarget[], offerPickups: Vec3[]): void } {
+): {
+  el: HTMLElement;
+  render(player: Vec3, heading: number, targets: MinimapTarget[], offerPickups: Vec3[], parked?: readonly ParkedMarker[]): void;
+} {
   const root = el('div', 'minimap', host);
   const canvas = el('canvas', 'minimap-canvas', root);
   canvas.width = canvas.height = opts.sizePx;
@@ -77,7 +115,7 @@ export function createMinimap(
 
   return {
     el: root,
-    render(player, heading, targets, offerPickups) {
+    render(player, heading, targets, offerPickups, parked = []) {
       if (!ctx) return;
       ctx.fillStyle = '#e9e6dc'; // ground
       ctx.fillRect(0, 0, opts.sizePx, opts.sizePx);
@@ -90,7 +128,7 @@ export function createMinimap(
         ctx.fillRect(p.x, p.y, b.hx * 2 * scale, b.hz * 2 * scale);
       }
 
-      ctx.fillStyle = '#d63a3a'; // hospitals: red cross
+      ctx.fillStyle = HOSPITAL_ICON_COLOR; // hospitals: red cross
       for (const h of map.hospitals) {
         const p = clampToEdge(toMinimap(h.center, player, opts), opts.sizePx, 8);
         if (p.clamped) continue; // hospitals only show while in range
@@ -102,6 +140,11 @@ export function createMinimap(
       for (const g of map.gasStations) {
         const p = clampToEdge(toMinimap(g.position, player, opts), opts.sizePx, 8);
         if (!p.clamped) drawFuelIcon(ctx, p.x, p.y, 12); // in range only, like the hospitals
+      }
+
+      for (const v of parked) {
+        const p = clampToEdge(toMinimap(v.position, player, opts), opts.sizePx, 8);
+        drawVehicleIcon(ctx, v.tier, p.x, p.y, p.clamped ? 10 : 14);
       }
 
       ctx.lineWidth = 2;

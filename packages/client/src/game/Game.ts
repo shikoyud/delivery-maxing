@@ -1,26 +1,30 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import {
   FixedStepper,
   Garage,
   PlayerSim,
+  createPagedPhysicsWorld,
   createPhysicsWorld,
   defaultGarage,
   RIDE_TIERS,
-  expandGreybox,
   findRoadSpot,
   horizontalLength,
   initRapier,
   lerpVec3,
   movementConfig,
   vec3,
-  type GreyboxSource,
+  worldConfig,
+  type CatalogIndex,
+  type CityMap,
+  type DistanceTable,
   type MapData,
   type NavRouter,
   type RideTier,
   type SimEvent,
   type Vec3,
 } from '@dm/shared';
-import greyboxJson from '../../../../map/greybox.json';
 import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
@@ -31,13 +35,19 @@ import { CourierModel } from '../render/courier/CourierModel';
 import type { CourierView } from '../render/courier/CourierView';
 import { createCourierPlaceholder } from '../render/courierPlaceholder';
 import { buildGreyboxMeshes } from '../render/greyboxMeshes';
+import { buildBlockMeshes } from '../render/city/blockMeshes';
+import { CityView } from '../render/city/CityView';
+import { ModelLoader } from '../render/city/modelLoader';
+import { packManifest } from '../render/city/packManifest';
 import { buildAccessZoneMeshes } from '../render/accessZoneMeshes';
 import { buildGasStationMeshes } from '../render/gasStationMeshes';
 import { buildHospitalMeshes } from '../render/hospitalMeshes';
 import { VehicleViews } from '../render/vehicles/VehicleViews';
+import { CAR_MODEL_ID } from '../render/vehicles/vehicleMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { mountDevPanel, type DevPanel } from '../ui/devPanel';
+import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
 import {
@@ -48,14 +58,18 @@ import {
   type DevSettings,
   type DevSettingsStore,
 } from './devSettings';
+import { teleportTargets, teleportToTarget } from './mapTargets';
 import { browserStorage, createProgressStore, saveWhenLeaving, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
 import { interpolationStart } from './interpolation';
-import { loadNavRouter } from './navLoader';
+import { loadMap, type MapKind } from './mapLoader';
 import { garageRows } from '../ui/phone/garageApp';
+import type { PerfResult } from './perf';
 
 /** Dev settings are saved this long after the last panel edit (ms). */
 const SAVE_DEBOUNCE_MS = 300;
+/** Weight of each new CityView.update sample in the overlay's running average (about the last ten frames). */
+const CITY_MS_SMOOTHING = 0.1;
 
 export interface GameOptions {
   debug: boolean;
@@ -63,6 +77,14 @@ export interface GameOptions {
   overlay?: boolean;
   /** Offer RNG seed (?seed=N); defaults to Date.now(). */
   seed?: number;
+  /** Which map to play (?map=); the city by default. */
+  map?: MapKind;
+}
+
+/** The catalog (the city's lots, the pack car) and, on the city, the build-time offer distances. */
+interface MapExtras {
+  catalog: CatalogIndex;
+  distances: DistanceTable | null;
 }
 
 /**
@@ -90,8 +112,23 @@ export class Game {
   private readonly cameraCast: RayCast;
   /** The animated courier, or the capsule when the model failed to load (Review Focus 4). */
   readonly courier: CourierView;
-  /** The owned vehicles' placeholders, interpolated like the courier. */
+  /** The owned vehicles' placeholders (the pack car once loaded), interpolated like the courier. */
   readonly vehicles: VehicleViews;
+  /** The runtime pack models (public/packs/, git-ignored; boxes and placeholders without them). */
+  readonly models: ModelLoader;
+  /** The city's regions, blocks and pack models; null on the greybox. */
+  readonly cityView: CityView | null = null;
+  /** The F4 map debug view (lot labels, distance bands, chunks, zones); null on the greybox. */
+  readonly mapDebug: MapDebugView | null = null;
+  /** The last ?perf=1 flythrough's result (null until one has finished). */
+  perfResult: PerfResult | null = null;
+  /**
+   * When set, takes over each frame (the ?perf=1 flythrough): it is called with the frame's wall clock (ms) before the
+   * frame is drawn, input and the simulation do not run, and it moves the player itself (viewpoint()).
+   */
+  frameDriver: ((nowMs: number) => void) | null = null;
+  /** The last frame's CityView.update cost (ms, unsmoothed: the ?perf=1 recorder); 0 on the greybox. */
+  lastCityUpdateMs = 0;
   /** Access-zone volumes, shown with the F3 overlay. */
   private readonly accessZones: THREE.Group;
   private prevPosition: Vec3;
@@ -100,6 +137,8 @@ export class Game {
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
   private lastFrameMs: number | null = null;
+  /** CityView.update's cost (ms), smoothed (the F3 overlay); null until the city has drawn a frame. */
+  private cityUpdateMs: number | null = null;
   private readonly saver = createDebouncedSave(() => this.devStore.save(this.settings), SAVE_DEBOUNCE_MS);
   private running = false;
   /** Called after the phone opened or closed (main.ts refreshes the play hint from it). */
@@ -116,6 +155,7 @@ export class Game {
     private readonly devStore: DevSettingsStore,
     model: CourierModel | null,
     progress: ProgressStore,
+    extras: MapExtras,
   ) {
     this.progress = progress;
     this.prevPosition = { ...sim.state.position };
@@ -142,12 +182,31 @@ export class Game {
     );
     this.courier = model ?? createCourierPlaceholder(settings.movement.capsule, this.cfg.courier);
     this.renderer.scene.add(this.courier.root);
-    this.renderer.scene.add(buildGreyboxMeshes(map));
+    this.models = new ModelLoader(`${import.meta.env.BASE_URL}${this.cfg.city.modelsBase}`, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder), {
+      manifest: packManifest,
+    });
+    if (map.kind === 'city') {
+      // The city (city design §7.2–§7.3): code-built regions and every lot as a category-coloured box, shown within
+      // city.lodRadii[2], with the pack models swapped in nearer when public/packs/ has them.
+      const city = map as CityMap;
+      const sun = this.renderer.sunDirection();
+      this.cityView = CityView.create(city, extras.catalog, buildBlockMeshes(city, extras.catalog), this.cfg.city, this.models, {
+        extent: this.cfg.graphics.shadowExtent,
+        slope: Math.hypot(sun.x, sun.z) / sun.y,
+      });
+      this.renderer.scene.add(this.cityView.group);
+      this.mapDebug = new MapDebugView(this.renderer.scene, city, { labelRadius: this.cfg.city.labelRadius });
+    } else {
+      this.renderer.scene.add(buildGreyboxMeshes(map));
+    }
     this.renderer.scene.add(buildHospitalMeshes(map));
     this.renderer.scene.add(buildGasStationMeshes(map));
     this.accessZones = buildAccessZoneMeshes(map);
     this.renderer.scene.add(this.accessZones);
-    this.vehicles = new VehicleViews(this.renderer.scene);
+    this.vehicles = new VehicleViews(
+      this.renderer.scene,
+      extras.catalog.has(CAR_MODEL_ID) ? { loader: this.models, car: extras.catalog.get(CAR_MODEL_ID) } : undefined,
+    );
     this.input = new InputManager(this.renderer.renderer.domElement, this.actions, {
       requirePointerLock: !opts.debug,
     });
@@ -169,6 +228,7 @@ export class Game {
       }),
       // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
       distance: (a, b) => nav.distance('walk', a, b),
+      ...(extras.distances ? { table: extras.distances } : {}),
       router: nav,
       cameraYaw: () => {
         const d = this.renderer.camera.getWorldDirection(this.camDir);
@@ -214,6 +274,12 @@ export class Game {
         fillTanks: () => this.fillTanks(),
         addCoins: (n) => this.delivery.setCoins(this.delivery.orders.totals.coins + n),
       },
+      map: {
+        kind: map.kind,
+        targets: teleportTargets(map),
+        teleportTo: (id) => void this.teleportTo(id),
+        lotIds: this.mapDebug ? { get: () => this.mapDebug?.visible ?? false, set: (on) => this.setMapDebug(on) } : null,
+      },
       onChange: () => {
         this.saver.schedule();
         this.devPanel.setOverrideCount(countOverrides(settings));
@@ -222,6 +288,7 @@ export class Game {
     this.devPanel.setOverrideCount(countOverrides(settings));
     this.actions.onUiKey = (name) => {
       if (name === 'debugOverlay') this.overlay.toggle();
+      else if (name === 'mapDebug') this.setMapDebug(!(this.mapDebug?.visible ?? false));
       else this.toggleDevPanel();
     };
   }
@@ -241,6 +308,11 @@ export class Game {
     this.onPhoneChanged?.(open);
   }
 
+  /** Shows or hides the F4 map debug view (a no-op on the greybox). */
+  setMapDebug(on: boolean): void {
+    this.mapDebug?.setVisible(on);
+  }
+
   /** Opens or closes the dev panel; opening releases held keys and the pointer lock so the mouse can use it. */
   private toggleDevPanel(): void {
     this.devPanel.toggle();
@@ -253,31 +325,53 @@ export class Game {
   static async create(host: HTMLElement, opts: GameOptions): Promise<Game> {
     // The model loads alongside physics; a missing or broken file falls back to the capsule with one warning.
     // The navmeshes (recast WASM and five binaries) load alongside too.
-    const [rapier, model, nav] = await Promise.all([
+    // The map (the city's layout fetched and expanded), its navmeshes and the city's distance table load alongside too.
+    const [rapier, model, loaded] = await Promise.all([
       initRapier(),
       CourierModel.load(robotUrl, clientConfig.courier),
-      loadNavRouter(),
+      loadMap(opts.map ?? 'city'),
     ]);
-    const map = expandGreybox(greyboxJson as GreyboxSource);
-    const physics = createPhysicsWorld(rapier, map);
+    const { map, nav } = loaded;
+    // The city pages its colliders by chunk around the player (world config); the greybox keeps every collider.
+    const physics =
+      map.kind === 'city' ? createPagedPhysicsWorld(rapier, map, map.chunkSize, worldConfig.physics) : createPhysicsWorld(rapier, map);
     // One deep-cloned movement object shared by PlayerSim and the dev panel; the shared import is never mutated.
     const devStore = createDevSettingsStore(browserStorage());
     const settings = devStore.load();
     // Hospitals are the only spawn points (spec rev. 2); a fresh session starts at the first one.
+    // On the city that is Bayview General (the layout lists it first); the colliders around it load before anything
+    // touches physics (the garage parks at its bay, the courier spawns on its avenue).
     const spawn = map.hospitals[0];
     if (!spawn) throw new Error('map has no hospitals');
+    physics.update?.(spawn.spawn);
     // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
-    const progress = createProgressStore(browserStorage(), () => defaultGarage(map));
+    const progress = createProgressStore(browserStorage(), map.kind, () => defaultGarage(map));
     const saved = progress.load();
     const garage = new Garage(physics, map, saved.garage);
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
     // The tier last ridden (capacity and offers follow it), only while it is still owned.
     sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
-    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress);
+    const extras = { catalog: loaded.catalog, distances: loaded.distances };
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras);
     // Closing or hiding the tab mid-ride keeps the vehicle's spot and the fuel it burnt.
     saveWhenLeaving(window, document, () => game.delivery.save());
     if (opts.debug) installDebugHooks(game);
     return game;
+  }
+
+  /** Which map is loaded. */
+  get mapKind(): MapKind {
+    return this.map.kind;
+  }
+
+  /** The collider chunks loaded around the player (the city's paged physics); empty on the greybox. */
+  loadedChunks(): string[] {
+    return [...(this.sim.physics.loadedChunks?.() ?? [])];
+  }
+
+  /** The city's paged physics loads the chunks around the player (a no-op on the greybox, whose colliders all exist). */
+  private pageAround(p: Vec3): void {
+    this.sim.physics.update?.(p);
   }
 
   get time(): number {
@@ -302,10 +396,16 @@ export class Game {
   /** Moves the player (airborne, at velocity `v`, zero by default) and resets interpolation so the camera doesn't sweep. */
   teleport(p: Vec3, v: Vec3 = { x: 0, y: 0, z: 0 }): void {
     this.sim.teleport(vec3(p.x, p.y, p.z), vec3(v.x, v.y, v.z));
+    this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
     this.courier.snap();
     this.chase.snap();
     this.vehicles.snap();
+  }
+
+  /** Dev panel and debug API: teleports to a hospital, gas station or lot id (false when unknown). */
+  teleportTo(id: string): boolean {
+    return teleportToTarget(this, id);
   }
 
   /**
@@ -368,6 +468,11 @@ export class Game {
     // Long gaps (tab switches) are safe: the stepper runs at most maxStepsPerFrame and drops the rest.
     const dt = this.lastFrameMs === null ? 0 : (nowMs - this.lastFrameMs) / 1000;
     this.lastFrameMs = nowMs;
+    if (this.frameDriver) {
+      this.frameDriver(nowMs);
+      this.renderFrame(1, dt, nowMs / 1000);
+      return;
+    }
     const steps = this.stepper.advance(dt);
     for (let i = 0; i < steps; i++) this.step();
     this.renderFrame(this.stepper.alpha, dt, nowMs / 1000);
@@ -405,6 +510,7 @@ export class Game {
    * respawned courier faces (the hospital's spawnYaw).
    */
   private afterTeleport(): void {
+    this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
     this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
     this.chase.snap();
@@ -419,6 +525,7 @@ export class Game {
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
     this.vehicles.beforeStep(this.sim.garage);
+    this.pageAround(this.sim.state.position);
     const events = this.sim.step(frame, mods, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
@@ -435,12 +542,21 @@ export class Game {
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
     this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s.riding);
+    this.delivery.setCamera(this.renderer.camera.position);
+    if (this.cityView) {
+      const t0 = performance.now();
+      this.cityView.update(feet, this.renderer.camera);
+      const ms = performance.now() - t0;
+      this.lastCityUpdateMs = ms;
+      this.cityUpdateMs = this.cityUpdateMs === null ? ms : this.cityUpdateMs + (ms - this.cityUpdateMs) * CITY_MS_SMOOTHING;
+    }
     this.vehicles.update(this.sim.garage, alpha);
     this.accessZones.visible = this.overlay.visible;
     this.courier.update(dt, s, feet, horizontalLength(s.velocity));
     this.courier.setPackages(this.delivery.carriedCount());
     this.courier.setHidden(this.chase.courierHidden);
     this.delivery.draw(clockSeconds);
+    if (this.mapDebug?.visible) this.mapDebug.update(feet, this.loadedChunks());
     this.renderer.followShadow(feet);
     this.renderer.render();
     this.frames++;
@@ -453,6 +569,9 @@ export class Game {
       sprinting: s.sprinting,
       tick: this.tick,
       position: s.position,
+      ...(this.cityView
+        ? { city: { chunks: this.sim.physics.loadedChunks?.().size ?? null, city: this.cityView.stats(), cityUpdateMs: this.cityUpdateMs } }
+        : {}),
     }));
   }
 }

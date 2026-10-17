@@ -46,6 +46,31 @@ describe('renderOrdersApp', () => {
     expect(cards[1]!.textContent).toContain('+6 pts · +60 coins');
   });
 
+  it('a city offer row shows the dropoff address under the household name', () => {
+    const o = offer('c', {
+      pickupText: 'Pick up 2 baguettes and a sourdough from Crumb & Co. Bakery, 14 Market St.',
+      dropoffName: 'J. Hartley',
+      dropoffText: 'Deliver to 7 Uptown Ave, apt 4',
+    });
+    renderOrdersApp(dom.asHost, model({ offers: [o] }), cb);
+    const card = dom.host.byClass('phone-offer')[0]!;
+    expect(card.textContent).toContain('Pick up 2 baguettes and a sourdough from Crumb & Co. Bakery, 14 Market St.');
+    const name = card.byClass('phone-card-name')[0]!;
+    const address = card.byClass('phone-card-address')[0]!;
+    expect(name.hidden).toBe(false);
+    expect(name.textContent).toBe('J. Hartley');
+    expect(address.textContent).toBe('Deliver to 7 Uptown Ave, apt 4');
+    const rows = card.children;
+    expect(rows.indexOf(name)).toBe(rows.indexOf(address) - 1);
+  });
+
+  it('a greybox offer (no address) shows no separate name line', () => {
+    renderOrdersApp(dom.asHost, model({ offers: [offer('a')] }), cb);
+    const card = dom.host.byClass('phone-offer')[0]!;
+    expect(card.byClass('phone-card-name')[0]!.hidden).toBe(true);
+    expect(card.byClass('phone-card-address')[0]!.textContent).toBe('Deliver to Elm Flats a');
+  });
+
   it('Accept calls back with the offer id', () => {
     renderOrdersApp(dom.asHost, model({ offers: [offer('a'), offer('b')] }), cb);
     button(dom.host, 'accept', 'b')!.click();

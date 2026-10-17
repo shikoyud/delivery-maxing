@@ -1,0 +1,586 @@
+{
+  "first": [
+    "Crumb",
+    "Bayside",
+    "Harbor Light",
+    "Terrace",
+    "Switchback",
+    "Saltwind",
+    "Tidewater",
+    "Cobblestone",
+    "Lantern",
+    "Driftwood",
+    "Breakwater",
+    "Hilltop",
+    "Ridgeline",
+    "Quayside",
+    "Foghorn",
+    "Pier Nine",
+    "Sandpiper",
+    "Copperleaf",
+    "Brightwater",
+    "Old Mill",
+    "Larkspur",
+    "Bluefin",
+    "Morning Tide",
+    "Little Cove",
+    "Gull Rock",
+    "Red Lantern",
+    "Stoneway",
+    "Wildflower",
+    "Lookout",
+    "Riptide",
+    "Windmill",
+    "Bramble",
+    "Cinnamon",
+    "Honeycomb",
+    "Nutmeg",
+    "Saffron",
+    "Fig Tree",
+    "Clockwork",
+    "Weathervane",
+    "Lamplight",
+    "Cormorant",
+    "Tern Point",
+    "Wharfside",
+    "Ropewalk",
+    "Tideline",
+    "Sea Glass",
+    "Sundial",
+    "Paper Lantern",
+    "Cornerstone",
+    "Twin Pines",
+    "Silver Birch",
+    "Hazel",
+    "Chestnut",
+    "Fernhill",
+    "Pinecone",
+    "Brass Bell",
+    "Green Door",
+    "Blue Door",
+    "Cable Car",
+    "Hairpin",
+    "Tram Stop",
+    "Steep Hill",
+    "Salt & Pepper",
+    "Rooftop",
+    "Copper Kettle",
+    "Half Moon",
+    "Lucky Cat",
+    "Wavecrest",
+    "Long Pier",
+    "Seven Steps"
+  ],
+  "surnames": [
+    "Abernathy",
+    "Ashby",
+    "Barlow",
+    "Birch",
+    "Blackwood",
+    "Bramley",
+    "Calloway",
+    "Carmody",
+    "Castell",
+    "Chadwick",
+    "Colby",
+    "Corrigan",
+    "Dalby",
+    "Darrow",
+    "Dunmore",
+    "Ellery",
+    "Fairbairn",
+    "Farrow",
+    "Finch",
+    "Garnett",
+    "Gilroy",
+    "Greaves",
+    "Hadley",
+    "Halloran",
+    "Hartley",
+    "Haskell",
+    "Hollis",
+    "Iverson",
+    "Keating",
+    "Kendrick",
+    "Lacey",
+    "Langford",
+    "Larkin",
+    "Lockwood",
+    "Lowry",
+    "Maddox",
+    "Marlow",
+    "Merriman",
+    "Ashcombe",
+    "Newcombe",
+    "Pemberton",
+    "Penhallow",
+    "Prescott",
+    "Quinlan",
+    "Radley",
+    "Redfern",
+    "Sallow",
+    "Selwyn",
+    "Sheridan",
+    "Stanhope",
+    "Sutcliffe",
+    "Thorne",
+    "Tilbury",
+    "Trevelyan",
+    "Underhill",
+    "Vance",
+    "Varga",
+    "Wainwright",
+    "Whitlock",
+    "Winslow",
+    "Ashdown",
+    "Bellamy",
+    "Brannigan",
+    "Coyle",
+    "Dempsey",
+    "Galloway",
+    "Hendry",
+    "Holloway",
+    "Kinsella",
+    "Mallory",
+    "Pryce",
+    "Rigby",
+    "Saxby",
+    "Whitaker",
+    "Tanaka",
+    "Nguyen",
+    "Okafor",
+    "Haddad",
+    "Kowalski",
+    "Moreau",
+    "Lindgren",
+    "Castillo",
+    "Petrov",
+    "Mehta",
+    "Osei",
+    "Novak",
+    "Salazar",
+    "Ibarra",
+    "Duarte",
+    "Sato"
+  ],
+  "firstWordShare": 0.6,
+  "tries": 40,
+  "initials": "ABCDEFGHIJKLMNOPRSTVW",
+  "kinds": {
+    "bakery": [
+      "Bakery",
+      "& Co. Bakery",
+      "Bakehouse"
+    ],
+    "bar": [
+      "Beach Bar",
+      "Surf Shack",
+      "Tiki Hut"
+    ],
+    "burger": [
+      "Burgers",
+      "Burger Bar",
+      "Grill"
+    ],
+    "cafe": [
+      "Cafe",
+      "Tea Rooms",
+      "Kitchen"
+    ],
+    "coffee": [
+      "Coffee",
+      "Roasters",
+      "Espresso Bar"
+    ],
+    "kiosk": [
+      "Corner Shop",
+      "Kiosk",
+      "Snack Stop"
+    ],
+    "donut": [
+      "Donuts",
+      "Doughnut Co.",
+      "Ring Bakery"
+    ],
+    "pizzeria": [
+      "Pizzeria",
+      "Pizza",
+      "Slice House"
+    ],
+    "sushi": [
+      "Sushi",
+      "Sushi Bar",
+      "Rolls"
+    ],
+    "wok": [
+      "Noodle House",
+      "Wok",
+      "Noodle Bar"
+    ],
+    "auto": [
+      "Auto Repair",
+      "Motors",
+      "Garage"
+    ],
+    "store": [
+      "All Hours",
+      "Superstore",
+      "Big Store"
+    ],
+    "supermarket": [
+      "Market",
+      "Grocers",
+      "Foods"
+    ],
+    "post": [
+      "Post Office",
+      "Parcel Depot"
+    ],
+    "storefront": [
+      "Goods",
+      "Supply",
+      "Hardware",
+      "Books",
+      "Florist",
+      "Outfitters"
+    ],
+    "bank": [
+      "Bank",
+      "Savings",
+      "Trust"
+    ],
+    "office": [
+      "Offices",
+      "Partners",
+      "Associates"
+    ],
+    "tower": [
+      "Tower",
+      "Plaza",
+      "Centre"
+    ],
+    "cinema": [
+      "Cinema",
+      "Picture House",
+      "Theatre"
+    ],
+    "court": [
+      "Courts",
+      "Sports Club",
+      "Athletic Club"
+    ],
+    "resort": [
+      "Resort",
+      "Beach Resort",
+      "Grand Resort"
+    ],
+    "hotel": [
+      "Hotel",
+      "Inn",
+      "Lodge"
+    ],
+    "motel": [
+      "Motel",
+      "Motor Inn",
+      "Rest Stop"
+    ],
+    "construction": [
+      "Construction",
+      "Builders",
+      "Developments"
+    ],
+    "warehouse": [
+      "Warehouse",
+      "Storage",
+      "Logistics"
+    ],
+    "factory": [
+      "Works",
+      "Manufacturing",
+      "Industries"
+    ],
+    "rail": [
+      "Freight Depot",
+      "Rail Yard"
+    ],
+    "church": [
+      "Church",
+      "Chapel"
+    ],
+    "hall": [
+      "City Hall",
+      "Town Hall"
+    ],
+    "fire": [
+      "Fire Station",
+      "Fire Hall"
+    ],
+    "police": [
+      "Police Station",
+      "Police Precinct"
+    ],
+    "hospital": [
+      "Hospital",
+      "Medical Centre"
+    ],
+    "school": [
+      "School",
+      "Academy",
+      "Primary School"
+    ],
+    "lighthouse": [
+      "Lighthouse"
+    ],
+    "fuel": [
+      "Fuel",
+      "Gas",
+      "Service Station"
+    ],
+    "park": [
+      "Car Park",
+      "Parking"
+    ],
+    "food": [
+      "Kitchen",
+      "Eatery",
+      "Diner"
+    ],
+    "shop": [
+      "Shop",
+      "Store",
+      "General Store"
+    ],
+    "civic": [
+      "Hall",
+      "Civic Centre"
+    ],
+    "leisure": [
+      "Club",
+      "Leisure Centre"
+    ],
+    "industrial": [
+      "Works",
+      "Yard"
+    ],
+    "service": [
+      "Services",
+      "Depot"
+    ],
+    "landmark": [
+      "Monument",
+      "Landmark"
+    ]
+  },
+  "streets": {
+    "avenues": [
+      "Harbor Road",
+      "Bayview Avenue",
+      "Midtown Avenue",
+      "Uptown Avenue",
+      "Hillcrest Drive"
+    ],
+    "cross": [
+      "Lantern Street",
+      "Saltmarsh Street",
+      "Ferry Street",
+      "Cooper Street",
+      "Gull Street",
+      "Mast Street",
+      "Chandler Street",
+      "Tiller Street",
+      "Sextant Street",
+      "Kelp Street",
+      "Pilot Street"
+    ],
+    "quay": "Quay Street",
+    "docks": { "street": "Depot Street", "lanes": ["Crane Lane", "Yard Lane"] },
+    "boardwalk": "Boardwalk",
+    "breakwater": "Lighthouse Mole",
+    "edge": "Eastcliff Street",
+    "rows": {
+      "L1": [
+        "Market Street",
+        "Foundry Lane",
+        "Copper Lane",
+        "Weaver Street"
+      ],
+      "L2": [
+        "High Street",
+        "Linden Row",
+        "Chapel Street",
+        "Mercer Lane"
+      ],
+      "L3": [
+        "Orchard Street",
+        "Belvedere Lane",
+        "Rosemary Lane"
+      ]
+    },
+    "terraces": {
+      "L1": "Bayview Terrace",
+      "L2": "Midtown Terrace",
+      "L3": "Uptown Terrace"
+    }
+  },
+  "address": {
+    "step": 4,
+    "aptOverFloors": 2,
+    "aptsPerFloor": 2,
+    "floorHeight": 3,
+    "abbreviations": {
+      "Street": "St",
+      "Road": "Rd",
+      "Avenue": "Ave",
+      "Lane": "Ln",
+      "Drive": "Dr",
+      "Terrace": "Tce",
+      "Row": "Row"
+    }
+  },
+  "items": {
+    "secondChance": 0.4,
+    "phrases": {
+      "bread and pastries": {
+        "max": 3,
+        "things": [
+          ["baguette", "baguettes"],
+          ["sourdough", "sourdoughs"],
+          ["croissant", "croissants"],
+          ["cinnamon roll", "cinnamon rolls"],
+          ["rye loaf", "rye loaves"]
+        ]
+      },
+      "burger meals": {
+        "max": 3,
+        "things": [
+          ["cheeseburger meal", "cheeseburger meals"],
+          ["veggie burger", "veggie burgers"],
+          ["double burger", "double burgers"],
+          ["side of fries", "sides of fries"]
+        ]
+      },
+      "sandwiches and coffee": {
+        "max": 3,
+        "things": [
+          ["club sandwich", "club sandwiches"],
+          ["toasted panini", "toasted paninis"],
+          ["flat white", "flat whites"],
+          ["iced latte", "iced lattes"]
+        ]
+      },
+      "coffee and pastries": {
+        "max": 4,
+        "things": [
+          ["cappuccino", "cappuccinos"],
+          ["flat white", "flat whites"],
+          ["almond croissant", "almond croissants"],
+          ["blueberry muffin", "blueberry muffins"]
+        ]
+      },
+      "donuts": {
+        "max": 6,
+        "things": [
+          ["glazed donut", "glazed donuts"],
+          ["jam donut", "jam donuts"],
+          ["chocolate donut", "chocolate donuts"],
+          ["box of donut holes", "boxes of donut holes"]
+        ]
+      },
+      "pizzas": {
+        "max": 3,
+        "things": [
+          ["margherita", "margheritas"],
+          ["pepperoni pizza", "pepperoni pizzas"],
+          ["veggie pizza", "veggie pizzas"],
+          ["garlic bread", "garlic breads"]
+        ]
+      },
+      "sushi platters": {
+        "max": 2,
+        "things": [
+          ["salmon platter", "salmon platters"],
+          ["maki platter", "maki platters"],
+          ["miso soup", "miso soups"],
+          ["box of nigiri", "boxes of nigiri"]
+        ]
+      },
+      "noodle boxes": {
+        "max": 3,
+        "things": [
+          ["noodle box", "noodle boxes"],
+          ["box of fried rice", "boxes of fried rice"],
+          ["spring roll", "spring rolls"],
+          ["dumpling box", "dumpling boxes"]
+        ]
+      },
+      "smoothies and snacks": {
+        "max": 4,
+        "things": [
+          ["mango smoothie", "mango smoothies"],
+          ["berry smoothie", "berry smoothies"],
+          ["fruit cup", "fruit cups"],
+          ["bag of chips", "bags of chips"]
+        ]
+      },
+      "snacks and drinks": {
+        "max": 4,
+        "things": [
+          ["cold soda", "cold sodas"],
+          ["bottle of water", "bottles of water"],
+          ["bag of chips", "bags of chips"],
+          ["chocolate bar", "chocolate bars"]
+        ]
+      },
+      "car parts": {
+        "max": 2,
+        "things": [
+          ["brake kit", "brake kits"],
+          ["car battery", "car batteries"],
+          ["set of tyres", "sets of tyres"],
+          ["exhaust pipe", "exhaust pipes"]
+        ]
+      },
+      "grocery boxes": {
+        "max": 2,
+        "things": [
+          ["grocery box", "grocery boxes"]
+        ]
+      },
+      "grocery and household boxes": {
+        "max": 2,
+        "things": [
+          ["grocery box", "grocery boxes"],
+          ["household box", "household boxes"]
+        ]
+      },
+      "industrial goods": {
+        "max": 2,
+        "things": [
+          ["crate of fittings", "crates of fittings"],
+          ["drum of oil", "drums of oil"],
+          ["steel coil", "steel coils"]
+        ]
+      },
+      "rail parcels": {
+        "max": 3,
+        "things": [
+          ["rail parcel", "rail parcels"]
+        ]
+      },
+      "parcels": {
+        "max": 3,
+        "things": [
+          ["parcel", "parcels"],
+          ["registered letter pack", "registered letter packs"]
+        ]
+      },
+      "pallets and crates": {
+        "max": 2,
+        "things": [
+          ["pallet", "pallets"],
+          ["crate", "crates"]
+        ]
+      }
+    }
+  }
+}

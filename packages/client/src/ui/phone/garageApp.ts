@@ -8,6 +8,8 @@ import type { PhoneAppView } from './Phone';
 export interface GarageRow {
   tier: RideTier;
   status: 'riding' | 'carried' | 'parked';
+  /** Where a parked vehicle stands (a copy); null otherwise. */
+  position: Vec3 | null;
   /** Metres from the player to a parked vehicle (rounded); null otherwise. */
   distance: number | null;
   /** Tank fraction 0..1 for the motorbike and the car; null for rides without fuel. */
@@ -36,6 +38,7 @@ export function garageRows(garage: Garage, player: Vec3, now: number): GarageRow
     return {
       tier,
       status: spot.kind,
+      position: spot.kind === 'parked' ? { x: p.x, y: p.y, z: p.z } : null,
       distance: spot.kind === 'parked' ? Math.round(Math.hypot(p.x - player.x, p.z - player.z)) : null,
       fuel: garage.cfg.rides[tier].fuel ? garage.state(tier).fuel : null,
       summon: garage.summonStatus(tier, player, now),

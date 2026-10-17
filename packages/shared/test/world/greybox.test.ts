@@ -2,11 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { expandGreybox, hospitalBlockId } from '../../src/world/greybox';
 import greyboxJson from '../../../../map/greybox.json';
 import type { GreyboxSource } from '../../src/world/mapTypes';
+import { worldConfig } from '../../src/config';
 import { greyboxFixture } from './fixtures';
 
 const buildings = (src: GreyboxSource) => expandGreybox(src).solids.filter((s) => s.kind === 'building');
 
 describe('expandGreybox', () => {
+  it('marks the map as greybox with the world chunk size', () => {
+    const m = expandGreybox(greyboxFixture());
+    expect(m.kind).toBe('greybox');
+    expect(m.chunkSize).toBe(worldConfig.chunkSize);
+  });
+
   it('is deterministic for a seed', () => {
     const src = greyboxFixture();
     expect(expandGreybox(src)).toEqual(expandGreybox(src));

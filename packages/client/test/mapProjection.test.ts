@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { CatalogIndex, expandGreybox, layoutToMap, parseCatalog, parseCityLayout, type GreyboxSource } from '@dm/shared';
+import catalogJson from '../../../map/catalog.json';
+import cityJson from '../../../map/city.layout.json';
+import greybox from '../../../map/greybox.json';
+import { clientConfig } from '../src/clientConfig';
 import { MapProjection } from '../src/ui/phone/mapProjection';
 
 describe('MapProjection', () => {
@@ -26,5 +31,47 @@ describe('MapProjection', () => {
     expect(p.scale).toBe(0.5);
     expect(p.drawOrder[0]).toBe('ground');
     expect(p.drawOrder[p.drawOrder.length - 1]).toBe('player');
+  });
+});
+
+describe('MapProjection.forMap', () => {
+  const greyboxMap = expandGreybox(greybox as GreyboxSource);
+  const city = layoutToMap(parseCityLayout(cityJson), new CatalogIndex(parseCatalog(catalogJson)));
+
+  it('the greybox projection maps the map corners to the canvas corners (whole-map scale, no pan)', () => {
+    const p = MapProjection.forMap(greyboxMap, 512);
+    const h = greyboxMap.size / 2;
+    expect(p.panned).toBe(false);
+    expect(p.toCanvas({ x: -h, y: 0, z: -h })).toEqual({ x: 0, y: 0 });
+    expect(p.toCanvas({ x: h, y: 0, z: h })).toEqual({ x: 512, y: 512 });
+    p.pan({ x: 100, y: 0, z: 50 }); // ignored: the whole greybox fits
+    expect(p.toCanvas({ x: h, y: 0, z: h })).toEqual({ x: 512, y: 512 });
+  });
+
+  it('the city projection maps a point half the map window east of the player to the right edge of the canvas', () => {
+    const p = MapProjection.forMap(city, 512);
+    expect(p.panned).toBe(true);
+    expect(p.scale).toBeCloseTo(512 / clientConfig.ui.mapWindowMeters);
+    const half = clientConfig.ui.mapWindowMeters / 2;
+    expect(half).toBeGreaterThan(0);
+    const player = { x: 600, y: 10, z: 400 };
+    p.pan(player);
+    expect(p.toCanvas(player)).toEqual({ x: 256, y: 256 });
+    const east = p.toCanvas({ x: player.x + half, y: 10, z: player.z });
+    expect(east.x).toBeCloseTo(512);
+    expect(east.y).toBeCloseTo(256);
+    expect(p.toCanvas({ x: player.x, y: 0, z: player.z - half }).y).toBeCloseTo(0); // north up
+  });
+
+  it('the whole-map layer is drawn at the window scale and offset by the pan', () => {
+    const p = MapProjection.forMap(city, 512);
+    p.pan({ x: 600, y: 10, z: 400 });
+    expect(p.layerPx).toBe(Math.ceil(city.size * p.scale));
+    const q = { x: 700, y: 0, z: 300 };
+    const l = p.toLayer(q);
+    const c = p.toCanvas(q);
+    expect(l.x - p.layerOffset.x).toBeCloseTo(c.x);
+    expect(l.y - p.layerOffset.y).toBeCloseTo(c.y);
+    expect(p.toLayer({ x: 0, y: 0, z: 0 })).toEqual({ x: 0, y: 0 }); // the city spans x, z in [0, size]
   });
 });

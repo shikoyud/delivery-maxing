@@ -29,6 +29,7 @@ const BINDING_LABEL: Record<BindingName, string> = {
   mount: 'Mount',
   devPanel: 'Dev panel',
   debugOverlay: 'Debug overlay',
+  mapDebug: 'Map debug view',
 };
 
 /** "App name" and "Coming in SP{n}" in `root`; a placeholder with that copy also serves the Map tab until Task 11. */

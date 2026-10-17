@@ -1,3 +1,4 @@
+import { worldConfig } from '../../src/config';
 import { vec3 } from '../../src/math/vec3';
 import type { GreyboxSource, Hospital, MapData, OrderRules } from '../../src/world/mapTypes';
 
@@ -20,6 +21,8 @@ export const testHospital = (id: string, center = vec3(0, 0, 0), name = id): Hos
 });
 
 export const emptyMap = (): MapData => ({
+  kind: 'greybox',
+  chunkSize: worldConfig.chunkSize,
   size: 200,
   solids: [{ id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(200, 1, 200) }],
   pois: [],

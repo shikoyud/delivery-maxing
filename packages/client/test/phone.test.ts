@@ -169,8 +169,8 @@ describe('Phone', () => {
     phone.render(
       model({
         garage: [
-          { tier: 'car', status: 'parked', distance: 240, fuel: 0.5, summon: 'ok', readyIn: 0 },
-          { tier: 'bicycle', status: 'parked', distance: 40, fuel: null, summon: 'tooClose', readyIn: 0 },
+          { tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 0.5, summon: 'ok', readyIn: 0 },
+          { tier: 'bicycle', status: 'parked', position: { x: 0, y: 0, z: 40 }, distance: 40, fuel: null, summon: 'tooClose', readyIn: 0 },
         ],
       }),
     );

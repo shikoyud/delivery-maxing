@@ -1,3 +1,4 @@
+import { worldConfig } from '../../src/config';
 import { movementConfig } from '../../src/config';
 import { emptyInput, type InputFrame } from '../../src/input/inputFrame';
 import { vec3, type Vec3 } from '../../src/math/vec3';
@@ -5,6 +6,7 @@ import { PlayerSim } from '../../src/movement/PlayerSim';
 import { Garage, type SavedVehicle } from '../../src/vehicles/Garage';
 import { NO_MODS, type PlayerState, type SimEvent, type StatModifiers } from '../../src/movement/types';
 import type { Hospital, MapData, Solid } from '../../src/world/mapTypes';
+import { createPagedPhysicsWorld, type PagedPhysicsWorld } from '../../src/world/colliderPager';
 import { createPhysicsWorld, initRapier } from '../../src/world/physicsWorld';
 
 export interface Hold {
@@ -23,6 +25,8 @@ export type Press = 'jump' | 'crouch' | 'interact' | 'mount';
 export interface Harness {
   sim: PlayerSim;
   map: MapData;
+  /** The paged physics world (`paged: true`), which the harness updates around the player before every tick; else null. */
+  pager: PagedPhysicsWorld | null;
   /** Simulation time in seconds, advanced by sim.dt per tick. */
   time: number;
   tick(hold?: Hold, press?: Press[], mods?: StatModifiers): SimEvent[];
@@ -41,6 +45,13 @@ export interface SimOptions {
   size?: number;
   /** The vehicles owned at the start (a function receives the map); default: the carried skateboard only. */
   garage?: SavedVehicle[] | ((map: MapData) => SavedVehicle[]);
+  /** A whole map to run on instead of the test floor (floor, solids, size and hospitals are then ignored). */
+  map?: MapData;
+  /**
+   * Page colliders by chunk (createPagedPhysicsWorld with worldConfig.physics) as the client does on the city:
+   * loaded around the spawn before the sim exists, and around the player before every tick.
+   */
+  paged?: boolean;
 }
 
 /** The default test garage: only the carried skateboard, so no parked vehicle stands in a movement test. */
@@ -82,7 +93,9 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
   const spawn = opts.spawn ?? vec3(0, 0, 0);
   const yaw = opts.yaw ?? 0;
   const size = opts.size ?? 200;
-  const map: MapData = {
+  const map: MapData = opts.map ?? {
+    kind: 'greybox',
+    chunkSize: worldConfig.chunkSize,
     size,
     solids: [
       ...(opts.floor === false ? [] : [box('floor', vec3(0, -0.5, 0), vec3(size, 1, size), { kind: 'ground' })]),
@@ -94,14 +107,18 @@ export async function makeSim(opts: SimOptions = {}): Promise<Harness> {
     gasStations: [],
     orderRules: { bands: { shortMax: 150, mediumMax: 350 }, foodDropoff: { min: 80, max: 400 }, packageDropoff: { min: 100, max: 650 }, maxPickupDistance: 250 },
   };
-  const physics = createPhysicsWorld(rapier, map);
+  const pager = opts.paged ? createPagedPhysicsWorld(rapier, map, map.chunkSize, worldConfig.physics) : null;
+  pager?.update(spawn);
+  const physics = pager ?? createPhysicsWorld(rapier, map);
   const saved = typeof opts.garage === 'function' ? opts.garage(map) : (opts.garage ?? SKATEBOARD_ONLY);
   const sim = new PlayerSim(physics, map, movementConfig, spawn, yaw, new Garage(physics, map, saved));
   const h: Harness = {
     sim,
     map,
+    pager,
     time: 0,
     tick(hold = {}, press = [], mods = NO_MODS) {
+      pager?.update(sim.state.position);
       const events = sim.step(makeInput(hold, press, yaw, sim.state), mods, h.time);
       h.time += sim.dt;
       return events;

@@ -2,8 +2,8 @@ import { describe, expect, it, test } from 'vitest';
 import { ridingConfig, vehiclesConfig } from '../../src/config';
 import { RIDE_TIERS, type RideTier } from '../../src/config/types';
 import { vec3 } from '../../src/math/vec3';
-import { facing } from '../../src/movement/ground';
-import { applyDrive, vehicleTopSpeed, type DriveInput } from '../../src/vehicles/drive';
+import { facing, wrapAngle } from '../../src/movement/ground';
+import { applyDrive, vehicleTopSpeed, type DriveInput, type DriveTurn } from '../../src/vehicles/drive';
 import type { VehicleState } from '../../src/vehicles/types';
 
 const DT = 1 / 30;
@@ -15,7 +15,13 @@ const mk = (tier: RideTier, over: Partial<VehicleState> = {}): VehicleState => (
 const FWD: DriveInput = { wish: vec3(0, 0, -1), magnitude: 1, hasInput: true, handbrake: false };
 const BACK: DriveInput = { wish: vec3(0, 0, 1), magnitude: 1, hasInput: true, handbrake: false };
 const NONE: DriveInput = { wish: vec3(0, 0, 0), magnitude: 0, hasInput: false, handbrake: false };
-const step = (v: VehicleState, d: DriveInput) => applyDrive(v, d, ridingConfig.rides[v.tier], vehicleTopSpeed(v), G, DT);
+/** Turns the heading the way stepVehicle does in free space (no obstacle). */
+const turnOf = (v: VehicleState, t: DriveTurn): void => {
+  if (t.wishHeading === null) return;
+  const diff = wrapAngle(t.wishHeading - v.heading);
+  v.heading = wrapAngle(v.heading + Math.max(-t.maxTurn, Math.min(t.maxTurn, diff)));
+};
+const step = (v: VehicleState, d: DriveInput) => turnOf(v, applyDrive(v, d, ridingConfig.rides[v.tier], vehicleTopSpeed(v), G, DT));
 const fwdSpeed = (v: VehicleState) => { const f = facing(v.heading); return v.velocity.x * f.x + v.velocity.z * f.z; };
 
 describe('drive model', () => {
@@ -55,6 +61,29 @@ describe('drive model', () => {
     expect(fwdSpeed(bike)).toBeGreaterThanOrEqual(-1e-9);
   });
 
+  it('applyDrive does not turn the heading; it returns the wish and the turn budget', () => {
+    const v = mk('car');
+    const left: DriveInput = { wish: vec3(-1, 0, 0), magnitude: 1, hasInput: true, handbrake: false };
+    const t = applyDrive(v, left, ridingConfig.rides.car, 28, G, DT);
+    expect(v.heading).toBe(0);
+    expect(t.wishHeading).toBeCloseTo(Math.PI / 2, 9);
+    expect(t.maxTurn).toBeCloseTo(1.8 * DT, 9);
+    expect(applyDrive(v, NONE, ridingConfig.rides.car, 28, G, DT).wishHeading).toBeNull();
+  });
+
+  it('a stopped motorbike turns toward S first and backs up at 2.5 m/s only when the turn is blocked', () => {
+    const free = mk('motorbike');
+    for (let i = 0; i < 30; i++) step(free, BACK);
+    expect(fwdSpeed(free)).toBeGreaterThanOrEqual(-1e-9);
+    const stuck = mk('motorbike', { backOutTicks: 15 });
+    for (let i = 0; i < 60; i++) {
+      const t = applyDrive(stuck, BACK, ridingConfig.rides.motorbike, 22, G, DT);
+      expect(Math.hypot(stuck.velocity.x, stuck.velocity.z)).toBeLessThanOrEqual(2.5 + 1e-9);
+      expect(t.wishHeading).not.toBeNull(); // it keeps probing the turn so a freed spin resumes
+    }
+    expect(Math.hypot(stuck.velocity.x, stuck.velocity.z)).toBeGreaterThan(2.4);
+  });
+
   it('what counts as back input is riding.backInputDot (final review 9)', () => {
     // Input 120° off the heading (dot −0.5): at the default −0.5 it is not back (it turns); at −0.4 it brakes.
     const side: DriveInput = { wish: vec3(Math.sin((2 * Math.PI) / 3) * -1, 0, -Math.cos((2 * Math.PI) / 3)), magnitude: 1, hasInput: true, handbrake: false };
@@ -86,7 +115,7 @@ describe('drive model', () => {
     step(rest, left);
     expect(rest.heading).toBeCloseTo(1.8 * DT, 9);
     const fast = mk('car', { velocity: vec3(0, 0, -28) });
-    applyDrive(fast, left, ridingConfig.rides.car, 28, G, DT);
+    turnOf(fast, applyDrive(fast, left, ridingConfig.rides.car, 28, G, DT));
     expect(fast.heading).toBeCloseTo(0.7 * DT, 9);
   });
 

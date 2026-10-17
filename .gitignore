@@ -6,3 +6,10 @@ test-results
 
 # Owner-supplied model packs (not redistributable; see docs/superpowers/specs/2026-10-14-city-map-design.md §7.4)
 assets/packs/
+
+# Contact sheets of pack models (assets:sheet)
+docs/playtest/sp5/sheet-*.png
+
+# Runtime pack models written by assets:import (derived from the packs: never committed)
+packages/client/public/packs/
+packages/client/src/packs/

@@ -55,6 +55,20 @@ describe('out-of-bounds respawn', () => {
     expect(h.sim.state.position.x).toBeCloseTo(5, 5);
   });
 
+  it('a city map spans 0..size: the north-east of the city is in bounds, beyond size + boundsMargin is not', async () => {
+    const size = 1200;
+    const floor = box('floor', vec3(size / 2, -0.5, size / 2), vec3(size, 1, size), { kind: 'ground' });
+    const h = await makeSim({ floor: false, solids: [floor], size, spawn: vec3(1100, 0, 1100) });
+    h.map.kind = 'city';
+    expect(h.run(5).some((e) => e.kind === 'respawned')).toBe(false);
+    h.sim.teleport(vec3(1190, 0, 1190));
+    expect(h.run(5).some((e) => e.kind === 'respawned')).toBe(false);
+    h.sim.teleport(vec3(size + cfg.fall.boundsMargin + 1, 3, 600));
+    expect(h.tick().some((e) => e.kind === 'respawned')).toBe(true);
+    h.sim.teleport(vec3(600, 3, -cfg.fall.boundsMargin - 1));
+    expect(h.tick().some((e) => e.kind === 'respawned')).toBe(true);
+  });
+
   it('does not respawn while inside the bounds', async () => {
     const h = await makeSim();
     expect(h.run(30, { forward: 1 }).some((e) => e.kind === 'respawned')).toBe(false);

@@ -1,14 +1,19 @@
 import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
-import { pickWeighted, type Rng } from '../util/rng';
+import { pickWeighted, shuffle, type Rng } from '../util/rng';
 import { bandFor, type PathDistance } from '../world/distance';
 import type { OrderRules, Poi, PoiRole } from '../world/mapTypes';
+import type { DistanceTable } from './distanceTable';
+import { itemPhrase } from './orderText';
 import { expressLimit, timeLimit, weightClassFor } from './rules';
 import type { CarrierCapacity, Modifier, Order, OrderKind } from './types';
 
 export interface OfferContext {
   pois: Poi[];
+  /** The router's on-foot path distance (the player→pickup leg, and pickup→dropoff pairs the table lacks). */
   distance: PathDistance;
+  /** Build-time pickup→dropoff path distances (the city's map/city.distances.bin.gz); absent: every leg asks `distance`. */
+  table?: DistanceTable;
   rules: OrderRules;
   cfg: OrdersConfig;
   rng: Rng;
@@ -21,15 +26,6 @@ export interface OfferContext {
   /** Door ids used within reuseSeconds (reuse). */
   recentlyUsed: ReadonlySet<string>;
   nextId: () => string;
-}
-
-function shuffle<T>(items: T[], rng: Rng): T[] {
-  const a = items.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j] as T, a[i] as T];
-  }
-  return a;
 }
 
 const pickOne = <T>(items: T[], rng: Rng): T => items[Math.floor(rng() * items.length)] as T;
@@ -45,14 +41,16 @@ export function generateOffer(ctx: OfferContext): Order | null {
   const kindWeights = { food: cfg.mix.kindWeights.food, package: packageOk ? cfg.mix.kindWeights.package : 0 };
   if (kindWeights.food <= 0 && kindWeights.package <= 0) return null;
   const kind: OrderKind = pickWeighted(rng, kindWeights);
-  const first = offerOfKind(ctx, kind, remainingKg);
+  // one budget of offers.maxPathQueries player→pickup queries for the whole roll, the fallback kind included
+  const budget = { left: cfg.offers.maxPathQueries };
+  const first = offerOfKind(ctx, kind, remainingKg, budget);
   if (first) return first;
   const other: OrderKind = kind === 'food' ? 'package' : 'food';
-  return kindWeights[other] > 0 ? offerOfKind(ctx, other, remainingKg) : null;
+  return kindWeights[other] > 0 ? offerOfKind(ctx, other, remainingKg, budget) : null;
 }
 
 /** One offer of `kind`, or null when no pickup/dropoff pair of that kind qualifies. */
-function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): Order | null {
+function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number, budget: { left: number }): Order | null {
   const { pois, rules, cfg, rng } = ctx;
   const pickupRole: PoiRole = kind === 'food' ? 'foodPickup' : 'packagePickup';
   const dropoffRole: PoiRole = kind === 'food' ? 'dropoffFood' : 'dropoffPackage';
@@ -62,14 +60,25 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
     !ctx.recentlyUsed.has(p.id) &&
     !ctx.blockedDoors.some((d) => Math.hypot(p.position.x - d.x, p.position.z - d.z) < spacing);
 
-  const pickups = shuffle(
-    pois.filter(
+  // Player → pickup: a path is never shorter than the straight line, so only pickups within maxPickupDistance in a
+  // straight line can qualify; of those, nearest first, as many as the roll's query budget has left get a path query.
+  const straight = (p: Poi): number =>
+    Math.hypot(p.position.x - ctx.player.x, p.position.y - ctx.player.y, p.position.z - ctx.player.z);
+  const candidates = pois
+    .filter(
       (p) =>
         p.roles.includes(pickupRole) &&
         free(p) &&
-        ctx.distance(ctx.player, p.position) <= rules.maxPickupDistance &&
-        (kind === 'food' || (p.weightKg !== undefined && p.weightKg[0] <= remainingKg)),
-    ),
+        (kind === 'food' || (p.weightKg !== undefined && p.weightKg[0] <= remainingKg)) &&
+        straight(p) <= rules.maxPickupDistance,
+    )
+    .map((p) => ({ p, d: straight(p) }))
+    .sort((a, b) => a.d - b.d || (a.p.id < b.p.id ? -1 : a.p.id > b.p.id ? 1 : 0))
+    .slice(0, Math.max(0, budget.left))
+    .map(({ p }) => p);
+  budget.left -= candidates.length;
+  const pickups = shuffle(
+    candidates.filter((p) => ctx.distance(ctx.player, p.position) <= rules.maxPickupDistance),
     rng,
   );
 
@@ -77,12 +86,13 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number): O
   for (const pickup of pickups) {
     const dropoffs = pois
       .filter((d) => d.id !== pickup.id && d.roles.includes(dropoffRole) && free(d))
-      .map((d) => ({ poi: d, distance: ctx.distance(pickup.position, d.position) }))
+      .map((d) => ({ poi: d, distance: ctx.table?.get(pickup.id, d.id) ?? ctx.distance(pickup.position, d.position) }))
       .filter(({ distance }) => distance >= window.min && distance <= window.max);
     if (dropoffs.length === 0) continue;
     const { poi: dropoff, distance } = pickOne(dropoffs, rng);
 
-    const item = pickup.items && pickup.items.length > 0 ? pickOne(pickup.items, rng) : pickup.name;
+    // a quantity and concrete things for the catalog phrase ("2 baguettes and a sourdough"); the greybox's own words as they are
+    const item = pickup.items && pickup.items.length > 0 ? itemPhrase(pickOne(pickup.items, rng), rng) : pickup.name;
     let weightKg: number | null = null;
     let modifier: Modifier | null = null;
     if (kind === 'package') {
