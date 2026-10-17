@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { vec3, type CityLayout, type MapData, type Road, type Solid } from '@dm/shared';
-import { buildRegionMeshes, regionOf } from '../src/render/city/regions';
+import { areaTiers, buildRegionMeshes, regionOf } from '../src/render/city/regions';
 import { kindColor } from '../src/render/palette';
 
 describe('regionOf', () => {
@@ -91,5 +91,32 @@ describe('buildRegionMeshes', () => {
     expect(b.min.y).toBeGreaterThanOrEqual(10);
     expect(b.max.y).toBeLessThan(10.2);
     expect([b.min.x, b.max.x, b.min.z, b.max.z]).toEqual([0, 100, 0, 12]);
+  });
+
+  it('city: areas lying on a larger area at the same height are drawn a lift step above it, so nothing fights (the quay, its rail and yard)', () => {
+    const area = (id: string, kind: string, rect: [number, number, number, number], y = 2) =>
+      ({ id, kind, rect: { minX: rect[0], maxX: rect[1], minZ: rect[2], maxZ: rect[3] }, y }) as unknown as CityLayout['areas'][number];
+    const quay = area('quay', 'quay', [0, 380, 110, 255]);
+    const rail = area('rail', 'rail', [0, 340, 236, 246]);
+    const yard = area('yard', 'containerYard', [20, 200, 120, 184]);
+    const gas = area('gas', 'gasLot', [348, 366, 228, 243]);
+    const park = area('park', 'park', [500, 560, 120, 184]); // beside, not on, the quay
+    const upper = area('upper', 'plaza', [0, 380, 110, 255], 10); // same rect, another terrace
+    const tiers = new Map(areaTiers([rail, gas, quay, park, yard, upper]).map(([a, t]) => [a.id, t]));
+    expect(tiers.get('quay')).toBe(0);
+    expect(tiers.get('park')).toBe(0);
+    expect(tiers.get('upper')).toBe(0);
+    expect(tiers.get('rail')).toBe(1);
+    expect(tiers.get('yard')).toBe(1);
+    expect(tiers.get('gas')).toBe(1);
+
+    const layout = { roads: [], areas: [quay, rail] } as unknown as CityLayout;
+    const city = { ...map, kind: 'city', layout, solids: [] } as unknown as MapData;
+    const mesh = solidsOf(buildRegionMeshes(city, 250).get(regionOf(190, 182, 250))!);
+    const pos = mesh.geometry.getAttribute('position');
+    const tops = new Set<number>();
+    for (let i = 0; i < pos.count; i++) tops.add(Math.round(pos.getY(i) * 1000));
+    // two slabs, four distinct heights: the rail's bottom (2.024) sits a lift step above the quay's top (2.016)
+    expect([...tops].sort((a, b) => a - b)).toEqual([2008, 2016, 2024, 2032]);
   });
 });

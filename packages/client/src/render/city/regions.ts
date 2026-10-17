@@ -80,6 +80,26 @@ function streetGeometry(rect: Rect, y: number): THREE.BufferGeometry[] {
 
 const rectCenter = (r: Rect): [number, number] => [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
 
+const rectsOverlap = (r: Rect, s: Rect): boolean => r.minX < s.maxX && s.minX < r.maxX && r.minZ < s.maxZ && s.minZ < r.maxZ;
+const rectArea = (r: Rect): number => (r.maxX - r.minX) * (r.maxZ - r.minZ);
+
+/**
+ * Areas may lie on one another at the same height (the rail, the container yard and a gas lot sit on the quay), and
+ * two slabs at one height fight in the depth buffer at any distance (the SP5 playtest's striped docks). Each area
+ * gets a tier: 0 for the largest, one more than the highest tier of any larger area it overlaps at its height, so
+ * the smaller area is always drawn a lift step above what it lies on.
+ */
+export function areaTiers(areas: readonly CityLayout['areas'][number][]): [CityLayout['areas'][number], number][] {
+  const sorted = [...areas].sort((a, b) => rectArea(b.rect) - rectArea(a.rect));
+  const tiers: [CityLayout['areas'][number], number][] = [];
+  for (const a of sorted) {
+    let tier = 0;
+    for (const [b, t] of tiers) if (b.y === a.y && rectsOverlap(a.rect, b.rect)) tier = Math.max(tier, t + 1);
+    tiers.push([a, tier]);
+  }
+  return tiers;
+}
+
 /** A city map carries its layout (layoutToMap); a greybox has none. */
 const isCityMap = (map: MapData): map is CityMap => map.kind === 'city' && 'layout' in map;
 
@@ -114,11 +134,11 @@ export function buildRegionMeshes(map: MapData, regionSize: number): Map<string,
       e.solids.push(solidGeometry(s, own !== undefined ? colorOf(own) : solidColor(s)));
     }
   }
-  for (const a of layout?.areas ?? []) {
+  for (const [a, tier] of areaTiers(layout?.areas ?? [])) {
     const c = AREA_COLORS[a.kind];
     if (c === undefined) continue;
     if (a.kind === 'sand' || a.kind === 'pier' || a.kind === 'breakwater') continue; // terrain solids, coloured above
-    entry(...rectCenter(a.rect)).solids.push(flat(a.rect, a.y + AREA_LIFT, AREA_THICKNESS, colorOf(c)));
+    entry(...rectCenter(a.rect)).solids.push(flat(a.rect, a.y + AREA_LIFT + tier * (AREA_LIFT + AREA_THICKNESS), AREA_THICKNESS, colorOf(c)));
   }
   for (const r of layout?.roads ?? []) entry(...rectCenter(r.rect)).solids.push(...streetGeometry(r.rect, r.y));
 
