@@ -9,17 +9,27 @@ import {
   playerZones,
   pumpAt,
   ridingConfig,
-  vehiclesConfig,
+  dispatcherTuning,
+  effectiveCapacity,
+  boostMultiplier,
+  payoutQuality,
+  rollPayoutUsd,
+  economyConfig,
+  type ChainSource,
+  type CompletedEvent,
+  type Payout,
   type AcceptResult,
   type AccessKind,
   type ButtonState,
   type ActiveOrder,
   type Bonus,
   type CancelResult,
+  type CarrierCapacity,
   type DistanceTable,
   type InputFrame,
   type MapData,
   type MoveMode,
+  type OrderKind,
   type NavRouter,
   type OrderEvent,
   type PathDistance,
@@ -28,6 +38,7 @@ import {
   type RideTier,
   type Rng,
   type SimEvent,
+  shoesSprintMul,
   type StatModifiers,
   type SavedVehicle,
   type SummonResult,
@@ -42,15 +53,19 @@ import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
 import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoints';
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
-import { hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { boostText, gameText, hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, usdText, walletModel, type HudModel } from '../ui/hudModel';
 import { createMinimap } from '../ui/minimap';
-import { createMapApp } from '../ui/phone/mapApp';
-import { MapProjection } from '../ui/phone/mapProjection';
+import { MapScreen, type MapScreenView } from '../ui/map/MapScreen';
 import { RIDE_NAME, type GarageRow } from '../ui/phone/garageApp';
 import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
-import { Popups, type PopupSink } from '../ui/popups';
+import { Popups, type PopupSink, type PopupTone } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
 import type { ProgressStore } from './progress';
+import type { Purchases } from '../economy/Purchases';
+import { defaultWardrobe, type Wardrobe } from '../economy/wardrobe';
+import { shopRows, type ShopRow } from '../ui/phone/shopApp';
+import { wardrobeRows } from '../ui/phone/wardrobeApp';
+import type { Look } from '../render/cosmetics';
 import { RouteCache } from './routes';
 
 export interface DeliveryDeps {
@@ -70,12 +85,31 @@ export interface DeliveryDeps {
    * speed (m/s), and what F would mount now on foot.
    */
   rider(): { riding: RideTier | null; lastRide: RideTier | null; speed: number; mountCandidate(): RideTier | null };
+  /** Sets the tier last ridden (Game: sim.state.lastRide): the Garage app's Switch on foot. */
+  setLastRide?(t: RideTier): void;
+  /** The owned Bag tier (Game: the chain's `ownership().lines.bag`); it and the ride set the capacity (spec §3.3). */
+  bagTier(): number;
+  /** The owned Dispatcher tier (Game: the chain's `ownership().lines.dispatcher`); it sets how many offers, how often, how good. */
+  dispatcherTier(): number;
+  /** The reward chain (Game: the browser MockChain): every completed order's GAME payout accrues there (spec §9). */
+  chain: ChainSource;
+  /** Wall-clock ms a payout is recorded at (the chain's time); Date.now when absent. */
+  wallClock?(): number;
+  /**
+   * The Shop's purchases (Game: Purchases), updated each tick at the wall clock; the Shop app's rows, Buy and Confirm
+   * go through it. Absent (tests): no Shop rows, and its buttons do nothing.
+   */
+  purchases?(): Pick<Purchases, 'update' | 'quote' | 'pending' | 'fuelTarget' | 'buy' | 'buyWithCoins'> | null;
+  /** The Coin cosmetics to save (Game: the wardrobe); absent: the stored ones are kept. */
+  wardrobe?(): Wardrobe;
+  /** The Wardrobe's Equip (Game: wears the item, saves and redraws the look). */
+  equip?(itemId: string): void;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
   /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
   table?: DistanceTable;
   /**
-   * Door routes for the HUD arrow, the stops' distances and the Map app (Game: the NavRouter), cached for
+   * Door routes for the HUD arrow, the stops' distances and the map screen (Game: the NavRouter), cached for
    * ui.routeRefreshSeconds. Absent (tests): straight lines.
    */
   router?: Pick<NavRouter, 'routeToDoor'>;
@@ -84,11 +118,17 @@ export interface DeliveryDeps {
   /** Sprint stamina as a fraction 0..1 (the HUD ring); full when absent (tests). */
   stamina?(): number;
   /**
-   * HUD, popups and the phone; default to the DOM ones on `host` (tests pass recorders). `phone` builds the phone
-   * from the callbacks DeliveryLoop wires (accept, cancel, skip, closed) and its close keys.
+   * HUD, popups, the phone and the map screen; default to the DOM ones on `host` (tests pass recorders). `phone`
+   * builds the phone from the callbacks DeliveryLoop wires (accept, cancel, skip, closed) and its close keys; `map`
+   * the map screen from its close keys and closed callback.
    */
-  ui?: { hud: HudView; popups: PopupSink; phone: (cb: PhoneCallbacks, closeCodes: string[]) => PhoneView };
-  /** The phone opened (true) or closed (false): Game exits or re-requests the pointer lock. */
+  ui?: {
+    hud: HudView;
+    popups: PopupSink;
+    phone: (cb: PhoneCallbacks, closeCodes: string[]) => PhoneView;
+    map: (closeCodes: string[], closed: () => void) => MapScreenView;
+  };
+  /** The phone or the map screen opened (true) or closed (false): Game exits or re-requests the pointer lock. */
   phoneChanged?(open: boolean): void;
   /**
    * The owned vehicles (Game: the sim's garage): the Garage app's rows at sim time `now`, a summon at `now`
@@ -105,6 +145,9 @@ export interface DeliveryDeps {
     snapshot(): SavedVehicle[];
   };
 }
+
+/** "3 min" for whole minutes, else seconds. */
+const durationText = (s: number): string => (s >= 60 && s % 60 === 0 ? `${s / 60} min` : `${s} s`);
 
 const BONUS_LINE: Record<Bonus, string> = { hot: 'Still hot', par: 'Within par', express: 'Express on time', fragile: 'Fragile intact' };
 
@@ -139,9 +182,9 @@ const ACCESS_PHRASE: Record<AccessKind, string> = {
   path: 'use paths',
 };
 
-const MOUNT_REFUSED: Record<Extract<SimEvent, { kind: 'mountRefused' }>['reason'], string> = {
+/** The hint for each refused get-off (Decision 9: F gets off at any speed, so none asks to slow down). */
+export const MOUNT_REFUSED: Record<Extract<SimEvent, { kind: 'mountRefused' }>['reason'], string> = {
   noRoom: 'No room to get off',
-  tooFast: 'Slow down to get off',
   airborne: 'Land first',
 };
 
@@ -180,6 +223,7 @@ export class DeliveryLoop {
   readonly poiMeshes: PoiMeshes;
   readonly waypoints: Waypoints;
   private readonly phone: PhoneView;
+  private readonly mapScreen: MapScreenView;
   private sys: OrderSystem;
   /** Sim time from which each get-off hint may show again (ui.hintCooldownSeconds). */
   private readonly hintAt = new Map<string, number>();
@@ -197,6 +241,9 @@ export class DeliveryLoop {
   /** One refuelling session per ridden vehicle: replaced (its session settled) when the ride changes. */
   private refueller = new Refueller();
   private refuelTier: RideTier | null = null;
+  /** capacity() and statModifiers() are read every tick: each is rebuilt only when what it depends on changed. */
+  private capMemo: { bag: number; tier: VehicleTier; cap: CarrierCapacity } | null = null;
+  private modsMemo: { base: StatModifiers; shoes: number; mods: StatModifiers } | null = null;
 
   constructor(private readonly d: DeliveryDeps) {
     this.rng = mulberry32(d.seed);
@@ -209,23 +256,40 @@ export class DeliveryLoop {
     const phoneCb: PhoneCallbacks = {
       accept: (id) => void this.accept(id),
       cancel: (id) => void this.cancel(id),
-      skipLockout: () => this.skipLockout(),
+      // Confirm on the Orders app's Skip sheet buys the lockout skip (GAME), as the Shop's Confirm does.
+      skipLockout: (maxGame) => void this.shopConfirm('lockoutSkip', maxGame),
+      shopBuy: (id) => this.shopBuy(id),
+      shopConfirm: (id, maxGame) => void this.shopConfirm(id, maxGame),
+      shopCancel: () => undefined,
+      claim: () => void this.claim(),
+      lockGame: (game) => this.lockGame(game),
+      withdrawLock: () => this.withdrawLock(),
+      wardrobeEquip: (id) => {
+        this.d.equip?.(id);
+        this.nextHudAt = 0;
+      },
       summon: (t) => void this.summon(t),
+      switchRide: (t) => void this.switchTo(t),
       respawn: () => this.respawn(),
       closed: () => {
         this.d.actions.releaseAll();
         this.d.phoneChanged?.(false);
       },
     };
-    // Esc, the phone key and the map key close it (spec §8; Tab opens it through the `phone` action in beforeStep,
-    // M through `map`, so both keys toggle).
+    // Esc, the phone key and the map key close it (spec §8; Tab opens it through the `phone` action in beforeStep, so
+    // it toggles; M closes it but does not open the map over it).
     const closeCodes = ['Escape', ...d.cfg.input.bindings.phone, ...d.cfg.input.bindings.map];
-    if (d.ui) this.phone = d.ui.phone(phoneCb, closeCodes);
-    else {
-      const phone = new Phone(d.host, phoneCb, closeCodes);
-      phone.setMapApp(createMapApp(d.map, MapProjection.forMap(d.map, 512), this.colorIndex));
-      this.phone = phone;
-    }
+    this.phone = d.ui ? d.ui.phone(phoneCb, closeCodes) : new Phone(d.host, phoneCb, closeCodes);
+    // Esc and the map key close the map screen (M opens it through the `map` action in beforeStep).
+    const mapCodes = ['Escape', ...d.cfg.input.bindings.map];
+    const mapClosed = (): void => {
+      this.d.actions.setLookFrozen(false);
+      this.d.actions.releaseAll();
+      this.d.phoneChanged?.(false);
+    };
+    this.mapScreen = d.ui
+      ? d.ui.map(mapCodes, mapClosed)
+      : new MapScreen(d.host, d.map, this.colorIndex, { closeCodes: mapCodes, closed: mapClosed });
     this.minimap = d.ui ? null : createMinimap(d.host, d.map);
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
     this.routes = d.router ? new RouteCache(d.router, d.cfg.ui.routeRefreshSeconds, d.cfg.ui.routeDriftMeters) : null;
@@ -240,8 +304,10 @@ export class DeliveryLoop {
         rules: this.d.map.orderRules,
         cfg: ordersConfig,
         rng: this.rng,
-        capacity: vehiclesConfig[this.capacityTier],
+        capacity: this.capacity(),
         totals,
+        dispatcher: () => dispatcherTuning(this.d.dispatcherTier()),
+        vehicleTier: () => this.capacityTier,
       },
       this.d.now(),
     );
@@ -250,6 +316,17 @@ export class DeliveryLoop {
   /** The player's order state (rebuilt by resetProgress). */
   get orders(): OrderSystem {
     return this.sys;
+  }
+
+  /** The effective capacity (spec §3.3): the Bag tier's slots and kg, each capped by the ride (or the last ride). */
+  capacity(): CarrierCapacity {
+    const bag = this.d.bagTier();
+    const tier = this.capacityTier;
+    const m = this.capMemo;
+    if (m && m.bag === bag && m.tier === tier) return m.cap;
+    const cap = effectiveCapacity(bag, tier);
+    this.capMemo = { bag, tier, cap };
+    return cap;
   }
 
   /** The capacity tier: the ride, else the last ride, else walking. */
@@ -269,7 +346,14 @@ export class DeliveryLoop {
   }
 
   statModifiers(): StatModifiers {
-    return this.sys.statModifiers();
+    const base = this.sys.statModifiers();
+    const shoes = this.d.chain.ownership().lines.shoes;
+    const m = this.modsMemo;
+    const same = m !== null && m.shoes === shoes && (m.base === base || (m.base.speedMul === base.speedMul && m.base.jumpHeightMul === base.jumpHeightMul && m.base.sprintMul === base.sprintMul && m.base.canSprint === base.canSprint));
+    if (same) return m.mods;
+    const mods = { ...base, sprintMul: shoesSprintMul(shoes) };
+    this.modsMemo = { base, shoes, mods };
+    return mods;
   }
 
   /** Whether the phone is up (the sim then gets only the look, and Y is ignored: accept with the phone's buttons). */
@@ -277,8 +361,32 @@ export class DeliveryLoop {
     return this.phone.isOpen;
   }
 
+  /** Whether the full-screen map is up (M; the sim then gets only the look). */
+  get mapOpen(): boolean {
+    return this.mapScreen.isOpen;
+  }
+
+  /**
+   * Opens the map screen (at any speed, on foot or riding; not over the phone). Held keys are released, the mouse look
+   * freezes (drags pan the map, so they must not turn the camera) and the pointer lock is released as for the phone.
+   */
+  openMap(): void {
+    if (this.mapScreen.isOpen || this.phone.isOpen) return;
+    this.mapScreen.open();
+    this.d.actions.releaseAll();
+    this.d.actions.setLookFrozen(true);
+    this.nextHudAt = 0; // draw the map at once
+    this.d.phoneChanged?.(true);
+  }
+
+  /** Closes the map screen (its `closed` callback frees the look, releases keys and reports it). */
+  closeMap(): void {
+    this.mapScreen.close();
+  }
+
   /** Opens the phone on `app` (Orders by default), or switches to `app` when it is already open. */
   openPhone(app: PhoneApp = 'orders'): void {
+    if (this.mapScreen.isOpen) return;
     if (this.phone.isOpen) {
       this.phone.show(app);
       return;
@@ -300,20 +408,26 @@ export class DeliveryLoop {
   }
 
   /**
-   * The input the sim sees this tick. The phone key toggles the phone and M opens the Map app, but while riding faster
-   * than ridingConfig.riding.stoppedSpeed they only say "Stop to use the phone" (spec §8: notifications only while
-   * riding). Y accepts the top offer here, riding or not, before afterStep's update, so an accept on an offer's expiry
-   * tick reports 'expired' (Review Focus 1). While the phone is open Y is ignored and only the look passes (the Orders
-   * app's buttons accept, between ticks at `now()`), with the handbrake held on a vehicle so it stays put. F on foot
+   * The input the sim sees this tick. M toggles the map screen at any speed (Decision 11); while it is open the sim
+   * gets only the look (no move, jump, F or Y) with the same brake hold as the phone below, and the phone key does nothing. The phone key toggles the phone,
+   * but while riding faster than ridingConfig.riding.stoppedSpeed it only says "Stop to use the phone" (spec §8:
+   * notifications only while riding); M with the phone open is the phone's close key, so it does not open the map.
+   * Y accepts the top offer here, riding or not, before afterStep's update, so an accept on an offer's expiry tick
+   * reports 'expired' (Review Focus 1). While the phone is open Y is ignored and only the look passes (the Orders
+   * app's buttons accept, between ticks at `now()`), with the brake held on a vehicle so it stays put: Space (the
+   * handbrake) on a ride whose Space does not jump, S on one that ollies (its jumpHeight is set; it does not reverse, so
+   * S only brakes, slopes included). F on foot
    * next to a ride that can't hold the active orders is swallowed (the sim never mounts it) with the reason.
    */
   beforeStep(frame: InputFrame): InputFrame {
     this.interact = { held: false, pressed: false };
-    if (frame.phone.pressed) {
+    if (this.mapScreen.isOpen) {
+      if (frame.map.pressed) this.closeMap(); // the screen's own key handler usually closes it first
+    } else if (frame.phone.pressed) {
       if (this.phone.isOpen) this.closePhone();
       else if (this.phoneAllowed()) this.openPhone();
-    } else if (frame.map.pressed && !this.phone.isOpen && this.phoneAllowed()) this.openPhone('map');
-    if (!this.phone.isOpen) {
+    } else if (frame.map.pressed && !this.phone.isOpen) this.openMap();
+    if (!this.phone.isOpen && !this.mapScreen.isOpen) {
       this.interact = frame.interact;
       if (frame.accept.pressed) {
         const top = this.sys.offers[0];
@@ -322,9 +436,14 @@ export class DeliveryLoop {
       if (frame.mount.pressed && !this.canMount()) return { ...frame, mount: { held: false, pressed: false } };
       return frame;
     }
+    // The phone or the map is up: only the look, and a ride is held on its brake so it does not coast away.
     const idle = emptyInput();
     idle.look = frame.look;
-    if (this.d.rider().riding !== null) idle.jump = { held: true, pressed: false }; // Space: the handbrake
+    const tier = this.d.rider().riding;
+    if (tier !== null) {
+      if (ridingConfig.rides[tier].jumpHeight === null) idle.jump = { held: true, pressed: false }; // Space: the handbrake
+      else idle.move = { x: 0, y: -1 }; // S: the brake (Space would not brake a ride that jumps)
+    }
     return idle;
   }
 
@@ -352,7 +471,7 @@ export class DeliveryLoop {
     if (r.riding !== null) return true;
     const tier = r.mountCandidate();
     if (tier === null) return true;
-    const cap = vehiclesConfig[tier];
+    const cap = effectiveCapacity(this.d.bagTier(), tier);
     if (this.sys.canSwitchCapacity(cap)) return true;
     const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
     this.popups.show(`Can't ride the ${TIER_LABEL[tier]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
@@ -371,7 +490,7 @@ export class DeliveryLoop {
       const text = simEventHint(e, ridden, this.d.map);
       if (text) this.hint(text, now);
     }
-    this.sys.setCapacity(vehiclesConfig[this.capacityTier]);
+    this.sys.setCapacity(this.capacity());
     const events = this.sys.onSimEvents(simEvents);
     const before = [...this.sys.active];
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);
@@ -380,6 +499,13 @@ export class DeliveryLoop {
     const zones = riding ? { poiIds: NO_POIS, safeZone: this.zones.safeZone } : this.zones;
     events.push(...this.sys.update(now, this.offerOrigin(position), zones));
     for (const e of events) this.announce(e, before);
+    this.d.purchases?.()?.update(this.d.wallClock?.() ?? Date.now());
+  }
+
+  /** A popup (Purchases: bought, parked, failed); `mock` when it is about GAME (the Mock wallet badge). */
+  popup(title: string, lines: string[] = [], tone: PopupTone = 'info', mock = false): void {
+    this.popups.show(title, lines, tone, mock);
+    this.nextHudAt = 0;
   }
 
   /**
@@ -499,6 +625,27 @@ export class DeliveryLoop {
   }
 
   /**
+   * Garage app Switch (decision 6): on foot, the tier offers, capacity and the payout range follow `t`. Refused while
+   * riding ("Get off first") and when the active orders would not fit the capacity `t` caps (spec §3.3).
+   */
+  switchTo(t: RideTier): { ok: true } | { ok: false; message: string } {
+    const refuse = (message: string): { ok: false; message: string } => {
+      this.popups.show(message, [], 'warn');
+      return { ok: false, message };
+    };
+    if (this.d.rider().riding !== null) return refuse('Get off first');
+    const row = this.d.vehicles?.rows(this.d.now()).find((r) => r.tier === t);
+    if (!this.d.setLastRide || !row?.owned) return refuse(`You don't have the ${TIER_LABEL[t]}`);
+    if (!this.sys.canSwitchCapacity(effectiveCapacity(this.d.bagTier(), t))) return refuse(`Your orders don't fit on the ${TIER_LABEL[t]}`);
+    this.d.setLastRide(t);
+    this.sys.setCapacity(this.capacity());
+    this.popups.show(`Offers now for the ${TIER_LABEL[t]}`, [], 'info');
+    this.save();
+    this.nextHudAt = 0;
+    return { ok: true };
+  }
+
+  /**
    * Settings app (spec §13 Vehicle stuck): respawn on foot at the nearest hospital. The orders are kept; the
    * `respawned` event breaks a carried Fragile as an out-of-bounds respawn does. The phone closes on the hospital.
    */
@@ -506,13 +653,28 @@ export class DeliveryLoop {
     const v = this.d.vehicles;
     if (!v) return;
     const simEvents = v.respawn();
-    const before = [...this.sys.active];
-    for (const e of this.sys.onSimEvents(simEvents)) this.announce(e, before);
+    this.offTickEvents(simEvents);
     const r = simEvents.find((e): e is Extract<SimEvent, { kind: 'respawned' }> => e.kind === 'respawned');
     const name = r ? this.d.map.hospitals.find((h) => h.id === r.hospitalId)?.name : undefined;
     if (name) this.popups.show(`Respawned at ${name}`, [], 'info');
     this.closePhone();
     this.nextHudAt = 0;
+  }
+
+  /**
+   * Sim events raised between ticks (Game: getting off a vehicle the chain removed, a progress reset, rideNow; the
+   * Settings respawn): handled as afterStep handles a tick's, so a `respawned` event breaks a carried Fragile.
+   */
+  offTickEvents(simEvents: SimEvent[]): void {
+    if (simEvents.length === 0) return;
+    const before = [...this.sys.active];
+    for (const e of this.sys.onSimEvents(simEvents)) this.announce(e, before);
+    this.nextHudAt = 0;
+  }
+
+  /** The phone case colour on the phone (Decision 4). */
+  applyLook(look: Look): void {
+    this.phone.applyLook?.(look);
   }
 
   /** Dev panel and debug API: sets the Coins held, saved. */
@@ -522,7 +684,64 @@ export class DeliveryLoop {
     this.nextHudAt = 0;
   }
 
-  /** Dev / GAME-burn stub (price Pending): end the offer lockout now. */
+  /** The Shop app's rows at sim time `now` (none without purchases). */
+  shopRows(now: number): ShopRow[] {
+    const p = this.d.purchases?.();
+    if (!p) return [];
+    return shopRows(p, this.d.chain.ownership(), this.d.wardrobe?.() ?? defaultWardrobe(), this.sys.lockoutUntil > now);
+  }
+
+  /** The Shop's Buy on a Coin item: bought now, or a popup saying why not. */
+  shopBuy(itemId: string): void {
+    const p = this.d.purchases?.();
+    if (!p) return;
+    const r = p.buyWithCoins(itemId);
+    if (!r.ok) this.popup(r.message, [], 'warn');
+    this.nextHudAt = 0;
+  }
+
+  /** A confirm sheet's Confirm (the Shop's, the Orders app's Skip): sends a GAME purchase capped at `maxGame`; a refusal pops up. */
+  async shopConfirm(itemId: string, maxGame: number): Promise<void> {
+    const p = this.d.purchases?.();
+    if (!p) return;
+    this.nextHudAt = 0;
+    const r = await p.buy(itemId, maxGame);
+    if (!r.ok) this.popup(r.message, [], 'warn', true);
+    this.nextHudAt = 0;
+  }
+
+  private wallMs(): number {
+    return this.d.wallClock?.() ?? Date.now();
+  }
+
+  /** The Wallet's Claim: the accrued GAME moves to the balance (instant on the mock, Decision 3). */
+  async claim(): Promise<void> {
+    const r = await this.d.chain.claim(this.wallMs());
+    if (r.ok) this.popup(`Claimed ${gameText(r.game)} GAME`, ['Added to your balance'], 'good', true);
+    else this.popup('Nothing to claim yet', ['Deliver orders to earn GAME'], 'warn', true);
+  }
+
+  /** The Wallet's Lock: locks `game` base units for lock.days days (spec §6.4); a refusal pops up. */
+  lockGame(game: number): void {
+    const r = this.d.chain.lockGame(game, this.wallMs());
+    if (!r.ok) {
+      this.popup(r.reason === 'locked' ? 'GAME is already locked' : 'Not enough GAME to lock', [], 'warn', true);
+      return;
+    }
+    const lock = this.d.chain.lock();
+    const boost = boostText(boostMultiplier(lock ? lock.usdMicroAtLock : 0));
+    this.popup(`Locked ${gameText(game)} GAME for ${economyConfig.lock.days} days`, [`${boost} boost on every order`], 'good', true);
+  }
+
+  /** The Wallet's Withdraw: the locked GAME back to the balance once the period has ended; too early pops up. */
+  withdrawLock(): void {
+    const lock = this.d.chain.lock();
+    const r = this.d.chain.withdrawLock(this.wallMs());
+    if (r.ok) this.popup(`Withdrew ${gameText(lock?.game ?? 0)} GAME`, ['The boost ends'], 'good', true);
+    else this.popup(r.reason === 'none' ? 'No GAME is locked' : 'The lock has not ended yet', [], 'warn', true);
+  }
+
+  /** Dev and debug: end the offer lockout now, free (the phone's Skip buys it: shopConfirm). */
   skipLockout(): void {
     this.sys.skipLockout();
     this.nextHudAt = 0;
@@ -559,10 +778,14 @@ export class DeliveryLoop {
       route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
       prompt: this.prompt(),
+      // The Wallet's lists, the Shop, the Wardrobe and the Orders app's Skip read the rows: built only while the phone shows them.
+      wallet: walletModel(this.d.chain, this.wallMs(), this.phone.isOpen),
+      shop: this.phone.isOpen ? this.shopRows(now) : [],
+      wardrobe: this.phone.isOpen ? wardrobeRows(this.d.wardrobe?.() ?? defaultWardrobe(), this.d.chain.ownership().skins) : [],
     });
   }
 
-  /** The key prompt now (hud-prompt): F to ride or get off, E to refuel, a pump hint on foot; null with the phone up. */
+  /** The key prompt now (hud-prompt): F to ride or get off, E to refuel, a pump hint on foot; null with the phone or map up. */
   prompt(): string | null {
     const r = this.d.rider();
     const rows = this.d.vehicles?.rows(this.d.now()) ?? [];
@@ -575,7 +798,7 @@ export class DeliveryLoop {
         atPump: pumpAt(this.d.map, this.d.player().position, ridingConfig.refuel.pumpRadius) !== null,
         tankFull: fuel !== undefined && fuel >= 1,
         ownsFuelledRide: rows.some((x) => x.fuel !== null),
-        phoneOpen: this.phone.isOpen,
+        phoneOpen: this.phone.isOpen || this.mapScreen.isOpen,
       },
       this.d.cfg.input.bindings,
     );
@@ -618,6 +841,7 @@ export class DeliveryLoop {
     const m = this.model(now);
     this.hud.update(m, this.colorIndex);
     if (this.phone.isOpen) this.phone.render(m, this.d.player().position, this.d.player().heading ?? 0);
+    if (this.mapScreen.isOpen) this.mapScreen.render(m, this.d.player().position, this.d.player().heading ?? 0);
   }
 
   /**
@@ -630,7 +854,38 @@ export class DeliveryLoop {
       totals: { ...this.sys.totals },
       garage: this.d.vehicles ? this.d.vehicles.snapshot() : stored.garage,
       lastRide: this.d.rider().lastRide,
+      cosmetics: this.d.wardrobe ? this.d.wardrobe() : stored.cosmetics,
     });
+  }
+
+  /**
+   * Rolls and records a completed order's GAME payout (spec §3.6, §9; Decision 3): `luck` from the seeded RNG, the
+   * quality points ÷ maxPoints, the order's tier's range, the lock-to-boost multiplier of the GAME locked (valued when
+   * locked), applied once inside the shared roll. The chain converts that USD at its rate (a stale rate is still the
+   * last good one, Decision 14) and pays from the vault, or records it unpaid when the vault cannot cover it.
+   */
+  payOut(e: CompletedEvent, nowMs: number, kind: OrderKind | null = null): Payout | null {
+    const chain = this.d.chain;
+    const rate = chain.rate();
+    // Unreachable with the MockChain (it always has a rate); a chain without one pays nothing and adds no GAME lines.
+    if (rate === null) return null;
+    const lock = chain.lock();
+    const boost = boostMultiplier(lock ? lock.usdMicroAtLock : 0);
+    const luck = this.rng();
+    const quality = payoutQuality(e.points, e.maxPoints);
+    const usdMicro = rollPayoutUsd({ tier: e.tier, points: e.points, maxPoints: e.maxPoints, luck, boost });
+    const detail = kind === null ? {} : { detail: { tier: e.tier, kind, inTime: e.inTime } };
+    return chain.accrue({ orderId: e.orderId, usdMicro, luck, quality, usdPerGame: rate.usdPerGame, boost, at: nowMs, ...detail });
+  }
+
+  /** The delivery popup's GAME lines: "+$0.12 ≈ 500 GAME" (and "×1.15 boost" when locked), or "Vault empty · no GAME". */
+  private payoutLines(p: Payout | null): string[] {
+    if (p === null) return [];
+    if (!p.paid) return ['Vault empty · no GAME'];
+    const lines = [`+${usdText(p.usdMicro)} ≈ ${gameText(p.game)} GAME`];
+    const boost = boostText(p.boost);
+    if (boost !== boostText(1)) lines.push(`${boost} boost`); // shown only above ×1.00 once rounded
+    return lines;
   }
 
   /** `before`: the active orders before this tick's update, so a completed order's details are still known. */
@@ -639,7 +894,13 @@ export class DeliveryLoop {
     switch (e.kind) {
       case 'prepStarted': {
         const a = this.sys.active.find((x) => x.order.id === e.orderId);
-        if (a) this.popups.show(`Preparing ${a.order.item}`, [`Ready in ${Math.ceil(e.readySeconds)} s`], 'info');
+        if (a) this.popups.show(`Preparing ${a.order.item}`, ['Wait at the counter'], 'info');
+        this.nextHudAt = 0;
+        break;
+      }
+      case 'pickupMissed': {
+        const missed = before.find((a) => a.order.id === e.orderId);
+        this.popups.show(`Missed the pickup${missed ? ` · ${missed.order.item}` : ''}`, [`No new offers for ${durationText(e.lockoutSeconds)}`], 'warn');
         this.nextHudAt = 0;
         break;
       }
@@ -652,11 +913,14 @@ export class DeliveryLoop {
       case 'completed': {
         this.save();
         const done = before.find((a) => a.order.id === e.orderId);
-        const lines = e.bonuses.map((b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[b])} · +${ordersConfig.coins[b]} coins`);
+        const payout = this.payOut(e, this.wallMs(), done?.order.kind ?? null);
+        const lines = this.payoutLines(payout);
+        lines.push(...e.bonuses.map((b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[b])} · +${ordersConfig.coins[b]} coins`));
         if (!e.inTime) lines.push(done?.order.kind === 'food' ? 'Cold · no hot bonus' : 'Over par · no bonus');
         if (e.expressOnTime === false) lines.push('Express late · no bonus');
         if (done?.order.modifier === 'fragile' && !done.fragileIntact) lines.push('Fragile damaged · no bonus');
-        this.popups.show(`Delivered! +${pointsText(e.points)} · +${e.coins} coins`, lines);
+        // The GAME line (paid, or "Vault empty · no GAME") carries the Mock wallet badge (Decision 1).
+        this.popups.show(`Delivered! +${pointsText(e.points)} · +${e.coins} coins`, lines, 'good', payout !== null);
         this.nextHudAt = 0;
         break;
       }

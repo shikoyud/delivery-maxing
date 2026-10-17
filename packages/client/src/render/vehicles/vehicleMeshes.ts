@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { ridingConfig, type CatalogEntry, type RideSpec, type RideTier } from '@dm/shared';
-import type { ModelLoader } from '../city/modelLoader';
+import { MATERIAL_FOLDED_SUFFIX, ridingConfig, type CatalogEntry, type RideSpec, type RideTier } from '@dm/shared';
+import { carModelScale, finishMaterial, paintMaterial, surfaceOf, type Paint, type Surface } from '../cosmetics';
+import { foldFlatShader, type ModelLoader } from '../city/modelLoader';
 import { placeModel } from '../city/placement';
 import { palette } from '../palette';
 
@@ -24,19 +25,29 @@ export function paint(g: THREE.BufferGeometry, color: number): THREE.BufferGeome
   return flat;
 }
 
-/** Collects painted parts and merges them. */
+/**
+ * Collects painted parts and merges them. Parts in the ride's body colour are its paintable body: they go last, as
+ * the merged geometry's second group (paintVehicle).
+ */
 class Parts {
-  private readonly list: THREE.BufferGeometry[] = [];
+  private readonly fixed: THREE.BufferGeometry[] = [];
+  private readonly body: THREE.BufferGeometry[] = [];
+
+  constructor(private readonly bodyColor: number) {}
+
+  private add(g: THREE.BufferGeometry, color: number): void {
+    (color === this.bodyColor ? this.body : this.fixed).push(paint(g, color));
+  }
 
   /** A box of size (w, h, l) centred at (x, y, z). */
   box(w: number, h: number, l: number, x: number, y: number, z: number, color: number): this {
-    this.list.push(paint(new THREE.BoxGeometry(w, h, l).translate(x, y, z), color));
+    this.add(new THREE.BoxGeometry(w, h, l).translate(x, y, z), color);
     return this;
   }
 
   /** A wheel (cylinder with its axle along X) of radius `r` and width `w`, centred at (x, r, z) so it stands on y = 0. */
   wheel(r: number, w: number, x: number, z: number, color: number): this {
-    this.list.push(paint(new THREE.CylinderGeometry(r, r, w, WHEEL_SEGMENTS).rotateZ(Math.PI / 2).translate(x, r, z), color));
+    this.add(new THREE.CylinderGeometry(r, r, w, WHEEL_SEGMENTS).rotateZ(Math.PI / 2).translate(x, r, z), color);
     return this;
   }
 
@@ -47,13 +58,18 @@ class Parts {
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
     g.applyQuaternion(q);
     const mid = a.clone().add(b).multiplyScalar(0.5);
-    this.list.push(paint(g.translate(mid.x, mid.y, mid.z), color));
+    this.add(g.translate(mid.x, mid.y, mid.z), color);
     return this;
   }
 
+  /** One geometry: group 0 the fixed parts (wheels, trim, seat, glass, lights), group 1 the body. */
   merge(): THREE.BufferGeometry {
-    const merged = mergeGeometries(this.list, false);
-    this.list.forEach((g) => g.dispose());
+    const all = [...this.fixed, ...this.body];
+    const merged = mergeGeometries(all, false);
+    const fixed = this.fixed.reduce((n, g) => n + g.getAttribute('position').count, 0);
+    merged.addGroup(0, fixed, 0);
+    merged.addGroup(fixed, merged.getAttribute('position').count - fixed, 1);
+    all.forEach((g) => g.dispose());
     return merged;
   }
 }
@@ -159,15 +175,33 @@ function car(p: Parts, w: number, l: number, h: number): void {
   }
 }
 
+/** Each placeholder's paintable body colour (the deck, the frame, the body panels). */
+const BODY_COLOR: Record<RideTier, number> = {
+  skateboard: palette.skateDeck,
+  bicycle: palette.bicycleFrame,
+  motorbike: palette.motorbikeBody,
+  car: palette.carBody,
+};
+
+/** A placeholder's paint state: its body's vertex range and factory colours, and its materials. */
+interface PaintState {
+  start: number;
+  count: number;
+  factory: Float32Array;
+  base: THREE.MeshLambertMaterial;
+  /** Made on the first premium finish. */
+  finish: THREE.MeshStandardMaterial | null;
+}
+
 /**
  * The placeholder for `tier`, sized from `spec.collider`: a Group named `vehicle-<tier>` holding one vertex-coloured
  * mesh (skateboard: deck + 4 wheels; bicycle: frame + 2 wheels; motorbike: body + 2 wheels; car: body + cabin +
- * 4 wheels). Origin at the feet, facing −Z.
+ * 4 wheels), its body parts the geometry's second group (paintVehicle). Origin at the feet, facing −Z.
  */
 export function buildVehicleMesh(tier: RideTier, spec: RideSpec): THREE.Group {
   const { w, l } = footprint(spec);
   const h = spec.collider.height;
-  const p = new Parts();
+  const p = new Parts(BODY_COLOR[tier]);
   switch (tier) {
     case 'skateboard':
       skateboard(p, l);
@@ -182,7 +216,13 @@ export function buildVehicleMesh(tier: RideTier, spec: RideSpec): THREE.Group {
       car(p, w, l, h);
       break;
   }
-  const mesh = new THREE.Mesh(p.merge(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const geometry = p.merge();
+  const base = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mesh = new THREE.Mesh(geometry, base);
+  const body = geometry.groups[1]!;
+  const colors = geometry.getAttribute('color').array as Float32Array;
+  const state: PaintState = { start: body.start, count: body.count, factory: colors.slice(body.start * 3, (body.start + body.count) * 3), base, finish: null };
+  mesh.userData.paint = state;
   mesh.name = `vehicle-${tier}-mesh`;
   mesh.castShadow = true;
   mesh.receiveShadow = false;
@@ -190,6 +230,34 @@ export function buildVehicleMesh(tier: RideTier, spec: RideSpec): THREE.Group {
   group.name = `vehicle-${tier}`;
   group.add(mesh);
   return group;
+}
+
+/**
+ * Paints a placeholder (buildVehicleMesh) in place; wheels, trim, seat, glass and lights keep their colours. A colour
+ * (or the factory paint, `color: null`) rewrites the body's vertex colours and stays one material, so one draw call; a
+ * premium finish draws the body group with a finish material (one more draw call while it is worn).
+ */
+export function paintVehicle(root: THREE.Object3D, paint: Paint): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    const state = mesh.userData.paint as PaintState | undefined;
+    if (!mesh.isMesh || !state) return;
+    const attr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const colors = attr.array as Float32Array;
+    if ('finish' in paint) {
+      state.finish ??= new THREE.MeshStandardMaterial();
+      finishMaterial(paint.finish, state.finish);
+      mesh.material = [state.base, state.finish];
+      return;
+    }
+    if (paint.color === null) colors.set(state.factory, state.start * 3);
+    else {
+      const c = new THREE.Color(paint.color);
+      for (let i = state.start; i < state.start + state.count; i++) c.toArray(colors, i * 3);
+    }
+    attr.needsUpdate = true;
+    mesh.material = state.base;
+  });
 }
 
 /**
@@ -205,11 +273,12 @@ export const CAR_MODEL_ID = 'mega/Car_01';
 
 /**
  * The pack car, once `loader` has it (`entry` is its catalog entry): a Group named `vehicle-car-model` holding the
- * model 1:1, placed by its catalog pivot on the car's feet (bounding-box centre on the origin, lowest point on y = 0)
- * and turned so its front (`entry.front`, +z by default) faces −Z like the placeholders. Null while loading or when
- * the model is missing (the placeholder stays).
+ * model scaled to the car's collider length (Decision 13: the 3.3 m model on the 4.4 m collider, carModelScale),
+ * placed by its catalog pivot on the car's feet (bounding-box centre on the origin, lowest point on y = 0) and turned
+ * so its front (`entry.front`, +z by default) faces −Z like the placeholders. Null while loading or when the model is
+ * missing (the placeholder stays).
  */
-export function carModel(loader: ModelLoader, entry: CatalogEntry): THREE.Object3D | null {
+export function carModel(loader: ModelLoader, entry: CatalogEntry, spec: RideSpec = ridingConfig.rides.car): THREE.Object3D | null {
   const m = loader.get(entry.id);
   if (m === 'missing' || m === 'loading') return null;
   const mesh = new THREE.Mesh(m.lod0, m.material);
@@ -220,8 +289,73 @@ export function carModel(loader: ModelLoader, entry: CatalogEntry): THREE.Object
   mesh.name = 'vehicle-car-model-mesh';
   mesh.castShadow = true;
   mesh.receiveShadow = false;
+  mesh.userData.shared = m.material; // the loader's, shared with the city's cars: paintPackCar paints copies
   const group = new THREE.Group();
   group.name = 'vehicle-car-model';
+  group.scale.setScalar(carModelScale(entry.size.d, footprint(spec).l));
   group.add(mesh);
   return group;
+}
+
+/**
+ * The pack car's paint material: its only material, or (a model with glass or lights in their own materials) the
+ * material of its largest geometry group, the body.
+ */
+function paintIndex(mesh: THREE.Mesh, materials: readonly THREE.Material[]): number {
+  if (materials.length === 1) return 0;
+  let best = 0;
+  let most = -1;
+  for (const g of mesh.geometry.groups) {
+    if (g.count > most) {
+      most = g.count;
+      best = g.materialIndex ?? 0;
+    }
+  }
+  return best;
+}
+
+/**
+ * A copy of the pack car's paint material to paint: the same texture and vertex colours, Lambert for a colour or
+ * standard for a finish; a folded one tints only its textured parts, never the glass and lights.
+ */
+function packPaint(src: THREE.Material, standard: boolean): THREE.MeshLambertMaterial | THREE.MeshStandardMaterial {
+  const s = src as THREE.MeshLambertMaterial;
+  const params = { map: s.map ?? null, vertexColors: s.vertexColors };
+  const m = standard ? new THREE.MeshStandardMaterial(params) : new THREE.MeshLambertMaterial(params);
+  m.name = src.name;
+  if (src.name.endsWith(MATERIAL_FOLDED_SUFFIX)) foldFlatShader(m);
+  return m;
+}
+
+/**
+ * Paints the pack car (carModel) on copies of its materials: the loader's are shared with every parked car of the
+ * city, which keep theirs. The factory paint (`color: null`) draws the model's own materials. Draw calls stay the same.
+ * The copy is repainted in place while its kind fits (Lambert for a colour, standard for a finish) and kept across
+ * the factory paint, so a repaint never drops a shader program for three.js to compile again.
+ */
+export function paintPackCar(model: THREE.Object3D, paint: Paint): void {
+  model.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    const shared = mesh.userData.shared as THREE.Material | THREE.Material[] | undefined;
+    if (!mesh.isMesh || !shared) return;
+    if ('color' in paint && paint.color === null) {
+      mesh.material = shared;
+      return;
+    }
+    const list = Array.isArray(shared) ? shared : [shared];
+    const i = paintIndex(mesh, list);
+    let painted = mesh.userData.painted as THREE.MeshLambertMaterial | THREE.MeshStandardMaterial | undefined;
+    const standard = 'finish' in paint;
+    if (painted && Boolean((painted as THREE.MeshStandardMaterial).isMeshStandardMaterial) === standard) {
+      paintMaterial(painted, paint, mesh.userData.paintSurface as Surface, 0xffffff);
+    } else {
+      painted?.dispose();
+      painted = packPaint(list[i]!, standard);
+      mesh.userData.paintSurface = surfaceOf(painted);
+      paintMaterial(painted, paint, mesh.userData.paintSurface as Surface, 0xffffff);
+      mesh.userData.painted = painted;
+    }
+    const p = painted;
+    mesh.material = Array.isArray(shared) ? shared.map((m, k) => (k === i ? p : m)) : p;
+  });
 }

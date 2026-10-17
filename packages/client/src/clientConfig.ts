@@ -16,6 +16,8 @@ export interface ClientConfig {
     near: number;
     far: number;
     chase: ChaseConfig;
+    /** The mouse orbits the camera around a ride; it swings back behind after a pause (decision 8). */
+    ride: { recenterDelay: number; recenterRate: number; recenterMinSpeed: number };
   };
   graphics: {
     maxPixelRatio: number;
@@ -61,8 +63,12 @@ export interface ClientConfig {
     hintCooldownSeconds: number;
     /** The HUD fuel gauge turns to the warning colour at or below this tank share (%). */
     fuelLowPct: number;
-    /** The phone Map app on the city shows a window this many metres wide, centred on the player (the greybox shows all of it). */
-    mapWindowMeters: number;
+    /**
+     * The full-screen map (M): it opens with the whole map fitted to the window (zoom 1); the wheel zooms toward the
+     * cursor by `wheelStep` per notch (a notch is `wheelPixelsPerStep` pixels or `wheelLinesPerStep` lines of deltaY;
+     * a trackpad's smaller deltas zoom by that fraction of a step), up to `maxZoom`.
+     */
+    map: { maxZoom: number; wheelStep: number; wheelPixelsPerStep: number; wheelLinesPerStep: number };
   };
 }
 

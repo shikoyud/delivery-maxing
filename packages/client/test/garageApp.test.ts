@@ -70,10 +70,10 @@ describe('Garage app', () => {
     const player = vec3(0, 0, 0);
     const rows = garageRows(garage, player, 0);
     expect(rows).toEqual([
-      { tier: 'skateboard', status: 'carried', position: null, distance: null, fuel: null, summon: 'carried', readyIn: 0 },
-      { tier: 'bicycle', status: 'parked', position: at(0, 60), distance: 60, fuel: null, summon: 'tooClose', readyIn: 0 },
-      { tier: 'motorbike', status: 'parked', position: at(0, -240), distance: 240, fuel: 0.4, summon: 'ok', readyIn: 0 },
-      { tier: 'car', status: 'parked', position: at(150, 0), distance: 150, fuel: 0.75, summon: 'ok', readyIn: 0 },
+      expect.objectContaining({ tier: 'skateboard', status: 'carried', position: null, distance: null, fuel: null, summon: 'carried', readyIn: 0 }),
+      expect.objectContaining({ tier: 'bicycle', status: 'parked', position: at(0, 60), distance: 60, fuel: null, summon: 'tooClose', readyIn: 0 }),
+      expect.objectContaining({ tier: 'motorbike', status: 'parked', position: at(0, -240), distance: 240, fuel: 0.4, summon: 'ok', readyIn: 0 }),
+      expect.objectContaining({ tier: 'car', status: 'parked', position: at(150, 0), distance: 150, fuel: 0.75, summon: 'ok', readyIn: 0 }),
     ]);
 
     const app = createGarageApp(() => undefined);
@@ -110,9 +110,65 @@ describe('Garage app', () => {
     expect(summonBtn('motorbike').disabled).toBe(true);
   });
 
+  const buyBtn = (tier: string): FakeElement | undefined => rowOf(tier).findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'buy')[0];
+  const switchBtn = (tier: string): FakeElement | undefined => rowOf(tier).findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'switch')[0];
+  const shown = (e: FakeElement | undefined): boolean => e !== undefined && !e.hidden;
+
+  it('four rows with their payout ranges; owned ones show "Fuel 64%" for tanks, Summon and Switch; unowned show "Buy in the Shop"', async () => {
+    const { garage } = await makeGarage([parked('bicycle', 0, 60), parked('motorbike', 0, -240, 0.64)]);
+    const player = vec3(0, 0, 0);
+    const rows = garageRows(garage, player, 0, 'bicycle');
+    expect(rows.map((r) => [r.tier, r.owned, r.range])).toEqual([
+      ['skateboard', false, '$0.01–0.06 per order'],
+      ['bicycle', true, '$0.02–0.12 per order'],
+      ['motorbike', true, '$0.03–0.30 per order'],
+      ['car', false, '$0.05–0.60 per order'],
+    ]);
+    expect(rows.map((r) => r.fuelText)).toEqual([null, null, 'Fuel 64%', null]);
+    const calls: string[] = [];
+    const app = createGarageApp(() => undefined, { switchTo: (t) => void calls.push(`switch ${t}`), buy: () => void calls.push('buy') });
+    dom.host.appendChild(app.el as unknown as FakeElement);
+    app.render(model({ garage: rows }), player, 0);
+    expect(rowOf('motorbike').textContent).toContain('$0.03–0.30 per order');
+    expect(rowOf('motorbike').textContent).toContain('Fuel 64%');
+    for (const t of ['bicycle', 'motorbike']) {
+      expect(shown(summonBtn(t))).toBe(true);
+      expect(shown(switchBtn(t))).toBe(true);
+      expect(shown(buyBtn(t))).toBe(false);
+    }
+    for (const t of ['skateboard', 'car']) {
+      expect(shown(summonBtn(t))).toBe(false);
+      expect(shown(switchBtn(t))).toBe(false);
+      expect(shown(buyBtn(t))).toBe(true);
+      expect(buyBtn(t)!.textContent).toBe('Buy in the Shop');
+      expect(rowOf(t).textContent).toContain('Not owned');
+      expect(rowOf(t).textContent).toContain('per order');
+    }
+    switchBtn('motorbike')!.click();
+    buyBtn('car')!.click();
+    expect(calls).toEqual(['switch motorbike', 'buy']);
+  });
+
+  it('the active row says "For offers" and its Switch is disabled', async () => {
+    const { garage } = await makeGarage([parked('bicycle', 0, 60), parked('motorbike', 0, -240)]);
+    const player = vec3(0, 0, 0);
+    const app = createGarageApp(() => undefined);
+    dom.host.appendChild(app.el as unknown as FakeElement);
+    app.render(model({ garage: garageRows(garage, player, 0, 'motorbike') }), player, 0);
+    expect(rowOf('motorbike').textContent).toContain('For offers');
+    expect(switchBtn('motorbike')!.disabled).toBe(true);
+    expect(switchBtn('bicycle')!.disabled).toBe(false);
+    expect(switchBtn('bicycle')!.textContent).toBe('Switch');
+    expect(rowOf('bicycle').textContent).not.toContain('For offers');
+    app.render(model({ garage: garageRows(garage, player, 0, 'bicycle') }), player, 0);
+    expect(switchBtn('motorbike')!.disabled).toBe(false);
+    expect(switchBtn('bicycle')!.disabled).toBe(true);
+    expect(rowOf('bicycle').textContent).toContain('For offers');
+  });
+
   it('the row distance is horizontal (final review 5): a courier 30 m above sees the flat distance', async () => {
     const { garage } = await makeGarage([parked('motorbike', 0, -240)]);
-    expect(garageRows(garage, vec3(0, 30, 0), 0)[0]!.distance).toBe(240);
+    expect(garageRows(garage, vec3(0, 30, 0), 0).find((r) => r.tier === 'motorbike')!.distance).toBe(240);
   });
 
   it('clicking Summon calls onSummon with the tier', async () => {
@@ -139,6 +195,14 @@ describe('Garage app', () => {
         closed: () => undefined,
         summon: () => undefined,
         respawn: () => void events.push(...sim.respawnAtHospital().map((e) => e.kind)),
+        shopBuy: () => undefined,
+        shopConfirm: () => undefined,
+        shopCancel: () => undefined,
+        claim: () => undefined,
+        lockGame: () => undefined,
+        withdrawLock: () => undefined,
+        switchRide: () => undefined,
+        wardrobeEquip: () => undefined,
       },
       ['Escape'],
     );

@@ -1,13 +1,17 @@
 import { describe, expect, it, test } from 'vitest';
 import {
+  GAME_UNITS,
   OrderSystem,
+  economyConfig,
+  usdToGame,
+  type Payout,
   expandGreybox,
   mulberry32,
   ordersConfig,
   playerZones,
   scoreOrder,
   streetDistance,
-  vehiclesConfig,
+  vehicleCapacity,
   type GreyboxSource,
   type Offer,
   type RouteToDoor,
@@ -16,8 +20,12 @@ import {
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import type { GarageRow } from '../src/ui/phone/garageApp';
+import type { ShopRow } from '../src/ui/phone/shopApp';
 import { clientConfig } from '../src/clientConfig';
-import { hudModel, loadText, promptFor, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
+import { dateText, gamePriceText, gameText, hudModel, loadText, promptFor, poiIndex, pointsText, stageText, usdText, walletModel, whenText } from '../src/ui/hudModel';
+import { MockChain } from '../src/economy/MockChain';
+
+const T0 = 1_760_000_000_000;
 
 const map = expandGreybox(greybox as GreyboxSource);
 const spawn = map.hospitals[0]!.spawn;
@@ -25,7 +33,7 @@ const nowhere = { poiIds: new Set<string>(), safeZone: null };
 
 function makeSystem(tier: VehicleTier = 'car', seed = 7): OrderSystem {
   return new OrderSystem(
-    { pois: map.pois, distance: streetDistance, rules: map.orderRules, cfg: ordersConfig, rng: mulberry32(seed), capacity: vehiclesConfig[tier] },
+    { pois: map.pois, distance: streetDistance, rules: map.orderRules, cfg: ordersConfig, rng: mulberry32(seed), capacity: vehicleCapacity(tier) },
     0,
   );
 }
@@ -73,7 +81,7 @@ describe('hudModel', () => {
     const m = hudModel(sys, map, spawn, 0, 'Downtown General');
     expect(m.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
     expect(m.totals).not.toBe(sys.totals);
-    expect(m.load).toEqual({ usedSlots: 0, slots: 3, carriedKg: 0, maxPackageKg: 50 });
+    expect(m.load).toEqual({ usedSlots: 0, slots: 4, carriedKg: 0, maxPackageKg: 50 });
     expect(m.lockoutLeft).toBe(0);
     expect(m.orders).toEqual([]);
     expect(m.offers).toEqual([]);
@@ -104,7 +112,7 @@ describe('hudModel', () => {
   it('city offers name the pickup with its address, and the dropoff by address with the name on its own line', () => {
     const city = { ...map, pois: map.pois.map((p, i) => ({ ...p, address: `${i + 1} Test St` })) };
     const sys = new OrderSystem(
-      { pois: city.pois, distance: streetDistance, rules: city.orderRules, cfg: ordersConfig, rng: mulberry32(7), capacity: vehiclesConfig.car },
+      { pois: city.pois, distance: streetDistance, rules: city.orderRules, cfg: ordersConfig, rng: mulberry32(7), capacity: vehicleCapacity('car') },
       0,
     );
     let found: Offer | undefined;
@@ -126,7 +134,7 @@ describe('hudModel', () => {
     const { offer, t } = waitForOffer(sys, (o) => (o.order.weightKg ?? 0) > 0);
     const status = (): string => hudModel(sys, map, spawn, t, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus;
     expect(status()).toBe('ok');
-    sys.setCapacity(vehiclesConfig.walk); // takes no packages
+    sys.setCapacity({ slots: 3, maxPackageKg: 0 }); // takes no packages
     expect(status()).toBe('too_heavy');
     expect(status()).toBe(sys.canAccept(offer.order.id, t));
     expect(hudModel(sys, map, spawn, offer.expiresAt, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus).toBe('expired');
@@ -157,7 +165,11 @@ describe('hudModel', () => {
     m = hudModel(sys, map, pickup.position, arrive + 1, null);
     o = m.orders[0]!;
     expect(o.stage).toBe(`Waiting for ${offer.order.item} at ${pickup.name}`);
-    expect(o.prep!.secondsLeft).toBeCloseTo(prep - 1);
+    expect(o.prep!.progress).toBeCloseTo(1 / prep);
+    expect(o.prep!.ready).toBe(false);
+    expect(hudModel(sys, map, pickup.position, arrive, null).orders[0]!.prep).toEqual({ progress: 0, ready: false });
+    expect(hudModel(sys, map, pickup.position, arrive + prep / 2, null).orders[0]!.prep!.progress).toBeCloseTo(0.5);
+    expect(hudModel(sys, map, pickup.position, arrive + prep + 5, null).orders[0]!.prep).toEqual({ progress: 1, ready: true });
     expect(o.timer).toBeNull();
 
     const tp = arrive + prep;
@@ -168,6 +180,7 @@ describe('hudModel', () => {
     expect(o.stage).toBe(`Deliver to ${dropoff.name}`);
     expect(o.targetName).toBe(dropoff.name);
     expect(o.target).toEqual(dropoff.position);
+    expect(o.prep).toBeNull();
     expect(o.timer!.secondsLeft).toBeCloseTo(offer.order.timeLimit - 4);
     expect(o.timer!.late).toBe(false);
 
@@ -186,6 +199,28 @@ describe('hudModel', () => {
     o = hudModel(sys, map, pickup, t + 3, null).orders[0]!;
     expect(o.timer!.secondsLeft).toBeCloseTo(offer.order.timeLimit - 2);
     expect(o.express!.secondsLeft).toBeCloseTo(offer.order.expressLimit! - 2);
+  });
+
+  test('an unreached order shows the pickup countdown; a reached one does not', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys, (o) => o.order.kind === 'food');
+    sys.accept(offer.order.id, t);
+    const limit = ordersConfig.pickupDeadline.seconds;
+    expect(hudModel(sys, map, spawn, t + 20, null).orders[0]!.pickup).toEqual({ secondsLeft: limit - 20, late: false });
+    const pickup = poiIndex(map).get(offer.order.pickupPoiId).position;
+    sys.update(t + 30, pickup, playerZones(pickup, map, ordersConfig.zones));
+    expect(hudModel(sys, map, pickup, t + 31, null).orders[0]!.pickup).toBeNull();
+  });
+
+  test('the lockout reason follows a missed pickup', () => {
+    const sys = makeSystem('car');
+    const { offer, t } = waitForOffer(sys);
+    sys.accept(offer.order.id, t);
+    sys.update(t + ordersConfig.pickupDeadline.seconds, spawn, nowhere);
+    const m = hudModel(sys, map, spawn, t + ordersConfig.pickupDeadline.seconds + 6, null);
+    expect(m.orders).toHaveLength(0);
+    expect(m.lockoutReason).toBe('missedPickup');
+    expect(m.lockoutLeft).toBeCloseTo(ordersConfig.pickupDeadline.lockoutSeconds - 6);
   });
 
   it('reports the offer lockout left after a cancel', () => {
@@ -256,6 +291,80 @@ describe('hudModel next stop and ride', () => {
     expect(Math.abs(straightAtDoor)).toBeGreaterThan(0.1);
   });
 
+  test('the model carries the Shop rows and the wallet; without them, none and an empty wallet', () => {
+    const sys = makeSystem('car');
+    const shop: ShopRow[] = [
+      {
+        itemId: 'line.bag.1',
+        tab: 'token',
+        section: 'Bag',
+        label: 'Bag 1',
+        detail: '2 slots · 10 kg',
+        price: { kind: 'game', usd: '$1', game: 4166e6, maxGame: 4250e6, text: '$1 ≈ 4,166 GAME' },
+        state: 'buy',
+      },
+    ];
+    const wallet = walletModel(new MockChain(null, economyConfig, { now: () => T0 }), T0, true);
+    const m = hudModel(sys, map, spawn, 0, null, 1, [], { shop, wallet });
+    expect(m.shop).toEqual(shop);
+    expect(m.wallet).toEqual(wallet);
+    expect(m.wallet.balance).toBe(600_000 * GAME_UNITS);
+    const bare = hudModel(sys, map, spawn, 0, null);
+    expect(bare.shop).toEqual([]);
+    expect(bare.wallet).toMatchObject({ accrued: 0, balance: 0, vault: 0, lock: null, payouts: [], history: [], claims: [] });
+  });
+
+  test('walletModel: address and mock flag, balance, accrued, the vault in GAME and USD, the lock with its boost, newest-first lists', async () => {
+    const clock = { t: T0, now() { return this.t; } };
+    const chain = new MockChain(null, economyConfig, clock);
+    const fresh = walletModel(chain, T0, true);
+    expect(fresh).toEqual({
+      address: 'DEV-WALLET',
+      mock: true,
+      balance: 600_000 * GAME_UNITS,
+      accrued: 0,
+      vault: chain.vault(),
+      vaultUsd: '$50.00',
+      vaultEmpty: false,
+      usdPerGame: 0.00024,
+      lock: null,
+      payouts: [],
+      history: [],
+      claims: [],
+    });
+    const pay = (usdMicro: number, detail?: Payout['detail']) =>
+      chain.accrue({ orderId: `o${clock.t}`, usdMicro, luck: 0, quality: 1, usdPerGame: 0.00024, boost: 1, at: clock.t, ...(detail ? { detail } : {}) });
+    pay(210_000, { tier: 'car', kind: 'food', inTime: true });
+    clock.t += 1000;
+    pay(30_000, { tier: 'walk', kind: 'package', inTime: false });
+    clock.t += 1000;
+    pay(50_000); // a payout saved before payouts carried their order
+    await chain.purchase('line.bag.1', 10_000 * GAME_UNITS, clock.t);
+    expect(chain.lockGame(100_000 * GAME_UNITS, clock.t)).toEqual({ ok: true });
+    clock.t += 3 * 3_600_000;
+    const w = walletModel(chain, clock.t, true);
+    expect(w.payouts.map((p) => [p.label, p.usd, p.paid, p.when])).toEqual([
+      ['Order', '$0.050', true, '3 h ago'],
+      ['On foot · late', '$0.030', true, '3 h ago'],
+      ['Car · hot', '$0.21', true, '3 h ago'],
+    ]);
+    expect(w.payouts[2]!.game).toBe(usdToGame(210_000, { usdPerGame: 0.00024, updatedAt: 0 }, 'payout'));
+    expect(w.history).toEqual([{ label: 'Bag 1', game: 0, burned: 0, vault: 0, status: 'pending', when: '3 h ago' }]);
+    expect(w.lock).toEqual({ game: 100_000 * GAME_UNITS, boostText: '×1.07', unlocksAt: dateText(T0 + 2000 + 7 * 86_400_000), canWithdraw: false });
+    // Closed phone: the lists are not built (the HUD needs only the figures).
+    const closed = walletModel(chain, clock.t, false);
+    expect(closed.payouts).toEqual([]);
+    expect(closed.history).toEqual([]);
+    expect(closed.accrued).toBe(w.accrued);
+  });
+
+  test('whenText is relative: just now, minutes, hours, days', () => {
+    expect(whenText(T0, T0 + 30_000)).toBe('just now');
+    expect(whenText(T0, T0 + 5 * 60_000)).toBe('5 min ago');
+    expect(whenText(T0, T0 + 2 * 3_600_000)).toBe('2 h ago');
+    expect(whenText(T0, T0 + 3 * 86_400_000)).toBe('3 d ago');
+  });
+
   it('nextStop is null without active orders; ride carries tier, speed and fuel', () => {
     const sys = makeSystem('car');
     const m = hudModel(sys, map, spawn, 0, null, 1, [], { ride: { tier: 'car', speed: 21.3, fuel: 0.4 } });
@@ -273,6 +382,10 @@ describe('hudModel next stop and ride', () => {
       fuel: null,
       summon: 'ok',
       readyIn: 0,
+      owned: true,
+      active: false,
+      fuelText: null,
+      range: '',
     });
     const rows = [
       row('skateboard', 'carried', null),
@@ -299,10 +412,16 @@ describe('promptFor', () => {
     [{ riding: 'bicycle', stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
     [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'Get on to refuel'],
     [{ riding: null, stopped: true, mountCandidate: null, atPump: true, ownsFuelledRide: false, phoneOpen: false }, null],
-    [{ riding: 'car', stopped: false, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, null],
+    [{ riding: 'car', stopped: false, mountCandidate: null, atPump: true, ownsFuelledRide: true, phoneOpen: false }, 'F · Get off'],
     [{ riding: null, stopped: true, mountCandidate: 'car', atPump: false, ownsFuelledRide: true, phoneOpen: true }, null],
   ] as const)('promptFor %j', (c, text) => {
     expect(promptFor({ ...ctx, ...c })).toBe(text);
+  });
+  test('the prompt says "F · Get off" while riding at any speed', () => {
+    // Decision 9: no speed limit on getting off; refuelling still needs the ride stopped.
+    for (const riding of ['skateboard', 'bicycle', 'motorbike', 'car'] as const) {
+      for (const atPump of [false, true]) expect(promptFor({ ...ctx, riding, stopped: false, atPump }), riding).toBe('F · Get off');
+    }
   });
   test('nothing to say on foot with nothing near', () => {
     expect(promptFor(ctx)).toBeNull();
@@ -316,4 +435,24 @@ describe('promptFor', () => {
     expect(promptFor({ ...ctx, riding: 'car' }, bindings)).toBe('G · Get off');
     expect(promptFor({ ...ctx, riding: 'car', atPump: true }, bindings)).toBe('Hold R · Refuel');
   });
+});
+
+test('usdText shows two decimals, three below $0.10; gameText whole GAME with thousands separators', () => {
+  expect(usdText(120_000)).toBe('$0.12');
+  expect(usdText(34_000)).toBe('$0.034');
+  expect(usdText(100_000)).toBe('$0.10');
+  expect(usdText(12_000_000)).toBe('$12.00');
+  expect(gameText(0)).toBe('0');
+  expect(gameText(500 * GAME_UNITS)).toBe('500');
+  expect(gameText(50_000 * GAME_UNITS + 999_999)).toBe('50,000');
+  expect(gameText(1_234_567_890_123)).toBe('1,234,567');
+});
+
+test('gamePriceText rounds a price or cap up to whole GAME, so the shown "at most" is never below the real cap', () => {
+  expect(gamePriceText(0)).toBe('0');
+  expect(gamePriceText(50_000 * GAME_UNITS)).toBe('50,000');
+  // $2 at $0.00024: charged 8,333.333334 GAME, capped at 8,500.000001
+  expect(gamePriceText(8_333_333_334)).toBe('8,334');
+  expect(gamePriceText(8_500_000_001)).toBe('8,501');
+  expect(gameText(8_500_000_001)).toBe('8,500'); // balances and payouts keep rounding down
 });

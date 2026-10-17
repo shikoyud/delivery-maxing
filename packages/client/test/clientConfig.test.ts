@@ -85,4 +85,13 @@ describe('clientConfig', () => {
     expect(clientConfig.ui.fuelLowPct).toBeGreaterThan(0);
     expect(clientConfig.ui.fuelLowPct).toBeLessThan(100);
   });
+
+  it('ui.map: zoom 1× to 6×, 1.2× per wheel notch (Decision 11); the 500 m window is gone', () => {
+    expect(clientConfig.ui.map).toEqual({ maxZoom: 6, wheelStep: 1.2, wheelPixelsPerStep: 100, wheelLinesPerStep: 3 });
+    expect('mapWindowMeters' in clientConfig.ui).toBe(false);
+  });
+
+  it('ride camera: recenters after 1.5 s above 2 m/s at rate 3', () => {
+    expect(clientConfig.camera.ride).toEqual({ recenterDelay: 1.5, recenterRate: 3, recenterMinSpeed: 2 });
+  });
 });

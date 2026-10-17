@@ -3,12 +3,10 @@ import { el, keyLabel } from '../dom';
 
 type ClientBindings = Record<BindingName, string[]>;
 
-export type StubAppName = 'shop' | 'wardrobe' | 'leaderboard' | 'settings';
+export type StubAppName = 'leaderboard' | 'settings';
 
 /** Apps that are placeholders this sub-project: their name and the sub-project that brings them. */
 export const STUB_APPS: Record<StubAppName, { title: string; sp: number }> = {
-  shop: { title: 'Shop', sp: 6 },
-  wardrobe: { title: 'Wardrobe', sp: 6 },
   leaderboard: { title: 'Leaderboard', sp: 7 },
   settings: { title: 'Settings', sp: 3 },
 };
@@ -32,8 +30,8 @@ const BINDING_LABEL: Record<BindingName, string> = {
   mapDebug: 'Map debug view',
 };
 
-/** "App name" and "Coming in SP{n}" in `root`; a placeholder with that copy also serves the Map tab until Task 11. */
-export function buildComingSoon(root: HTMLElement, title: string, sp: number): HTMLElement {
+/** "App name" and "Coming in SP{n}" in `root`. */
+function buildComingSoon(root: HTMLElement, title: string, sp: number): HTMLElement {
   const wrap = el('div', 'phone-stub', root);
   el('h3', 'phone-stub-title', wrap).textContent = title;
   el('p', 'phone-stub-when', wrap).textContent = `Coming in SP${sp}`;
@@ -71,5 +69,8 @@ export function buildStubApp(
     if (codes.length) row(BINDING_LABEL[name], codes.map(keyLabel).join(' / '));
   }
   row('Look', 'Mouse');
+  const keys = (...names: BindingName[]): string => names.map((n) => bindings[n].map(keyLabel).join(' / ')).join(' / ');
+  row('Steer', keys('left', 'right'));
+  row('Throttle / brake', keys('forward', 'back'));
   row('Close phone', ['Esc', ...bindings.phone.map(keyLabel)].join(' / '));
 }

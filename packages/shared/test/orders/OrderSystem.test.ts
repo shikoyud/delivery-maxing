@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import type { OrdersConfig } from '../../src/config/types';
+import type { OrdersConfig, VehicleTier } from '../../src/config/types';
+import { dispatcherTuning } from '../../src/economy/dispatcher';
 import { vec3 } from '../../src/math/vec3';
 import { OrderSystem, type OrderEvent, type OrderSystemOptions } from '../../src/orders/OrderSystem';
 import type { CarrierCapacity } from '../../src/orders/types';
@@ -16,7 +17,7 @@ const zeroRng: Rng = () => 0;
 const cfgWith = (kind: 'food' | 'package', modifier: 'none' | 'express' | 'fragile' = 'none'): OrdersConfig => ({
   ...ordersConfig,
   // These tests pin the original pacing; the prep and cooldown tests below opt in to the live values.
-  offers: { maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15, maxPathQueries: 8 },
+  offers: { lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15, maxPathQueries: 8 },
   deliveryCooldown: { minSeconds: 0, maxSeconds: 0 },
   prep: { foodSeconds: 0 },
   mix: {
@@ -173,7 +174,7 @@ describe('OrderSystem', () => {
     onTime.accept('o1', 9);
     onTime.update(10, offerPlayer, zones('fp-near'));
     const done = onTime.update(10 + 44.375, offerPlayer, zones('df-ok'));
-    expect(done).toEqual([{ kind: 'completed', orderId: 'o1', points: 3, coins: 30, bonuses: ['hot'], inTime: true, expressOnTime: null }]);
+    expect(done).toEqual([{ kind: 'completed', orderId: 'o1', points: 3, coins: 30, bonuses: ['hot'], inTime: true, expressOnTime: null, maxPoints: 3, tier: 'walk' }]);
     expect(onTime.active).toHaveLength(0);
     expect(onTime.totals).toEqual({ points: 3, coins: 30, deliveries: 1 });
 
@@ -182,8 +183,21 @@ describe('OrderSystem', () => {
     late.accept('o1', 9);
     late.update(10, offerPlayer, zones('fp-near'));
     const lateDone = late.update(10 + 44.5, offerPlayer, zones('df-ok'));
-    expect(lateDone).toEqual([{ kind: 'completed', orderId: 'o1', points: 2, coins: 20, bonuses: [], inTime: false, expressOnTime: null }]);
+    expect(lateDone).toEqual([{ kind: 'completed', orderId: 'o1', points: 2, coins: 20, bonuses: [], inTime: false, expressOnTime: null, maxPoints: 3, tier: 'walk' }]);
     expect(late.totals).toEqual({ points: 7, coins: 70, deliveries: 3 });
+  });
+
+  test('completed carries maxPoints and the tier the offer was made for', () => {
+    // food fp-near -> df-ok: medium band (2) + hot (1) = 3 at most. Accepted on the motorbike, delivered after a switch.
+    let tier: VehicleTier = 'motorbike';
+    const sys = makeSystem({ vehicleTier: () => tier });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 9);
+    expect(sys.active[0]!.tier).toBe('motorbike');
+    tier = 'car';
+    sys.update(10, offerPlayer, zones('fp-near'));
+    const [late] = sys.update(10 + 60, offerPlayer, zones('df-ok'));
+    expect(late).toMatchObject({ kind: 'completed', points: 2, maxPoints: 3, tier: 'motorbike' });
   });
 
   test('express completion reports expressOnTime measured from pickup', () => {
@@ -245,6 +259,95 @@ describe('OrderSystem', () => {
     const ev = sys.update(21, offerPlayer, nowhere);
     expect(kinds(ev)).toEqual(['lockoutEnded', 'offered']);
     expect(kinds(run(sys, 22, 80))).not.toContain('lockoutEnded');
+  });
+
+  test('an order not reached within pickupDeadline.seconds fails and starts a 180 s lockout', () => {
+    const sys = makeSystem({ pois: twoFoodPois() });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 0);
+    expect(sys.active[0]!.pickupBy).toBe(180);
+    expect(kinds(run(sys, 9, 179))).not.toContain('pickupMissed');
+    expect(sys.active).toHaveLength(1);
+    const ev = sys.update(180, offerPlayer, nowhere);
+    expect(ev).toContainEqual({ kind: 'pickupMissed', orderId: 'o1', lockoutSeconds: 180 });
+    expect(kinds(ev).filter((k) => k === 'pickupMissed')).toHaveLength(1);
+    expect(sys.active).toHaveLength(0);
+    expect(sys.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
+    expect(sys.lockoutUntil).toBe(360);
+    expect(sys.lockoutReason).toBe('missedPickup');
+    expect(kinds(run(sys, 181, 359))).not.toContain('offered');
+    expect(kinds(run(sys, 360, 400))).toEqual(expect.arrayContaining(['lockoutEnded', 'offered']));
+    expect(sys.lockoutReason).toBeNull();
+  });
+
+  test('reaching the pickup in time (food: prep starts; package: picked up) clears the deadline', () => {
+    const food = makeSystem({ cfg: { ...cfgWith('food'), prep: { foodSeconds: 6 } } });
+    food.update(8, offerPlayer, nowhere);
+    food.accept('o1', 0);
+    food.update(100, offerPlayer, zones('fp-near'));
+    expect(kinds(run(food, 101, 300))).not.toContain('pickupMissed');
+    expect(food.active).toHaveLength(1);
+
+    const pkg = makeSystem({ pois: packagePois([5]), cfg: cfgWith('package') });
+    pkg.update(8, offerPlayer, nowhere);
+    pkg.accept('o1', 0);
+    pkg.update(100, offerPlayer, zones('ps-5'));
+    expect(kinds(run(pkg, 101, 300))).not.toContain('pickupMissed');
+    expect(pkg.active).toHaveLength(1);
+  });
+
+  test('arriving at the pickup on the deadline tick counts as reaching it in time', () => {
+    const food = makeSystem({ cfg: { ...cfgWith('food'), prep: { foodSeconds: 6 } } });
+    food.update(8, offerPlayer, nowhere);
+    food.accept('o1', 0);
+    const ev = food.update(180, offerPlayer, zones('fp-near'));
+    expect(kinds(ev)).toContain('prepStarted');
+    expect(kinds(ev)).not.toContain('pickupMissed');
+    expect(food.active).toHaveLength(1);
+
+    const pkg = makeSystem({ pois: packagePois([5]), cfg: cfgWith('package') });
+    pkg.update(8, offerPlayer, nowhere);
+    pkg.accept('o1', 0);
+    const ev2 = pkg.update(180, offerPlayer, zones('ps-5'));
+    expect(kinds(ev2)).toContain('pickedUp');
+    expect(kinds(ev2)).not.toContain('pickupMissed');
+    expect(pkg.lockoutReason).toBeNull();
+  });
+
+  test('a cancel lockout still running is extended to the missed-pickup lockout, never shortened', () => {
+    const other = makeSystem({ pois: twoFoodPois(), capacity: CAR });
+    other.update(8, offerPlayer, nowhere);
+    other.accept('o1', 0);
+    other.update(16, offerPlayer, nowhere);
+    other.accept('o2', 1);
+    // A cancel at 170 locks until 215; the second order's miss at 181 extends it.
+    other.cancel('o1', 170);
+    expect(other.lockoutUntil).toBe(215);
+    const ev = other.update(181, offerPlayer, nowhere);
+    expect(ev).toContainEqual({ kind: 'pickupMissed', orderId: 'o2', lockoutSeconds: 180 });
+    expect(other.lockoutUntil).toBe(361);
+    expect(other.lockoutReason).toBe('missedPickup');
+    // and a cancel afterwards (picked-up orders can still be cancelled) never cuts it
+    const third = makeSystem({ pois: twoFoodPois(), capacity: CAR });
+    third.update(8, offerPlayer, nowhere);
+    third.accept('o1', 0);
+    third.update(16, offerPlayer, nowhere);
+    third.accept('o2', 170);
+    third.update(180, offerPlayer, nowhere); // o1 missed: lockout until 360
+    expect(third.lockoutUntil).toBe(360);
+    third.cancel('o2', 200);
+    expect(third.lockoutUntil).toBe(360);
+    expect(third.lockoutReason).toBe('missedPickup');
+  });
+
+  test('skipLockout ends a missed-pickup lockout too', () => {
+    const sys = makeSystem({ pois: twoFoodPois() });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 0);
+    sys.update(180, offerPlayer, nowhere);
+    sys.skipLockout();
+    expect(sys.lockoutUntil).toBe(0);
+    expect(kinds(sys.update(181, offerPlayer, nowhere))).toEqual(['lockoutEnded', 'offered']);
   });
 
   test('a respawn breaks a carried Fragile once; a second respawn emits nothing', () => {
@@ -310,7 +413,7 @@ describe('OrderSystem', () => {
     sys.accept(order.id, 9);
     expect(sys.statModifiers().canSprint).toBe(true);
     sys.update(10, offerPlayer, zones('ps-100'));
-    expect(sys.statModifiers()).toEqual({ speedMul: 1, jumpHeightMul: 1, canSprint: false });
+    expect(sys.statModifiers()).toEqual({ speedMul: 1, jumpHeightMul: 1, sprintMul: 1, canSprint: false });
     sys.update(11, offerPlayer, zones('dp-0'));
     expect(sys.statModifiers().canSprint).toBe(true);
   });
@@ -393,5 +496,33 @@ describe('spendCoins', () => {
     expect(os.totals.coins).toBe(50);
     expect(os.spendCoins(30)).toBe(true);
     expect(os.totals.coins).toBe(20);
+  });
+});
+
+describe('the Dispatcher tier', () => {
+  const manyFood = (): Poi[] => [
+    ...Array.from({ length: 6 }, (_, i): Poi => ({ id: `fp-${i}`, position: vec3(15 * i, 0, 0), district: 'downtown', kind: 'counter', name: `Snacks ${i}`, roles: ['foodPickup'], items: ['wrap'] })),
+    ...Array.from({ length: 6 }, (_, i): Poi => ({ id: `df-${i}`, position: vec3(-200 - 15 * i, 0, 0), district: 'downtown', kind: 'door', name: `${i} West St`, roles: ['dropoffFood'] })),
+  ];
+  const offered = (tier: number, seconds: number) => {
+    const cfg = { ...cfgWith('food'), offers: { ...cfgWith('food').offers, lifetimeSeconds: 1e6 } };
+    const sys = makeSystem({ pois: manyFood(), cfg, dispatcher: () => dispatcherTuning(tier) });
+    let peak = 0;
+    for (let t = 0; t <= seconds; t += 0.5) {
+      sys.update(t, offerPlayer, nowhere);
+      peak = Math.max(peak, sys.offers.length);
+    }
+    return { peak };
+  };
+  test('Dispatcher 5 shows up to 5 offers and rolls them twice as often as tier 0', () => {
+    expect(offered(0, 200).peak).toBe(3);
+    expect(offered(5, 200).peak).toBe(5);
+    // with room to spare, tier 5 (interval x0.5) rolls twice as often: first rolls at 4 s vs 8 s, 4 s vs 8 s apart
+    const sys0 = makeSystem({ pois: manyFood(), dispatcher: () => dispatcherTuning(0) });
+    const sys5 = makeSystem({ pois: manyFood(), dispatcher: () => dispatcherTuning(5) });
+    expect(sys0.nextOfferAt).toBe(8);
+    expect(sys5.nextOfferAt).toBe(4);
+    sys5.update(4, offerPlayer, nowhere);
+    expect(sys5.nextOfferAt).toBe(8);
   });
 });

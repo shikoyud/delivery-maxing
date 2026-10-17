@@ -1,13 +1,28 @@
-import { RIDE_TIERS, type RideTier, type SavedVehicle, type Totals, type VehicleSpot } from '@dm/shared';
+import {
+  RIDE_TIERS,
+  tierOfVehicle,
+  type RideTier,
+  type SavedVehicle,
+  type Totals,
+  type VehicleSpot,
+} from '@dm/shared';
+import { defaultWardrobe, parseWardrobe, type Wardrobe } from '../economy/wardrobe';
 
 /**
- * What persists between visits: lifetime totals, the owned vehicles (where each is parked, its fuel) and the tier
- * last ridden (capacity and offers follow it).
+ * What persists between visits: lifetime totals, the vehicles (where each is parked, its fuel), the tier last ridden
+ * (capacity and offers follow it) and the Coin cosmetics. Which vehicles are owned is the chain's (Decision 2): Game
+ * keeps only the saved rows of owned tiers (ownedGarage).
  */
 export interface Progress {
   totals: Totals;
   garage: SavedVehicle[];
   lastRide: RideTier | null;
+  cosmetics: Wardrobe;
+}
+
+/** The saved rows of the vehicle tiers the chain owns (tiers 1..`vehicleTier`, Decision 15), in order. */
+export function ownedGarage(garage: readonly SavedVehicle[], vehicleTier: number): SavedVehicle[] {
+  return garage.filter((v) => tierOfVehicle(v.tier) <= vehicleTier);
 }
 
 /** Which map a save belongs to: a greybox save never places a vehicle in the city. */
@@ -86,25 +101,30 @@ function parseProgress(storage: Pick<Storage, 'getItem'>, defaults: () => SavedV
   const raw = storage.getItem(progressKey(kind)) ?? (kind === 'greybox' ? storage.getItem(PROGRESS_KEY_V3) : null);
   if (raw !== null) {
     const v3 = parseJson(raw);
-    return { totals: parseTotals(v3?.totals), garage: parseGarage(v3?.garage, defaults()), lastRide: rideTier(v3?.lastRide) };
+    return {
+      totals: parseTotals(v3?.totals),
+      garage: parseGarage(v3?.garage, defaults()),
+      lastRide: rideTier(v3?.lastRide),
+      cosmetics: parseWardrobe(v3?.cosmetics),
+    };
   }
   // No record at all: on the greybox a v2 record keeps its totals; the city starts fresh.
-  if (kind !== 'greybox') return { totals: parseTotals(null), garage: defaults(), lastRide: null };
+  if (kind !== 'greybox') return { totals: parseTotals(null), garage: defaults(), lastRide: null, cosmetics: defaultWardrobe() };
   const v2 = parseJson(storage.getItem(PROGRESS_KEY_V2));
-  return { totals: parseTotals(v2?.totals), garage: defaults(), lastRide: null };
+  return { totals: parseTotals(v2?.totals), garage: defaults(), lastRide: null, cosmetics: defaultWardrobe() };
 }
 
 /**
  * Local progress, one save per map kind. Never throws: blocked storage (private windows, disabled site data), quota errors and
  * malformed data all give default progress (Review Focus 5). `defaults` is the garage a new player starts with
- * (Game: defaultGarage(map)); it is called afresh for each load.
+ * (Game: none, Decision 2); it is called afresh for each load.
  */
 export function createProgressStore(
   storage: Pick<Storage, 'getItem' | 'setItem'> | null,
   kind: ProgressKind,
   defaults: () => SavedVehicle[] = () => [],
 ): ProgressStore {
-  const fresh = (): Progress => ({ totals: { points: 0, coins: 0, deliveries: 0 }, garage: defaults(), lastRide: null });
+  const fresh = (): Progress => ({ totals: { points: 0, coins: 0, deliveries: 0 }, garage: defaults(), lastRide: null, cosmetics: defaultWardrobe() });
   return {
     load() {
       if (!storage) return fresh();
@@ -121,6 +141,7 @@ export function createProgressStore(
           totals: { points: p.totals.points, coins: p.totals.coins, deliveries: p.totals.deliveries },
           garage: p.garage,
           lastRide: p.lastRide,
+          cosmetics: { owned: [...p.cosmetics.owned], equipped: { ...p.cosmetics.equipped } },
         }));
       } catch {
         // Storage full or blocked: progress for this session stays in memory only.

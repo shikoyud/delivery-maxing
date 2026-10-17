@@ -1,3 +1,4 @@
+import type { VehicleTier } from '../config/types';
 import type { Band } from '../world/distance';
 
 export type OrderKind = 'food' | 'package';
@@ -32,10 +33,14 @@ export interface Offer {
 export interface ActiveOrder {
   order: Order;
   acceptedAt: number;
+  /** Sim seconds by which the courier must first reach the pickup door (food: prep starts; package: pickup). */
+  pickupBy: number;
   /** Food: when the courier first reached the pickup and the kitchen started preparing. Null for packages. */
   prepStartedAt: number | null;
   pickedUpAt: number | null;
   fragileIntact: boolean;
+  /** The order's vehicle tier (spec §3.6): the capacity tier when it was accepted; it sets the payout range. */
+  tier: VehicleTier;
 }
 
 export interface CarrierCapacity {

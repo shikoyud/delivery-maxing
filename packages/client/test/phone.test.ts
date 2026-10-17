@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clientConfig } from '../src/clientConfig';
 import { PHONE_APPS, Phone } from '../src/ui/phone/Phone';
-import { STUB_APPS } from '../src/ui/phone/stubApp';
-import { fakeEvent, installFakeDom, type FakeElement } from './fakeDom';
+import { STUB_APPS, buildStubApp } from '../src/ui/phone/stubApp';
+import { fakeEvent, installFakeDom, type FakeElement, type FakeEvent } from './fakeDom';
 import { model, offer } from './phoneFixtures';
 
 describe('Phone', () => {
@@ -24,6 +24,14 @@ describe('Phone', () => {
         closed: () => void calls.push('closed'),
         summon: (t) => void calls.push(`summon ${t}`),
         respawn: () => void calls.push('respawn'),
+        shopBuy: (id) => void calls.push(`shop buy ${id}`),
+        shopConfirm: (id) => void calls.push(`shop confirm ${id}`),
+        shopCancel: () => void calls.push('shop cancel'),
+        claim: () => void calls.push('claim'),
+        lockGame: (g) => void calls.push(`lock ${g}`),
+        withdrawLock: () => void calls.push('withdraw'),
+        switchRide: (t) => void calls.push(`switch ${t}`),
+        wardrobeEquip: (id) => void calls.push(`equip ${id}`),
       },
       ['Escape', 'Tab'],
     );
@@ -112,6 +120,22 @@ describe('Phone', () => {
     expect(tab.propagationStopped).toBe(false);
   });
 
+  it('a close key typed in a text field (the Wallet amount) stays in the field; Escape still closes', () => {
+    phone.open();
+    for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT']) {
+      const field = { tagName } as unknown as FakeEvent['target'];
+      const tab = fakeEvent('keydown', { code: 'Tab', target: field });
+      dom.doc.dispatchEvent(tab);
+      expect(phone.isOpen).toBe(true);
+      expect(tab.propagationStopped).toBe(false);
+    }
+    const editable = { isContentEditable: true } as unknown as FakeEvent['target'];
+    dom.doc.dispatchEvent(fakeEvent('keydown', { code: 'Tab', target: editable }));
+    expect(phone.isOpen).toBe(true);
+    dom.doc.dispatchEvent(fakeEvent('keydown', { code: 'Escape', target: { tagName: 'INPUT' } as unknown as FakeEvent['target'] }));
+    expect(phone.isOpen).toBe(false);
+  });
+
   it('a held close key (auto-repeat) does not close the phone it just opened', () => {
     phone.open();
     const rep = fakeEvent('keydown', { code: 'Tab', repeat: true });
@@ -149,9 +173,9 @@ describe('Phone', () => {
 
   it('stub apps say when they arrive; settings lists the key bindings from config', () => {
     expect(STUB_APPS).not.toHaveProperty('garage');
+    expect(STUB_APPS).not.toHaveProperty('shop');
+    expect(STUB_APPS).not.toHaveProperty('wardrobe');
     expect(STUB_APPS).toMatchObject({
-      shop: { sp: 6 },
-      wardrobe: { sp: 6 },
       leaderboard: { sp: 7 },
       settings: { sp: 3 },
     });
@@ -163,14 +187,44 @@ describe('Phone', () => {
     expect(settings).toContain('Esc');
   });
 
+  it('settings labels Steer and Throttle / brake from the bindings, not fixed keys', () => {
+    const root = dom.doc.createElement('div') as unknown as HTMLElement;
+    const bindings = { ...clientConfig.input.bindings, forward: ['ArrowUp'], back: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'] };
+    buildStubApp(root, 'settings', () => undefined, bindings);
+    const text = (root as unknown as FakeElement).textContent;
+    expect(text).toContain('SteerArrowLeft / ArrowRight');
+    expect(text).toContain('Throttle / brakeArrowUp / ArrowDown');
+  });
+
+  it('the Shop app renders the shop rows; Buy and the confirm sheet reach the callbacks', () => {
+    phone.open('shop');
+    expect(view('shop').textContent).not.toContain('Coming in');
+    const game = { kind: 'game', usd: '$1', game: 4166e6, maxGame: 4250e6, text: '$1 ≈ 4,166 GAME' } as const;
+    phone.render(
+      model({
+        shop: [
+          { itemId: 'cosmetic.outfit.coral', tab: 'coins', section: 'Outfits', label: 'Coral outfit', detail: 'Outfit colour', price: { kind: 'coins', coins: 50, text: '50 Coins' }, state: 'buy' },
+          { itemId: 'line.bag.1', tab: 'token', section: 'Bag', label: 'Bag 1', detail: '2 slots · 10 kg', price: game, state: 'buy' },
+        ],
+      }),
+    );
+    const btn = (attr: 'id' | 'action', v: string): FakeElement => view('shop').findAll((e) => e.tagName === 'BUTTON' && e.dataset[attr] === v)[0]!;
+    btn('id', 'cosmetic.outfit.coral').click();
+    btn('id', 'line.bag.1').click();
+    btn('action', 'cancel').click();
+    btn('id', 'line.bag.1').click();
+    btn('action', 'confirm').click();
+    expect(calls).toEqual(['shop buy cosmetic.outfit.coral', 'shop cancel', 'shop confirm line.bag.1']);
+  });
+
   it('the Garage app renders the garage rows and Summon reaches the callback', () => {
     phone.open('garage');
     expect(view('garage').textContent).not.toContain('Coming in');
     phone.render(
       model({
         garage: [
-          { tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 0.5, summon: 'ok', readyIn: 0 },
-          { tier: 'bicycle', status: 'parked', position: { x: 0, y: 0, z: 40 }, distance: 40, fuel: null, summon: 'tooClose', readyIn: 0 },
+          { tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 0.5, summon: 'ok', readyIn: 0, owned: true, active: false, fuelText: null, range: '' },
+          { tier: 'bicycle', status: 'parked', position: { x: 0, y: 0, z: 40 }, distance: 40, fuel: null, summon: 'tooClose', readyIn: 0, owned: true, active: false, fuelText: null, range: '' },
         ],
       }),
     );
@@ -182,6 +236,24 @@ describe('Phone', () => {
     expect(calls).toEqual(['summon car']);
   });
 
+  it('the Wardrobe app renders the wardrobe rows and Equip reaches the callback', () => {
+    phone.open('wardrobe');
+    expect(view('wardrobe').textContent).not.toContain('Coming in');
+    phone.render(
+      model({
+        wardrobe: [
+          { itemId: 'cosmetic.outfit.teal', section: 'Outfits', label: 'Teal outfit', swatch: '#1f9e93', state: 'equipped' },
+          { itemId: 'cosmetic.outfit.coral', section: 'Outfits', label: 'Coral outfit', swatch: '#f27166', state: 'equip' },
+        ],
+      }),
+    );
+    const equip = view('wardrobe').findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'equip');
+    expect(equip.map((b) => b.textContent)).toEqual(['Equipped', 'Equip']);
+    equip[0]!.click();
+    equip[1]!.click();
+    expect(calls).toEqual(['equip cosmetic.outfit.coral']);
+  });
+
   it('Settings has "Respawn at nearest hospital", reaching the respawn callback', () => {
     phone.open('settings');
     const b = view('settings').findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'respawn')[0]!;
@@ -190,25 +262,27 @@ describe('Phone', () => {
     expect(calls).toEqual(['respawn']);
   });
 
-  it('setMapApp replaces the Map placeholder', () => {
-    const doc = dom.doc;
-    const el = doc.createElement('div');
-    const seen: number[] = [];
-    phone.setMapApp({ el: el as unknown as HTMLElement, render: (m) => void seen.push(m.totals.coins) });
-    phone.open('map');
-    phone.render(model({ totals: { points: 0, coins: 9, deliveries: 0 } }));
-    expect(seen).toEqual([9]);
-    expect(view('map')).toBe(el);
+  it('the phone has seven apps and no Map tab', () => {
+    expect(PHONE_APPS).toEqual(['orders', 'garage', 'shop', 'wallet', 'wardrobe', 'leaderboard', 'settings']);
+    expect(dom.host.byClass('phone-nav-btn').map((b) => b.dataset.app)).toEqual([...PHONE_APPS]);
+    expect(dom.host.findAll((e) => e.dataset.app === 'map')).toHaveLength(0);
   });
+});
 
-  it('forwards the player position and heading to the Map app', () => {
-    const seen: string[] = [];
-    phone.setMapApp({
-      el: dom.doc.createElement('div') as unknown as HTMLElement,
-      render: (_m, p, h) => void seen.push(`${p.x},${p.z},${h}`),
-    });
-    phone.open('map');
-    phone.render(model(), { x: 3, y: 0, z: -4 }, 1.5);
-    expect(seen).toEqual(['3,-4,1.5']);
+describe('Phone look', () => {
+  it('the phone frame takes the phone case colour', () => {
+    const dom = installFakeDom();
+    const noop = (): void => undefined;
+    const phone = new Phone(
+      dom.asHost,
+      { accept: noop, cancel: noop, skipLockout: noop, closed: noop, summon: noop, switchRide: noop, respawn: noop, shopBuy: noop, shopConfirm: noop, shopCancel: noop, claim: noop, lockGame: noop, withdrawLock: noop, wardrobeEquip: noop },
+      ['Escape'],
+    );
+    const device = dom.host.byClass('phone-device')[0]!;
+    phone.applyLook({ outfit: { color: 0 }, vehicle: { color: null }, bag: 0, phone: 0xe88aa6 });
+    expect(device.style.getPropertyValue('--phone-case')).toBe('#e88aa6');
+    phone.applyLook({ outfit: { color: 0 }, vehicle: { color: null }, bag: 0, phone: 0x10262d });
+    expect(device.style.getPropertyValue('--phone-case')).toBe('#10262d');
+    dom.restore();
   });
 });

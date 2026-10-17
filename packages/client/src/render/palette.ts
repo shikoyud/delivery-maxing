@@ -25,6 +25,8 @@ export const palette = {
   safeZone: 0x5fc9a8,
   /** Cardboard parcels on the courier's back. */
   parcel: 0xd8b98a,
+  /** The phone's frame (the free Slate case). */
+  phoneCase: 0x10262d,
   /** Vehicle placeholders: tyres, metal trim (hubs, bars, forks), seats, glass, lights. */
   tyre: 0x33393d,
   trim: 0xb8c2c7,
@@ -63,10 +65,10 @@ export const mapDebugColors = {
 export const mapDebugOverlay = { grid: 0xffffff, loadedChunk: 0x3d7fe0, plainLot: 0xb8c4c8 } as const;
 
 /**
- * One colour per active-order slot (the car, the largest carrier, holds 5): waypoint beams and the HUD swatches share them.
+ * One colour per active-order slot (the car, the largest carrier, holds 6): waypoint beams and the HUD swatches share them.
  * Ordered so the first slots read best against the sky and the sand.
  */
-export const slotColors = [0xf27166, 0x8a6cf0, 0x16b3a4, 0xe25c9e, 0x3d7fe0] as const;
+export const slotColors = [0xf27166, 0x8a6cf0, 0x16b3a4, 0xe25c9e, 0x3d7fe0, 0x9bc53d] as const;
 
 export const cssHex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 

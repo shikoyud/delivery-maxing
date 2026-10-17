@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
 import type { PlayerState, Vec3 } from '@dm/shared';
+import type { Look } from '../cosmetics';
 
 /** What the debug API reports about the visible courier. */
 export interface CourierDebug {
@@ -28,6 +29,8 @@ export interface CourierView {
   setHidden(hidden: boolean): void;
   /** One box per carried package on the courier's back. */
   setPackages(n: number): void;
+  /** The outfit colour or finish and the bag colour (Decision 4). */
+  applyLook(look: Look): void;
   /** The next update jumps straight to the state (no turn ease, clip or pose blend): spawn, teleport, respawn. */
   snap(): void;
   debug(): CourierDebug;

@@ -129,6 +129,29 @@ kbd {
   font-size: 12px;
 }
 
+.hud-prep {
+  position: relative;
+  flex: 1 1 100%;
+  height: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(247, 243, 234, 0.18);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  color: var(--dm-paper);
+}
+
+.hud-prep-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--progress, 0%);
+  background: var(--dm-teal);
+}
+
+.hud-prep > span { position: relative; }
+
 .hud-stamina-icon {
   font-size: 18px;
   color: var(--dm-paper);
@@ -234,6 +257,8 @@ kbd {
 
 .hud-coins .hud-stat-value { color: var(--dm-coral); }
 .hud-points .hud-stat-value { color: var(--dm-teal); }
+.hud-mock-badge { margin-top: 2px; padding: 0 4px; font-size: 9px; }
+.hud-mock-badge[hidden] { display: none; }
 
 .hud-stat-label,
 .hud-load-label {
@@ -395,7 +420,7 @@ kbd {
     linear-gradient(90deg, var(--dm-coral) var(--fuel, 100%), rgba(247, 243, 234, 0.18) 0);
 }
 
-/* Minimap, bottom right: a player-centred cut of the city (M opens the full Map app). */
+/* Minimap, bottom right: a player-centred cut of the city (M opens the full-screen map). */
 .minimap {
   position: absolute;
   right: 16px;
@@ -488,6 +513,7 @@ kbd {
   align-items: center;
   gap: 8px;
   pointer-events: none;
+  z-index: 17; /* over the phone (15) and the map screen (16): a purchase's popup must show while the Shop is open */
 }
 
 .popup {
@@ -512,6 +538,11 @@ kbd {
 }
 
 .popup-good .popup-title { color: #137a71; }
+
+.popup .popup-mock-badge {
+  display: inline-block;
+  margin-top: 6px;
+}
 
 .popup-line {
   margin-top: 3px;
@@ -551,7 +582,7 @@ kbd {
   width: min(360px, 100%);
   height: min(680px, 100%);
   border-radius: 34px;
-  border: 10px solid #10262d;
+  border: 10px solid var(--phone-case, #10262d); /* the phone case (Wardrobe, Decision 4) */
   background: var(--dm-paper);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   overflow: hidden;
@@ -691,15 +722,6 @@ kbd {
 
 .phone-lockout-text { flex: 1 1 100%; }
 
-.phone-devstub {
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px dashed #557078;
-  font-size: 11px;
-  font-weight: 600;
-  color: #557078;
-}
-
 .phone-empty,
 .phone-note,
 .phone-garage-note,
@@ -720,6 +742,33 @@ kbd {
 .phone-wallet-value { font-size: 18px; }
 .phone-wallet-row.coins .phone-wallet-value { color: var(--dm-coral); }
 .phone-wallet-row.points .phone-wallet-value { color: var(--dm-teal); }
+.phone-wallet { display: flex; flex-direction: column; gap: 6px; }
+.phone-wallet-address { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; }
+.phone-wallet-card { gap: 6px; }
+.phone-wallet-figure { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.phone-wallet-claim, .phone-wallet-withdraw, .phone-wallet-lock-btn { margin: 0; align-self: auto; background: var(--dm-teal); }
+.phone-wallet-withdraw { align-self: flex-start; background: var(--dm-ink); }
+.phone-wallet-claim:disabled, .phone-wallet-lock-btn:disabled { background: #b9c4c6; }
+.phone-wallet-vault-usd { font-size: 14px; font-weight: 700; color: #557078; }
+.phone-wallet-vault-empty {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(242, 113, 102, 0.16);
+  font-size: 13px;
+  font-weight: 700;
+}
+.phone-wallet-lock { display: flex; flex-direction: column; gap: 3px; }
+.phone-wallet-lock-boost { color: var(--dm-teal); font-weight: 700; }
+.phone-wallet-amount { flex: 1; min-width: 0; padding: 7px 8px; border: 1px solid #b9c4c6; border-radius: 8px; font: 14px system-ui, sans-serif; }
+.phone-wallet-preview { font-size: 13px; color: #557078; }
+.phone-wallet-list { display: flex; flex-direction: column; }
+.phone-wallet-item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; padding: 5px 0; border-top: 1px solid rgba(22, 50, 58, 0.08); font-size: 13px; }
+.phone-wallet-item.unpaid .phone-wallet-line { color: #c0503f; }
+.phone-wallet-when { color: #557078; font-size: 12px; white-space: nowrap; }
+.phone-wallet-tx-detail { flex-basis: 100%; color: #557078; font-size: 12px; }
+.phone-wallet-tx[data-status='failed'] .phone-wallet-line { color: #c0503f; }
+.phone-wallet-lock[hidden], .phone-wallet-lock-form[hidden], .phone-wallet-withdraw[hidden], .phone-wallet-vault-empty[hidden] { display: none; }
 
 .phone-stub-title { margin: 8px 0 2px; font-size: 18px; }
 
@@ -740,6 +789,107 @@ kbd {
 }
 
 .phone-summon { background: var(--dm-teal); }
+
+/* Shop (spec §6, §8): two tabs, ladders of tiers, a confirm sheet for GAME items */
+.phone-shop { display: flex; flex-direction: column; gap: 6px; }
+.phone-shop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.phone-mock-badge {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px dashed #b07a00;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b07a00;
+  white-space: nowrap;
+}
+.phone-shop-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 12px; background: #e9e2d3; }
+.phone-shop-tab {
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dm-ink);
+  font: 700 13px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+.phone-shop-tab.active { background: var(--dm-ink); color: #fff; }
+.phone-shop-panel[hidden],
+.phone-shop-paused[hidden],
+.phone-shop-sheet[hidden],
+.phone-shop-swatch[hidden],
+.phone-shop-sheet-note[hidden] { display: none; }
+.phone-shop-paused {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(242, 145, 61, 0.18);
+  font-size: 13px;
+  font-weight: 700;
+}
+.phone-shop-row { flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; }
+.phone-shop-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.phone-shop-label { font-size: 14px; font-weight: 700; }
+.phone-shop-detail { font-size: 12px; color: #557078; }
+.phone-shop-price { font-size: 12px; font-weight: 700; color: #b07a00; }
+.phone-shop-swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--swatch, transparent);
+  border: 2px solid rgba(22, 50, 58, 0.18);
+}
+.phone-shop-swatch.factory { background: conic-gradient(#c8323c 0 33%, #2f6fb5 0 66%, #f2c230 0); }
+.phone-shop-buy { flex: none; align-self: center; margin: 0; background: var(--dm-teal); }
+.phone-shop-row.owned { border-left-color: var(--dm-teal); }
+.phone-shop-row.owned .phone-shop-buy:disabled { background: transparent; color: var(--dm-teal); }
+.phone-shop-row.locked { opacity: 0.55; border-left-color: #b9c4c6; }
+.phone-shop-row.pending { border-left-color: #f2913d; }
+.phone-shop-row.paused { border-left-color: #b9c4c6; }
+/* Wardrobe (Decision 4): owned items Equip, the worn one Equipped, the rest greyed "In the Shop". */
+.phone-wardrobe { display: flex; flex-direction: column; gap: 6px; }
+.phone-wardrobe-row { flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; }
+.phone-wardrobe-label { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; }
+.phone-wardrobe-equip { flex: none; align-self: center; margin: 0; background: var(--dm-teal); }
+.phone-wardrobe-row.equipped { border-left-color: var(--dm-teal); }
+.phone-wardrobe-row.equipped .phone-wardrobe-equip:disabled { background: transparent; color: var(--dm-teal); }
+.phone-wardrobe-row.shop { opacity: 0.55; border-left-color: #b9c4c6; }
+.phone-wardrobe-row.shop .phone-wardrobe-equip:disabled { background: #b9c4c6; }
+.phone-shop-swatch.finish-gold { background: radial-gradient(circle at 35% 30%, #fff3b0, #d4a017 55%, #8a6400); }
+.phone-shop-swatch.finish-chrome { background: radial-gradient(circle at 35% 30%, #ffffff, #dfe3e8 50%, #7d858c); }
+.phone-shop-swatch.finish-neon { background: #39ff14; box-shadow: 0 0 8px #39ff14; }
+.phone-shop-sheet {
+  position: sticky; /* pinned to the bottom of the phone screen while it scrolls */
+  bottom: 0;
+  margin-top: 8px;
+  padding: 8px 0 0;
+}
+.phone-shop-sheet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 -6px 24px rgba(22, 50, 58, 0.28);
+}
+.phone-shop-sheet-card .phone-mock-badge { align-self: flex-start; }
+.phone-shop-sheet-label { font-size: 16px; font-weight: 800; }
+.phone-shop-sheet-price { font-size: 18px; font-weight: 800; color: #b07a00; }
+.phone-shop-sheet-max,
+.phone-shop-sheet-split { font-size: 13px; color: var(--dm-ink); }
+.phone-shop-sheet-note { font-size: 13px; font-weight: 700; color: var(--dm-coral); }
+.phone-shop-sheet-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.phone-shop-sheet-actions .phone-btn { margin: 4px 0 0; }
+.phone-shop-cancel { background: #8a9ba0; }
+.phone-shop-confirm { background: var(--dm-teal); }
 .phone-respawn { background: var(--dm-coral); align-self: flex-start; }
 
 .phone-bindings {
@@ -786,7 +936,6 @@ kbd {
   font: 11px ui-monospace, Menlo, Consolas, monospace;
 }
 
-.phone-map-canvas { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; }
 
 .phone-footer {
   padding: 0 12px 8px;
@@ -852,3 +1001,122 @@ kbd {
 .perf-title.fail {
   color: #ff9a8f;
 }
+
+/* The full-screen map (M, Decision 11): the whole city fitted, wheel zoom, drag pan, a legend. */
+.map-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 16; /* over the HUD and the phone's backdrop; under the debug overlay and the dev panel */
+  background: #9cc3d5;
+  cursor: grab;
+  user-select: none;
+}
+
+.map-screen[hidden] {
+  display: none;
+}
+
+.map-screen.dragging {
+  cursor: grabbing;
+}
+
+.map-screen-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-legend {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(247, 243, 234, 0.94);
+  border-top: 4px solid var(--dm-teal);
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-legend-swatch {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+}
+
+.map-legend-player {
+  background: var(--swatch);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.map-legend-dot {
+  border-radius: 50%;
+  background: var(--swatch);
+}
+
+.map-legend-ring {
+  border-radius: 50%;
+  border: 2px solid var(--swatch);
+}
+
+.map-legend-cross {
+  background:
+    linear-gradient(var(--swatch), var(--swatch)) center / 100% 34% no-repeat,
+    linear-gradient(var(--swatch), var(--swatch)) center / 34% 100% no-repeat;
+}
+
+.map-legend-fuel {
+  width: 9px;
+  margin: 0 2.5px;
+  background: var(--swatch);
+  outline: 1px solid var(--dm-ink);
+}
+
+.map-legend-vehicle {
+  height: 8px;
+  margin: 3px 0;
+  background: var(--swatch);
+  outline: 1px solid var(--dm-ink);
+}
+
+.map-screen-footer {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(22, 50, 58, 0.82);
+  color: var(--dm-paper);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (max-width: 560px) {
+  .map-screen-footer {
+    left: auto;
+    right: 16px;
+    transform: none;
+    white-space: normal;
+    max-width: 45%;
+  }
+}
+
+/* Garage rows (Task 17): payout range, Switch and Buy */
+.phone-garage-range { color: var(--dm-ink); opacity: 0.7; font-size: 12px; }
+.phone-switch { background: var(--dm-coral); }
+.phone-switch:disabled { background: var(--dm-teal); opacity: 0.6; }
+.phone-buy { background: var(--dm-coral); }
+.phone-garage-row [hidden] { display: none; }

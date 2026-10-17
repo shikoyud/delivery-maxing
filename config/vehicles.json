@@ -1,7 +1,7 @@
 {
-  "walk": { "slots": 1, "maxPackageKg": 0, "topSpeed": 8 },
-  "skateboard": { "slots": 1, "maxPackageKg": 0, "topSpeed": 12 },
-  "bicycle": { "slots": 2, "maxPackageKg": 0, "topSpeed": 16 },
-  "motorbike": { "slots": 3, "maxPackageKg": 50, "topSpeed": 22 },
-  "car": { "slots": 5, "maxPackageKg": 150, "topSpeed": 28 }
+  "walk": { "slotCap": 2, "kgCap": 10, "topSpeed": 8 },
+  "skateboard": { "slotCap": 2, "kgCap": 10, "topSpeed": 12 },
+  "bicycle": { "slotCap": 3, "kgCap": 25, "topSpeed": 16 },
+  "motorbike": { "slotCap": 4, "kgCap": 50, "topSpeed": 22 },
+  "car": { "slotCap": 6, "kgCap": 150, "topSpeed": 28 }
 }

@@ -1,3 +1,4 @@
+import { isTypingTarget } from '../ui/dom';
 import type { ActionState } from './actionState';
 
 export interface InputManagerOptions {
@@ -52,8 +53,7 @@ export class InputManager {
     if (e.repeat) return;
     const ui = this.actions.isUiCode(e.code);
     // Typing in a panel field (lil-gui inputs) must not drive the player.
-    const t = e.target;
-    if (!ui && t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+    if (!ui && isTypingTarget(e.target)) return;
     if (!ui && !this.active) return;
     // Keep the browser from scrolling (Space), moving focus (Tab, the phone key) or using F3 as find.
     if (ui || e.code === 'Space' || e.code === 'Tab') e.preventDefault();

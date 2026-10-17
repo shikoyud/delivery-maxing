@@ -7,8 +7,7 @@ import {
   PlayerSim,
   createPagedPhysicsWorld,
   createPhysicsWorld,
-  defaultGarage,
-  RIDE_TIERS,
+  economyConfig,
   findRoadSpot,
   horizontalLength,
   initRapier,
@@ -16,6 +15,7 @@ import {
   movementConfig,
   vec3,
   worldConfig,
+  GAME_UNITS,
   type CatalogIndex,
   type CityMap,
   type DistanceTable,
@@ -28,6 +28,7 @@ import {
 import { clientConfig, type ClientConfig } from '../clientConfig';
 import { ActionState } from '../input/actionState';
 import { InputManager } from '../input/InputManager';
+import { RideLook } from '../input/rideLook';
 import { easeToward } from '../render/cameraRig';
 import robotUrl from '../../../../assets/models/RobotExpressive.glb?url';
 import { ChaseCamera, clampPivotHeight, pivotHeightFor, type RayCast } from '../render/chaseCamera';
@@ -46,7 +47,11 @@ import { VehicleViews } from '../render/vehicles/VehicleViews';
 import { CAR_MODEL_ID } from '../render/vehicles/vehicleMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
-import { mountDevPanel, type DevPanel } from '../ui/devPanel';
+import { MockChain } from '../economy/MockChain';
+import { Purchases } from '../economy/Purchases';
+import { equipItem, type Wardrobe } from '../economy/wardrobe';
+import { lookApplier, lookOf, type Look } from '../render/cosmetics';
+import { capacityLabel, mountDevPanel, rideOfTier, vehicleTierAfter, type DevPanel } from '../ui/devPanel';
 import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
 import { DeliveryLoop } from './delivery';
@@ -59,9 +64,9 @@ import {
   type DevSettingsStore,
 } from './devSettings';
 import { teleportTargets, teleportToTarget } from './mapTargets';
-import { browserStorage, createProgressStore, saveWhenLeaving, type ProgressStore } from './progress';
+import { browserStorage, createProgressStore, ownedGarage, saveWhenLeaving, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
-import { interpolationStart } from './interpolation';
+import { interpolationStart, lerpAngle } from './interpolation';
 import { loadMap, type MapKind } from './mapLoader';
 import { garageRows } from '../ui/phone/garageApp';
 import type { PerfResult } from './perf';
@@ -114,6 +119,19 @@ export class Game {
   readonly courier: CourierView;
   /** The owned vehicles' placeholders (the pack car once loaded), interpolated like the courier. */
   readonly vehicles: VehicleViews;
+  /** The Shop's purchases: GAME items granted once the chain confirms them, Coin items at once. */
+  readonly purchases: Purchases;
+  /** The Coin cosmetics owned and worn (saved with the progress). */
+  wardrobe: Wardrobe;
+  /** The look last drawn on the courier, the rides and the phone (debug API); null before the first. */
+  drawnLook: Look | null = null;
+  /** Draws the look on the courier, the rides and the phone, only when it changed. */
+  private readonly drawLook = lookApplier((look) => {
+    this.courier.applyLook(look);
+    this.vehicles.applyLook(look);
+    this.delivery.applyLook(look);
+    this.drawnLook = look;
+  });
   /** The runtime pack models (public/packs/, git-ignored; boxes and placeholders without them). */
   readonly models: ModelLoader;
   /** The city's regions, blocks and pack models; null on the greybox. */
@@ -132,10 +150,15 @@ export class Game {
   /** Access-zone volumes, shown with the F3 overlay. */
   private readonly accessZones: THREE.Group;
   private prevPosition: Vec3;
+  /** The heading before the last tick: the ride camera follows the heading interpolated like the feet. */
+  private prevHeading: number;
   /** Scratch vector for the camera's yaw (the HUD arrow). */
   private readonly camDir = new THREE.Vector3();
   /** Eased chase pivot height above the feet (drops while crouched or sliding). */
   private pivot: number = clientConfig.camera.chase.pivotHeight;
+  /** The camera yaw on a ride: the mouse orbits it, and it swings back behind the heading. */
+  private readonly rideLook = new RideLook(this.cfg.camera.ride);
+  private rideCamActive = false;
   private lastFrameMs: number | null = null;
   /** CityView.update's cost (ms), smoothed (the F3 overlay); null until the city has drawn a frame. */
   private cityUpdateMs: number | null = null;
@@ -156,9 +179,14 @@ export class Game {
     model: CourierModel | null,
     progress: ProgressStore,
     extras: MapExtras,
+    /** The reward chain (the browser mock): it owns the tiers and skins; the dev panel grants through it. */
+    readonly chain: MockChain,
+    wardrobe: Wardrobe,
   ) {
     this.progress = progress;
+    this.wardrobe = wardrobe;
     this.prevPosition = { ...sim.state.position };
+    this.prevHeading = sim.state.heading;
     const chase = this.cfg.camera.chase;
     this.actions = new ActionState(
       this.cfg.input,
@@ -219,6 +247,12 @@ export class Game {
       progress: this.progress,
       seed: opts.seed ?? Date.now(),
       now: () => this.time,
+      bagTier: () => this.chain.ownership().lines.bag,
+      dispatcherTier: () => this.chain.ownership().lines.dispatcher,
+      chain: this.chain,
+      purchases: () => this.purchases,
+      wardrobe: () => this.wardrobe,
+      equip: (id) => this.equip(id),
       player: () => this.sim.state,
       rider: () => ({
         riding: this.sim.state.riding,
@@ -226,6 +260,10 @@ export class Game {
         speed: horizontalLength(this.sim.state.velocity),
         mountCandidate: () => this.sim.mountCandidate(),
       }),
+      // Only an owned tier (DeliveryLoop.switchTo already refuses others; a stale row must not set a lost tier).
+      setLastRide: (t) => {
+        if (this.sim.garage.owned().includes(t)) this.sim.state.lastRide = t;
+      },
       // Order distances stay on-foot paths: the timers' reference speed is the on-foot sprint (spec §3.2).
       distance: (a, b) => nav.distance('walk', a, b),
       ...(extras.distances ? { table: extras.distances } : {}),
@@ -238,7 +276,7 @@ export class Game {
       phoneChanged: (open) => this.phoneChanged(open),
       vehicles: {
         // Rows and summon both measure from the feet on the ground (an airborne courier's last grounded position).
-        rows: (now) => garageRows(sim.garage, sim.state.grounded ? sim.state.position : sim.state.lastGrounded, now),
+        rows: (now) => garageRows(sim.garage, sim.state.grounded ? sim.state.position : sim.state.lastGrounded, now, sim.state.riding ?? sim.state.lastRide),
         state: (t) => sim.garage.state(t),
         summon: (t, now) => {
           const s = sim.state;
@@ -254,6 +292,28 @@ export class Game {
           return events;
         },
       },
+    });
+    const delivery = this.delivery;
+    this.purchases = new Purchases(chain, {
+      garage: sim.garage,
+      // DeliveryLoop rebuilds its OrderSystem on a progress reset: always the current one.
+      get orders() {
+        return delivery.orders;
+      },
+      map,
+      player: () => (sim.state.grounded ? sim.state.position : sim.state.lastGrounded),
+      wardrobe: () => this.wardrobe,
+      setWardrobe: (w) => void (this.wardrobe = w),
+      ridden: () => sim.state.riding,
+      lastRide: () => sim.state.lastRide,
+      save: () => delivery.save(),
+      popup: (title, lines, tone, mock) => delivery.popup(title, lines, tone, mock),
+      now: () => Date.now(),
+      removing: (t) => {
+        if (sim.state.riding === t) this.offTick(sim.leaveRide());
+        if (sim.state.lastRide === t) sim.state.lastRide = null;
+      },
+      changed: () => this.vehicles.snap(),
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
@@ -273,6 +333,17 @@ export class Game {
         setOwned: (t, owned) => this.setOwned(t, owned),
         fillTanks: () => this.fillTanks(),
         addCoins: (n) => this.delivery.setCoins(this.delivery.orders.totals.coins + n),
+        capacityLabel: () => capacityLabel(this.chain.ownership().lines.bag, this.delivery.capacityTier, this.delivery.capacity()),
+      },
+      economy: {
+        dev: chain.dev,
+        rate: () => chain.rate()?.usdPerGame ?? null,
+        tier: (l) => chain.ownership().lines[l],
+        tierMax: (l) => economyConfig.lines[l].usdMicro.length,
+        setTier: (l, n) => (l === 'vehicle' ? this.setVehicleTier(n) : (chain.dev.grantTier(l, n), true)),
+        confirmSeconds: () => chain.dev.confirmSeconds(),
+        vaultUsd: () => (chain.vault() * (chain.rate()?.usdPerGame ?? 0)) / GAME_UNITS,
+        subscribe: (fn) => chain.subscribe(fn),
       },
       map: {
         kind: map.kind,
@@ -286,6 +357,9 @@ export class Game {
       },
     });
     this.devPanel.setOverrideCount(countOverrides(settings));
+    // The look follows the wardrobe and the chain's skins (a skin the chain no longer owns falls back to the free item).
+    this.applyLook();
+    chain.subscribe(() => this.applyLook());
     this.actions.onUiKey = (name) => {
       if (name === 'debugOverlay') this.overlay.toggle();
       else if (name === 'mapDebug') this.setMapDebug(!(this.mapDebug?.visible ?? false));
@@ -293,9 +367,24 @@ export class Game {
     };
   }
 
+  /** The Wardrobe's Equip: wears an owned item (or a skin the chain owns), saved, and redraws the look. */
+  private equip(itemId: string): void {
+    const w = equipItem(this.wardrobe, itemId, this.chain.ownership().skins);
+    if (!w) return;
+    this.wardrobe = w;
+    this.delivery.save();
+    this.applyLook();
+  }
+
+  /** Dresses the courier, paints the rides and colours the phone from the wardrobe (Decision 4). */
+  private applyLook(): void {
+    // The chain changes on every payout, settle and lock renewal: only a new look repaints (no material churn).
+    this.drawLook(lookOf(this.wardrobe, this.chain.ownership().skins));
+  }
+
   /**
-   * The phone opened or closed (Tab, Esc). Open: the pointer lock is released so the player can click the phone
-   * (DeliveryLoop already released held keys). Closed: ask for the lock back — browsers may refuse without a click
+   * The phone or the map screen opened or closed (Tab, M, Esc). Open: the pointer lock is released so the player can
+   * click the phone or drag the map (DeliveryLoop already released held keys and, for the map, froze the mouse look). Closed: ask for the lock back — browsers may refuse without a click
    * (Esc gives no user activation), and then a click on the canvas locks it as usual.
    */
   private phoneChanged(open: boolean): void {
@@ -344,15 +433,17 @@ export class Game {
     const spawn = map.hospitals[0];
     if (!spawn) throw new Error('map has no hospitals');
     physics.update?.(spawn.spawn);
-    // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
-    const progress = createProgressStore(browserStorage(), map.kind, () => defaultGarage(map));
+    // The chain owns the vehicles (Decision 2): a new player starts on foot, and only the saved rows of the tiers the
+    // chain owns load (Purchases parks owned tiers without a row at the nearest hospital's bay).
+    const chain = new MockChain(browserStorage(), economyConfig, { now: () => Date.now() });
+    const progress = createProgressStore(browserStorage(), map.kind, () => []);
     const saved = progress.load();
-    const garage = new Garage(physics, map, saved.garage);
+    const garage = new Garage(physics, map, ownedGarage(saved.garage, chain.ownership().lines.vehicle));
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
     // The tier last ridden (capacity and offers follow it), only while it is still owned.
     sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
     const extras = { catalog: loaded.catalog, distances: loaded.distances };
-    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras);
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras, chain, saved.cosmetics);
     // Closing or hiding the tab mid-ride keeps the vehicle's spot and the fuel it burnt.
     saveWhenLeaving(window, document, () => game.delivery.save());
     if (opts.debug) installDebugHooks(game);
@@ -398,6 +489,7 @@ export class Game {
     this.sim.teleport(vec3(p.x, p.y, p.z), vec3(v.x, v.y, v.z));
     this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
+    this.prevHeading = this.sim.state.heading;
     this.courier.snap();
     this.chase.snap();
     this.vehicles.snap();
@@ -409,16 +501,25 @@ export class Game {
   }
 
   /**
-   * Dev panel: buys or removes `t`. The vehicle being ridden cannot be removed (refused, false): the courier gets off
-   * first. A bought one parks at the first free bay slot with a full tank. Saved.
+   * Dev panel: grants or revokes `t` on the mock chain (Decision 15: owning `t` owns every tier below it; removing it
+   * removes the tiers above too). Refused (false) while riding a tier that would go: the courier gets off first.
+   * Purchases moves the garage along: a granted one parks at the nearest hospital's bay with a full tank. Saved.
    */
   setOwned(t: RideTier, owned: boolean): boolean {
-    if (!owned && this.sim.state.riding === t) return false;
-    this.sim.garage.setOwned(t, owned, this.map.hospitals[0]!);
-    if (!owned && this.sim.state.lastRide === t) this.sim.state.lastRide = null;
+    const next = vehicleTierAfter(this.chain.ownership().lines.vehicle, t, owned, this.sim.state.riding);
+    if (next === null) return false;
+    this.chain.dev.grantTier('vehicle', next);
     this.vehicles.snap();
     this.delivery.save();
     return true;
+  }
+
+  /** Dev panel's vehicle tier slider: moves the line to tier `n` through setOwned (garage, riding guard, save). */
+  setVehicleTier(n: number): boolean {
+    const current = this.chain.ownership().lines.vehicle;
+    if (n === current) return true;
+    const t = rideOfTier(n > current ? n : n + 1);
+    return t === null ? false : this.setOwned(t, n > current);
   }
 
   /** Dev panel: every owned tank full. Saved. */
@@ -428,15 +529,17 @@ export class Game {
   }
 
   /**
-   * Dev panel "Reset progress": the courier gets off and every vehicle is bought afresh (the default garage: the bay
-   * slots in order, full tanks), no last ride, summon ready.
+   * Dev panel "Reset progress": the courier gets off and every owned vehicle (the chain keeps what it owns) is parked
+   * afresh at the first hospital's bay slots in order (never beside or onto the courier) with a full tank, no last
+   * ride, summon ready.
    */
   private resetGarage(): void {
-    this.sim.leaveRide();
+    this.offTick(this.sim.leaveRide());
     const g = this.sim.garage;
     const hospital = this.map.hospitals[0]!;
-    for (const t of RIDE_TIERS) g.setOwned(t, false, hospital);
-    for (const t of RIDE_TIERS) g.setOwned(t, true, hospital);
+    const owned = [...g.owned()];
+    for (const t of owned) g.setOwned(t, false, hospital);
+    for (const t of owned) g.setOwned(t, true, hospital, this.sim.state.position);
     g.summonReadyAt = 0;
     this.sim.state.lastRide = null;
     this.vehicles.snap();
@@ -447,8 +550,9 @@ export class Game {
     const g = this.sim.garage;
     if (!g.owned().includes(tier)) this.setOwned(tier, true);
     // Park ahead of the courier by half the mount radius (leaves any current ride first).
-    this.sim.rideNow(tier, g.cfg.riding.mountRadius / 2);
+    const events = this.sim.rideNow(tier, g.cfg.riding.mountRadius / 2);
     this.afterTeleport();
+    this.delivery.offTickEvents(events);
     this.delivery.save();
   }
 
@@ -512,15 +616,27 @@ export class Game {
   private afterTeleport(): void {
     this.pageAround(this.sim.state.position);
     this.prevPosition = { ...this.sim.state.position };
+    this.prevHeading = this.sim.state.heading;
     this.actions.setLook(this.sim.state.heading, this.actions.look().pitch);
+    this.rideCamActive = false;
     this.chase.snap();
     this.courier.snap();
     this.vehicles.snap();
   }
 
+  /**
+   * Sim events from outside a tick (leaveRide when a vehicle is removed or progress is reset): a respawn at the
+   * nearest hospital (no spot to get off) snaps the camera and views and breaks a carried Fragile, as in step().
+   */
+  private offTick(events: SimEvent[]): void {
+    if (events.some((e) => e.kind === 'respawned')) this.afterTeleport();
+    this.delivery.offTickEvents(events);
+  }
+
   /** One fixed simulation tick. */
   private step(): SimEvent[] {
     const before = { ...this.sim.state.position };
+    const headingBefore = this.sim.state.heading;
     const now = this.time;
     const mods = this.delivery.statModifiers();
     const frame = this.delivery.beforeStep(this.actions.sampleTick());
@@ -529,6 +645,7 @@ export class Game {
     const events = this.sim.step(frame, mods, now);
     this.delivery.afterStep(events, this.sim.state.position, now);
     this.prevPosition = interpolationStart(before, this.sim.state.position, events);
+    this.prevHeading = headingBefore;
     if (events.some((e) => e.kind === 'respawned')) this.afterTeleport();
     this.tick++;
     return events;
@@ -538,10 +655,27 @@ export class Game {
     const s = this.sim.state;
     const cc = this.cfg.camera;
     const feet = lerpVec3(this.prevPosition, s.position, alpha);
-    const look = this.actions.look();
+    const speed = horizontalLength(s.velocity);
+    const mouseYaw = this.actions.takeYawDelta();
+    // The heading between the last two ticks, as the feet are (else the ride camera turns in 30 Hz steps).
+    const heading = lerpAngle(this.prevHeading, s.heading, alpha);
+    let look = this.actions.look();
+    if (s.riding !== null) {
+      if (!this.rideCamActive) {
+        // Getting on: the camera stays where it was. The look already holds this frame's mouse yaw, which update adds.
+        this.rideLook.mount(look.yaw - mouseYaw, heading);
+        this.rideCamActive = true;
+      }
+      look = { yaw: this.rideLook.update(mouseYaw, heading, speed, dt), pitch: look.pitch };
+    } else if (this.rideCamActive) {
+      // Getting off: the on-foot camera starts where the ride camera was, with this frame's mouse yaw.
+      this.actions.setLook(this.rideLook.update(mouseYaw, heading, 0, 0), look.pitch);
+      this.rideCamActive = false;
+      look = this.actions.look();
+    }
     this.pivot = easeToward(this.pivot, pivotHeightFor(s, cc.chase), dt, cc.crouchEaseRate);
     const pivotY = feet.y + clampPivotHeight(feet, this.pivot, this.cameraCast, cc.chase);
-    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, horizontalLength(s.velocity), s.riding);
+    this.chase.update(dt, { x: feet.x, y: pivotY, z: feet.z }, look.yaw, look.pitch, speed, s.riding);
     this.delivery.setCamera(this.renderer.camera.position);
     if (this.cityView) {
       const t0 = performance.now();

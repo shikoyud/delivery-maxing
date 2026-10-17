@@ -37,8 +37,8 @@ describe('access', () => {
     const s0 = baySlot(h, 0);
     const s2 = baySlot(h, 2);
     expect(s0.position).toEqual(h.bay);
-    expect(Math.hypot(s2.position.x - s0.position.x, s2.position.z - s0.position.z)).toBeCloseTo(8, 6);
-    expect(s2.position.z).toBeCloseTo(12, 6);
+    expect(Math.hypot(s2.position.x - s0.position.x, s2.position.z - s0.position.z)).toBeCloseTo(11, 6);
+    expect(s2.position.z).toBeCloseTo(9, 6);
     expect(s2.position.x).toBeCloseTo(10, 6);
     expect(s2.heading).toBe(h.bayYaw);
   });

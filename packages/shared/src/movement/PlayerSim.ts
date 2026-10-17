@@ -23,6 +23,19 @@ const BLOCK_EPS = 1e-4;
 const DIRECTION_EPS = 1e-6;
 
 /**
+ * Horizontal velocity `v` of a courier stepping off at `spot` from a vehicle at `vehicle`, less its component back
+ * toward the vehicle: with n the horizontal unit vector from vehicle to spot, v − min(0, v·n)·n. Unchanged when the
+ * spot is the vehicle's own position (the skateboard).
+ */
+function awayFrom(v: Vec3, vehicle: Vec3, spot: Vec3): Vec3 {
+  const n = vec3(spot.x - vehicle.x, 0, spot.z - vehicle.z);
+  const l = horizontalLength(n);
+  if (l <= DIRECTION_EPS) return v;
+  const into = Math.min(0, (v.x * n.x + v.z * n.z) / l);
+  return vec3(v.x - (into * n.x) / l, v.y, v.z - (into * n.z) / l);
+}
+
+/**
  * Deterministic single-player movement simulation, stepped at cfg.tickRate: on foot, or riding a vehicle from the
  * garage (F mounts and dismounts). `cfg` is held by reference: edits (e.g. from the dev panel) apply on the next step.
  */
@@ -115,13 +128,12 @@ export class PlayerSim {
    * there.
    */
   rideNow(tier: RideTier, ahead: number): SimEvent[] {
-    this.leaveRide();
+    const events = this.leaveRide();
     const s = this.state;
     if (!restsCarried(tier)) {
       const f = facing(s.heading);
       this.garage.parkAt(tier, vec3(s.position.x + f.x * ahead, s.position.y, s.position.z + f.z * ahead), s.heading);
     }
-    const events: SimEvent[] = [];
     this.mount(tier, events);
     return events;
   }
@@ -129,28 +141,48 @@ export class PlayerSim {
   /**
    * Gets off at once, whatever the speed (dev tools and respawn): the ridden vehicle is left where it is, parked on the
    * ground (at the last grounded spot when airborne) or carried for the skateboard. The courier is on foot, at rest,
-   * where the board was (skateboard) or at the first free spot of dismountSpots (the left one when none is free),
-   * grounded when the vehicle was, else airborne. Nothing happens on foot.
+   * where the board was (skateboard); off any other ride at the first free spot of dismountSpots, else leaveSpot's;
+   * grounded when the vehicle was, else airborne. When no spot fits at all the courier respawns at the nearest hospital and the
+   * `respawned` event is returned. Nothing happens on foot.
    */
-  leaveRide(): void {
+  leaveRide(): SimEvent[] {
     const s = this.state;
     const tier = s.riding;
-    if (!tier) return;
+    if (!tier) return [];
     const v = this.garage.state(tier);
     const wasGrounded = v.grounded;
     if (!wasGrounded) v.position = vec3(s.lastGrounded.x, s.lastGrounded.y, s.lastGrounded.z);
-    let feet = v.position;
-    if (!restsCarried(tier)) {
-      const spots = this.dismountSpots(tier, v);
-      feet = spots.find((p) => this.body.fitsAt(p, false)) ?? spots[0]!;
-    }
+    let feet: Vec3 | null = v.position;
+    if (!restsCarried(tier)) feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false)) ?? this.leaveSpot(tier, v);
     this.garage.leave(tier);
     s.riding = null;
     this.body.setEnabled(true);
+    if (!feet) return [respawn(s, this.body, this.cfg, nearestHospital(this.map, s.lastGrounded))];
     this.body.setFeet(feet);
     s.position = this.body.feet;
     s.velocity = vec3(0, 0, 0);
     if (!wasGrounded) enterAir(s, this.cfg);
+    return [];
+  }
+
+  /**
+   * The first spot around the vehicle a standing courier fits and reaches from it in a straight line: rings of
+   * summon.ringSamples points, one capsule diameter apart, from the dismount distance out to riding.leaveSearchRadius.
+   * Null when none does.
+   */
+  private leaveSpot(tier: RideTier, v: VehicleState): Vec3 | null {
+    const g = this.garage;
+    const vehicle = g.body(tier).collider;
+    const start = g.cfg.rides[tier].collider.radius + this.cfg.capsule.radius + g.cfg.riding.dismountGap;
+    const n = g.cfg.summon.ringSamples;
+    for (let r = start; r <= g.cfg.riding.leaveSearchRadius; r += 2 * this.cfg.capsule.radius) {
+      for (let k = 0; k < n; k++) {
+        const a = (2 * Math.PI * k) / n;
+        const p = vec3(v.position.x + Math.cos(a) * r, v.position.y, v.position.z + Math.sin(a) * r);
+        if (this.body.fitsAt(p, false) && this.body.pathClear(v.position, p, vehicle)) return p;
+      }
+    }
+    return null;
   }
 
   /**
@@ -184,13 +216,14 @@ export class PlayerSim {
   }
 
   /**
-   * F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding. While the vehicle is
-   * airborne F is refused (`mountRefused 'airborne'`), so nothing is ever left parked in the air.
+   * F: mounts mountCandidate() on foot (ignored when there is none), dismounts while riding, at any speed. In the air
+   * only the skateboard gets off (it is carried); any other ride refuses (`mountRefused 'airborne'`), so nothing is
+   * ever left parked in the air.
    */
   private toggleMount(events: SimEvent[]): void {
     const tier = this.state.riding;
     if (tier) {
-      if (this.garage.state(tier).grounded) this.dismount(tier, events);
+      if (this.garage.state(tier).grounded || restsCarried(tier)) this.dismount(tier, events);
       else events.push({ kind: 'mountRefused', reason: 'airborne' });
       return;
     }
@@ -233,19 +266,17 @@ export class PlayerSim {
   }
 
   /**
-   * Gets off the grounded `tier` at no more than riding.dismountMaxSpeed (else `mountRefused 'tooFast'`). The
-   * skateboard is picked up and the courier stands where it was, when a standing courier fits there; any other
-   * vehicle stays parked where it stopped and the courier steps off at the first free spot of dismountSpots. No room
-   * to stand: `mountRefused 'noRoom'`, still riding.
+   * Gets off `tier` at any speed (Decision 9). The skateboard is picked up and the courier is where it was, when a
+   * standing courier fits there, grounded or in the air as the board was. Any other (grounded) vehicle is parked
+   * where it is, stopped, and the courier steps off at the first spot of dismountSpots a standing courier fits and
+   * reaches from the vehicle in a straight line (never through a wall or rail). No such spot: `mountRefused 'noRoom'`,
+   * still riding. The courier keeps the ride's horizontal velocity less any part of it pointing back into the parked
+   * vehicle (awayFrom), clamped to speedCap, and in the air its vertical velocity.
    */
   private dismount(tier: RideTier, events: SimEvent[]): void {
     const s = this.state;
     const g = this.garage;
     const v = g.state(tier);
-    if (horizontalLength(v.velocity) > g.cfg.riding.dismountMaxSpeed) {
-      events.push({ kind: 'mountRefused', reason: 'tooFast' });
-      return;
-    }
     let feet: Vec3 | undefined;
     if (restsCarried(tier)) {
       // The board's own collider stands where the courier would: test the spot with it out of the way.
@@ -253,17 +284,24 @@ export class PlayerSim {
       board.setEnabled(false);
       if (this.body.fitsAt(v.position, false)) feet = v.position;
       else board.setEnabled(true);
-    } else feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false));
+    } else {
+      const vehicle = g.body(tier).collider;
+      feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false) && this.body.pathClear(v.position, p, vehicle));
+    }
     if (!feet) {
       events.push({ kind: 'mountRefused', reason: 'noRoom' });
       return;
     }
+    const grounded = v.grounded;
+    const flat = clampHorizontal(awayFrom(vec3(v.velocity.x, 0, v.velocity.z), v.position, feet), this.cfg.speedCap);
+    const velocity = vec3(flat.x, grounded ? 0 : v.velocity.y, flat.z);
     g.leave(tier);
     s.riding = null;
     this.body.setEnabled(true);
     this.body.setFeet(feet);
     s.position = this.body.feet;
-    s.velocity = vec3(0, 0, 0);
+    s.velocity = velocity;
+    if (!grounded) enterAir(s, this.cfg);
     events.push({ kind: 'dismounted', tier });
   }
 
@@ -293,16 +331,25 @@ export class PlayerSim {
     s.pitch = input.look.pitch;
     s.sprinting = false;
     s.stamina = Math.min(this.cfg.stamina.max, s.stamina + this.cfg.stamina.regenPerSecond * this.dt);
-    s.jumpPressAge = null; // Space is the handbrake
+    const spec = g.cfg.rides[tier];
+    // Space ollies a ride with a jumpHeight, with the on-foot jump buffer and coyote time; on any other it is the handbrake.
+    if (spec.jumpHeight !== null) ageJumpBuffer(s, input, this.cfg);
+    else s.jumpPressAge = null;
     const v = g.state(tier);
     const events = stepVehicle(v, g.body(tier), input, {
       map: this.map,
-      spec: g.cfg.rides[tier],
+      spec,
       gravity: this.cfg.gravity,
       dt: this.dt,
       crashSpeed: ordersConfig.fragile.crashSpeed,
+      jump: { pressAge: s.jumpPressAge, coyote: s.airTicks <= coyoteTicks(this.cfg) },
     });
     this.mirrorVehicle(v);
+    if (events.some((e) => e.kind === 'jumped')) {
+      // As tryJump: the press is spent and the coyote window is over (no second jump in the air).
+      s.jumpPressAge = null;
+      s.airTicks = coyoteTicks(this.cfg) + 1;
+    }
     return events;
   }
 

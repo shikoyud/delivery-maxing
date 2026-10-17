@@ -202,7 +202,7 @@ describe('CourierModel', () => {
     expect(m.packages.visible).toBe(true);
     expect(m.packages.count).toBe(3);
     m.setPackages(99);
-    expect(m.packages.count).toBe(vehiclesConfig.car.slots);
+    expect(m.packages.count).toBe(vehiclesConfig.car.slotCap);
     // Behind the courier (+Z at heading 0), around its back.
     m.root.updateMatrixWorld(true);
     const p = new THREE.Box3().setFromObject(m.packages);
@@ -255,5 +255,32 @@ describe('CourierModel', () => {
     expect(await CourierModel.load('https://example.test/RobotExpressive.glb', cfg)).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(error).not.toHaveBeenCalled();
+  });
+});
+
+describe('CourierModel look (Decision 4)', () => {
+  const look = { outfit: { color: 0x7d4e9e }, vehicle: { color: null }, bag: 0xb02e3a, phone: 0x10262d } as const;
+  const mains = (m: CourierModel): THREE.MeshStandardMaterial[] =>
+    meshesOf(m.figure).flatMap((x) => (Array.isArray(x.material) ? x.material : [x.material])).filter((x) => x.name === 'Main') as THREE.MeshStandardMaterial[];
+
+  it('the outfit colour reaches the Main material; the bag colour reaches the carried boxes', async () => {
+    const m = await model();
+    expect(mains(m).length).toBeGreaterThan(0);
+    const others = meshesOf(m.figure).flatMap((x) => (Array.isArray(x.material) ? x.material : [x.material])).filter((x) => x.name !== 'Main') as THREE.MeshStandardMaterial[];
+    const before = others.map((x) => x.color.getHex());
+    m.applyLook(look);
+    for (const x of mains(m)) expect(x.color.getHex()).toBe(0x7d4e9e);
+    expect(others.map((x) => x.color.getHex())).toEqual(before);
+    expect((m.packages.material as THREE.MeshLambertMaterial).color.getHex()).toBe(0xb02e3a);
+
+    // A Gold outfit is the gold finish on Main; back to a colour drops the metal.
+    const main = mains(m)[0]!;
+    const rest = [main.metalness, main.roughness, main.emissive.getHex()];
+    m.applyLook({ ...look, outfit: { finish: 'gold' } });
+    expect(mains(m).map((x) => [x.color.getHex(), x.metalness])).toEqual(mains(m).map(() => [0xd4a017, 1]));
+    m.applyLook({ ...look, outfit: { finish: 'neon' } });
+    m.applyLook(look);
+    expect([main.metalness, main.roughness, main.emissive.getHex()]).toEqual(rest);
+    expect(main.color.getHex()).toBe(0x7d4e9e);
   });
 });

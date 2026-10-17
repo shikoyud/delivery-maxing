@@ -57,11 +57,13 @@ export interface PlayerState {
 export interface StatModifiers {
   speedMul: number;
   jumpHeightMul: number;
+  /** Multiplies the sprint target only, on foot (Shoes, spec §6.2); the on-foot speedCap still applies. */
+  sprintMul: number;
   /** False while a Heavy order is carried: the sprint toggle is ignored and sprint stays off. */
   canSprint: boolean;
 }
 
-export const NO_MODS: StatModifiers = Object.freeze({ speedMul: 1, jumpHeightMul: 1, canSprint: true });
+export const NO_MODS: StatModifiers = Object.freeze({ speedMul: 1, jumpHeightMul: 1, sprintMul: 1, canSprint: true });
 
 export type SimEvent =
   | { kind: 'jumped' }
@@ -69,8 +71,8 @@ export type SimEvent =
   | { kind: 'respawned'; hospitalId: string }
   | { kind: 'mounted'; tier: RideTier }
   | { kind: 'dismounted'; tier: RideTier }
-  /** F was refused: riding faster than riding.dismountMaxSpeed, no dismount spot is free, or the vehicle is in the air. */
-  | { kind: 'mountRefused'; reason: 'tooFast' | 'noRoom' | 'airborne' }
+  /** F was refused: no dismount spot is free, or a ride other than the skateboard is in the air. */
+  | { kind: 'mountRefused'; reason: 'noRoom' | 'airborne' }
   /** Out of bounds while riding: the vehicle went back to this hospital's bay (Decision 6). */
   | { kind: 'towed'; tier: RideTier; hospitalId: string }
   | { kind: 'slideStarted'; boosted: boolean }

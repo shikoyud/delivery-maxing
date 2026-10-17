@@ -1,9 +1,9 @@
 import type { ClientConfig } from '../clientConfig';
 import { cssHex } from '../render/palette';
 import { slotColor } from '../render/waypoints';
-import { clock, el, esc, setHtml, setText } from './dom';
+import { clock, el, esc, mockBadge, setHtml, setText } from './dom';
 import { acceptBlockedReason } from './phone/ordersApp';
-import { BAND_LABEL, KIND_LABEL, loadText, pointsText, type HudModel, type HudOrder, type HudTimer } from './hudModel';
+import { BAND_LABEL, KIND_LABEL, gameText, loadText, pointsText, type HudModel, type HudOrder, type HudTimer } from './hudModel';
 
 /** What DeliveryLoop needs from the HUD (tests pass a recorder). */
 export interface HudView {
@@ -14,16 +14,18 @@ export interface HudView {
 }
 
 /**
- * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals and load top
- * right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the next-stop
- * arrow (name and route distance) over the safe-zone and lockout chips; bottom centre the key prompt; bottom left
- * while riding the speed and, on the motorbike and car, the fuel gauge.
+ * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals, the accrued GAME
+ * and load top right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the
+ * next-stop arrow (name and route distance) over the safe-zone and lockout chips; bottom centre the key prompt; bottom
+ * left while riding the speed and, on the motorbike and car, the fuel gauge.
  */
 export class Hud implements HudView {
   private readonly orders: HTMLElement;
   private readonly coins: HTMLElement;
   private readonly points: HTMLElement;
   private readonly deliveries: HTMLElement;
+  private readonly game: HTMLElement;
+  private readonly gameBadge: HTMLElement;
   private readonly load: HTMLElement;
   private readonly offers: HTMLElement;
   private readonly safe: HTMLElement;
@@ -65,6 +67,9 @@ export class Hud implements HudView {
     this.coins = stat('coins', 'hud-coins');
     this.points = stat('pts', 'hud-points');
     this.deliveries = stat('delivered', 'hud-deliveries');
+    this.game = stat('GAME', 'hud-game');
+    // The GAME figure is the browser mock's (Decision 1): a small badge under it.
+    this.gameBadge = mockBadge(this.game.parentNode as HTMLElement, 'hud-mock-badge');
     const load = el('div', 'hud-load', totals);
     el('span', 'hud-load-label', load).textContent = 'Load';
     this.load = el('b', 'hud-load-value', load);
@@ -112,12 +117,17 @@ export class Hud implements HudView {
     setText(this.coins, String(m.totals.coins));
     setText(this.points, String(m.totals.points));
     setText(this.deliveries, String(m.totals.deliveries));
+    setText(this.game, gameText(m.wallet.accrued));
+    this.gameBadge.hidden = !m.wallet.mock;
     setText(this.load, loadText(m.load));
 
     this.safe.hidden = m.safeZone === null;
     if (m.safeZone !== null) setText(this.safe, `Safe zone · ${m.safeZone}`);
     this.lockout.hidden = m.lockoutLeft <= 0;
-    if (m.lockoutLeft > 0) setText(this.lockout, `No new offers · ${Math.ceil(m.lockoutLeft)} s`);
+    if (m.lockoutLeft > 0) {
+      const secs = Math.ceil(m.lockoutLeft);
+      setText(this.lockout, m.lockoutReason === 'missedPickup' ? `Missed pickup · no new offers · ${secs} s` : `No new offers · ${secs} s`);
+    }
 
     const n = m.nextStop;
     this.next.hidden = n === null;
@@ -187,7 +197,14 @@ export class Hud implements HudView {
 
   private orderRow(o: HudOrder, color: number): string {
     const extra: string[] = [];
-    if (o.prep) extra.push(o.prep.secondsLeft > 0 ? `<span class="hud-timer">Ready ${clock(o.prep.secondsLeft)}</span>` : '<span class="hud-prep-ready">Ready for pickup</span>');
+    if (o.prep) {
+      extra.push(
+        o.prep.ready
+          ? '<span class="hud-prep-ready">Ready for pickup</span>'
+          : `<div class="hud-prep"><div class="hud-prep-bar" style="--progress:${Math.round(o.prep.progress * 100)}%"></div><span>Preparing</span></div>`,
+      );
+    }
+    if (o.pickup) extra.push(this.timer('Pickup', o.pickup, 'Pickup missed'));
     if (o.timer) extra.push(o.kind === 'food' ? this.timer('Hot', o.timer, 'Cold · no hot bonus') : this.timer('Par', o.timer, 'Over par · no bonus'));
     if (o.express) extra.push(this.timer('Express', o.express, 'Express late · no bonus'));
     if (o.weightKg !== null) extra.push(`<span class="hud-kg">${o.weightKg} kg</span>`);

@@ -1,19 +1,22 @@
 import type { RideTier, Vec3 } from '@dm/shared';
-import { el, keyLabel } from '../dom';
+import type { Look } from '../../render/cosmetics';
+import { cssHex } from '../../render/palette';
+import { el, isTypingTarget, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
 import { createGarageApp } from './garageApp';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
-import { buildComingSoon, buildStubApp, type StubAppName } from './stubApp';
-import { renderWalletApp } from './walletApp';
+import { createShopApp } from './shopApp';
+import { buildStubApp, type StubAppName } from './stubApp';
+import { createWalletApp, type WalletCallbacks } from './walletApp';
+import { createWardrobeApp } from './wardrobeApp';
 
-export type PhoneApp = 'orders' | 'map' | 'garage' | 'shop' | 'wallet' | 'wardrobe' | 'leaderboard' | 'settings';
+export type PhoneApp = 'orders' | 'garage' | 'shop' | 'wallet' | 'wardrobe' | 'leaderboard' | 'settings';
 
-/** Nav order (spec §8 app table). */
-export const PHONE_APPS: readonly PhoneApp[] = ['orders', 'map', 'garage', 'shop', 'wallet', 'wardrobe', 'leaderboard', 'settings'];
+/** Nav order (spec §8 app table; the map is its own screen, M: Decision 11). */
+export const PHONE_APPS: readonly PhoneApp[] = ['orders', 'garage', 'shop', 'wallet', 'wardrobe', 'leaderboard', 'settings'];
 
 const APP_TITLE: Record<PhoneApp, string> = {
   orders: 'Orders',
-  map: 'Map',
   garage: 'Garage',
   shop: 'Shop',
   wallet: 'Wallet',
@@ -22,13 +25,23 @@ const APP_TITLE: Record<PhoneApp, string> = {
   settings: 'Settings',
 };
 
-export interface PhoneCallbacks extends OrdersCallbacks {
+export interface PhoneCallbacks extends OrdersCallbacks, WalletCallbacks {
   /** The phone was closed (Esc / Tab in the phone, or close()). */
   closed(): void;
   /** Garage: Summon `t` to the road next to the courier. */
   summon(t: RideTier): void;
   /** Settings: respawn at the nearest hospital (spec §13 Vehicle stuck). */
   respawn(): void;
+  /** Garage: Switch offers, capacity and the payout range to `t` (on foot). */
+  switchRide(t: RideTier): void;
+  /** Shop: a Coin item's Buy (bought at once). */
+  shopBuy(itemId: string): void;
+  /** Shop: Confirm on a GAME item's confirm sheet, paying at most the `maxGame` it showed. */
+  shopConfirm(itemId: string, maxGame: number): void;
+  /** Shop: the confirm sheet was cancelled. */
+  shopCancel(): void;
+  /** Wardrobe: Equip on an owned item. */
+  wardrobeEquip(itemId: string): void;
 }
 
 /** What DeliveryLoop needs from the phone (tests pass a recorder). */
@@ -38,23 +51,30 @@ export interface PhoneView {
   close(): void;
   toggle(): void;
   show(app: PhoneApp): void;
-  /** `player`/`heading` feed the Map app. */
+  /** `player`/`heading` feed the Garage app (distances). */
   render(model: HudModel, player: Vec3, heading: number): void;
+  /** Brings the view's main tab to the front (the Shop: Token); called after the phone shows the app. */
+  focus?(): void;
+  /** The phone case colour on the frame (Decision 4); absent on test recorders. */
+  applyLook?(look: Look): void;
 }
 
 /** An app view the phone hosts: its element and how it draws a model. */
 export interface PhoneAppView {
   el: HTMLElement;
   render(model: HudModel, player: Vec3, heading: number): void;
+  /** Brings the view's main tab to the front (the Shop: Token); called after the phone shows the app. */
+  focus?(): void;
 }
 
 /**
  * The courier's phone (spec §8): a dimmed backdrop over the game (the HUD stays visible behind it) and a handset
- * with a nav bar of the eight apps. Only the open app renders. While open, the close keys (Esc and the phone key) are
+ * with a nav bar of the seven apps. Only the open app renders. While open, the close keys (Esc and the phone key) are
  * caught before the game's input sees them.
  */
 export class Phone implements PhoneView {
   private readonly root: HTMLElement;
+  private readonly device: HTMLElement;
   private readonly title: HTMLElement;
   private readonly screen: HTMLElement;
   private readonly navButtons = new Map<PhoneApp, HTMLButtonElement>();
@@ -73,6 +93,7 @@ export class Phone implements PhoneView {
     this.root = el('div', 'phone', host);
     this.root.hidden = true;
     const device = el('div', 'phone-device', this.root);
+    this.device = device;
     device.setAttribute('role', 'dialog');
     device.setAttribute('aria-label', 'Phone');
     this.title = el('div', 'phone-title', device);
@@ -98,6 +119,8 @@ export class Phone implements PhoneView {
       'keydown',
       (e) => {
         if (!this.open_ || !this.closeCodes.includes(e.code)) return;
+        // Tab or M typed in a field (the Wallet's amount) is the field's; Escape still closes.
+        if (e.code !== 'Escape' && isTypingTarget(e.target)) return;
         e.preventDefault();
         e.stopPropagation();
         // A held Tab auto-repeats: only a fresh press closes, or holding the key would close the phone it just opened.
@@ -147,7 +170,7 @@ export class Phone implements PhoneView {
 
   /**
    * Draws the open app (DeliveryLoop calls this at the HUD rate while the phone is open). The apps read everything
-   * time-dependent (seconds left, accept status) from the model; only the Map also needs the player's pose.
+   * time-dependent (seconds left, accept status) from the model; the Garage also needs the player's pose.
    */
   render(model: HudModel, player: Vec3 = this.player, heading: number = this.heading): void {
     this.last = model;
@@ -157,15 +180,15 @@ export class Phone implements PhoneView {
     if (this.open_) this.views.get(this.current)!.render(model, player, heading);
   }
 
-  /** Puts the real Map app (Task 11) in place of the placeholder. */
-  setMapApp(view: PhoneAppView): void {
-    const old = this.views.get('map')!;
-    view.el.classList.add('phone-app');
-    view.el.dataset.app = 'map';
-    this.screen.replaceChild(view.el, old.el);
-    this.views.set('map', view);
-    this.syncNav();
-    if (this.open_ && this.current === 'map' && this.last) view.render(this.last, this.player, this.heading);
+  /** The Garage's "Buy in the Shop": the Shop app on its Token tab. */
+  openShopTokens(): void {
+    this.show('shop');
+    this.views.get('shop')!.focus?.();
+  }
+
+  /** The phone case colour on the frame (`--phone-case`). */
+  applyLook(look: Look): void {
+    this.device.style.setProperty('--phone-case', cssHex(look.phone));
   }
 
   private buildApp(app: PhoneApp): PhoneAppView {
@@ -174,18 +197,30 @@ export class Phone implements PhoneView {
     switch (app) {
       case 'orders':
         return { el: root, render: (m) => renderOrdersApp(root, m, this.callbacks) };
-      case 'wallet':
-        return { el: root, render: (m) => renderWalletApp(root, m) };
+      case 'wallet': {
+        const cb = this.callbacks;
+        const view = createWalletApp({ claim: () => cb.claim(), lockGame: (g) => cb.lockGame(g), withdrawLock: () => cb.withdrawLock() });
+        root.appendChild(view.el);
+        return { el: root, render: (m, p, h) => view.render(m, p, h) };
+      }
       case 'garage': {
-        const view = createGarageApp((t) => this.callbacks.summon(t));
+        const view = createGarageApp((t) => this.callbacks.summon(t), { switchTo: (t) => this.callbacks.switchRide(t), buy: () => this.openShopTokens() });
+        root.appendChild(view.el);
+        return { el: root, render: (m, p, h) => view.render(m, p, h) };
+      }
+      case 'shop': {
+        const cb = this.callbacks;
+        const view = createShopApp({ buy: (id) => cb.shopBuy(id), confirm: (id, max) => cb.shopConfirm(id, max), cancel: () => cb.shopCancel() });
+        root.appendChild(view.el);
+        return { el: root, render: (m, p, h) => view.render(m, p, h), focus: () => view.focus?.() };
+      }
+      case 'wardrobe': {
+        const view = createWardrobeApp({ equip: (id) => this.callbacks.wardrobeEquip(id) });
         root.appendChild(view.el);
         return { el: root, render: (m, p, h) => view.render(m, p, h) };
       }
       case 'settings':
         buildStubApp(root, app, () => this.callbacks.respawn());
-        return { el: root, render: () => undefined };
-      case 'map':
-        buildComingSoon(root, 'Map', 3); // placeholder until Task 11's setMapApp
         return { el: root, render: () => undefined };
       default:
         buildStubApp(root, app satisfies StubAppName);

@@ -1,4 +1,5 @@
-import type { OrdersConfig } from '../config/types';
+import { dispatcherTuning, type DispatcherTuning } from '../economy/dispatcher';
+import type { OrdersConfig, VehicleTier } from '../config/types';
 import type { Vec3 } from '../math/vec3';
 import { NO_MODS, type SimEvent, type StatModifiers } from '../movement/types';
 import type { Rng } from '../util/rng';
@@ -7,7 +8,7 @@ import type { OrderRules, Poi } from '../world/mapTypes';
 import type { PlayerZones } from '../world/zones';
 import type { DistanceTable } from './distanceTable';
 import { generateOffer } from './offers';
-import { scoreOrder } from './rules';
+import { maxPointsFor, scoreOrder } from './rules';
 import type { ActiveOrder, Bonus, CarrierCapacity, Offer } from './types';
 
 /** What broke a carried Fragile package: a fall, a respawn, or a crash into a wall on a vehicle. */
@@ -22,8 +23,23 @@ export type OrderEvent =
   | { kind: 'prepStarted'; orderId: string; readySeconds: number }
   | { kind: 'pickedUp'; orderId: string }
   | { kind: 'fragileBroken'; orderId: string; reason: FragileBreak }
-  | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; inTime: boolean; expressOnTime: boolean | null }
+  | {
+      kind: 'completed';
+      orderId: string;
+      points: number;
+      coins: number;
+      bonuses: Bonus[];
+      inTime: boolean;
+      expressOnTime: boolean | null;
+      /** The most points the order could have earned (the payout roll's quality is points ÷ maxPoints, spec §3.6). */
+      maxPoints: number;
+      /** The order's vehicle tier, fixed when it was accepted. */
+      tier: VehicleTier;
+    }
+  | { kind: 'pickupMissed'; orderId: string; lockoutSeconds: number }
   | { kind: 'lockoutEnded' };
+
+export type CompletedEvent = Extract<OrderEvent, { kind: 'completed' }>;
 
 export interface Totals {
   points: number;
@@ -41,6 +57,10 @@ export interface OrderSystemOptions {
   rng: Rng;
   capacity: CarrierCapacity;
   totals?: Totals;
+  /** The owned Dispatcher tier's tuning, read each tick (Game: the chain's tier); absent: tier 0. */
+  dispatcher?: () => DispatcherTuning;
+  /** The capacity tier (the ride, else the last ride), read on accept: the order's vehicle tier. Absent: walk. */
+  vehicleTier?: () => VehicleTier;
 }
 
 /** Per-player order state: offers on the phone, accepted orders, lockout and totals (spec §3.2–§3.5). */
@@ -57,6 +77,8 @@ export class OrderSystem {
   totals: Totals;
   capacity: CarrierCapacity;
   lockoutUntil = 0;
+  /** Why offers are locked: a cancel or a missed pickup deadline. Null when no lockout is running. */
+  lockoutReason: 'cancelled' | 'missedPickup' | null = null;
   nextOfferAt: number;
 
   constructor(opts: OrderSystemOptions, now: number) {
@@ -75,9 +97,13 @@ export class OrderSystem {
     return this._active;
   }
 
+  private tuning(): DispatcherTuning {
+    return this.opts.dispatcher ? this.opts.dispatcher() : dispatcherTuning(0);
+  }
+
   private interval(): number {
     const { minIntervalSeconds: lo, maxIntervalSeconds: hi } = this.opts.cfg.offers;
-    return lo + this.opts.rng() * (hi - lo);
+    return (lo + this.opts.rng() * (hi - lo)) * this.tuning().intervalScale;
   }
 
   canSwitchCapacity(c: CarrierCapacity): boolean {
@@ -118,7 +144,15 @@ export class OrderSystem {
     const i = this._offers.findIndex((o) => o.order.id === offerId);
     const [offer] = this._offers.splice(i, 1) as [Offer];
     if (result === 'expired') return result;
-    this._active.push({ order: offer.order, acceptedAt: now, prepStartedAt: null, pickedUpAt: null, fragileIntact: true });
+    this._active.push({
+      order: offer.order,
+      acceptedAt: now,
+      pickupBy: now + this.opts.cfg.pickupDeadline.seconds,
+      prepStartedAt: null,
+      pickedUpAt: null,
+      fragileIntact: true,
+      tier: this.opts.vehicleTier?.() ?? 'walk',
+    });
     this.used.push({ ids: [offer.order.pickupPoiId, offer.order.dropoffPoiId], at: now });
     return 'ok';
   }
@@ -128,9 +162,16 @@ export class OrderSystem {
     const i = this._active.findIndex((a) => a.order.id === orderId);
     if (i < 0) return 'unknown';
     this._active.splice(i, 1);
-    this.lockoutUntil = now + this.opts.cfg.lockout.seconds;
-    this.lockoutActive = true;
+    this.startLockout(now, this.opts.cfg.lockout.seconds, 'cancelled');
     return 'ok';
+  }
+
+  /** Only ever extends: a longer lockout still running is never cut short by a shorter one. */
+  private startLockout(now: number, seconds: number, reason: 'cancelled' | 'missedPickup'): void {
+    const until = now + seconds;
+    if (until >= this.lockoutUntil) this.lockoutReason = reason;
+    this.lockoutUntil = Math.max(this.lockoutUntil, until);
+    this.lockoutActive = true;
   }
 
   /** Pays `n` Coins (fuel); false and no change when the player holds fewer. */
@@ -140,9 +181,10 @@ export class OrderSystem {
     return true;
   }
 
-  /** Dev / GAME-burn stub (price Pending): end the lockout now. */
+  /** The confirmed lockout skip (and the dev panel): ends the lockout now. */
   skipLockout(): void {
     this.lockoutUntil = 0;
+    this.lockoutReason = null; // over now; the next update still reports lockoutEnded
   }
 
   isCarried(a: ActiveOrder): boolean {
@@ -175,12 +217,24 @@ export class OrderSystem {
       }
     }
 
+    // An order not reached by its pickup deadline fails like a cancel; the lockout it starts blocks this tick's roll.
+    // Standing at the pickup on the deadline tick counts as reaching it (the arrival is handled below).
+    for (let i = this._active.length - 1; i >= 0; i--) {
+      const a = this._active[i] as ActiveOrder;
+      if (now < a.pickupBy || a.prepStartedAt !== null || a.pickedUpAt !== null || zones.poiIds.has(a.order.pickupPoiId)) continue;
+      this._active.splice(i, 1);
+      const lockoutSeconds = cfg.pickupDeadline.lockoutSeconds;
+      this.startLockout(now, lockoutSeconds, 'missedPickup');
+      events.push({ kind: 'pickupMissed', orderId: a.order.id, lockoutSeconds });
+    }
+
     if (this.lockoutActive && now >= this.lockoutUntil) {
       this.lockoutActive = false;
+      this.lockoutReason = null;
       events.push({ kind: 'lockoutEnded' });
     }
 
-    if (now >= this.nextOfferAt && this._offers.length < cfg.offers.maxShown && this.freeSlots() > 0 && now >= this.lockoutUntil) {
+    if (now >= this.nextOfferAt && this._offers.length < this.tuning().maxShown && this.freeSlots() > 0 && now >= this.lockoutUntil) {
       const order = generateOffer({
         pois: this.opts.pois,
         distance: this.opts.distance,
@@ -195,6 +249,7 @@ export class OrderSystem {
         blockedDoors: this.blockedDoors(),
         recentlyUsed: this.recentlyUsed(now),
         nextId: () => `o${++this.idCounter}`,
+        dispatcher: this.tuning(),
       });
       if (order) {
         this._offers.push({ order, offeredAt: now, expiresAt: now + cfg.offers.lifetimeSeconds });
@@ -232,7 +287,7 @@ export class OrderSystem {
         deliveries: this.totals.deliveries + 1,
       };
       this._active.splice(i--, 1);
-      events.push({ kind: 'completed', orderId: a.order.id, ...score, inTime, expressOnTime });
+      events.push({ kind: 'completed', orderId: a.order.id, ...score, inTime, expressOnTime, maxPoints: maxPointsFor(a.order, cfg), tier: a.tier });
       // Pacing after a delivery (server-side only, no UI): the next offer waits at least the cooldown.
       const { minSeconds, maxSeconds } = cfg.deliveryCooldown;
       this.nextOfferAt = Math.max(this.nextOfferAt, now + minSeconds + this.opts.rng() * (maxSeconds - minSeconds));

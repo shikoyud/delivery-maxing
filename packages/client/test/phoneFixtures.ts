@@ -1,4 +1,4 @@
-import type { HudModel, HudOffer, HudOrder } from '../src/ui/hudModel';
+import { emptyWallet, type HudModel, type HudOffer, type HudOrder } from '../src/ui/hudModel';
 
 /** Hand-built HUD models for the phone tests. */
 export function offer(id: string, over: Partial<HudOffer> = {}): HudOffer {
@@ -28,6 +28,7 @@ export function order(id: string, over: Partial<HudOrder> = {}): HudOrder {
     target: { x: 0, y: 0, z: 0 },
     distance: 120,
     prep: null,
+    pickup: null,
     timer: { secondsLeft: 65, late: false },
     express: null,
     weightKg: 4,
@@ -42,6 +43,7 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     totals: { points: 0, coins: 0, deliveries: 0 },
     load: { usedSlots: 0, slots: 3, carriedKg: 0, maxPackageKg: 50 },
     lockoutLeft: 0,
+    lockoutReason: null,
     orders: [],
     offers: [],
     safeZone: null,
@@ -51,6 +53,9 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     nextStop: null,
     ride: null,
     prompt: null,
+    wallet: emptyWallet(),
+    shop: [],
+    wardrobe: [],
     ...over,
   };
 }

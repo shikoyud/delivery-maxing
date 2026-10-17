@@ -95,6 +95,7 @@ describe('animFor: riding', () => {
   it('riding through the air keeps the ride pose (no Jump clip or fall pose on a vehicle)', () => {
     expect(animFor(state({ riding: 'bicycle', mode: 'air', vy: -6 }), 10, cfg).pose).toBe('bike');
     expect(animFor(state({ riding: 'skateboard', mode: 'air', vy: 3 }), 10, cfg)).toMatchObject({ clip: 'Idle', pose: 'board' });
+    expect(animFor(state({ riding: 'skateboard', mode: 'air', vy: -6 }), 10, cfg)).toMatchObject({ clip: 'Idle', pose: 'board' }); // falling off an ollie
   });
 });
 

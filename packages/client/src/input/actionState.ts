@@ -25,6 +25,10 @@ export class ActionState {
   private readonly latched = new Set<ButtonAction>();
   private yaw = 0;
   private pitch = 0;
+  /** Mouse yaw turned since the last takeYawDelta (radians). */
+  private yawDelta = 0;
+  /** While set (the map screen is open: drags pan it), mouse motion does not turn the look. */
+  private lookFrozen = false;
 
   constructor(
     private readonly input: ClientConfig['input'],
@@ -67,8 +71,10 @@ export class ActionState {
 
   /** Relative mouse motion in pixels: right turns right, up looks up (unless invertY). */
   mouseMove(dx: number, dy: number): void {
+    if (this.lookFrozen) return;
     const k = this.input.mouseSensitivity;
     this.yaw -= dx * k;
+    this.yawDelta -= dx * k;
     this.pitch -= (this.input.invertY ? -dy : dy) * k;
     this.pitch = this.clampPitch(this.pitch);
   }
@@ -79,6 +85,12 @@ export class ActionState {
     this.latched.clear();
   }
 
+  /** Freezes (true) or frees the mouse look; freezing also drops any yaw not yet taken by takeYawDelta. */
+  setLookFrozen(frozen: boolean): void {
+    this.lookFrozen = frozen;
+    if (frozen) this.yawDelta = 0;
+  }
+
   /** Sets the look direction (e.g. the spawn yaw); pitch is clamped. */
   setLook(yaw: number, pitch: number): void {
     this.yaw = yaw;
@@ -87,6 +99,13 @@ export class ActionState {
 
   private clampPitch(p: number): number {
     return Math.min(this.pitchMaxRad, Math.max(this.pitchMinRad, p));
+  }
+
+  /** The mouse yaw turned since the last call (the ride camera orbits by it); resets to 0. */
+  takeYawDelta(): number {
+    const d = this.yawDelta;
+    this.yawDelta = 0;
+    return d;
   }
 
   look(): { yaw: number; pitch: number } {

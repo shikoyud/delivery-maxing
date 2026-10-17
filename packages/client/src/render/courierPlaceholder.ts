@@ -4,6 +4,7 @@ import type { CourierConfig } from '../clientConfig';
 import { isLow } from './chaseCamera';
 import { animFor, displayYaw, easeYaw } from './courier/animState';
 import type { CourierView } from './courier/CourierView';
+import { paintMaterial, surfaceOf } from './cosmetics';
 import { palette } from './palette';
 import { riderLift } from './vehicles/vehicleMeshes';
 
@@ -54,6 +55,7 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
 
   let snapNext = true;
   let packages = 0;
+  const bodySurface = surfaceOf(capsuleMesh.material);
   return {
     root,
     front: visor,
@@ -75,6 +77,10 @@ export function createCourierPlaceholder(capsule: Capsule, courier: CourierConfi
         m.material.colorWrite = !hidden;
         m.material.depthWrite = !hidden;
       }
+    },
+    applyLook(look) {
+      // The capsule wears the outfit; it carries no visible boxes to take the bag colour.
+      paintMaterial(capsuleMesh.material, look.outfit, bodySurface, palette.teal);
     },
     setPackages(n) {
       packages = n; // the fallback carries no visible packages

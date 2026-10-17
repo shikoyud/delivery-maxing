@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Hud } from '../src/ui/hud';
+import { Popups } from '../src/ui/popups';
 import { installFakeDom } from './fakeDom';
-import { model, offer } from './phoneFixtures';
+import { model, offer, order } from './phoneFixtures';
+import { emptyWallet } from '../src/ui/hudModel';
 
 describe('Hud offer toasts', () => {
   let dom: ReturnType<typeof installFakeDom>;
@@ -101,6 +103,21 @@ describe('Hud next stop and ride', () => {
     expect(one('hud-fuel').className).not.toContain('low');
   });
 
+  it('shows the accrued GAME top right, whole with thousands separators (spec §8)', () => {
+    const value = () => one('hud-game').byClass('hud-stat-value')[0]!.textContent;
+    hud.update(model(), () => 0);
+    expect(value()).toBe('0');
+    hud.update(model({ wallet: { ...emptyWallet(), accrued: 1_234_567_890_123 } }), () => 0); // base units: 1,234,567.89 GAME
+    expect(value()).toBe('1,234,567');
+    expect(one('hud-game').byClass('hud-stat-label')[0]!.textContent).toBe('GAME');
+    // Decision 1: the mock's GAME carries the "Mock wallet" badge.
+    const badge = one('hud-game').byClass('phone-mock-badge')[0]!;
+    expect(badge.textContent).toBe('Mock wallet');
+    expect(badge.hidden).toBe(false);
+    hud.update(model({ wallet: { ...emptyWallet(), mock: false } }), () => 0);
+    expect(badge.hidden).toBe(true);
+  });
+
   it('the load chip keeps loadText', () => {
     hud.update(model({ load: { usedSlots: 2, slots: 5, carriedKg: 25, maxPackageKg: 150 }, ride: { tier: 'car', speed: 0, fuel: 1 } }), () => 0);
     expect(one('hud-load-value').textContent).toBe('2/5 · 25/150 kg');
@@ -121,5 +138,83 @@ describe('Hud key prompt', () => {
     } finally {
       dom.restore();
     }
+  });
+});
+
+describe('Hud pickup deadline', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  let hud: Hud;
+  const rowHtml = (): string => dom.host.byClass('hud-active')[0]!.innerHTML;
+
+  beforeEach(() => {
+    dom = installFakeDom();
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
+  });
+  afterEach(() => dom.restore());
+
+  it('an unreached order shows the pickup countdown, urgent under the threshold; a reached one does not', () => {
+    hud.update(model({ orders: [order('a', { pickup: { secondsLeft: 161, late: false } })] }), () => 0);
+    expect(rowHtml()).toContain('<span class="hud-timer">Pickup 2:41</span>');
+    hud.update(model({ orders: [order('a', { pickup: { secondsLeft: 9, late: false } })] }), () => 0);
+    expect(rowHtml()).toContain('hud-timer urgent">Pickup 0:09');
+    hud.update(model({ orders: [order('a', { pickup: null })] }), () => 0);
+    expect(rowHtml()).not.toContain('Pickup');
+  });
+
+  it('the lockout chip names a missed pickup', () => {
+    const chip = () => dom.host.byClass('hud-lockout')[0]!;
+    hud.update(model({ lockoutLeft: 173.2, lockoutReason: 'missedPickup' }), () => 0);
+    expect(chip().hidden).toBe(false);
+    expect(chip().textContent).toBe('Missed pickup · no new offers · 174 s');
+    hud.update(model({ lockoutLeft: 41.5, lockoutReason: 'cancelled' }), () => 0);
+    expect(chip().textContent).toBe('No new offers · 42 s');
+  });
+});
+
+describe('Hud food prep bar', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  let hud: Hud;
+  const rowHtml = (): string => dom.host.byClass('hud-active')[0]!.innerHTML;
+
+  beforeEach(() => {
+    dom = installFakeDom();
+    hud = new Hud(dom.asHost, { timerUrgentSeconds: 10, fuelLowPct: 20 }, 'Y');
+  });
+  afterEach(() => dom.restore());
+
+  it('a preparing order shows a bar at its progress and no seconds', () => {
+    hud.update(model({ orders: [order('a', { prep: { progress: 0.5, ready: false } })] }), () => 0);
+    const html = rowHtml();
+    expect(html).toContain('hud-prep-bar');
+    expect(html).toContain('--progress:50%');
+    expect(html).toContain('Preparing');
+    const prep = html.slice(html.indexOf('class="hud-prep"'));
+    expect(prep.slice(0, prep.indexOf('</span>'))).not.toMatch(/\d+:\d\d/);
+    expect(html).not.toContain('hud-prep-ready');
+  });
+
+  it('a ready order shows "Ready for pickup"', () => {
+    hud.update(model({ orders: [order('a', { prep: { progress: 1, ready: true } })] }), () => 0);
+    expect(rowHtml()).toContain('Ready for pickup');
+    expect(rowHtml()).not.toContain('hud-prep-bar');
+  });
+});
+
+describe('Popups', () => {
+  let dom: ReturnType<typeof installFakeDom>;
+  beforeEach(() => {
+    dom = installFakeDom();
+    (globalThis as { window?: unknown }).window ??= { setTimeout: () => 0 };
+  });
+  afterEach(() => dom.restore());
+
+  it('a popup naming GAME carries the Mock wallet badge; others do not (Decision 1)', () => {
+    const popups = new Popups(dom.asHost, 3, 4);
+    popups.show('Claimed 500 GAME', ['Added to your balance'], 'good', true);
+    popups.show('Offer accepted', [], 'info');
+    const [game, plain] = dom.host.byClass('popup');
+    expect(game!.byClass('phone-mock-badge')).toHaveLength(1);
+    expect(game!.byClass('phone-mock-badge')[0]!.textContent).toBe('Mock wallet');
+    expect(plain!.byClass('phone-mock-badge')).toHaveLength(0);
   });
 });

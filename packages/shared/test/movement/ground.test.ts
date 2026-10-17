@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { movementConfig as cfg } from '../../src/config';
+import { economyConfig, movementConfig as cfg } from '../../src/config';
+import { shoesSprintMul } from '../../src/economy/catalog';
 import { horizontalLength, vec3 } from '../../src/math/vec3';
 import { NO_MODS } from '../../src/movement/types';
 import { box, makeSim } from '../helpers/simHarness';
@@ -55,6 +56,31 @@ describe('ground movement', () => {
     const h = await makeSim();
     h.run(60, SPRINT, mods);
     expect(speed(h.sim.state)).toBeCloseTo(9.4, 2);
+  });
+
+  it('Shoes tier 5 sprints at 8 × 1.175 = 9.4 m/s; running and riding are unchanged', async () => {
+    const mods = { ...NO_MODS, sprintMul: shoesSprintMul(5, economyConfig) };
+    expect(mods.sprintMul).toBeCloseTo(1.175, 10);
+    const h = await makeSim();
+    h.run(60, SPRINT, mods);
+    expect(speed(h.sim.state)).toBeCloseTo(9.4, 2);
+    const run = await makeSim();
+    run.run(60, { forward: 1 }, mods);
+    expect(speed(run.sim.state)).toBeCloseTo(cfg.run.runSpeed, 2);
+    expect(shoesSprintMul(0, economyConfig)).toBe(1);
+    expect(NO_MODS.sprintMul).toBe(1);
+  });
+
+  it('the on-foot cap of 12 m/s still holds with Shoes and a slide burst', async () => {
+    const mods = { ...NO_MODS, sprintMul: shoesSprintMul(5, economyConfig) };
+    const h = await makeSim();
+    h.run(30, SPRINT, mods);
+    h.tick({ ...SPRINT, crouch: true }, ['crouch'], mods);
+    expect(h.sim.state.mode).toBe('slide');
+    for (let i = 0; i < 45; i++) {
+      expect(speed(h.sim.state)).toBeLessThanOrEqual(12 + 1e-9);
+      h.tick({ ...SPRINT, crouch: true }, [], mods);
+    }
   });
 
   it('horizontal speed never exceeds the 18 m/s cap', async () => {

@@ -1,0 +1,36 @@
+{
+  "outfit": [
+    { "name": "Teal", "color": "#1f9e93", "coins": 0 },
+    { "name": "Coral", "color": "#f27166", "coins": 50 },
+    { "name": "Sky", "color": "#5aa9e6", "coins": 75 },
+    { "name": "Lime", "color": "#8cc63f", "coins": 100 },
+    { "name": "Plum", "color": "#7d4e9e", "coins": 150 },
+    { "name": "Charcoal", "color": "#3a3f44", "coins": 200 }
+  ],
+  "vehicle": [
+    { "name": "Factory", "color": null, "coins": 0 },
+    { "name": "Cherry", "color": "#c8323c", "coins": 50 },
+    { "name": "Ocean", "color": "#2f6fb5", "coins": 75 },
+    { "name": "Sunflower", "color": "#f2c230", "coins": 100 },
+    { "name": "Mint", "color": "#7fd6b0", "coins": 150 },
+    { "name": "Midnight", "color": "#1d2340", "coins": 200 }
+  ],
+  "bag": [
+    { "name": "Cardboard", "color": "#d8b98a", "coins": 0 },
+    { "name": "Crimson", "color": "#b02e3a", "coins": 50 },
+    { "name": "Navy", "color": "#26406b", "coins": 75 },
+    { "name": "Olive", "color": "#7a8a3a", "coins": 100 },
+    { "name": "Lavender", "color": "#b49be0", "coins": 150 },
+    { "name": "Snow", "color": "#f4f6f8", "coins": 200 }
+  ],
+  "phone": [
+    { "name": "Slate", "color": "#10262d", "coins": 0 },
+    { "name": "Rose", "color": "#e88aa6", "coins": 50 },
+    { "name": "Aqua", "color": "#3cc4d6", "coins": 75 },
+    { "name": "Lemon", "color": "#f4e04d", "coins": 100 },
+    { "name": "Grape", "color": "#5b3a8c", "coins": 150 },
+    { "name": "Pearl", "color": "#ece6da", "coins": 200 }
+  ],
+  "premiumFinishes": ["gold", "chrome", "neon"],
+  "premiumSlots": ["outfit", "vehicle"]
+}

@@ -1,3 +1,4 @@
+import type { CosmeticSlot, Finish } from '../economy/types';
 import type { Vec3 } from '../math/vec3';
 import type { CityDistrict, OrderRules } from '../world/mapTypes';
 
@@ -36,7 +37,8 @@ export interface MovementConfig {
 }
 
 export type VehicleTier = 'walk' | 'skateboard' | 'bicycle' | 'motorbike' | 'car';
-export interface VehicleSpec { slots: number; maxPackageKg: number; topSpeed: number }
+/** `slotCap` and `kgCap` cap the Bag's capacity (spec §3.3 rev. 3; the player's capacity is the smaller of the two). */
+export interface VehicleSpec { slotCap: number; kgCap: number; topSpeed: number }
 export type VehiclesConfig = Record<VehicleTier, VehicleSpec>;
 
 export type RideTier = 'skateboard' | 'bicycle' | 'motorbike' | 'car';
@@ -58,6 +60,8 @@ export interface RideSpec {
   maxStepHeight: number;
   maxSlopeClimbDeg: number;
   fuel: { rangeMeters: number; fullTankCoins: number } | null;
+  /** Space jumps this high (m), with the on-foot coyote time and jump buffer; null: Space is the handbrake (Decision 10). */
+  jumpHeight: number | null;
 }
 
 export interface RidingConfig {
@@ -68,22 +72,18 @@ export interface RidingConfig {
     /** A parked vehicle more than this far above or below the feet (m) is out of reach for F. */
     mountReachHeight: number;
     stoppedSpeed: number;
-    dismountMaxSpeed: number;
     dismountGap: number;
     emptyTankSpeed: number;
-    /** Drive input whose direction has a dot product with the heading below this points back (brake / reverse). */
-    backInputDot: number;
-    /**
-     * A ride whose reverseSpeed is at most this (the two-wheelers' walking pace) turns toward back input first and
-     * only backs up when that turn is blocked by an obstacle; faster-reversing rides (the car) back up at once.
-     */
-    turnFirstMaxReverse: number;
-    /** When such a ride's short-way turn is refused it backs up for this long (s) before turning again. */
-    backOutSeconds: number;
+    /** leaveRide (forced off) with no dismount spot free searches rings around the vehicle out to this far (m). */
+    leaveSearchRadius: number;
   };
   refuel: { pumpRadius: number; tankPerSecond: number };
   summon: { minDistance: number; cooldownSeconds: number; minClearance: number; searchRadius: number; ringSamples: number };
-  bays: { spacing: number };
+  /**
+   * Bay slots run nose-to-tail `spacing` apart (m); the longest ride's collider plus `minGap` must fit in one (asserted
+   * at load), so neighbours never touch.
+   */
+  bays: { spacing: number; minGap: number };
 }
 
 export interface NavConfig {
@@ -144,7 +144,6 @@ interface Rewards { short: number; medium: number; long: number; hot: number; pa
 
 export interface OrdersConfig {
   offers: {
-    maxShown: number;
     lifetimeSeconds: number;
     minIntervalSeconds: number;
     maxIntervalSeconds: number;
@@ -156,6 +155,8 @@ export interface OrdersConfig {
   /** Food orders: seconds the kitchen takes once the courier arrives at the pickup, before the order can be picked up. */
   prep: { foodSeconds: number };
   lockout: { seconds: number };
+  /** Accepted orders must reach their pickup within `seconds` of accepting, or fail and lock offers for `lockoutSeconds`. */
+  pickupDeadline: { seconds: number; lockoutSeconds: number };
   /** `doorMeters` must equal config/city.json `pois.doorSpacing` (the generator and the order picker keep the same gap). */
   spacing: { doorMeters: number; reuseSeconds: number };
   referenceSpeed: number;
@@ -433,3 +434,39 @@ export interface ItemsConfig {
   /** Per catalog phrase: up to `max` of each thing, each thing as [singular, plural] */
   phrases: Record<string, { max: number; things: string[][] }>;
 }
+
+/** A [min, max] range in micro-USD. */
+type MicroRange = [number, number];
+
+/**
+ * config/economy.json once loaded: every USD value (decimals in the JSON, `usd`/`…Usd` keys) becomes a micro-USD
+ * integer (`usdMicro`/`…UsdMicro`). Line price arrays are tiers 1..n; capacity and Dispatcher tables are tiers 0..n.
+ */
+export interface EconomyConfig {
+  lines: {
+    vehicle: { usdMicro: number[] };
+    bag: { usdMicro: number[]; slots: number[]; kg: number[] };
+    shoes: { usdMicro: number[]; sprintPerTier: number };
+    dispatcher: { usdMicro: number[]; maxShown: number[]; intervalScale: number[]; longWeightPerTier: number; modifierWeightPerTier: number };
+  };
+  skinUsdMicro: number;
+  lockoutSkipUsdMicro: number;
+  /** Share of a line purchase's GAME sent to the reward vault; the rest is burned. Skins and the skip burn all. */
+  split: { linePool: number };
+  /** The rate must be younger than maxAgeSeconds; one update may move it at most maxMove (a fraction). */
+  rate: { maxAgeSeconds: number; maxMove: number };
+  /** The buyer's maxGame is the quote × (1 + slippage). */
+  slippage: number;
+  payout: { ranges: Record<VehicleTier, MicroRange>; qualityWeight: number; luckWeight: number };
+  /** Locks last `days` and renew; a renewed lock may be withdrawn for `withdrawWindowHours` after the period that ended. */
+  lock: { days: number; withdrawWindowHours: number; maxBoost: number; fullBoostUsdMicro: number };
+  /** A fuel can adds `tank` of a tank for `markup` × the pump price of that much fuel. */
+  fuelCan: { tank: number; markup: number };
+  /** `startGameUnits`: the dev wallet's starting balance in base units (economy.json `startGame` is whole GAME). */
+  mockChain: { wallet: string; startGameUnits: number; vaultUsdMicro: number; usdPerGame: number; confirmSeconds: number };
+}
+
+/** One Coin cosmetic. `color` null keeps each model's own colours (the free factory paint). */
+export interface CosmeticSpec { name: string; color: number | null; coins: number }
+/** config/cosmetics.json once loaded (`"#rrggbb"` colours become numbers). The first entry of each slot is free and owned. */
+export type CosmeticsConfig = Record<CosmeticSlot, CosmeticSpec[]> & { premiumFinishes: Finish[]; premiumSlots: CosmeticSlot[] };

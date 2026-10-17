@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import { expressLimit, scoreOrder, timeLimit, weightClassFor } from '../../src/orders/rules';
+import { expressLimit, maxPointsFor, scoreOrder, timeLimit, weightClassFor } from '../../src/orders/rules';
 import type { Order } from '../../src/orders/types';
 
 const wc = ordersConfig.weightClasses;
@@ -68,5 +68,18 @@ describe('scoreOrder', () => {
     const fr = order({ weightClass: 'small', modifier: 'fragile' });
     expect(scoreOrder(fr, all, ordersConfig)).toEqual({ points: 4, coins: 40, bonuses: ['par', 'fragile'] });
     expect(scoreOrder(fr, { ...all, intact: false }, ordersConfig).bonuses).toEqual(['par']);
+  });
+});
+
+describe('maxPointsFor', () => {
+  it('is what scoreOrder gives the perfect delivery, for every kind and modifier', () => {
+    const cases: Order[] = [
+      order({ band: 'long', modifier: 'fragile' }),
+      order({ modifier: 'express', weightClass: 'medium', weightKg: 20 }),
+      order({ band: 'medium', weightClass: 'bulky', weightKg: 100 }),
+      order({ kind: 'food', weightKg: null, weightClass: null, modifier: 'express', band: 'medium' }),
+    ];
+    expect(cases.map((o) => maxPointsFor(o, ordersConfig))).toEqual([9, 4, 7, 3]);
+    for (const o of cases) expect(maxPointsFor(o, ordersConfig)).toBe(scoreOrder(o, all, ordersConfig).points);
   });
 });

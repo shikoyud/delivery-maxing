@@ -1,11 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import * as THREE from 'three';
 import {
+  Garage,
+  NO_MODS,
+  PlayerSim,
+  createPhysicsWorld,
   emptyInput,
   expandGreybox,
+  initRapier,
+  movementConfig,
+  vec3,
+  type InputFrame,
+  type MapData,
   ordersConfig,
   ridingConfig,
   streetDistance,
+  vehicleCapacity,
   vehiclesConfig,
   type GreyboxSource,
   type Offer,
@@ -15,13 +25,23 @@ import {
   type SummonResult,
   type Vec3,
   type VehicleState,
+  GAME_UNITS,
+  economyConfig,
+  effectiveCapacity,
+  maxPointsFor,
+  rollPayoutUsd,
+  usdToGame,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { clientConfig } from '../src/clientConfig';
-import { DeliveryLoop, simEventHint } from '../src/game/delivery';
+import { DeliveryLoop, MOUNT_REFUSED, simEventHint } from '../src/game/delivery';
 import { createProgressStore, type Progress } from '../src/game/progress';
+import { MockChain } from '../src/economy/MockChain';
+import type { PurchaseOutcome, QuoteView } from '../src/economy/Purchases';
+import { defaultWardrobe } from '../src/economy/wardrobe';
 import { ActionState } from '../src/input/actionState';
-import type { HudModel } from '../src/ui/hudModel';
+import { gameText, usdText, type HudModel } from '../src/ui/hudModel';
+import type { MapScreenView } from '../src/ui/map/MapScreen';
 import type { PhoneApp, PhoneCallbacks, PhoneView } from '../src/ui/phone/Phone';
 
 const map = expandGreybox(greybox as GreyboxSource);
@@ -31,23 +51,28 @@ interface Popup {
   text: string;
   lines: string[];
   tone: string;
+  /** Present (true) only on a popup carrying the Mock wallet badge. */
+  mock?: true;
 }
 
 /**
  * A DeliveryLoop with recording HUD and popups (no DOM), in-memory storage, a movable player and a fake rider (on foot,
  * last ridden `lastRide`). `distance` defaults to the street grid.
  */
-function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: PathDistance = streetDistance) {
+function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmetics'>, distance: PathDistance = streetDistance) {
   const data = new Map<string, string>();
   const progress = createProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) }, 'greybox');
-  if (saved) progress.save(saved);
+  if (saved) progress.save({ ...saved, cosmetics: defaultWardrobe() });
   const popups: Popup[] = [];
   const huds: HudModel[] = [];
   const env = { now: 0, position: { ...map.hospitals[0]!.spawn } as Vec3, grounded: true, lastGrounded: undefined as Vec3 | undefined };
   /** What the sim reports: the ridden and last ridden tier, and what F would mount on foot. */
+  /** The owned Bag tier (the top one: the ride alone caps the load, as before Task 10). */
+  const bag = { tier: 5 };
   const rider = { riding: null as RideTier | null, lastRide, speed: 0, candidate: null as RideTier | null };
   /** A recording garage: what summon answers, the cooldown left, and the calls summon and respawn got. */
-  const vehicles = { result: 'ok' as SummonResult, readyIn: 0, calls: [] as string[] };
+  /** `owned`: the tiers the Garage rows list (the car by default). */
+  const vehicles = { result: 'ok' as SummonResult, readyIn: 0, calls: [] as string[], owned: ['car'] as RideTier[] };
   /** Each ride's dynamic state (refuelling reads and fills `fuel`). */
   const states = Object.fromEntries(
     (['skateboard', 'bicycle', 'motorbike', 'car'] as RideTier[]).map((tier): [RideTier, VehicleState] => [
@@ -56,6 +81,29 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     ]),
   ) as Record<RideTier, VehicleState>;
   const actions = new ActionState(clientConfig.input, -1, 1);
+  /** The reward chain: an in-memory mock wallet on a wall clock (ms) the test moves. */
+  const wall = { ms: 1_000_000 };
+  const chainData = new Map<string, string>();
+  const chainStorage = { getItem: (k: string) => chainData.get(k) ?? null, setItem: (k: string, v: string) => void chainData.set(k, v) };
+  const chain = new MockChain(chainStorage, economyConfig, { now: () => wall.ms });
+  /** The chain as a reload would find it in storage. */
+  const reloadChain = (): MockChain => new MockChain(chainStorage, economyConfig, { now: () => wall.ms });
+  /** A recording Shop: what Buy and Confirm sent, and what they answer. */
+  const shop = { calls: [] as string[], answer: { ok: true } as PurchaseOutcome };
+  const purchases = {
+    update: () => undefined,
+    quote: (): QuoteView => ({ kind: 'coins', coins: 1, text: '1 Coins' }),
+    pending: () => [],
+    fuelTarget: () => null,
+    buy: (id: string, maxGame?: number) => {
+      shop.calls.push(`buy ${id} max ${maxGame}`);
+      return Promise.resolve(shop.answer);
+    },
+    buyWithCoins: (id: string) => {
+      shop.calls.push(`coins ${id}`);
+      return shop.answer;
+    },
+  };
   /** A recording phone: open/close state, the app, the renders, the callbacks and close keys DeliveryLoop gave it. */
   const phone = {
     isOpen: false,
@@ -87,6 +135,22 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     },
     render: (m) => void phone.renders.push(m),
   };
+  /** A recording map screen: open state, the renders, and the close keys and callback DeliveryLoop gave it. */
+  const mapScreen = { isOpen: false, renders: [] as HudModel[], closeCodes: [] as string[], closed: null as (() => void) | null };
+  const mapView: MapScreenView = {
+    get isOpen() {
+      return mapScreen.isOpen;
+    },
+    open() {
+      mapScreen.isOpen = true;
+    },
+    close() {
+      if (!mapScreen.isOpen) return;
+      mapScreen.isOpen = false;
+      mapScreen.closed!();
+    },
+    render: (m) => void mapScreen.renders.push(m),
+  };
   const loop = new DeliveryLoop({
     host: {} as HTMLElement,
     scene: new THREE.Scene(),
@@ -95,22 +159,34 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     actions,
     progress,
     seed: 11,
+    bagTier: () => bag.tier,
+    dispatcherTier: () => 0,
+    chain,
+    purchases: () => purchases,
+    wallClock: () => wall.ms,
     now: () => env.now,
     player: () => ({ position: env.position, mode: 'ground', grounded: env.grounded, lastGrounded: env.lastGrounded }),
     rider: () => ({ riding: rider.riding, lastRide: rider.lastRide, speed: rider.speed, mountCandidate: () => rider.candidate }),
+    setLastRide: (t) => void (rider.lastRide = t),
     distance,
     ui: {
       hud: { update: (m) => void huds.push(m) },
-      popups: { show: (text, lines = [], tone = 'good') => void popups.push({ text, lines, tone }) },
+      popups: { show: (text, lines = [], tone = 'good', mock = false) => void popups.push({ text, lines, tone, ...(mock ? { mock: true as const } : {}) }) },
       phone: (cb, closeCodes) => {
         phone.cb = cb;
         phone.closeCodes = closeCodes;
         return phoneView;
       },
+      map: (closeCodes, closed) => {
+        mapScreen.closeCodes = closeCodes;
+        mapScreen.closed = closed;
+        return mapView;
+      },
     },
     phoneChanged: (open) => void phone.changes.push(open),
     vehicles: {
-      rows: () => [{ tier: 'car', status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn }],
+      rows: () =>
+        vehicles.owned.map((tier) => ({ tier, status: 'parked', position: { x: 0, y: 0, z: 240 }, distance: 240, fuel: 1, summon: 'ok', readyIn: vehicles.readyIn, owned: true, active: false, fuelText: 'Fuel 100%', range: '' })),
       summon: (t, now) => {
         vehicles.calls.push(`summon ${t} at ${now}`);
         return vehicles.result;
@@ -167,10 +243,62 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     for (let i = 0; i < Math.round(seconds / TICK); i++) tick();
   };
   const poiPos = (id: string): Vec3 => ({ ...map.pois.find((p) => p.id === id)!.position });
-  return { loop, env, rider, popups, huds, phone, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states };
+  /** Accepts the next food offer, picks it up and hands it over in time; returns the order and the "Delivered!" popup. */
+  const deliverFood = () => {
+    const offer = waitForOffer((o) => o.order.kind === 'food');
+    expect(loop.accept(offer.order.id)).toBe('ok');
+    goTo(offer.order.pickupPoiId);
+    goTo(offer.order.dropoffPoiId);
+    const popup = [...popups].reverse().find((p) => p.text.startsWith('Delivered!'))!;
+    return { order: offer.order, popup };
+  };
+  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states, chain, wall, deliverFood, shop, reloadChain };
 }
 
 describe('DeliveryLoop', () => {
+  test('Switch to the car on foot makes offers, capacity and the payout range follow the car', () => {
+    const s = setup('bicycle');
+    expect(s.loop.capacityTier).toBe('bicycle');
+    expect(s.loop.switchTo('car')).toEqual({ ok: true });
+    expect(s.rider.lastRide).toBe('car');
+    expect(s.loop.capacityTier).toBe('car');
+    expect(s.loop.capacity()).toEqual(effectiveCapacity(s.bag.tier, 'car'));
+    s.tick();
+    expect(s.loop.orders.capacity).toEqual(effectiveCapacity(s.bag.tier, 'car'));
+    const offer = s.waitForOffer();
+    expect(s.loop.accept(offer.order.id)).toBe('ok');
+    expect(s.loop.orders.active[0]!.tier).toBe('car'); // paid from the car's range
+  });
+
+  test('Switch to the bicycle with two packages is refused with the copy (§3.3)', () => {
+    const s = setup('car');
+    s.vehicles.owned = ['bicycle', 'car'];
+    // Four orders: more than the bicycle's slots (it caps the car's six at three).
+    for (let i = 0; i < 4000 && s.loop.orders.active.length < 4; i++) {
+      const o = s.loop.orders.offers[0];
+      if (o) s.loop.accept(o.order.id);
+      else s.tick();
+    }
+    expect(s.loop.orders.active.length).toBe(4);
+    expect(s.loop.switchTo('bicycle')).toEqual({ ok: false, message: "Your orders don't fit on the bicycle" });
+    expect(s.rider.lastRide).toBe('car');
+    expect(s.popups.at(-1)).toMatchObject({ text: "Your orders don't fit on the bicycle", tone: 'warn' });
+  });
+
+  test('Switch to a tier the Garage does not list is refused as not owned', () => {
+    const s = setup('car');
+    expect(s.loop.switchTo('motorbike')).toEqual({ ok: false, message: "You don't have the motorbike" });
+    expect(s.rider.lastRide).toBe('car');
+  });
+
+  test('Switch while riding says "Get off first"', () => {
+    const s = setup('car');
+    s.rider.riding = 'car';
+    expect(s.loop.switchTo('bicycle')).toEqual({ ok: false, message: 'Get off first' });
+    expect(s.rider.lastRide).toBe('car');
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Get off first', tone: 'warn' });
+  });
+
   it('Y (accept.pressed) in beforeStep accepts the first offer', () => {
     const s = setup('car');
     s.waitForOffer();
@@ -224,17 +352,68 @@ describe('DeliveryLoop', () => {
     expect(s.phone.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.phone, ...clientConfig.input.bindings.map]);
   });
 
-  it('the map key (M) opens the phone straight on the Map app; while open it is a close key, not a toggle here', () => {
+  test('M opens the map while riding at 20 m/s; the sim then gets only the look and the brake hold; M closes it', () => {
+    const s = setup('car');
+    s.rider.riding = 'car';
+    s.rider.speed = 20;
+    s.actions.keyDown('KeyW');
+    s.tick(false, false, true);
+    expect(s.loop.mapOpen).toBe(true);
+    expect(s.mapScreen.isOpen).toBe(true);
+    expect(s.loop.phoneOpen).toBe(false);
+    expect(s.popups.some((p) => p.text === 'Stop to use the phone')).toBe(false); // at any speed
+    expect(s.phone.changes).toEqual([true]); // the pointer lock is released, as for the phone
+    expect(s.actions.sampleTick().move).toEqual({ x: 0, y: 0 }); // W was released
+    expect(s.mapScreen.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.map]);
+    // The sim gets only the look and, as with the phone, the car's handbrake held so it does not coast away (no move,
+    // jump press, F or Y).
+    const frame = emptyInput();
+    frame.move = { x: 0, y: 1 };
+    frame.look = { yaw: 1.5, pitch: 0.2 };
+    frame.jump = { held: true, pressed: true };
+    frame.mount = { held: true, pressed: true };
+    frame.accept = { held: true, pressed: true };
+    frame.phone = { held: true, pressed: true };
+    const out = s.loop.beforeStep(frame);
+    expect(out).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 }, jump: { held: true, pressed: false } });
+    // On the skateboard (it ollies on Space) the hold is S.
+    s.rider.riding = 'skateboard';
+    expect(s.loop.beforeStep(frame)).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 }, move: { x: 0, y: -1 } });
+    s.rider.riding = null;
+    expect(s.loop.beforeStep(frame)).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 } }); // on foot: only the look
+    s.rider.riding = 'car';
+    expect(s.loop.phoneOpen).toBe(false); // Tab does not open the phone over the map
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.loop.prompt()).toBeNull();
+    // A drag on the map must not turn the camera (the ride camera reads takeYawDelta).
+    const look = s.actions.look();
+    s.actions.mouseMove(200, 40);
+    expect(s.actions.takeYawDelta()).toBe(0);
+    expect(s.actions.look()).toEqual(look);
+    // The map renders at the HUD rate while open.
+    s.loop.draw(0);
+    expect(s.mapScreen.renders).toHaveLength(1);
+    // M again (the screen's close handler, or a press reaching beforeStep) closes it and the sim gets its input back.
+    s.tick(false, false, true);
+    expect(s.loop.mapOpen).toBe(false);
+    expect(s.phone.changes).toEqual([true, false]);
+    s.tick(false, false, false, { move: { x: 0, y: 1 } });
+    expect(s.simFrames.at(-1)!.move).toEqual({ x: 0, y: 1 });
+    s.actions.mouseMove(200, 0);
+    expect(s.actions.takeYawDelta()).not.toBe(0);
+    // Esc in the screen closes it through the same path.
+    s.loop.openMap();
+    s.mapScreen.isOpen = false; // as MapScreen.close: closed, then the callback
+    s.mapScreen.closed!();
+    expect(s.loop.mapOpen).toBe(false);
+    expect(s.phone.changes).toEqual([true, false, true, false]);
+  });
+
+  it('M with the phone open does not open the map over it (the phone takes M as a close key)', () => {
     const s = setup();
+    s.loop.openPhone();
     s.tick(false, false, true);
-    expect(s.loop.phoneOpen).toBe(true);
-    expect(s.phone.app).toBe('map');
-    expect(s.phone.changes).toEqual([true]);
-    // While the phone is open the real M keydown is swallowed by the phone's close handler (closeCodes above);
-    // a map press reaching beforeStep anyway must not reopen or switch apps.
-    s.phone.app = 'orders';
-    s.tick(false, false, true);
-    expect(s.phone.app).toBe('orders');
+    expect(s.loop.mapOpen).toBe(false);
     expect(s.loop.phoneOpen).toBe(true);
   });
 
@@ -270,8 +449,33 @@ describe('DeliveryLoop', () => {
     s.phone.cb!.cancel(offer.order.id);
     expect(s.loop.orders.active).toHaveLength(0);
     expect(s.loop.orders.lockoutUntil).toBeGreaterThan(s.env.now);
-    s.phone.cb!.skipLockout();
+    s.loop.skipLockout(); // the dev panel's free skip
     expect(s.loop.orders.lockoutUntil).toBeLessThanOrEqual(s.env.now);
+  });
+
+  it("the Orders app's Skip and the Shop's Confirm send GAME purchases; Buy buys Coin items; refusals pop up", async () => {
+    const s = setup('car');
+    s.phone.cb!.skipLockout(2125);
+    s.phone.cb!.shopConfirm('line.bag.1', 4250);
+    s.phone.cb!.shopBuy('cosmetic.outfit.coral');
+    // The confirm sheets' "at most" figure is the cap sent.
+    expect(s.shop.calls).toEqual(['buy lockoutSkip max 2125', 'buy line.bag.1 max 4250', 'coins cosmetic.outfit.coral']);
+    s.shop.answer = { ok: false, message: 'Not enough Coins' };
+    s.phone.cb!.shopBuy('cosmetic.outfit.sky');
+    expect(s.popups.at(-1)).toEqual({ text: 'Not enough Coins', lines: [], tone: 'warn' });
+    s.shop.answer = { ok: false, message: 'Prices updating, purchases paused' };
+    s.phone.cb!.shopConfirm('line.bag.1', 4250);
+    await Promise.resolve();
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Prices updating, purchases paused', mock: true });
+    // The HUD model carries the spendable balance; the Shop rows only while the phone shows them.
+    s.tick();
+    s.loop.draw(10);
+    const closed = s.huds.at(-1)!;
+    expect(closed.shop).toEqual([]);
+    expect(closed.wallet.balance).toBe(s.chain.balance());
+    s.loop.openPhone('shop');
+    s.loop.draw(10.01);
+    expect(s.phone.renders.at(-1)!.shop.find((r) => r.itemId === 'line.bag.1')).toBeDefined();
   });
 
   it('draw renders the phone with the HUD model while it is open', () => {
@@ -293,7 +497,8 @@ describe('DeliveryLoop', () => {
     expect(s.loop.carriedCount()).toBe(0);
     s.goTo(offer.order.pickupPoiId);
     expect(s.loop.carriedCount()).toBe(1);
-    expect(s.popups.some((p) => p.text === `Preparing ${offer.order.item}`)).toBe(true);
+    const prepPopup = s.popups.find((p) => p.text === `Preparing ${offer.order.item}`);
+    expect(prepPopup?.lines).toEqual(['Wait at the counter']);
     expect(s.popups.at(-1)!.text).toBe(`Picked up ${offer.order.item}`);
     s.goTo(offer.order.dropoffPoiId);
     expect(s.loop.carriedCount()).toBe(0);
@@ -304,6 +509,16 @@ describe('DeliveryLoop', () => {
     const done = s.popups.at(-1)!;
     expect(done.text).toBe(`Delivered! +${totals.points} pts · +${totals.coins} coins`);
     expect(done.lines.some((l) => l.startsWith('Still hot'))).toBe(true);
+  });
+
+  it('a missed pickup shows the warn popup with the lockout length', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.kind === 'food');
+    s.loop.accept(offer.order.id);
+    s.wait(ordersConfig.pickupDeadline.seconds + 1);
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.popups.find((p) => p.text === `Missed the pickup · ${offer.order.item}`)).toMatchObject({ lines: ['No new offers for 3 min'], tone: 'warn' });
+    expect(s.loop.orders.lockoutReason).toBe('missedPickup');
   });
 
   it('carriedCount drops after cancelling a picked-up order (Review Focus 3)', () => {
@@ -322,7 +537,7 @@ describe('DeliveryLoop', () => {
   it('starts from the saved totals and the last ridden tier', () => {
     const s = setup('bicycle', { totals: { points: 5, coins: 50, deliveries: 3 }, garage: [], lastRide: null });
     expect(s.loop.orders.totals).toEqual({ points: 5, coins: 50, deliveries: 3 });
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('bicycle'));
   });
 
   it('resetProgress zeroes the totals, drops the orders and saves; capacity still follows the ride', () => {
@@ -331,7 +546,7 @@ describe('DeliveryLoop', () => {
     s.loop.accept(offer.order.id);
     s.loop.resetProgress();
     expect(s.loop.orders.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.car);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('car'));
     expect(s.loop.orders.active).toHaveLength(0);
     expect(s.stored().totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
   });
@@ -343,23 +558,23 @@ describe('DeliveryLoop', () => {
     expect(s.huds).toHaveLength(1);
     s.loop.draw(1 / clientConfig.ui.hudUpdateHz + 0.001);
     expect(s.huds).toHaveLength(2);
-    expect(s.huds[0]!.load.slots).toBe(vehiclesConfig.car.slots);
+    expect(s.huds[0]!.load.slots).toBe(vehiclesConfig.car.slotCap);
   });
 
-  it('Review Focus 4: two food orders, last ride bicycle, F next to the skateboard is swallowed with the reason and both orders stay', () => {
+  it('Review Focus 4: three food orders, last ride bicycle, F next to the skateboard is swallowed with the reason and all three stay', () => {
     const s = setup('bicycle');
-    for (let n = 0; n < 2; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
+    for (let n = 0; n < 3; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
     const ids = s.loop.orders.active.map((a) => a.order.id);
-    expect(ids).toHaveLength(2);
+    expect(ids).toHaveLength(3);
     s.rider.candidate = 'skateboard';
     const before = s.popups.length;
     s.tick(false, false, false, { mount: true });
     expect(s.simFrames.at(-1)!.mount).toEqual({ held: false, pressed: false });
     expect(s.popups.length).toBe(before + 1);
-    expect(s.popups.at(-1)).toEqual({ text: "Can't ride the skateboard", lines: ["Your orders don't fit: 1 slot and no packages"], tone: 'warn' });
+    expect(s.popups.at(-1)).toEqual({ text: "Can't ride the skateboard", lines: ["Your orders don't fit: 2 slots and 10 kg"], tone: 'warn' });
     expect(s.loop.orders.active.map((a) => a.order.id)).toEqual(ids);
     expect(s.loop.capacityTier).toBe('bicycle');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('bicycle'));
     // A ride that holds them (a car next to the courier) passes F to the sim.
     s.rider.candidate = 'car';
     s.tick(false, false, false, { mount: true });
@@ -414,20 +629,98 @@ describe('DeliveryLoop', () => {
     const s = setup(null);
     s.tick();
     expect(s.loop.capacityTier).toBe('walk');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.walk);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('walk'));
     s.rider.riding = 'motorbike';
     s.rider.lastRide = 'motorbike';
     s.tick();
     expect(s.loop.capacityTier).toBe('motorbike');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.motorbike);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('motorbike'));
     s.rider.riding = null;
     s.tick();
     expect(s.loop.capacityTier).toBe('motorbike');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.motorbike);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('motorbike'));
     s.rider.riding = 'bicycle';
     s.rider.lastRide = 'bicycle';
     s.tick();
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('bicycle'));
+  });
+
+  test('Bag 0 on foot: one slot, no packages; Bag 3 on the motorbike: 4 slots, 50 kg; Bag 5 on the bicycle: 3 slots, 25 kg', () => {
+    const s = setup(null);
+    s.bag.tier = 0;
+    s.tick();
+    expect(s.loop.capacity()).toEqual({ slots: 1, maxPackageKg: 0 });
+    expect(s.loop.orders.capacity).toEqual({ slots: 1, maxPackageKg: 0 });
+    s.bag.tier = 3;
+    s.rider.riding = 'motorbike';
+    s.rider.lastRide = 'motorbike';
+    s.tick();
+    expect(s.loop.orders.capacity).toEqual({ slots: 4, maxPackageKg: 50 });
+    s.bag.tier = 5;
+    s.rider.riding = 'bicycle';
+    s.rider.lastRide = 'bicycle';
+    s.tick();
+    expect(s.loop.orders.capacity).toEqual({ slots: 3, maxPackageKg: 25 });
+    s.loop.draw(100);
+    expect(s.huds.at(-1)!.load).toMatchObject({ slots: 3, maxPackageKg: 25 });
+  });
+
+  test('the sim modifiers follow the chain’s Shoes tier', () => {
+    const s = setup(null);
+    expect(s.loop.statModifiers().sprintMul).toBe(1);
+    const lines = { vehicle: 0, bag: 0, shoes: 3, dispatcher: 0 };
+    s.chain.ownership = () => ({ lines, skins: [] });
+    expect(s.loop.statModifiers().sprintMul).toBeCloseTo(1.105, 10);
+    expect(s.loop.statModifiers()).toMatchObject({ speedMul: 1, canSprint: true });
+    lines.shoes = 5;
+    expect(s.loop.statModifiers().sprintMul).toBeCloseTo(1.175, 10);
+    // Read every tick: the same object until the Shoes tier (or a carried Heavy) changes it.
+    expect(s.loop.statModifiers()).toBe(s.loop.statModifiers());
+  });
+
+  test('capacity() is rebuilt only when the Bag tier or the capacity tier changes', () => {
+    const s = setup('car');
+    const first = s.loop.capacity();
+    expect(s.loop.capacity()).toBe(first);
+    s.bag.tier = 1;
+    const smaller = s.loop.capacity();
+    expect(smaller).not.toBe(first);
+    expect(smaller).toEqual(effectiveCapacity(1, 'car'));
+    s.rider.lastRide = 'bicycle';
+    expect(s.loop.capacity()).toEqual(effectiveCapacity(1, 'bicycle'));
+    expect(s.loop.capacity()).toBe(s.loop.capacity());
+  });
+
+  test('buying a Bag tier mid-game raises the capacity on the next tick without dropping orders', () => {
+    const s = setup('car');
+    s.bag.tier = 1;
+    s.tick();
+    expect(s.loop.orders.capacity.slots).toBe(2);
+    for (let n = 0; n < 2; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
+    const ids = s.loop.orders.active.map((a) => a.order.id);
+    expect(ids).toHaveLength(2);
+    s.bag.tier = 2;
+    s.tick();
+    expect(s.loop.orders.capacity.slots).toBe(3);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual(ids);
+    expect(s.loop.orders.freeSlots()).toBe(1);
+  });
+
+  test('switching to a vehicle whose cap is below the carried load is refused (§3.3)', () => {
+    const s = setup('bicycle');
+    s.bag.tier = 2;
+    s.tick();
+    for (let n = 0; n < 3; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
+    const ids = s.loop.orders.active.map((a) => a.order.id);
+    expect(ids).toHaveLength(3);
+    s.rider.candidate = 'skateboard';
+    s.tick(false, false, false, { mount: true });
+    expect(s.simFrames.at(-1)!.mount).toEqual({ held: false, pressed: false });
+    expect(s.popups.at(-1)).toEqual({ text: "Can't ride the skateboard", lines: ["Your orders don't fit: 2 slots and 10 kg"], tone: 'warn' });
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual(ids);
+    s.rider.candidate = 'car';
+    s.tick(false, false, false, { mount: true });
+    expect(s.simFrames.at(-1)!.mount.pressed).toBe(true);
   });
 
   it('Review Focus 5: after a tow, carried orders are kept and the Fragile break popup shows once', () => {
@@ -448,7 +741,7 @@ describe('DeliveryLoop', () => {
     expect(s.popups.filter((p) => p.text.includes('Fragile'))).toHaveLength(1);
     expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([offer.order.id]);
     expect(s.loop.carriedCount()).toBe(1);
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.car);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('car'));
   });
 
   it('an offer whose door has no walk path is never generated', () => {
@@ -544,6 +837,20 @@ describe('DeliveryLoop', () => {
     expect(s.phone.isOpen).toBe(false);
   });
 
+  it('a respawn from getting off between ticks (leaveRide found no spot) breaks a carried Fragile once', () => {
+    const s = setup('car');
+    const offer = s.waitForOffer((o) => o.order.modifier === 'fragile');
+    s.loop.accept(offer.order.id);
+    s.goTo(offer.order.pickupPoiId);
+    expect(s.loop.carriedCount()).toBe(1);
+    s.loop.offTickEvents([]); // nothing raised: nothing happens
+    expect(s.loop.orders.active[0]!.fragileIntact).toBe(true);
+    s.loop.offTickEvents([{ kind: 'respawned', hospitalId: map.hospitals[0]!.id }]);
+    expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([offer.order.id]);
+    expect(s.loop.orders.active[0]!.fragileIntact).toBe(false);
+    expect(s.popups.filter((p) => p.text === 'Fragile package damaged')).toHaveLength(1);
+  });
+
   it('Tab at 8 m/s on the car does not open the phone and shows the hint; at rest it opens and the car holds still', () => {
     const s = setup('car');
     s.rider.riding = 'car';
@@ -551,9 +858,8 @@ describe('DeliveryLoop', () => {
     s.tick(false, true);
     expect(s.loop.phoneOpen).toBe(false);
     expect(s.popups.at(-1)).toMatchObject({ text: 'Stop to use the phone' });
-    // M is refused too, and the hint waits out its cooldown.
-    s.tick(false, false, true);
-    expect(s.loop.phoneOpen).toBe(false);
+    // The hint waits out its cooldown.
+    s.tick(false, true);
     expect(s.popups.filter((p) => p.text === 'Stop to use the phone')).toHaveLength(1);
     s.wait(clientConfig.ui.hintCooldownSeconds);
     s.tick(false, true);
@@ -574,6 +880,52 @@ describe('DeliveryLoop', () => {
     s.tick(false, true);
     expect(s.loop.phoneOpen).toBe(true);
     expect(s.simFrames.at(-1)!.jump.held).toBe(false);
+  });
+
+  it('with the phone open the skateboard holds still on a 12° slope: S brakes it (Space does not, it ollies)', async () => {
+    // A real sim on a 12° ramp, fed the frames beforeStep gives it with the phone open.
+    const slope = 12;
+    const rampMap: MapData = {
+      ...map,
+      solids: [
+        { id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(200, 1, 200) },
+        { id: 'ramp', kind: 'ramp', center: vec3(0, 7, 0), size: vec3(20, 1, 60), rotationDeg: vec3(slope, 0, 0) },
+      ],
+      pois: [],
+      accessZones: [],
+      gasStations: [],
+    };
+    const rapier = await initRapier();
+    /** Ticks the phone-open sim for 2 s and returns how far the board moved; `frame` builds each tick's input. */
+    const drift = (frame: () => InputFrame): number => {
+      const physics = createPhysicsWorld(rapier, rampMap);
+      const garage = new Garage(physics, rampMap, [{ tier: 'skateboard', spot: { kind: 'carried' }, fuel: 1 }]);
+      const sim = new PlayerSim(physics, rampMap, movementConfig, vec3(0, 7.8, 0), 0, garage);
+      for (let i = 0; i < 10; i++) sim.step(emptyInput(), NO_MODS, 0);
+      expect(sim.state.grounded).toBe(true);
+      const mount = emptyInput();
+      mount.mount = { held: true, pressed: true };
+      sim.step(mount, NO_MODS, 0);
+      expect(sim.state.riding).toBe('skateboard');
+      const start = { ...sim.state.position };
+      for (let i = 0; i < 2 * movementConfig.tickRate; i++) sim.step(frame(), NO_MODS, 0);
+      expect(sim.state.riding).toBe('skateboard');
+      return Math.hypot(sim.state.position.x - start.x, sim.state.position.z - start.z);
+    };
+
+    const s = setup('skateboard');
+    s.rider.riding = 'skateboard';
+    s.rider.speed = 0;
+    s.tick(false, true);
+    expect(s.loop.phoneOpen).toBe(true);
+    const f = s.loop.beforeStep(emptyInput());
+    expect(f.move).toEqual({ x: 0, y: -1 });
+    expect(f.jump).toEqual({ held: false, pressed: false });
+    expect(drift(() => s.loop.beforeStep(emptyInput()))).toBeLessThan(0.1);
+
+    // Not vacuous: Space held alone (the other rides' phone input) lets the board roll down the slope.
+    const space = (): InputFrame => ({ ...emptyInput(), jump: { held: true, pressed: false } });
+    expect(drift(space)).toBeGreaterThan(1);
   });
 
   it('Y accepts the top offer while riding at speed', () => {
@@ -656,7 +1008,7 @@ describe('DeliveryLoop', () => {
     s.states.car.fuel = 0.5;
     expect(s.loop.prompt()).toBe('Hold E · Refuel');
     s.rider.speed = 9;
-    expect(s.loop.prompt()).toBeNull();
+    expect(s.loop.prompt()).toBe('F · Get off'); // moving: no refuel, but F gets off at any speed (Decision 9)
     s.rider.speed = 0;
     s.rider.riding = null;
     expect(s.loop.prompt()).toBe('Get on to refuel');
@@ -702,10 +1054,146 @@ describe('DeliveryLoop', () => {
   });
 });
 
+describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
+  it('a completed car order accrues a payout in the car range, converted at the rate, recorded with luck and quality', () => {
+    const s = setup('car');
+    const rate = s.chain.rate()!;
+    const { order, popup } = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p).toBeDefined();
+    const maxPoints = maxPointsFor(order, ordersConfig);
+    const points = s.loop.orders.totals.points;
+    expect(p!.orderId).toBe(order.id);
+    expect(p!.quality).toBe(points / maxPoints);
+    expect(p!.luck).toBeGreaterThanOrEqual(0);
+    expect(p!.luck).toBeLessThan(1);
+    expect(p!.boost).toBe(1);
+    expect(p!.usdMicro).toBe(rollPayoutUsd({ tier: 'car', points, maxPoints, luck: p!.luck, boost: p!.boost }, economyConfig));
+    const [min, max] = economyConfig.payout.ranges.car;
+    expect(p!.usdMicro).toBeGreaterThanOrEqual(min);
+    expect(p!.usdMicro).toBeLessThanOrEqual(max);
+    expect(p!.usdPerGame).toBe(rate.usdPerGame);
+    expect(p!.paid).toBe(true);
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate, 'payout'));
+    expect(s.chain.accrued()).toBe(p!.game);
+    expect(popup.text).toBe(`Delivered! +${points} pts · +${s.loop.orders.totals.coins} coins`);
+    expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
+    expect(popup.lines.some((l) => l.includes('boost'))).toBe(false);
+    expect(popup.lines.some((l) => l.startsWith('Still hot'))).toBe(true);
+    expect(popup.mock).toBe(true); // the GAME line carries the Mock wallet badge (Decision 1)
+    // The HUD's top-right GAME figure is the accrued balance.
+    s.loop.draw(1000);
+    expect(s.huds.at(-1)!.wallet.accrued).toBe(p!.game);
+  });
+
+  it('with $100 locked the payout is ×1.3', () => {
+    const s = setup('car');
+    const rate = s.chain.rate()!;
+    expect(s.chain.lockGame(usdToGame(100_000_000, rate, 'purchase'), s.wall.ms)).toEqual({ ok: true });
+    const { order, popup } = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p!.boost).toBeCloseTo(1.3, 12);
+    // The shared roll applies the boost once: usdMicro is the boosted amount paid, converted as is.
+    const roll = { tier: 'car' as const, points: s.loop.orders.totals.points, maxPoints: maxPointsFor(order, ordersConfig), luck: p!.luck };
+    expect(p!.usdMicro).toBe(rollPayoutUsd({ ...roll, boost: p!.boost }, economyConfig));
+    expect(p!.usdMicro / rollPayoutUsd({ ...roll, boost: 1 }, economyConfig)).toBeCloseTo(1.3, 4);
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate, 'payout'));
+    expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
+    expect(popup.lines[1]).toBe('×1.30 boost'); // boostText, as the Wallet shows it
+  });
+
+  it('with the vault short the popup says "Vault empty · no GAME" and nothing accrues (Review Focus 5)', () => {
+    const s = setup('car');
+    s.chain.dev.setVaultUsd(0.1);
+    const vault = s.chain.vault();
+    const first = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p!.usdMicro).toBeGreaterThan(100_000); // an on-time car order rolls at least $0.38
+    expect(p!.paid).toBe(false);
+    expect(p!.game).toBe(0);
+    expect(s.chain.vault()).toBe(vault); // not drained for a partial payout
+    expect(s.chain.accrued()).toBe(0);
+    expect(s.loop.orders.totals.deliveries).toBe(1);
+    expect(s.loop.orders.totals.coins).toBeGreaterThan(0);
+    expect(first.popup.text).toMatch(/^Delivered! \+\d+ pts · \+\d+ coins$/);
+    expect(first.popup.lines[0]).toBe('Vault empty · no GAME');
+    expect(first.popup.mock).toBe(true);
+    expect(first.popup.lines.some((l) => l.includes('≈'))).toBe(false);
+    // The dev panel refills the vault: the next order pays normally.
+    s.chain.dev.setVaultUsd(50);
+    s.wait(ordersConfig.deliveryCooldown.maxSeconds + 1);
+    const second = s.deliverFood();
+    const paid = s.chain.payouts().at(-1)!;
+    expect(paid.orderId).toBe(second.order.id);
+    expect(paid.paid).toBe(true);
+    expect(s.chain.accrued()).toBe(paid.game);
+    expect(second.popup.lines[0]).toBe(`+${usdText(paid.usdMicro)} ≈ ${gameText(paid.game)} GAME`);
+  });
+
+  test('Claim moves accrued to the balance on the mock; lock and withdraw go through the chain and are saved', async () => {
+    const s = setup('car');
+    const { popup } = s.deliverFood();
+    expect(popup.lines[0]).toContain('GAME');
+    const p = s.chain.payouts().at(-1)!;
+    expect(p.detail).toEqual({ tier: 'car', kind: 'food', inTime: true });
+    const balance = s.chain.balance();
+    expect(s.chain.accrued()).toBe(p.game);
+    s.phone.cb!.claim();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(s.chain.accrued()).toBe(0);
+    expect(s.chain.balance()).toBe(balance + p.game);
+    expect(s.popups.at(-1)).toMatchObject({ text: `Claimed ${gameText(p.game)} GAME`, tone: 'good', mock: true });
+    expect(s.reloadChain().balance()).toBe(balance + p.game);
+    expect(s.reloadChain().claims()).toEqual([{ game: p.game, at: s.wall.ms }]);
+    // Nothing left to claim.
+    await s.loop.claim();
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Nothing to claim yet', tone: 'warn', mock: true });
+
+    // Lock 100,000 GAME for 7 days: out of the balance, saved, and the model shows it.
+    const units = 100_000 * GAME_UNITS;
+    const lockedAt = s.wall.ms;
+    s.phone.cb!.lockGame(units);
+    expect(s.chain.lock()).toMatchObject({ game: units, lockedAt });
+    expect(s.chain.balance()).toBe(balance + p.game - units);
+    expect(s.reloadChain().lock()).toEqual(s.chain.lock());
+    expect(s.popups.at(-1)).toMatchObject({ text: `Locked ${gameText(units)} GAME for ${economyConfig.lock.days} days`, lines: ['×1.07 boost on every order'], mock: true });
+    s.phone.cb!.lockGame(units); // one lock at a time
+    expect(s.popups.at(-1)).toMatchObject({ text: 'GAME is already locked', tone: 'warn', mock: true });
+    s.phone.isOpen = true;
+    s.loop.draw(1000);
+    expect(s.phone.renders.at(-1)!.wallet.lock).toMatchObject({ game: units, boostText: '×1.07', canWithdraw: false });
+
+    // Withdraw before the 7 days is refused; after them it returns the GAME, saved.
+    s.phone.cb!.withdrawLock();
+    expect(s.chain.lock()).not.toBeNull();
+    expect(s.popups.at(-1)).toMatchObject({ tone: 'warn', mock: true });
+    s.wall.ms = lockedAt + economyConfig.lock.days * 86_400_000;
+    s.phone.cb!.withdrawLock();
+    expect(s.chain.lock()).toBeNull();
+    expect(s.chain.balance()).toBe(balance + p.game);
+    expect(s.reloadChain().lock()).toBeNull();
+    expect(s.reloadChain().balance()).toBe(balance + p.game);
+    expect(s.popups.at(-1)).toMatchObject({ text: `Withdrew ${gameText(units)} GAME`, tone: 'good', mock: true });
+  });
+
+  it('a stale rate converts at the last good rate', () => {
+    const s = setup('car');
+    expect(s.chain.dev.setRate(0.0002)).toBe(true);
+    s.chain.dev.makeRateStale();
+    s.wall.ms += 3_600_000; // an hour later the rate is long past rate.maxAgeSeconds
+    const { popup } = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p!.usdPerGame).toBe(0.0002);
+    expect(p!.paid).toBe(true);
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, { usdPerGame: 0.0002, updatedAt: 0 }, 'payout'));
+    expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
+  });
+});
+
 describe('simEventHint (final review 3)', () => {
   it('maps sim events to hints: get-off refusals, tow, empty tank, access per zone kind for the ridden tier', () => {
     expect(simEventHint({ kind: 'mountRefused', reason: 'noRoom' }, 'car', map)).toBe('No room to get off');
-    expect(simEventHint({ kind: 'mountRefused', reason: 'tooFast' }, 'car', map)).toBe('Slow down to get off');
     expect(simEventHint({ kind: 'mountRefused', reason: 'airborne' }, 'skateboard', map)).toBe('Land first');
     expect(simEventHint({ kind: 'towed', tier: 'car', hospitalId: 'harbor-hospital' }, null, map)).toBe('Car towed to Harbor Clinic bay');
     expect(simEventHint({ kind: 'fuelEmpty', tier: 'motorbike' }, 'motorbike', map)).toBe('Out of fuel');
@@ -715,6 +1203,12 @@ describe('simEventHint (final review 3)', () => {
     expect(simEventHint({ kind: 'accessBlocked', zone: 'path' }, 'motorbike', map)).toBe("Motorbikes can't use paths");
     expect(simEventHint({ kind: 'jumped' }, null, map)).toBeNull();
     expect(simEventHint({ kind: 'mounted', tier: 'car' }, 'car', map)).toBeNull();
+  });
+
+  test('no refusal copy says "Slow down"', () => {
+    // Decision 9: F gets off at any speed; only no room or the air refuse it.
+    expect(Object.keys(MOUNT_REFUSED).sort()).toEqual(['airborne', 'noRoom']);
+    for (const copy of Object.values(MOUNT_REFUSED)) expect(copy).not.toMatch(/slow down/i);
   });
 
   it('afterStep shows each hint once per hintCooldownSeconds', () => {

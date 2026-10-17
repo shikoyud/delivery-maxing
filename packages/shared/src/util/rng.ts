@@ -13,18 +13,35 @@ export function mulberry32(seed: number): Rng {
   };
 }
 
-/** Pick a key with probability proportional to its weight. Keys with weight <= 0 are never picked. */
-export function pickWeighted<K extends string>(rng: Rng, weights: Record<K, number>): K {
-  const entries = (Object.entries(weights) as [K, number][]).filter(([, w]) => w > 0);
-  const total = entries.reduce((sum, [, w]) => sum + w, 0);
-  if (entries.length === 0) throw new Error('pickWeighted: all weights are <= 0');
+/**
+ * The index of `weights` picked with probability proportional to its weight, from one rng() draw: the first index
+ * whose running total passes the draw. Weights <= 0 are never picked; throws when none is positive.
+ */
+export function pickIndexWeighted(rng: Rng, weights: readonly number[]): number {
+  let total = 0;
+  let last = -1;
+  weights.forEach((w, i) => {
+    if (w > 0) {
+      total += w;
+      last = i;
+    }
+  });
+  if (last < 0) throw new Error('pickIndexWeighted: all weights are <= 0');
   let r = rng() * total;
-  for (const [key, w] of entries) {
+  for (let i = 0; i < last; i++) {
+    const w = weights[i] as number;
+    if (w <= 0) continue;
     r -= w;
-    if (r < 0) return key;
+    if (r < 0) return i;
   }
-  const last = entries[entries.length - 1];
-  return (last as [K, number])[0];
+  return last;
+}
+
+/** Pick a key with probability proportional to its weight (pickIndexWeighted). Keys with weight <= 0 are never picked. */
+export function pickWeighted<K extends string>(rng: Rng, weights: Record<K, number>): K {
+  const entries = Object.entries(weights) as [K, number][];
+  if (!entries.some(([, w]) => w > 0)) throw new Error('pickWeighted: all weights are <= 0');
+  return (entries[pickIndexWeighted(rng, entries.map(([, w]) => w))] as [K, number])[0];
 }
 
 /** A Fisher-Yates shuffled copy of `items`. */

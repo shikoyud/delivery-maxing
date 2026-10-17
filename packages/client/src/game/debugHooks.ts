@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import type { AcceptResult, ActiveOrder, CancelResult, Hospital, Lot, MoveMode, Offer, RideTier, Totals, Vec3, VehicleSpot, VehicleTier } from '@dm/shared';
+import type { ChainSource, ShopItemId } from '@dm/shared';
+import type { MockChain } from '../economy/MockChain';
+import type { PurchaseOutcome } from '../economy/Purchases';
+import type { ShopRow } from '../ui/phone/shopApp';
 import type { HudNextStop } from '../ui/hudModel';
 import type { CourierDebug } from '../render/courier/CourierView';
+import type { Look } from '../render/cosmetics';
 import type { PhoneApp } from '../ui/phone/Phone';
 import type { MapDebugView } from '../ui/mapDebug';
 import type { Game } from './Game';
@@ -39,6 +44,8 @@ export interface DebugApi {
   capacityTier(): VehicleTier;
   /** Sets the tier last ridden (capacity on foot follows it), as if the courier had just got off it. */
   setLastRide(t: RideTier | null): void;
+  /** The Garage app's Switch: on foot, offers and capacity follow `t` (refused while riding or when the orders don't fit). */
+  switchTo(t: RideTier): { ok: true } | { ok: false; message: string };
   /** Parks `tier` next to the player (owning it first if need be) and mounts it; any current ride is left first. */
   ride(tier: RideTier): void;
   /** The owned vehicles: where each is, its world position and its tank (0..1). */
@@ -62,8 +69,36 @@ export interface DebugApi {
   openPhone(app: PhoneApp): void;
   /** Closes the phone (as Esc does). */
   closePhone(): void;
+  /** Whether the full-screen map is up (M). */
+  mapOpen(): boolean;
+  /** Opens the map screen (as M does). */
+  openMap(): void;
+  /** Closes the map screen (as M or Esc does). */
+  closeMap(): void;
+  /** The mock chain's state: balance, accrued, vault (base units), ownership, the lock, purchases and payouts (copies). */
+  chain(): {
+    balance: number;
+    accrued: number;
+    vault: number;
+    ownership: ReturnType<ChainSource['ownership']>;
+    lock: ReturnType<ChainSource['lock']>;
+    history: ReturnType<ChainSource['history']>;
+    payouts: ReturnType<ChainSource['payouts']>;
+  };
+  /** Buys a shop item at the current quote (a GAME item confirms after the mock's delay). */
+  buy(itemId: string): Promise<PurchaseOutcome>;
+  /** The Shop app's rows now. */
+  shop(): ShopRow[];
+  /** The mock chain's dev controls (add GAME, set the rate, grant tiers, advance the clock...). */
+  readonly devChain: MockChain['dev'];
+  /** Locks `game` base units (as the Wallet's Lock does). */
+  lockGame(game: number): void;
+  /** Claims the accrued GAME (as the Wallet's Claim does). */
+  claim(): Promise<void>;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
+  /** The cosmetics last drawn on the courier, the rides and the phone (a copy), or null before the first draw. */
+  look(): Look | null;
   /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
   courier(): CourierDebug;
   /** Whether any of the camera's near plane is inside a map solid (a ball reaching the near-plane corners). */
@@ -144,6 +179,7 @@ export function installDebugHooks(game: Game): void {
     setLastRide: (t) => {
       game.sim.state.lastRide = t;
     },
+    switchTo: (t) => game.delivery.switchTo(t),
     ride: (tier) => game.rideNow(tier),
     vehicles: () =>
       game.sim.garage.owned().map((tier) => ({
@@ -167,7 +203,28 @@ export function installDebugHooks(game: Game): void {
     phoneOpen: () => game.delivery.phoneOpen,
     openPhone: (app) => game.delivery.openPhone(app),
     closePhone: () => game.delivery.closePhone(),
+    mapOpen: () => game.delivery.mapOpen,
+    openMap: () => game.delivery.openMap(),
+    closeMap: () => game.delivery.closeMap(),
+    chain: () =>
+      structuredClone({
+        balance: game.chain.balance(),
+        accrued: game.chain.accrued(),
+        vault: game.chain.vault(),
+        ownership: game.chain.ownership(),
+        lock: game.chain.lock(),
+        history: game.chain.history(),
+        payouts: game.chain.payouts(),
+      }),
+    buy: (itemId) => game.purchases.buy(itemId as ShopItemId),
+    shop: () => structuredClone(game.delivery.shopRows(game.time)),
+    get devChain() {
+      return game.chain.dev;
+    },
+    lockGame: (g) => game.delivery.lockGame(g),
+    claim: () => game.delivery.claim(),
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
+    look: () => (game.drawnLook ? structuredClone(game.drawnLook) : null),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),
     mapKind: () => game.mapKind,
