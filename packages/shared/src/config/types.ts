@@ -74,6 +74,8 @@ export interface RidingConfig {
     stoppedSpeed: number;
     dismountGap: number;
     emptyTankSpeed: number;
+    /** leaveRide (forced off) with no dismount spot free searches rings around the vehicle out to this far (m). */
+    leaveSearchRadius: number;
   };
   refuel: { pumpRadius: number; tankPerSecond: number };
   summon: { minDistance: number; cooldownSeconds: number; minClearance: number; searchRadius: number; ringSamples: number };

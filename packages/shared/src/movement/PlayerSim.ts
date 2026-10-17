@@ -128,13 +128,12 @@ export class PlayerSim {
    * there.
    */
   rideNow(tier: RideTier, ahead: number): SimEvent[] {
-    this.leaveRide();
+    const events = this.leaveRide();
     const s = this.state;
     if (!restsCarried(tier)) {
       const f = facing(s.heading);
       this.garage.parkAt(tier, vec3(s.position.x + f.x * ahead, s.position.y, s.position.z + f.z * ahead), s.heading);
     }
-    const events: SimEvent[] = [];
     this.mount(tier, events);
     return events;
   }
@@ -142,28 +141,48 @@ export class PlayerSim {
   /**
    * Gets off at once, whatever the speed (dev tools and respawn): the ridden vehicle is left where it is, parked on the
    * ground (at the last grounded spot when airborne) or carried for the skateboard. The courier is on foot, at rest,
-   * where the board was (skateboard) or at the first free spot of dismountSpots (the left one when none is free),
-   * grounded when the vehicle was, else airborne. Nothing happens on foot.
+   * where the board was (skateboard); off any other ride at the first free spot of dismountSpots, else leaveSpot's;
+   * grounded when the vehicle was, else airborne. When no spot fits at all the courier respawns at the nearest hospital and the
+   * `respawned` event is returned. Nothing happens on foot.
    */
-  leaveRide(): void {
+  leaveRide(): SimEvent[] {
     const s = this.state;
     const tier = s.riding;
-    if (!tier) return;
+    if (!tier) return [];
     const v = this.garage.state(tier);
     const wasGrounded = v.grounded;
     if (!wasGrounded) v.position = vec3(s.lastGrounded.x, s.lastGrounded.y, s.lastGrounded.z);
-    let feet = v.position;
-    if (!restsCarried(tier)) {
-      const spots = this.dismountSpots(tier, v);
-      feet = spots.find((p) => this.body.fitsAt(p, false)) ?? spots[0]!;
-    }
+    let feet: Vec3 | null = v.position;
+    if (!restsCarried(tier)) feet = this.dismountSpots(tier, v).find((p) => this.body.fitsAt(p, false)) ?? this.leaveSpot(tier, v);
     this.garage.leave(tier);
     s.riding = null;
     this.body.setEnabled(true);
+    if (!feet) return [respawn(s, this.body, this.cfg, nearestHospital(this.map, s.lastGrounded))];
     this.body.setFeet(feet);
     s.position = this.body.feet;
     s.velocity = vec3(0, 0, 0);
     if (!wasGrounded) enterAir(s, this.cfg);
+    return [];
+  }
+
+  /**
+   * The first spot around the vehicle a standing courier fits and reaches from it in a straight line: rings of
+   * summon.ringSamples points, one capsule diameter apart, from the dismount distance out to riding.leaveSearchRadius.
+   * Null when none does.
+   */
+  private leaveSpot(tier: RideTier, v: VehicleState): Vec3 | null {
+    const g = this.garage;
+    const vehicle = g.body(tier).collider;
+    const start = g.cfg.rides[tier].collider.radius + this.cfg.capsule.radius + g.cfg.riding.dismountGap;
+    const n = g.cfg.summon.ringSamples;
+    for (let r = start; r <= g.cfg.riding.leaveSearchRadius; r += 2 * this.cfg.capsule.radius) {
+      for (let k = 0; k < n; k++) {
+        const a = (2 * Math.PI * k) / n;
+        const p = vec3(v.position.x + Math.cos(a) * r, v.position.y, v.position.z + Math.sin(a) * r);
+        if (this.body.fitsAt(p, false) && this.body.pathClear(v.position, p, vehicle)) return p;
+      }
+    }
+    return null;
   }
 
   /**

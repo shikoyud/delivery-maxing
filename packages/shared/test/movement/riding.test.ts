@@ -675,6 +675,40 @@ describe('leaveRide places the courier (final review 1)', () => {
     expect(h.sim.state.position.y).toBeLessThan(1);
   });
 
+  test('no dismount spot fits: leaveRide searches rings around the vehicle for a reachable spot (never inside a wall)', async () => {
+    // As Review Focus 1's blocked case: a wall on the left, a motorbike on the right, a box behind; only the front is open.
+    const wall = box('wall', vec3(-2.3, 2, 0), vec3(1, 4, 12));
+    const garage = [skateboard, parked('car', vec3(0, 0, 0)), parked('motorbike', vec3(2.2, 0, 0))];
+    const h = await makeSim({ spawn: vec3(0, 0, -3.25), solids: [wall, box('back', vec3(0, 2, 3.5), vec3(3, 4, 1))], garage });
+    mount(h, 'car');
+    expect(h.sim.leaveRide()).toEqual([]);
+    const s = h.sim.state;
+    expect(s.riding).toBeNull();
+    expect(h.sim.body.fitsAt(s.position, false)).toBe(true);
+    // the old fallback put the courier at the left spot, inside the wall
+    expect(s.position.x).toBeGreaterThan(-1.8 + 0.3);
+    expect(Math.hypot(s.position.x, s.position.z)).toBeLessThanOrEqual(R.leaveSearchRadius + 1e-6);
+  });
+
+  test('walled in on every side: leaveRide respawns the courier at the nearest hospital', async () => {
+    const walls = [
+      // inner faces 0.25 m from the car's sides and 0.2 m from its ends: no room for a courier anywhere
+      box('w', vec3(-1.7, 2, 0), vec3(1, 4, 20)),
+      box('e', vec3(1.7, 2, 0), vec3(1, 4, 20)),
+      box('n', vec3(0, 2, -2.9), vec3(4, 4, 1)),
+      box('s', vec3(0, 2, 2.9), vec3(4, 4, 1)),
+    ];
+    const hosp = { id: 'h-far', name: 'Far', center: vec3(40, 0, 40), safeRadius: 18, spawn: vec3(40, 0, 48), spawnYaw: 0, bay: vec3(50, 0, 56), bayYaw: 0 };
+    const h = await makeSim({ spawn: vec3(0, 0, 0), hospitals: [hosp], solids: walls, garage: [skateboard, parked('car', vec3(0, 0, 0))] });
+    h.sim.rideNow('car', 0);
+    expect(h.sim.state.riding).toBe('car');
+    const events = h.sim.leaveRide();
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'respawned' }));
+    expect(h.sim.state.riding).toBeNull();
+    expect(h.sim.garage.spot('car').kind).toBe('parked');
+    expect(Math.hypot(h.sim.state.position.x - 40, h.sim.state.position.z - 48)).toBeLessThan(0.5);
+  });
+
   test('invariant: body.feet equals state.position after leaveRide, respawnAtHospital, tow and dismount', async () => {
     const hosp = { id: 'h-north', name: 'North', center: vec3(0, 0, 40), safeRadius: 18, spawn: vec3(0, 0, 48), spawnYaw: 0, bay: vec3(10, 0, 56), bayYaw: 0 };
     const make = () => makeSim({ spawn: vec3(2, 0, -80), hospitals: [hosp], garage: [skateboard, parked('car', vec3(0, 0, -80))] });
