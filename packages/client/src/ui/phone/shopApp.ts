@@ -10,6 +10,7 @@ import {
   type OrdersConfig,
   type Ownership,
   type ShopItem,
+  type RideTier,
   type ShopItemId,
 } from '@dm/shared';
 import type { QuoteView, Wardrobe } from '../../economy/Purchases';
@@ -54,6 +55,8 @@ export interface ShopRow {
 export interface ShopSource {
   quote(itemId: ShopItemId): QuoteView;
   pending(): readonly ChainTx[];
+  /** The ride a fuel can would fill now, or null (the can is not for sale). */
+  fuelTarget(): RideTier | null;
 }
 
 const COSMETIC_SECTION: Record<CosmeticSlot, ShopSection> = { outfit: 'Outfits', vehicle: 'Vehicle paint', bag: 'Bags', phone: 'Phone cases' };
@@ -69,6 +72,7 @@ const SECTIONS: Record<ShopTab, readonly ShopSection[]> = {
   token: ['Vehicle', 'Bag', 'Shoes', 'Dispatcher', 'Premium skins', 'Offer lockout'],
 };
 const PAUSED = 'Prices updating, purchases paused';
+const NO_FUEL_TARGET = 'Ride or park a motorbike or car first';
 
 /** Dollars to two decimals, three when two would drop a digit ("0.03", "0.005"). */
 function dollars(usd: number): string {
@@ -100,7 +104,7 @@ export function shopDetail(item: ShopItem, econ: EconomyConfig = economyConfig, 
     case 'cosmetic':
       return item.slot ? COSMETIC_DETAIL[item.slot] : '';
     case 'fuelCan':
-      return `+${num(econ.fuelCan.tank * 100)}% of a tank for the ridden or last-ridden motorbike or car`;
+      return `+${num(econ.fuelCan.tank * 100)}% of a tank for the motorbike or car you ride`;
   }
 }
 
@@ -134,7 +138,7 @@ function sectionOf(item: ShopItem): ShopSection {
 export function shopRows(src: ShopSource, own: Ownership, wardrobe: Wardrobe, lockout: boolean): ShopRow[] {
   const pending = new Set(src.pending().map((t) => t.itemId));
   const rows: ShopRow[] = [];
-  for (const item of shopCatalog()) {
+  for (const { item, base } of staticRows()) {
     const price = src.quote(item.id);
     let state: ShopRow['state'];
     if (item.kind === 'line') {
@@ -143,23 +147,35 @@ export function shopRows(src: ShopSource, own: Ownership, wardrobe: Wardrobe, lo
     } else if (item.kind === 'skin') state = own.skins.includes(item.id) ? 'owned' : 'buy';
     else if (item.kind === 'lockoutSkip') state = lockout ? 'buy' : 'locked';
     else if (item.kind === 'cosmetic') state = wardrobe.owned.includes(item.id) ? 'owned' : 'buy';
-    else state = 'buy';
+    else state = src.fuelTarget() === null ? 'locked' : 'buy';
     if (state === 'buy' && pending.has(item.id)) state = 'pending';
     if (state === 'buy' && price.kind === 'paused') state = 'paused';
-    rows.push({
+    const detail = item.kind === 'fuelCan' && state === 'locked' ? NO_FUEL_TARGET : base.detail;
+    rows.push({ ...base, detail, price, state });
+  }
+  return rows;
+}
+
+type StaticRow = Omit<ShopRow, 'price' | 'state'>;
+let statics: { item: ShopItem; base: StaticRow }[] | null = null;
+
+/** The catalog's rows minus price and state, in tab and section order, built once (the catalog is config). */
+function staticRows(): { item: ShopItem; base: StaticRow }[] {
+  if (statics) return statics;
+  const order = [...SECTIONS.coins, ...SECTIONS.token];
+  const out = shopCatalog().map((item) => ({
+    item,
+    base: {
       itemId: item.id,
-      tab: item.currency === 'coins' ? 'coins' : 'token',
+      tab: item.currency === 'coins' ? ('coins' as const) : ('token' as const),
       section: sectionOf(item),
       label: item.label,
       detail: shopDetail(item),
-      price,
-      state,
       ...(item.kind === 'cosmetic' ? { swatch: item.color === undefined ? null : `#${item.color.toString(16).padStart(6, '0')}` } : {}),
-    });
-  }
-  const order = [...SECTIONS.coins, ...SECTIONS.token];
+    },
+  }));
   // A stable sort keeps the catalog's tier and cosmetic order inside each section.
-  return rows.sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section));
+  return (statics = out.sort((a, b) => order.indexOf(a.base.section) - order.indexOf(b.base.section)));
 }
 
 const BUTTON: Record<ShopRow['state'], string> = { buy: 'Buy', owned: '✓ Owned', pending: 'Confirming…', locked: 'Locked', paused: 'Paused' };
@@ -173,8 +189,8 @@ function buttonText(r: ShopRow): string {
 export interface ShopCallbacks {
   /** A Coin item's Buy (bought on the first tap). */
   buy(itemId: ShopItemId): void;
-  /** Confirm on a GAME item's confirm sheet. */
-  confirm(itemId: ShopItemId): void;
+  /** Confirm on a GAME item's confirm sheet, with the "at most" GAME it showed (the cap sent to the chain). */
+  confirm(itemId: ShopItemId, maxGame: number): void;
   /** Cancel on the confirm sheet. */
   cancel(): void;
 }
@@ -194,18 +210,107 @@ interface SectionView {
   rows: Map<string, RowView>;
 }
 
-function mockBadge(parent: HTMLElement): HTMLElement {
+/** The "Mock wallet" badge shown wherever GAME is spent (Decision 1). */
+export function mockBadge(parent: HTMLElement): HTMLElement {
   const b = el('span', 'phone-mock-badge', parent);
   b.textContent = 'Mock wallet';
   b.title = 'GAME here is a browser mock of the reward program: no real tokens';
   return b;
 }
 
+export interface ConfirmSheet {
+  el: HTMLElement;
+  /** Shows the sheet for a GAME item (drawn from its row at the next render, or now from the last rows). */
+  open(itemId: ShopItemId): void;
+  /** Redraws from the HUD model's shop rows; closes when the item's row is gone. */
+  render(rows: readonly ShopRow[]): void;
+}
+
+/**
+ * The GAME confirm sheet (every GAME spend goes through it: the Shop's Buy and the Orders app's Skip): the label and
+ * detail, "$12 ≈ 50,000 GAME", "You pay at most 51,000 GAME", where the GAME goes, the Mock wallet badge, Confirm and
+ * Cancel. It stays live: a price change or a stale rate shows at once, and Confirm is disabled while the item cannot be
+ * bought. Confirm passes the "at most" figure shown, so the cap sent is the one the player saw.
+ */
+export function createConfirmSheet(
+  parent: HTMLElement,
+  onConfirm: (itemId: ShopItemId, maxGame: number) => void,
+  onCancel: () => void,
+): ConfirmSheet {
+  const sheet = el('div', 'phone-shop-sheet', parent);
+  sheet.hidden = true;
+  const card = el('div', 'phone-shop-sheet-card', sheet);
+  const label = el('div', 'phone-shop-sheet-label', card);
+  const detail = el('div', 'phone-shop-detail', card);
+  const price = el('div', 'phone-shop-sheet-price', card);
+  const max = el('div', 'phone-shop-sheet-max', card);
+  const split = el('div', 'phone-shop-sheet-split', card);
+  mockBadge(card);
+  const note = el('div', 'phone-shop-sheet-note', card);
+  const actions = el('div', 'phone-shop-sheet-actions', card);
+  const cancel = el('button', 'phone-btn phone-shop-cancel', actions);
+  cancel.type = 'button';
+  cancel.dataset.action = 'cancel';
+  cancel.textContent = 'Cancel';
+  const confirm = el('button', 'phone-btn phone-shop-confirm', actions);
+  confirm.type = 'button';
+  confirm.dataset.action = 'confirm';
+  confirm.textContent = 'Confirm';
+  let id: ShopItemId | null = null;
+  let shownMax: number | null = null;
+  let last: readonly ShopRow[] = [];
+
+  const close = (): void => {
+    id = null;
+    shownMax = null;
+    sheet.hidden = true;
+  };
+  const draw = (): void => {
+    const r = id === null ? undefined : last.find((x) => x.itemId === id);
+    if (!r) {
+      close();
+      return;
+    }
+    sheet.hidden = false;
+    setText(label, r.label);
+    setText(detail, r.detail);
+    setText(price, r.price.text);
+    shownMax = r.price.kind === 'game' ? r.price.maxGame : null;
+    setText(max, shownMax === null ? '' : `You pay at most ${gameText(shownMax)} GAME`);
+    setText(split, splitText(shopItem(r.itemId)));
+    const blocked = r.state !== 'buy' || shownMax === null;
+    confirm.disabled = blocked;
+    note.hidden = !blocked;
+    setText(note, r.state === 'paused' ? PAUSED : blocked ? buttonText(r) : '');
+  };
+  cancel.addEventListener('click', () => {
+    close();
+    onCancel();
+  });
+  confirm.addEventListener('click', () => {
+    const at = id;
+    const cap = shownMax;
+    if (at === null || cap === null || confirm.disabled) return;
+    close();
+    onConfirm(at, cap);
+  });
+  return {
+    el: sheet,
+    open: (itemId) => {
+      id = itemId;
+      draw();
+    },
+    render: (rows) => {
+      last = rows;
+      draw();
+    },
+  };
+}
+
 /**
  * The Shop app (spec §8): a Coins tab (fuel, cosmetics) and a Token tab (the four upgrade ladders, premium skins,
  * the lockout skip) with USD and GAME prices, live from the HUD model. A Coin item buys on the first tap; a GAME
- * item's Buy opens a confirm sheet (price, the most it can cost, where the GAME goes) that stays live: a price change
- * or a stale rate shows at once, and Confirm is disabled while the item cannot be bought.
+ * item's Buy opens the confirm sheet (createConfirmSheet).
  */
 export function createShopApp(cb: ShopCallbacks): PhoneAppView {
   const root = el('section', 'phone-shop');
@@ -252,61 +357,7 @@ export function createShopApp(cb: ShopCallbacks): PhoneAppView {
   }
   showTab(tab);
 
-  // The confirm sheet over the app: one GAME item at a time, kept in step with that item's row.
-  const sheet = el('div', 'phone-shop-sheet', root);
-  sheet.hidden = true;
-  const card = el('div', 'phone-shop-sheet-card', sheet);
-  const sheetLabel = el('div', 'phone-shop-sheet-label', card);
-  const sheetDetail = el('div', 'phone-shop-detail', card);
-  const sheetPrice = el('div', 'phone-shop-sheet-price', card);
-  const sheetMax = el('div', 'phone-shop-sheet-max', card);
-  const sheetSplit = el('div', 'phone-shop-sheet-split', card);
-  mockBadge(card);
-  const sheetNote = el('div', 'phone-shop-sheet-note', card);
-  const actions = el('div', 'phone-shop-sheet-actions', card);
-  const cancel = el('button', 'phone-btn phone-shop-cancel', actions);
-  cancel.type = 'button';
-  cancel.dataset.action = 'cancel';
-  cancel.textContent = 'Cancel';
-  const confirm = el('button', 'phone-btn phone-shop-confirm', actions);
-  confirm.type = 'button';
-  confirm.dataset.action = 'confirm';
-  confirm.textContent = 'Confirm';
-  let sheetId: ShopItemId | null = null;
-  let last: ShopRow[] = [];
-
-  const drawSheet = (): void => {
-    const r = sheetId === null ? undefined : last.find((x) => x.itemId === sheetId);
-    if (!r) {
-      sheetId = null;
-      sheet.hidden = true;
-      return;
-    }
-    sheet.hidden = false;
-    setText(sheetLabel, r.label);
-    setText(sheetDetail, r.detail);
-    setText(sheetPrice, r.price.text);
-    setText(sheetMax, r.price.kind === 'game' ? `You pay at most ${gameText(r.price.maxGame)} GAME` : '');
-    setText(sheetSplit, splitText(shopItem(r.itemId)));
-    const blocked = r.state !== 'buy';
-    confirm.disabled = blocked;
-    sheetNote.hidden = !blocked;
-    setText(sheetNote, r.state === 'paused' ? PAUSED : blocked ? buttonText(r) : '');
-  };
-  const closeSheet = (): void => {
-    sheetId = null;
-    sheet.hidden = true;
-  };
-  cancel.addEventListener('click', () => {
-    closeSheet();
-    cb.cancel();
-  });
-  confirm.addEventListener('click', () => {
-    const id = sheetId;
-    if (id === null || confirm.disabled) return;
-    closeSheet();
-    cb.confirm(id);
-  });
+  const sheet = createConfirmSheet(root, cb.confirm, cb.cancel);
 
   const create = (r: ShopRow): RowView => {
     const row = el('div', 'phone-card phone-shop-row');
@@ -327,8 +378,7 @@ export function createShopApp(cb: ShopCallbacks): PhoneAppView {
         cb.buy(r.itemId);
         return;
       }
-      sheetId = r.itemId;
-      drawSheet();
+      sheet.open(r.itemId);
     });
     return { el: row, swatch, label, detail, price, button };
   };
@@ -354,7 +404,6 @@ export function createShopApp(cb: ShopCallbacks): PhoneAppView {
   return {
     el: root,
     render: (m: HudModel) => {
-      last = m.shop;
       setText(balance, `${gameText(m.wallet.balance)} GAME · ${m.totals.coins} Coins`);
       for (const [name, s] of sections) {
         syncList(
@@ -367,7 +416,7 @@ export function createShopApp(cb: ShopCallbacks): PhoneAppView {
         );
       }
       paused.hidden = !m.shop.some((r) => r.tab === 'token' && r.price.kind === 'paused');
-      drawSheet();
+      sheet.render(m.shop);
     },
   };
 }

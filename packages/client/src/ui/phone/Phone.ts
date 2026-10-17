@@ -31,8 +31,8 @@ export interface PhoneCallbacks extends OrdersCallbacks {
   respawn(): void;
   /** Shop: a Coin item's Buy (bought at once). */
   shopBuy(itemId: string): void;
-  /** Shop: Confirm on a GAME item's confirm sheet (sent to the chain at the live quote). */
-  shopConfirm(itemId: string): void;
+  /** Shop: Confirm on a GAME item's confirm sheet, paying at most the `maxGame` it showed. */
+  shopConfirm(itemId: string, maxGame: number): void;
   /** Shop: the confirm sheet was cancelled. */
   shopCancel(): void;
 }
@@ -178,7 +178,7 @@ export class Phone implements PhoneView {
       }
       case 'shop': {
         const cb = this.callbacks;
-        const view = createShopApp({ buy: (id) => cb.shopBuy(id), confirm: (id) => cb.shopConfirm(id), cancel: () => cb.shopCancel() });
+        const view = createShopApp({ buy: (id) => cb.shopBuy(id), confirm: (id, max) => cb.shopConfirm(id, max), cancel: () => cb.shopCancel() });
         root.appendChild(view.el);
         return { el: root, render: (m, p, h) => view.render(m, p, h) };
       }

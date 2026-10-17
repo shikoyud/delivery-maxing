@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { GAME_UNITS, economyConfig, expandGreybox, ridingConfig, type Garage, type GreyboxSource, type OrderSystem } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { MockChain } from '../src/economy/MockChain';
+import { gameText } from '../src/ui/hudModel';
 import { Purchases, defaultWardrobe } from '../src/economy/Purchases';
 import { createShopApp, shopRows, type ShopRow } from '../src/ui/phone/shopApp';
 import { installFakeDom, type FakeElement } from './fakeDom';
@@ -49,8 +50,8 @@ describe('shopRows', () => {
     // The free cosmetic of each slot is owned from the start; the rest buy with Coins.
     expect(row(rows, 'cosmetic.outfit.teal').state).toBe('owned');
     expect(row(rows, 'cosmetic.outfit.coral')).toMatchObject({ state: 'buy', price: { kind: 'coins', text: '50 Coins' } });
-    // No ride ridden or parked: the fuel can shows the cheaper (motorbike) price.
-    expect(row(rows, 'fuelCan').price).toMatchObject({ kind: 'coins', coins: 15 });
+    // No ride ridden or parked: the fuel can shows the cheaper (motorbike) price, and is not for sale.
+    expect(row(rows, 'fuelCan')).toMatchObject({ state: 'locked', detail: 'Ride or park a motorbike or car first', price: { kind: 'coins', coins: 15 } });
   });
 
   test('each line is a ladder: owned tiers ticked, the next with Buy, the rest greyed; detail text per tier', () => {
@@ -115,7 +116,11 @@ describe('Shop app', () => {
   beforeEach(() => {
     dom = installFakeDom();
     calls = [];
-    view = createShopApp({ buy: (id) => void calls.push(`buy ${id}`), confirm: (id) => void calls.push(`confirm ${id}`), cancel: () => void calls.push('cancel') });
+    view = createShopApp({
+      buy: (id) => void calls.push(`buy ${id}`),
+      confirm: (id, max) => void calls.push(`confirm ${id} at most ${gameText(max)} GAME`),
+      cancel: () => void calls.push('cancel'),
+    });
     dom.host.appendChild(view.el as unknown as FakeElement);
   });
   afterEach(() => dom.restore());
@@ -165,7 +170,8 @@ describe('Shop app', () => {
     btn('lockoutSkip').click();
     expect(sheet.textContent).toContain('100% burned');
     byAction('confirm').click();
-    expect(calls).toEqual(['cancel', 'confirm lockoutSkip']);
+    // The cap sent is the "at most" figure the sheet showed.
+    expect(calls).toEqual(['cancel', 'confirm lockoutSkip at most 2,125 GAME']);
     expect(sheet.hidden).toBe(true);
   });
 

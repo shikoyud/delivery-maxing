@@ -84,8 +84,9 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     update: () => undefined,
     quote: (): QuoteView => ({ kind: 'coins', coins: 1, text: '1 Coins' }),
     pending: () => [],
-    buy: (id: string) => {
-      shop.calls.push(`buy ${id}`);
+    fuelTarget: () => null,
+    buy: (id: string, maxGame?: number) => {
+      shop.calls.push(`buy ${id} max ${maxGame}`);
       return Promise.resolve(shop.answer);
     },
     buyWithCoins: (id: string) => {
@@ -392,23 +393,27 @@ describe('DeliveryLoop', () => {
 
   it("the Orders app's Skip and the Shop's Confirm send GAME purchases; Buy buys Coin items; refusals pop up", async () => {
     const s = setup('car');
-    s.phone.cb!.skipLockout();
-    s.phone.cb!.shopConfirm('line.bag.1');
+    s.phone.cb!.skipLockout(2125);
+    s.phone.cb!.shopConfirm('line.bag.1', 4250);
     s.phone.cb!.shopBuy('cosmetic.outfit.coral');
-    expect(s.shop.calls).toEqual(['buy lockoutSkip', 'buy line.bag.1', 'coins cosmetic.outfit.coral']);
+    // The confirm sheets' "at most" figure is the cap sent.
+    expect(s.shop.calls).toEqual(['buy lockoutSkip max 2125', 'buy line.bag.1 max 4250', 'coins cosmetic.outfit.coral']);
     s.shop.answer = { ok: false, message: 'Not enough Coins' };
     s.phone.cb!.shopBuy('cosmetic.outfit.sky');
     expect(s.popups.at(-1)).toEqual({ text: 'Not enough Coins', lines: [], tone: 'warn' });
     s.shop.answer = { ok: false, message: 'Prices updating, purchases paused' };
-    s.phone.cb!.shopConfirm('line.bag.1');
+    s.phone.cb!.shopConfirm('line.bag.1', 4250);
     await Promise.resolve();
     expect(s.popups.at(-1)!.text).toBe('Prices updating, purchases paused');
-    // The HUD model carries the Shop rows and the spendable balance.
+    // The HUD model carries the spendable balance; the Shop rows only while the phone shows them.
     s.tick();
     s.loop.draw(10);
-    const m = s.huds.at(-1)!;
-    expect(m.shop.find((r) => r.itemId === 'line.bag.1')).toBeDefined();
-    expect(m.wallet.balance).toBe(s.chain.balance());
+    const closed = s.huds.at(-1)!;
+    expect(closed.shop).toEqual([]);
+    expect(closed.wallet.balance).toBe(s.chain.balance());
+    s.loop.openPhone('shop');
+    s.loop.draw(10.01);
+    expect(s.phone.renders.at(-1)!.shop.find((r) => r.itemId === 'line.bag.1')).toBeDefined();
   });
 
   it('draw renders the phone with the HUD model while it is open', () => {

@@ -119,8 +119,11 @@ export class Purchases {
     return { kind: 'game', usd, game: q.game, maxGame: q.maxGame, text: `${usd} ≈ ${gameText(q.game)} GAME` };
   }
 
-  /** Sends a GAME purchase at the current quote (Coin items are bought at once). Granted on confirmation, in update(). */
-  async buy(itemId: ShopItemId): Promise<PurchaseOutcome> {
+  /**
+   * Sends a GAME purchase (Coin items are bought at once) paying at most `maxGame` (the confirm sheet's figure; the
+   * current quote's when absent): above it the chain refuses it. Granted on confirmation, in update().
+   */
+  async buy(itemId: ShopItemId, maxGame?: number): Promise<PurchaseOutcome> {
     const item = shopItem(itemId);
     if (item.currency === 'coins') return this.buyWithCoins(itemId);
     const own = this.ownershipError(item);
@@ -128,7 +131,7 @@ export class Purchases {
     const q = this.quote(itemId);
     if (q.kind !== 'game') return { ok: false, message: PAUSED };
     if (q.game > this.chain.balance()) return { ok: false, message: this.message('insufficient', item) };
-    const tx = await this.chain.purchase(itemId, q.maxGame, this.now());
+    const tx = await this.chain.purchase(itemId, maxGame ?? q.maxGame, this.now());
     if (tx.status === 'failed') {
       this.seen.add(tx.id); // answered here, never popped up again
       return { ok: false, message: this.message(tx.error ?? 'rejected', item) };
@@ -240,8 +243,8 @@ export class Purchases {
     d.save();
   }
 
-  /** The ridden, else last-ridden, owned ride with a tank; null when neither has one. */
-  private fuelTarget(): RideTier | null {
+  /** The ridden, else last-ridden, owned ride with a tank a fuel can would fill; null when neither has one. */
+  fuelTarget(): RideTier | null {
     const d = this.deps;
     for (const t of [d.ridden(), d.lastRide()]) {
       if (t && d.garage.cfg.rides[t].fuel && d.garage.owned().includes(t)) return t;

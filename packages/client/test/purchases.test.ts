@@ -145,6 +145,20 @@ describe('Purchases', () => {
     expect(await s.purchases.buy('line.bag.1')).toEqual({ ok: false, message: 'Not enough GAME' });
   });
 
+  test('buy sends the cap the confirm sheet showed: a price moved past it since is refused, nothing charged', async () => {
+    const s = setup();
+    const shown = s.purchases.quote('line.vehicle.1');
+    if (shown.kind !== 'game') throw new Error('no GAME quote');
+    // GAME's price falls 15% after the sheet showed the cap: the item now costs more GAME than the player agreed to.
+    expect(s.chain.dev.setRate(economyConfig.mockChain.usdPerGame / 1.15)).toBe(true);
+    const balance = s.chain.balance();
+    expect(await s.purchases.buy('line.vehicle.1', shown.maxGame)).toEqual({ ok: false, message: 'The price moved. Nothing was charged; check the new price.' });
+    expect(s.chain.balance()).toBe(balance);
+    // Without a cap it pays at most the current quote's, which goes through.
+    const out = await s.purchases.buy('line.vehicle.1');
+    expect(out.ok).toBe(true);
+  });
+
   test('a grant is applied once even if update() sees the confirmed tx twice', async () => {
     const s = setup();
     await s.purchases.buy('line.vehicle.1');

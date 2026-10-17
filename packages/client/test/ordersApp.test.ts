@@ -34,7 +34,7 @@ describe('renderOrdersApp', () => {
   const cb = {
     accept: (id: string) => void calls.push(`accept ${id}`),
     cancel: (id: string) => void calls.push(`cancel ${id}`),
-    skipLockout: () => void calls.push('skip'),
+    skipLockout: (maxGame: number) => void calls.push(`skip at most ${maxGame}`),
   };
   const button = (root: FakeElement, action: string, id?: string): FakeElement | undefined =>
     root.findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === action && (id === undefined || e.dataset.id === id))[0];
@@ -141,10 +141,36 @@ describe('renderOrdersApp', () => {
     expect(row.hidden).toBe(false);
     expect(row.textContent).toContain('No new offers for 32 s');
     expect(row.textContent).not.toContain('dev stub');
-    button(dom.host, 'skip')!.click();
-    expect(calls).toEqual(['skip']);
     renderOrdersApp(dom.asHost, model(), cb);
     expect(row.hidden).toBe(true);
+  });
+
+  test('Skip opens the confirm sheet (no purchase yet); Confirm buys lockoutSkip once at the shown cap; the row has the Mock wallet badge', () => {
+    renderOrdersApp(dom.asHost, model({ lockoutLeft: 31.4, shop: [skipRow()] }), cb);
+    const row = dom.host.byClass('phone-lockout')[0]!;
+    expect(row.byClass('phone-mock-badge')[0]!.textContent).toBe('Mock wallet');
+    const sheet = dom.host.byClass('phone-shop-sheet')[0]!;
+    expect(sheet.hidden).toBe(true);
+    button(dom.host, 'skip')!.click();
+    expect(calls).toEqual([]);
+    expect(sheet.hidden).toBe(false);
+    expect(sheet.textContent).toContain('$0.50 ≈ 2,083 GAME');
+    expect(sheet.textContent).toContain('You pay at most 2,125 GAME');
+    expect(sheet.textContent).toContain('100% burned');
+    expect(sheet.byClass('phone-mock-badge')[0]!.textContent).toBe('Mock wallet');
+    button(dom.host, 'confirm')!.click();
+    expect(calls).toEqual([`skip at most ${2125e6}`]);
+    expect(sheet.hidden).toBe(true);
+    button(dom.host, 'confirm')!.click(); // closed: nothing more
+    // Cancel closes it without buying.
+    button(dom.host, 'skip')!.click();
+    button(dom.host, 'cancel')!.click();
+    expect(calls).toHaveLength(1);
+    expect(sheet.hidden).toBe(true);
+    // The lockout ends while the sheet is open: it closes.
+    button(dom.host, 'skip')!.click();
+    renderOrdersApp(dom.asHost, model(), cb);
+    expect(sheet.hidden).toBe(true);
   });
 
   test('during a lockout the Skip button shows the live lockout-skip price', () => {

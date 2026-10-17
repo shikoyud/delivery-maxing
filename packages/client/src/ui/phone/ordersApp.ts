@@ -1,13 +1,13 @@
 import { ordersConfig, type AcceptResult } from '@dm/shared';
 import { clock, el, setText } from '../dom';
 import { BAND_LABEL, KIND_LABEL, pointsText, type HudModel, type HudOffer, type HudOrder, type HudTimer } from '../hudModel';
-import type { ShopRow } from './shopApp';
+import { createConfirmSheet, mockBadge, type ConfirmSheet, type ShopRow } from './shopApp';
 
 export interface OrdersCallbacks {
   accept(offerId: string): void;
   cancel(orderId: string): void;
-  /** Skip: buys the Shop's `lockoutSkip` (GAME, burned) at its live price. */
-  skipLockout(): void;
+  /** Confirm on Skip's confirm sheet: buys the Shop's `lockoutSkip` (GAME, burned), paying at most `maxGame`. */
+  skipLockout(maxGame: number): void;
 }
 
 const BLOCKED: Record<AcceptResult, string> = {
@@ -105,6 +105,7 @@ class OrdersApp {
   private readonly lockout: HTMLElement;
   private readonly lockoutText: HTMLElement;
   private readonly skip: HTMLButtonElement;
+  private readonly sheet: ConfirmSheet;
   private readonly offerList: HTMLElement;
   private readonly offersEmpty: HTMLElement;
   private readonly activeList: HTMLElement;
@@ -120,9 +121,11 @@ class OrdersApp {
     this.lockoutText = el('span', 'phone-lockout-text', this.lockout);
     this.skip = button('phone-skip', 'skip', this.lockout);
     this.skip.title = 'Ends the offer lockout now; the GAME is burned';
+    // Every GAME spend goes through the confirm sheet: Skip opens it for the lockout skip.
     this.skip.addEventListener('click', () => {
-      if (!this.skip.disabled) this.cb.skipLockout();
+      if (!this.skip.disabled) this.sheet.open('lockoutSkip');
     });
+    mockBadge(this.lockout);
 
     el('h3', 'phone-section', wrap).textContent = 'Offers';
     this.offerList = el('div', 'phone-list', wrap);
@@ -131,6 +134,7 @@ class OrdersApp {
     this.activeList = el('div', 'phone-list', wrap);
     this.activeEmpty = el('p', 'phone-empty', wrap);
     this.activeEmpty.textContent = 'No active orders.';
+    this.sheet = createConfirmSheet(wrap, (_id, maxGame) => this.cb.skipLockout(maxGame), () => undefined);
   }
 
   render(m: HudModel): void {
@@ -143,6 +147,8 @@ class OrdersApp {
       this.skip.disabled = row?.state !== 'buy';
       setText(this.skip, `Skip · ${skipText(row)}`);
     }
+    // No lockout: no skip row, so the sheet closes.
+    this.sheet.render(m.lockoutLeft > 0 ? m.shop : []);
 
     syncList(this.offerList, this.offerCards, m.offers, (o) => o.id, (o) => this.offerCard(o), (c, o) => this.updateOffer(c, o));
     this.offersEmpty.hidden = m.offers.length > 0;

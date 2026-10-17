@@ -92,7 +92,7 @@ export interface DeliveryDeps {
    * The Shop's purchases (Game: Purchases), updated each tick at the wall clock; the Shop app's rows, Buy and Confirm
    * go through it. Absent (tests): no Shop rows, and its buttons do nothing.
    */
-  purchases?(): Pick<Purchases, 'update' | 'quote' | 'pending' | 'buy' | 'buyWithCoins'> | null;
+  purchases?(): Pick<Purchases, 'update' | 'quote' | 'pending' | 'fuelTarget' | 'buy' | 'buyWithCoins'> | null;
   /** The Coin cosmetics to save (Game: the wardrobe); absent: the stored ones are kept. */
   wardrobe?(): Wardrobe;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
@@ -244,10 +244,10 @@ export class DeliveryLoop {
     const phoneCb: PhoneCallbacks = {
       accept: (id) => void this.accept(id),
       cancel: (id) => void this.cancel(id),
-      // The Orders app's Skip buys the lockout skip (GAME) at its live price, as the Shop's Confirm does.
-      skipLockout: () => void this.shopConfirm('lockoutSkip'),
+      // Confirm on the Orders app's Skip sheet buys the lockout skip (GAME), as the Shop's Confirm does.
+      skipLockout: (maxGame) => void this.shopConfirm('lockoutSkip', maxGame),
       shopBuy: (id) => this.shopBuy(id),
-      shopConfirm: (id) => void this.shopConfirm(id),
+      shopConfirm: (id, maxGame) => void this.shopConfirm(id, maxGame),
       shopCancel: () => undefined,
       summon: (t) => void this.summon(t),
       respawn: () => this.respawn(),
@@ -635,12 +635,12 @@ export class DeliveryLoop {
     this.nextHudAt = 0;
   }
 
-  /** The Shop's Confirm (and the Orders app's Skip): sends a GAME purchase at the live quote; a refusal pops up. */
-  async shopConfirm(itemId: string): Promise<void> {
+  /** A confirm sheet's Confirm (the Shop's, the Orders app's Skip): sends a GAME purchase capped at `maxGame`; a refusal pops up. */
+  async shopConfirm(itemId: string, maxGame: number): Promise<void> {
     const p = this.d.purchases?.();
     if (!p) return;
     this.nextHudAt = 0;
-    const r = await p.buy(itemId);
+    const r = await p.buy(itemId, maxGame);
     if (!r.ok) this.popup(r.message, [], 'warn');
     this.nextHudAt = 0;
   }
@@ -683,7 +683,8 @@ export class DeliveryLoop {
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
       prompt: this.prompt(),
       wallet: { accrued: this.d.chain.accrued(), balance: this.d.chain.balance() },
-      shop: this.shopRows(now),
+      // The Shop and the Orders app's Skip read the rows: built only while the phone shows them.
+      shop: this.phone.isOpen ? this.shopRows(now) : [],
     });
   }
 
