@@ -7,9 +7,7 @@ import {
   PlayerSim,
   createPagedPhysicsWorld,
   createPhysicsWorld,
-  defaultGarage,
   economyConfig,
-  RIDE_TIERS,
   findRoadSpot,
   horizontalLength,
   initRapier,
@@ -17,8 +15,8 @@ import {
   movementConfig,
   vec3,
   worldConfig,
+  tierOfVehicle,
   type CatalogIndex,
-  type ChainSource,
   type CityMap,
   type DistanceTable,
   type MapData,
@@ -50,6 +48,7 @@ import { CAR_MODEL_ID } from '../render/vehicles/vehicleMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { MockChain } from '../economy/MockChain';
+import { Purchases, type Wardrobe } from '../economy/Purchases';
 import { capacityLabel, mountDevPanel, type DevPanel } from '../ui/devPanel';
 import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
@@ -63,7 +62,7 @@ import {
   type DevSettingsStore,
 } from './devSettings';
 import { teleportTargets, teleportToTarget } from './mapTargets';
-import { browserStorage, createProgressStore, saveWhenLeaving, type ProgressStore } from './progress';
+import { browserStorage, createProgressStore, ownedGarage, saveWhenLeaving, type ProgressStore } from './progress';
 import { ballInSolid, physicsSphereCast, physicsWallProbe, type CameraExclude } from './cameraQueries';
 import { interpolationStart } from './interpolation';
 import { loadMap, type MapKind } from './mapLoader';
@@ -118,6 +117,10 @@ export class Game {
   readonly courier: CourierView;
   /** The owned vehicles' placeholders (the pack car once loaded), interpolated like the courier. */
   readonly vehicles: VehicleViews;
+  /** The Shop's purchases: GAME items granted once the chain confirms them, Coin items at once. */
+  readonly purchases: Purchases;
+  /** The Coin cosmetics owned and worn (saved with the progress). */
+  wardrobe: Wardrobe;
   /** The runtime pack models (public/packs/, git-ignored; boxes and placeholders without them). */
   readonly models: ModelLoader;
   /** The city's regions, blocks and pack models; null on the greybox. */
@@ -163,10 +166,12 @@ export class Game {
     model: CourierModel | null,
     progress: ProgressStore,
     extras: MapExtras,
-    /** The reward chain (the browser mock); Task 13 extends what it feeds. */
-    private readonly chain: ChainSource,
+    /** The reward chain (the browser mock): it owns the tiers and skins; the dev panel grants through it. */
+    private readonly chain: MockChain,
+    wardrobe: Wardrobe,
   ) {
     this.progress = progress;
+    this.wardrobe = wardrobe;
     this.prevPosition = { ...sim.state.position };
     const chase = this.cfg.camera.chase;
     this.actions = new ActionState(
@@ -231,6 +236,8 @@ export class Game {
       bagTier: () => this.chain.ownership().lines.bag,
       dispatcherTier: () => this.chain.ownership().lines.dispatcher,
       chain: this.chain,
+      purchases: () => this.purchases,
+      wardrobe: () => this.wardrobe,
       player: () => this.sim.state,
       rider: () => ({
         riding: this.sim.state.riding,
@@ -266,6 +273,28 @@ export class Game {
           return events;
         },
       },
+    });
+    const delivery = this.delivery;
+    this.purchases = new Purchases(chain, {
+      garage: sim.garage,
+      // DeliveryLoop rebuilds its OrderSystem on a progress reset: always the current one.
+      get orders() {
+        return delivery.orders;
+      },
+      map,
+      player: () => (sim.state.grounded ? sim.state.position : sim.state.lastGrounded),
+      wardrobe: () => this.wardrobe,
+      setWardrobe: (w) => void (this.wardrobe = w),
+      ridden: () => sim.state.riding,
+      lastRide: () => sim.state.lastRide,
+      save: () => delivery.save(),
+      popup: (title, lines, tone) => delivery.popup(title, lines, tone),
+      now: () => Date.now(),
+      removing: (t) => {
+        if (sim.state.riding === t) sim.leaveRide();
+        if (sim.state.lastRide === t) sim.state.lastRide = null;
+      },
+      changed: () => this.vehicles.snap(),
     });
     this.overlay = mountDebugOverlay(host, opts.overlay ?? opts.debug);
     this.devPanel = mountDevPanel(settings, {
@@ -357,16 +386,17 @@ export class Game {
     const spawn = map.hospitals[0];
     if (!spawn) throw new Error('map has no hospitals');
     physics.update?.(spawn.spawn);
-    // Every vehicle owned and parked at the first hospital's bay (the skateboard carried) until saves load a garage.
-    const progress = createProgressStore(browserStorage(), map.kind, () => defaultGarage(map));
+    // The chain owns the vehicles (Decision 2): a new player starts on foot, and only the saved rows of the tiers the
+    // chain owns load (Purchases parks owned tiers without a row at the nearest hospital's bay).
+    const chain = new MockChain(browserStorage(), economyConfig, { now: () => Date.now() });
+    const progress = createProgressStore(browserStorage(), map.kind, () => []);
     const saved = progress.load();
-    const garage = new Garage(physics, map, saved.garage);
+    const garage = new Garage(physics, map, ownedGarage(saved.garage, chain.ownership().lines.vehicle));
     const sim = new PlayerSim(physics, map, settings.movement, spawn.spawn, spawn.spawnYaw, garage);
     // The tier last ridden (capacity and offers follow it), only while it is still owned.
     sim.state.lastRide = saved.lastRide && garage.owned().includes(saved.lastRide) ? saved.lastRide : null;
     const extras = { catalog: loaded.catalog, distances: loaded.distances };
-    const chain = new MockChain(browserStorage(), economyConfig, { now: () => Date.now() });
-    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras, chain);
+    const game = new Game(host, opts, map, sim, nav, settings, devStore, model, progress, extras, chain, saved.cosmetics);
     // Closing or hiding the tab mid-ride keeps the vehicle's spot and the fuel it burnt.
     saveWhenLeaving(window, document, () => game.delivery.save());
     if (opts.debug) installDebugHooks(game);
@@ -423,13 +453,16 @@ export class Game {
   }
 
   /**
-   * Dev panel: buys or removes `t`. The vehicle being ridden cannot be removed (refused, false): the courier gets off
-   * first. A bought one parks at the first free bay slot with a full tank. Saved.
+   * Dev panel: grants or revokes `t` on the mock chain (Decision 15: owning `t` owns every tier below it; removing it
+   * removes the tiers above too). Refused (false) while riding a tier that would go: the courier gets off first.
+   * Purchases moves the garage along: a granted one parks at the nearest hospital's bay with a full tank. Saved.
    */
   setOwned(t: RideTier, owned: boolean): boolean {
-    if (!owned && this.sim.state.riding === t) return false;
-    this.sim.garage.setOwned(t, owned, this.map.hospitals[0]!);
-    if (!owned && this.sim.state.lastRide === t) this.sim.state.lastRide = null;
+    const tier = tierOfVehicle(t);
+    const riding = this.sim.state.riding;
+    if (!owned && riding !== null && tierOfVehicle(riding) >= tier) return false;
+    const current = this.chain.ownership().lines.vehicle;
+    this.chain.dev.grantTier('vehicle', owned ? Math.max(current, tier) : Math.min(current, tier - 1));
     this.vehicles.snap();
     this.delivery.save();
     return true;
@@ -442,15 +475,16 @@ export class Game {
   }
 
   /**
-   * Dev panel "Reset progress": the courier gets off and every vehicle is bought afresh (the default garage: the bay
-   * slots in order, full tanks), no last ride, summon ready.
+   * Dev panel "Reset progress": the courier gets off and every owned vehicle (the chain keeps what it owns) is parked
+   * afresh at the first hospital's bay slots in order with a full tank, no last ride, summon ready.
    */
   private resetGarage(): void {
     this.sim.leaveRide();
     const g = this.sim.garage;
     const hospital = this.map.hospitals[0]!;
-    for (const t of RIDE_TIERS) g.setOwned(t, false, hospital);
-    for (const t of RIDE_TIERS) g.setOwned(t, true, hospital);
+    const owned = [...g.owned()];
+    for (const t of owned) g.setOwned(t, false, hospital);
+    for (const t of owned) g.setOwned(t, true, hospital);
     g.summonReadyAt = 0;
     this.sim.state.lastRide = null;
     this.vehicles.snap();

@@ -36,6 +36,7 @@ import { clientConfig } from '../src/clientConfig';
 import { DeliveryLoop, MOUNT_REFUSED, simEventHint } from '../src/game/delivery';
 import { createProgressStore, type Progress } from '../src/game/progress';
 import { MockChain } from '../src/economy/MockChain';
+import { defaultWardrobe } from '../src/economy/Purchases';
 import { ActionState } from '../src/input/actionState';
 import type { HudModel } from '../src/ui/hudModel';
 import type { MapScreenView } from '../src/ui/map/MapScreen';
@@ -54,10 +55,10 @@ interface Popup {
  * A DeliveryLoop with recording HUD and popups (no DOM), in-memory storage, a movable player and a fake rider (on foot,
  * last ridden `lastRide`). `distance` defaults to the street grid.
  */
-function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: PathDistance = streetDistance) {
+function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmetics'>, distance: PathDistance = streetDistance) {
   const data = new Map<string, string>();
   const progress = createProgressStore({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) }, 'greybox');
-  if (saved) progress.save(saved);
+  if (saved) progress.save({ ...saved, cosmetics: defaultWardrobe() });
   const popups: Popup[] = [];
   const huds: HudModel[] = [];
   const env = { now: 0, position: { ...map.hospitals[0]!.spawn } as Vec3, grounded: true, lastGrounded: undefined as Vec3 | undefined };

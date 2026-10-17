@@ -8,6 +8,10 @@ describe('config pins spec values', () => {
     expect(ridingConfig.rides.skateboard.reverseSpeed).toBe(0);
     expect(ridingConfig.rides.car.reverseSpeed).toBe(6);
   });
+  it('bay slots are long enough for the car (Decision 13)', () => {
+    const car = ridingConfig.rides.car.collider;
+    expect(ridingConfig.bays.spacing).toBeGreaterThanOrEqual(2 * (car.halfLength + car.radius) + 1);
+  });
   it('movement', () => {
     expect(movementConfig.tickRate).toBe(30);
     expect(movementConfig.run.sprintSpeed).toBe(8);

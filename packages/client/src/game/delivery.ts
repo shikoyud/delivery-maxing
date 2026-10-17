@@ -54,9 +54,10 @@ import { createMinimap } from '../ui/minimap';
 import { MapScreen, type MapScreenView } from '../ui/map/MapScreen';
 import { RIDE_NAME, type GarageRow } from '../ui/phone/garageApp';
 import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
-import { Popups, type PopupSink } from '../ui/popups';
+import { Popups, type PopupSink, type PopupTone } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
 import type { ProgressStore } from './progress';
+import type { Wardrobe } from '../economy/Purchases';
 import { RouteCache } from './routes';
 
 export interface DeliveryDeps {
@@ -84,6 +85,10 @@ export interface DeliveryDeps {
   chain: ChainSource;
   /** Wall-clock ms a payout is recorded at (the chain's time); Date.now when absent. */
   wallClock?(): number;
+  /** The Shop's purchases (Game: Purchases), updated each tick at the wall clock; absent (tests): none. */
+  purchases?(): { update(nowMs: number): void } | null;
+  /** The Coin cosmetics to save (Game: the wardrobe); absent: the stored ones are kept. */
+  wardrobe?(): Wardrobe;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
   /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
@@ -455,6 +460,13 @@ export class DeliveryLoop {
     const zones = riding ? { poiIds: NO_POIS, safeZone: this.zones.safeZone } : this.zones;
     events.push(...this.sys.update(now, this.offerOrigin(position), zones));
     for (const e of events) this.announce(e, before);
+    this.d.purchases?.()?.update(this.d.wallClock?.() ?? Date.now());
+  }
+
+  /** A popup (Purchases: bought, parked, failed). */
+  popup(title: string, lines: string[] = [], tone: PopupTone = 'info'): void {
+    this.popups.show(title, lines, tone);
+    this.nextHudAt = 0;
   }
 
   /**
@@ -707,6 +719,7 @@ export class DeliveryLoop {
       totals: { ...this.sys.totals },
       garage: this.d.vehicles ? this.d.vehicles.snapshot() : stored.garage,
       lastRide: this.d.rider().lastRide,
+      cosmetics: this.d.wardrobe ? this.d.wardrobe() : stored.cosmetics,
     });
   }
 

@@ -74,6 +74,8 @@ export interface ChainSource {
   lockGame(game: number, nowMs: number): { ok: true } | { ok: false; reason: 'insufficient' | 'locked' };
   withdrawLock(nowMs: number): { ok: true } | { ok: false; reason: 'tooEarly' | 'none' };
   claim(nowMs: number): Promise<{ ok: true; game: number } | { ok: false; reason: 'nothing' }>;
+  /** Brings the chain up to `nowMs`: settles due transactions (the mock confirms them; a real chain would poll). */
+  tick(nowMs: number): void;
   /** Calls `listener` after every change; returns the unsubscriber. */
   subscribe(listener: () => void): () => void;
 }

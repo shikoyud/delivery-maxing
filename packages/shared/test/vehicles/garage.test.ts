@@ -86,6 +86,22 @@ describe('Garage', () => {
     expect(g.body('skateboard').collider.isEnabled()).toBe(false);
   });
 
+  test('a car bought behind the bicycle and motorbike takes slot 2 without overlapping them (5.5 m slots, Review Focus 3)', () => {
+    const h = map.hospitals[0]!;
+    const g = new Garage(physics, map, []);
+    for (const t of ['skateboard', 'bicycle', 'motorbike', 'car'] as const) g.setOwned(t, true, h);
+    expect(g.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
+    // Along the row each capsule reaches halfLength + radius from its centre; neighbours must leave a gap.
+    const reach = (t: 'bicycle' | 'motorbike' | 'car'): number => ridingConfig.rides[t].collider.halfLength + ridingConfig.rides[t].collider.radius;
+    const along = (t: 'bicycle' | 'motorbike' | 'car'): number => {
+      const p = g.state(t).position;
+      return (p.x - h.bay.x) * Math.sin(h.bayYaw) + (p.z - h.bay.z) * Math.cos(h.bayYaw);
+    };
+    expect(along('motorbike') - along('bicycle') - reach('motorbike') - reach('bicycle')).toBeGreaterThan(0);
+    expect(along('car') - along('motorbike') - reach('car') - reach('motorbike')).toBeGreaterThan(0);
+    expect(ridingConfig.bays.spacing).toBe(5.5);
+  });
+
   test('setOwned(true) does not park on a vehicle being ridden over slot 0', () => {
     const h = map.hospitals[0]!;
     const g = new Garage(physics, map, defaultGarage(map));
