@@ -2,7 +2,7 @@ import type { CityMap, MapData, Solid, Vec3 } from '@dm/shared';
 import { clientConfig } from '../../clientConfig';
 import { slotColor } from '../../render/waypoints';
 import type { HudModel } from '../hudModel';
-import { el, keyLabel } from '../dom';
+import { el, isTypingTarget, keyLabel } from '../dom';
 import { drawFuelIcon, drawVehicleIcon, FUEL_ICON_COLOR, HOSPITAL_ICON_COLOR, VEHICLE_ICON_COLOR } from '../minimap';
 import { MapProjection } from './mapProjection';
 import { MapView } from './mapView';
@@ -70,6 +70,21 @@ export interface MapScreenOptions {
 }
 
 /**
+ * The zoom factor of one wheel event: a mouse notch (wheelPixelsPerStep pixels, or wheelLinesPerStep lines, or a page)
+ * zooms by wheelStep, a trackpad's small deltas by a matching fraction of it, and no event by more than one step.
+ * Wheel up (deltaY < 0) zooms in.
+ */
+export function wheelZoomFactor(
+  deltaY: number,
+  deltaMode: number,
+  cfg: { wheelStep: number; wheelPixelsPerStep: number; wheelLinesPerStep: number },
+): number {
+  const perStep = deltaMode === 1 ? cfg.wheelLinesPerStep : deltaMode === 2 ? 1 : cfg.wheelPixelsPerStep;
+  const steps = Math.max(-1, Math.min(1, deltaY / perStep));
+  return cfg.wheelStep ** -steps;
+}
+
+/**
  * The full-screen map (M, Decision 11): the whole map fitted to the window on every open, wheel zoom toward the cursor
  * (1× to ui.map.maxZoom, ui.map.wheelStep per notch), drag to pan, and a legend. The static art is drawn once to an
  * offscreen layer `min(4096, size × 3)` px wide and blitted scaled per frame: on the greybox the ground and
@@ -121,8 +136,7 @@ export class MapScreen implements MapScreenView {
       const w = e as WheelEvent;
       w.preventDefault();
       if (!w.deltaY) return;
-      const step = clientConfig.ui.map.wheelStep;
-      this.view_.zoomAt(w.deltaY < 0 ? step : 1 / step, this.point(w));
+      this.view_.zoomAt(wheelZoomFactor(w.deltaY, w.deltaMode ?? 0, clientConfig.ui.map), this.point(w));
       this.draw();
     });
     this.canvas.addEventListener('mousedown', (e) => {
@@ -154,6 +168,7 @@ export class MapScreen implements MapScreenView {
       (e) => {
         const k = e as KeyboardEvent;
         if (!this.open_ || !this.opts.closeCodes.includes(k.code)) return;
+        if (k.code !== 'Escape' && isTypingTarget(k.target)) return; // M typed in a field
         k.preventDefault();
         k.stopPropagation();
         if (!k.repeat) this.close();

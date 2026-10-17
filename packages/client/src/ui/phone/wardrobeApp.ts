@@ -1,9 +1,8 @@
 import { COSMETIC_SLOTS, shopCatalog, type CosmeticSlot, type Finish, type ShopItemId } from '@dm/shared';
 import { wornItem, type Wardrobe } from '../../economy/wardrobe';
 import { cssHex } from '../../render/palette';
-import { el, setText } from '../dom';
+import { el, setText, syncList } from '../dom';
 import type { HudModel } from '../hudModel';
-import { syncList } from './ordersApp';
 import type { PhoneAppView } from './Phone';
 
 export type WardrobeSection = 'Outfits' | 'Vehicle paint' | 'Bags' | 'Phone cases';

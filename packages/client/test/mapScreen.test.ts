@@ -4,7 +4,7 @@ import catalogJson from '../../../map/catalog.json';
 import cityJson from '../../../map/city.layout.json';
 import greybox from '../../../map/greybox.json';
 import { clientConfig } from '../src/clientConfig';
-import { MapScreen } from '../src/ui/map/MapScreen';
+import { MapScreen, wheelZoomFactor } from '../src/ui/map/MapScreen';
 import { FUEL_ICON_COLOR, HOSPITAL_ICON_COLOR, VEHICLE_ICON_COLOR } from '../src/ui/minimap';
 import { recordCanvases } from './canvasRecorder';
 import { fakeEvent, installFakeDom, type FakeEvent } from './fakeDom';
@@ -61,6 +61,26 @@ describe('MapScreen', () => {
     expect(screen.view.zoom).toBe(1);
   });
 
+  test('wheelZoomFactor: a notch in pixels, lines or a page is one step; smaller deltas a fraction', () => {
+    const cfg = clientConfig.ui.map;
+    expect(wheelZoomFactor(-cfg.wheelPixelsPerStep, 0, cfg)).toBeCloseTo(cfg.wheelStep);
+    expect(wheelZoomFactor(cfg.wheelPixelsPerStep, 0, cfg)).toBeCloseTo(1 / cfg.wheelStep);
+    expect(wheelZoomFactor(-cfg.wheelLinesPerStep, 1, cfg)).toBeCloseTo(cfg.wheelStep);
+    expect(wheelZoomFactor(-1, 2, cfg)).toBeCloseTo(cfg.wheelStep);
+    expect(wheelZoomFactor(-cfg.wheelPixelsPerStep / 4, 0, cfg)).toBeCloseTo(cfg.wheelStep ** 0.25);
+    expect(wheelZoomFactor(-5000, 0, cfg)).toBeCloseTo(cfg.wheelStep);
+  });
+
+  test('M typed in a text field does not close the map; Escape does', () => {
+    const screen = screenFor(city);
+    screen.open();
+    const field = { tagName: 'INPUT' } as unknown as FakeEvent['target'];
+    dom.doc.dispatchEvent(fakeEvent('keydown', { code: 'KeyM', target: field }));
+    expect(screen.isOpen).toBe(true);
+    dom.doc.dispatchEvent(fakeEvent('keydown', { code: 'Escape', target: field }));
+    expect(screen.isOpen).toBe(false);
+  });
+
   test('the legend lists You, Orders, Offers, Hospitals, Gas stations, Your vehicles', () => {
     screenFor(city);
     const items = dom.host.byClass('map-legend-item').map((e) => e.textContent);
@@ -82,8 +102,11 @@ describe('MapScreen', () => {
     expect(p.y).toBeCloseTo(300);
     canvas.dispatchEvent(wheel(100));
     expect(screen.view.zoom).toBeCloseTo(1);
-    canvas.dispatchEvent(wheel(-100));
-    canvas.dispatchEvent(wheel(-100));
+    // A trackpad's small deltas zoom by a fraction of a step; a huge delta by one step at most.
+    for (let i = 0; i < 10; i++) canvas.dispatchEvent(wheel(-10));
+    expect(screen.view.zoom).toBeCloseTo(clientConfig.ui.map.wheelStep);
+    canvas.dispatchEvent(wheel(-1000));
+    expect(screen.view.zoom).toBeCloseTo(clientConfig.ui.map.wheelStep ** 2);
     const before = screen.view.toScreen(v(600, 600));
     canvas.dispatchEvent({ ...fakeEvent('mousedown'), button: 0, clientX: 500, clientY: 500 } as FakeEvent);
     dom.doc.dispatchEvent({ ...fakeEvent('mousemove'), clientX: 540, clientY: 470 } as FakeEvent);

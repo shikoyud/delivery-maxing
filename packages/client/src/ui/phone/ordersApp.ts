@@ -1,7 +1,8 @@
 import { ordersConfig, type AcceptResult } from '@dm/shared';
-import { clock, el, mockBadge, setText } from '../dom';
+import { clock, el, mockBadge, setText, syncList } from '../dom';
 import { BAND_LABEL, KIND_LABEL, pointsText, type HudModel, type HudOffer, type HudOrder, type HudTimer } from '../hudModel';
-import { createConfirmSheet, type ConfirmSheet, type ShopRow } from './shopApp';
+import { createConfirmSheet, type ConfirmSheet } from './confirmSheet';
+import type { ShopRow } from './shopApp';
 
 export interface OrdersCallbacks {
   accept(offerId: string): void;
@@ -21,35 +22,6 @@ const BLOCKED: Record<AcceptResult, string> = {
 /** The disabled Accept button's copy for a refused accept ('' for 'ok'). */
 export function acceptBlockedReason(result: AcceptResult): string {
   return BLOCKED[result];
-}
-
-/**
- * Keeps `list`'s children in step with `items` by key: existing elements are updated in place (so a button under the
- * cursor is never replaced between mousedown and click), missing ones created, stale ones removed.
- */
-export function syncList<T, V extends { el: HTMLElement }>(
-  list: HTMLElement,
-  views: Map<string, V>,
-  items: readonly T[],
-  key: (item: T) => string,
-  create: (item: T) => V,
-  update: (view: V, item: T) => void,
-): void {
-  const keep = new Set(items.map(key));
-  for (const [k, v] of views) {
-    if (!keep.has(k)) {
-      v.el.remove();
-      views.delete(k);
-    }
-  }
-  items.forEach((item, i) => {
-    const k = key(item);
-    let v = views.get(k);
-    if (!v) views.set(k, (v = create(item)));
-    update(v, item);
-    const at = list.children[i] ?? null;
-    if (at !== v.el) list.insertBefore(v.el, at);
-  });
 }
 
 interface OfferCard {

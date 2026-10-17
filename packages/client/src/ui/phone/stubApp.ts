@@ -69,7 +69,8 @@ export function buildStubApp(
     if (codes.length) row(BINDING_LABEL[name], codes.map(keyLabel).join(' / '));
   }
   row('Look', 'Mouse');
-  row('Steer', 'A / D');
-  row('Throttle / brake', 'W / S');
+  const keys = (...names: BindingName[]): string => names.map((n) => bindings[n].map(keyLabel).join(' / ')).join(' / ');
+  row('Steer', keys('left', 'right'));
+  row('Throttle / brake', keys('forward', 'back'));
   row('Close phone', ['Esc', ...bindings.phone.map(keyLabel)].join(' / '));
 }

@@ -1,7 +1,7 @@
 import type { RideTier, Vec3 } from '@dm/shared';
 import type { Look } from '../../render/cosmetics';
 import { cssHex } from '../../render/palette';
-import { el, keyLabel } from '../dom';
+import { el, isTypingTarget, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
 import { createGarageApp } from './garageApp';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
@@ -119,6 +119,8 @@ export class Phone implements PhoneView {
       'keydown',
       (e) => {
         if (!this.open_ || !this.closeCodes.includes(e.code)) return;
+        // Tab or M typed in a field (the Wallet's amount) is the field's; Escape still closes.
+        if (e.code !== 'Escape' && isTypingTarget(e.target)) return;
         e.preventDefault();
         e.stopPropagation();
         // A held Tab auto-repeats: only a fresh press closes, or holding the key would close the phone it just opened.

@@ -146,6 +146,8 @@ export interface HudPayout {
   game: number;
   paid: boolean;
   when: string;
+  /** "×1.07" when a lock boosted it (above ×1.00 once rounded); absent otherwise. */
+  boost?: string;
 }
 
 /** One GAME purchase row: what it bought, the GAME charged, burned and sent to the vault, and its status. */
@@ -211,6 +213,20 @@ export function boostText(boost: number): string {
   return `×${boost.toFixed(2)}`;
 }
 
+/** The last lock end dateText formatted (the HUD model is built several times a second; the date rarely changes). */
+let unlocksMemo: { ms: number; text: string } | null = null;
+function unlocksText(ms: number): string {
+  if (unlocksMemo?.ms !== ms) unlocksMemo = { ms, text: dateText(ms) };
+  return unlocksMemo.text;
+}
+
+/** A payout row: its boost shown only when it rounds above ×1.00. */
+function payoutRow(p: Payout, nowMs: number): HudPayout {
+  const row: HudPayout = { label: payoutLabel(p), usd: usdText(p.usdMicro), game: p.game, paid: p.paid, when: whenText(p.at, nowMs) };
+  const boost = boostText(p.boost);
+  return boost === boostText(1) ? row : { ...row, boost };
+}
+
 const TIER_LABEL: Record<VehicleTier, string> = { walk: 'On foot', skateboard: 'Skateboard', bicycle: 'Bicycle', motorbike: 'Motorbike', car: 'Car' };
 
 /** "Car · hot", "Bicycle · on time", "On foot · late"; "Order" for a payout saved without its order. */
@@ -254,11 +270,11 @@ export function walletModel(chain: ChainSource, nowMs: number, lists: boolean, c
     lock: lock && {
       game: lock.game,
       boostText: boostText(boostMultiplier(lock.usdMicroAtLock, cfg)),
-      unlocksAt: dateText(lock.unlocksAt),
+      unlocksAt: unlocksText(lock.unlocksAt),
       canWithdraw: chain.withdrawable(nowMs),
     },
     payouts: lists
-      ? newest(chain.payouts()).map((p) => ({ label: payoutLabel(p), usd: usdText(p.usdMicro), game: p.game, paid: p.paid, when: whenText(p.at, nowMs) }))
+      ? newest(chain.payouts()).map((p) => payoutRow(p, nowMs))
       : [],
     history: lists
       ? newest(chain.history()).map((t) => ({

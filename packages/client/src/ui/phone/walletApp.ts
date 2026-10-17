@@ -87,7 +87,7 @@ export function createWalletApp(cb: WalletCallbacks, cfg = economyConfig): Phone
   const vaultUsd = el('span', 'phone-wallet-vault-usd', vaultRow);
   const vaultEmpty = el('p', 'phone-wallet-vault-empty', vaultCard);
   vaultEmpty.textContent = 'Vault empty · orders pay no GAME';
-  el('p', 'phone-note', vaultCard).textContent = 'Pays every order’s GAME; 20% of every upgrade refills it';
+  el('p', 'phone-note', vaultCard).textContent = `Pays every order’s GAME; ${Math.round(cfg.split.linePool * 100)}% of every upgrade refills it`;
 
   const boost = section('Boost');
   const lockView = el('div', 'phone-wallet-lock', boost);
@@ -143,10 +143,8 @@ export function createWalletApp(cb: WalletCallbacks, cfg = economyConfig): Phone
     else if (amount.value.trim() === '') text = 'Type the GAME to lock';
     else if (units === null) text = 'Whole GAME only';
     else if (units > w.balance) text = 'Not enough GAME';
-    else if (w.usdPerGame === null) {
-      text = 'Prices updating';
-      ok = true;
-    } else {
+    else if (w.usdPerGame === null) text = 'Prices updating'; // the lock is valued at the rate: none, no lock
+    else {
       const usdMicro = Math.round(units * w.usdPerGame); // base units × USD per GAME = micro-USD, as the lock values it
       text = `${usdText(usdMicro)} locked · ${boostText(boostMultiplier(usdMicro, cfg))} boost on every order`;
       ok = true;
@@ -159,6 +157,8 @@ export function createWalletApp(cb: WalletCallbacks, cfg = economyConfig): Phone
     const units = parseAmount(amount.value);
     if (lock.disabled || units === null) return;
     cb.lockGame(units);
+    amount.value = ''; // the form starts empty for the next lock (a refusal pops up with the reason)
+    drawForm();
   });
 
   return {
@@ -195,7 +195,8 @@ export function createWalletApp(cb: WalletCallbacks, cfg = economyConfig): Phone
         w.payouts,
         (p, row) => {
           row.classList.toggle('unpaid', !p.paid);
-          rowText(row, p.paid ? `${p.label} · ${p.usd} ≈ ${gameText(p.game)} GAME` : `${p.label} · vault empty`, p.when);
+          const boost = p.boost ? ` · ${p.boost}` : '';
+          rowText(row, p.paid ? `${p.label} · ${p.usd} ≈ ${gameText(p.game)} GAME${boost}` : `${p.label} · vault empty`, p.when);
         },
         'phone-wallet-payout',
         'No payouts yet: deliver an order',

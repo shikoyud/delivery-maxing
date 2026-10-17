@@ -87,7 +87,7 @@ describe('clientConfig', () => {
   });
 
   it('ui.map: zoom 1× to 6×, 1.2× per wheel notch (Decision 11); the 500 m window is gone', () => {
-    expect(clientConfig.ui.map).toEqual({ maxZoom: 6, wheelStep: 1.2 });
+    expect(clientConfig.ui.map).toEqual({ maxZoom: 6, wheelStep: 1.2, wheelPixelsPerStep: 100, wheelLinesPerStep: 3 });
     expect('mapWindowMeters' in clientConfig.ui).toBe(false);
   });
 

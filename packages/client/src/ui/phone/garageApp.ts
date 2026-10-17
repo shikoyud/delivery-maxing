@@ -1,7 +1,6 @@
-import { RIDE_TIERS, payoutRange, ridingConfig, type Garage, type RideTier, type SummonResult, type Vec3 } from '@dm/shared';
-import { el, setText } from '../dom';
+import { RIDE_TIERS, economyConfig, payoutRange, ridingConfig, type EconomyConfig, type Garage, type RideTier, type SummonResult, type Vec3, type VehicleTier } from '@dm/shared';
+import { el, setText, syncList } from '../dom';
 import type { HudModel } from '../hudModel';
-import { syncList } from './ordersApp';
 import type { PhoneAppView } from './Phone';
 
 /** One vehicle in the Garage app: the four tiers, owned or not. */
@@ -41,9 +40,9 @@ const dollars = (micro: number): string => {
   return d.toFixed(Math.abs(Number(d.toFixed(2)) - d) < 1e-9 ? 2 : 3);
 };
 
-/** "$0.03–0.30 per order" (spec §3.6). */
-export function rangeText(tier: RideTier): string {
-  const { minMicro, maxMicro } = payoutRange(tier);
+/** "$0.03–0.30 per order" (spec §3.6; the Garage rows and the Shop's Vehicle tiers). */
+export function rangeText(tier: VehicleTier, econ: EconomyConfig = economyConfig): string {
+  const { minMicro, maxMicro } = payoutRange(tier, econ);
   return `$${dollars(minMicro)}–${dollars(maxMicro)} per order`;
 }
 

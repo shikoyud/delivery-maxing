@@ -79,6 +79,31 @@ describe('the Wallet app (spec §8, §6.4)', () => {
     expect(t).toContain('Deliveries3');
     // Top to bottom: address, Earned, Vault, Boost, Payouts, Purchases, the totals.
     expect(dom.host.byClass('phone-section').map((h) => h.textContent)).toEqual(['Earned', 'Vault', 'Boost', 'Payouts', 'Purchases', 'Totals']);
+    // The vault note's share is the config's (split.linePool).
+    expect(s.one('phone-wallet-vault').parentNode!.parentNode!.textContent).toContain(`${Math.round(economyConfig.split.linePool * 100)}% of every upgrade refills it`);
+  });
+
+  test('without a rate the Lock is disabled: "Prices updating"', () => {
+    const s = setup();
+    s.render();
+    const amount = s.one('phone-wallet-amount') as FakeElement & { value: string };
+    amount.value = '100000';
+    amount.dispatchEvent({ type: 'input' } as never);
+    expect(s.action('lock').disabled).toBe(false);
+    s.chain.rate = () => null;
+    s.render();
+    expect(s.one('phone-wallet-preview').textContent).toBe('Prices updating');
+    expect(s.action('lock').disabled).toBe(true);
+    s.action('lock').click();
+    expect(s.calls).toEqual([]);
+  });
+
+  test('a boosted payout row shows its boost', () => {
+    const s = setup();
+    s.chain.accrue({ orderId: 'b', usdMicro: 210_000, luck: 0.5, quality: 1, usdPerGame: s.chain.rate()!.usdPerGame, boost: 1.072, at: s.clock.t, detail: { tier: 'car', kind: 'food', inTime: true } });
+    s.render();
+    const row = s.one('phone-wallet-payouts').byClass('phone-wallet-payout')[0]!;
+    expect(row.byClass('phone-wallet-line')[0]!.textContent).toMatch(/^Car · hot · \$0\.21 ≈ [\d,]+ GAME · ×1\.07$/);
   });
 
   test('the Lock form previews the boost live; locking disables the form and shows Withdraw only after 7 days', () => {
@@ -96,6 +121,10 @@ describe('the Wallet app (spec §8, §6.4)', () => {
     expect(lock.disabled).toBe(false);
     lock.click();
     expect(s.calls).toEqual([`lock ${100_000 * GAME_UNITS}`]);
+    // The amount clears after Lock: the form is empty for the next one.
+    expect(amount.value).toBe('');
+    expect(lock.disabled).toBe(true);
+    expect(s.one('phone-wallet-preview').textContent).toBe('Type the GAME to lock');
     amount.value = '700000'; // more than the balance
     amount.dispatchEvent({ type: 'input' } as never);
     expect(lock.disabled).toBe(true);

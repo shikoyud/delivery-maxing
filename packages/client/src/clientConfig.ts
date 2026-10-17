@@ -65,9 +65,10 @@ export interface ClientConfig {
     fuelLowPct: number;
     /**
      * The full-screen map (M): it opens with the whole map fitted to the window (zoom 1); the wheel zooms toward the
-     * cursor by `wheelStep` per notch, up to `maxZoom`.
+     * cursor by `wheelStep` per notch (a notch is `wheelPixelsPerStep` pixels or `wheelLinesPerStep` lines of deltaY;
+     * a trackpad's smaller deltas zoom by that fraction of a step), up to `maxZoom`.
      */
-    map: { maxZoom: number; wheelStep: number };
+    map: { maxZoom: number; wheelStep: number; wheelPixelsPerStep: number; wheelLinesPerStep: number };
   };
 }
 

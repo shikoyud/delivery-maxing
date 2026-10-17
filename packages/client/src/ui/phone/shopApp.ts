@@ -15,9 +15,10 @@ import {
 } from '@dm/shared';
 import type { QuoteView } from '../../economy/Purchases';
 import type { Wardrobe } from '../../economy/wardrobe';
-import { el, mockBadge, setText } from '../dom';
+import { el, mockBadge, setText, syncList } from '../dom';
 import { gameText, type HudModel } from '../hudModel';
-import { syncList } from './ordersApp';
+import { BUTTON, PAUSED, buttonText, createConfirmSheet } from './confirmSheet';
+import { rangeText } from './garageApp';
 import type { PhoneAppView } from './Phone';
 
 export type ShopTab = 'coins' | 'token';
@@ -72,14 +73,7 @@ const SECTIONS: Record<ShopTab, readonly ShopSection[]> = {
   coins: ['Fuel', 'Outfits', 'Vehicle paint', 'Bags', 'Phone cases'],
   token: ['Vehicle', 'Bag', 'Shoes', 'Dispatcher', 'Premium skins', 'Offer lockout'],
 };
-const PAUSED = 'Prices updating, purchases paused';
 const NO_FUEL_TARGET = 'Ride or park a motorbike or car first';
-
-/** Dollars to two decimals, three when two would drop a digit ("0.03", "0.005"). */
-function dollars(usd: number): string {
-  const two = usd.toFixed(2);
-  return Math.abs(Number(two) - usd) < 1e-9 ? two : usd.toFixed(3);
-}
 
 /** A trimmed number: "7", "17.5". */
 const num = (n: number): string => String(Math.round(n * 1000) / 1000);
@@ -90,8 +84,7 @@ export function shopDetail(item: ShopItem, econ: EconomyConfig = economyConfig, 
     case 'line': {
       const t = item.tier;
       if (item.line === 'vehicle') {
-        const [lo, hi] = econ.payout.ranges[vehicleOfTier(t)];
-        return `$${dollars(lo / 1e6)}–${dollars(hi / 1e6)} per order`;
+        return rangeText(vehicleOfTier(t), econ);
       }
       if (item.line === 'bag') return `${econ.lines.bag.slots[t]} slots · ${econ.lines.bag.kg[t]} kg`;
       if (item.line === 'shoes') return `+${num(t * econ.lines.shoes.sprintPerTier * 100)}% sprint`;
@@ -107,13 +100,6 @@ export function shopDetail(item: ShopItem, econ: EconomyConfig = economyConfig, 
     case 'fuelCan':
       return `+${num(econ.fuelCan.tank * 100)}% of a tank for the motorbike or car you ride`;
   }
-}
-
-/** Where a GAME purchase's GAME goes: "80% burned · 20% to the reward vault" for a line tier, else "100% burned". */
-export function splitText(item: ShopItem, econ: EconomyConfig = economyConfig): string {
-  if (item.kind !== 'line') return '100% burned';
-  const vault = Math.round(econ.split.linePool * 100);
-  return `${100 - vault}% burned · ${vault}% to the reward vault`;
 }
 
 function sectionOf(item: ShopItem): ShopSection {
@@ -179,14 +165,6 @@ function staticRows(): { item: ShopItem; base: StaticRow }[] {
   return (statics = out.sort((a, b) => order.indexOf(a.base.section) - order.indexOf(b.base.section)));
 }
 
-const BUTTON: Record<ShopRow['state'], string> = { buy: 'Buy', owned: '✓ Owned', pending: 'Confirming…', locked: 'Locked', paused: 'Paused' };
-
-/** The row button's copy (the lockout skip without a lockout says so). */
-function buttonText(r: ShopRow): string {
-  if (r.state === 'locked' && r.itemId === 'lockoutSkip') return 'No lockout';
-  return BUTTON[r.state];
-}
-
 export interface ShopCallbacks {
   /** A Coin item's Buy (bought on the first tap). */
   buy(itemId: ShopItemId): void;
@@ -209,95 +187,6 @@ interface SectionView {
   el: HTMLElement;
   list: HTMLElement;
   rows: Map<string, RowView>;
-}
-
-export interface ConfirmSheet {
-  el: HTMLElement;
-  /** Shows the sheet for a GAME item (drawn from its row at the next render, or now from the last rows). */
-  open(itemId: ShopItemId): void;
-  /** Redraws from the HUD model's shop rows; closes when the item's row is gone. */
-  render(rows: readonly ShopRow[]): void;
-}
-
-/**
- * The GAME confirm sheet (every GAME spend goes through it: the Shop's Buy and the Orders app's Skip): the label and
- * detail, "$12 ≈ 50,000 GAME", "You pay at most 51,000 GAME", where the GAME goes, the Mock wallet badge, Confirm and
- * Cancel. It stays live: a price change or a stale rate shows at once, and Confirm is disabled while the item cannot be
- * bought. Confirm passes the "at most" figure shown, so the cap sent is the one the player saw.
- */
-export function createConfirmSheet(
-  parent: HTMLElement,
-  onConfirm: (itemId: ShopItemId, maxGame: number) => void,
-  onCancel: () => void,
-): ConfirmSheet {
-  const sheet = el('div', 'phone-shop-sheet', parent);
-  sheet.hidden = true;
-  const card = el('div', 'phone-shop-sheet-card', sheet);
-  const label = el('div', 'phone-shop-sheet-label', card);
-  const detail = el('div', 'phone-shop-detail', card);
-  const price = el('div', 'phone-shop-sheet-price', card);
-  const max = el('div', 'phone-shop-sheet-max', card);
-  const split = el('div', 'phone-shop-sheet-split', card);
-  mockBadge(card);
-  const note = el('div', 'phone-shop-sheet-note', card);
-  const actions = el('div', 'phone-shop-sheet-actions', card);
-  const cancel = el('button', 'phone-btn phone-shop-cancel', actions);
-  cancel.type = 'button';
-  cancel.dataset.action = 'cancel';
-  cancel.textContent = 'Cancel';
-  const confirm = el('button', 'phone-btn phone-shop-confirm', actions);
-  confirm.type = 'button';
-  confirm.dataset.action = 'confirm';
-  confirm.textContent = 'Confirm';
-  let id: ShopItemId | null = null;
-  let shownMax: number | null = null;
-  let last: readonly ShopRow[] = [];
-
-  const close = (): void => {
-    id = null;
-    shownMax = null;
-    sheet.hidden = true;
-  };
-  const draw = (): void => {
-    const r = id === null ? undefined : last.find((x) => x.itemId === id);
-    if (!r) {
-      close();
-      return;
-    }
-    sheet.hidden = false;
-    setText(label, r.label);
-    setText(detail, r.detail);
-    setText(price, r.price.text);
-    shownMax = r.price.kind === 'game' ? r.price.maxGame : null;
-    setText(max, shownMax === null ? '' : `You pay at most ${gameText(shownMax)} GAME`);
-    setText(split, splitText(shopItem(r.itemId)));
-    const blocked = r.state !== 'buy' || shownMax === null;
-    confirm.disabled = blocked;
-    note.hidden = !blocked;
-    setText(note, r.state === 'paused' ? PAUSED : blocked ? buttonText(r) : '');
-  };
-  cancel.addEventListener('click', () => {
-    close();
-    onCancel();
-  });
-  confirm.addEventListener('click', () => {
-    const at = id;
-    const cap = shownMax;
-    if (at === null || cap === null || confirm.disabled) return;
-    close();
-    onConfirm(at, cap);
-  });
-  return {
-    el: sheet,
-    open: (itemId) => {
-      id = itemId;
-      draw();
-    },
-    render: (rows) => {
-      last = rows;
-      draw();
-    },
-  };
 }
 
 /**

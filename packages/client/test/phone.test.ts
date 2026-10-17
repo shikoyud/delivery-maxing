@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clientConfig } from '../src/clientConfig';
 import { PHONE_APPS, Phone } from '../src/ui/phone/Phone';
-import { STUB_APPS } from '../src/ui/phone/stubApp';
-import { fakeEvent, installFakeDom, type FakeElement } from './fakeDom';
+import { STUB_APPS, buildStubApp } from '../src/ui/phone/stubApp';
+import { fakeEvent, installFakeDom, type FakeElement, type FakeEvent } from './fakeDom';
 import { model, offer } from './phoneFixtures';
 
 describe('Phone', () => {
@@ -120,6 +120,22 @@ describe('Phone', () => {
     expect(tab.propagationStopped).toBe(false);
   });
 
+  it('a close key typed in a text field (the Wallet amount) stays in the field; Escape still closes', () => {
+    phone.open();
+    for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT']) {
+      const field = { tagName } as unknown as FakeEvent['target'];
+      const tab = fakeEvent('keydown', { code: 'Tab', target: field });
+      dom.doc.dispatchEvent(tab);
+      expect(phone.isOpen).toBe(true);
+      expect(tab.propagationStopped).toBe(false);
+    }
+    const editable = { isContentEditable: true } as unknown as FakeEvent['target'];
+    dom.doc.dispatchEvent(fakeEvent('keydown', { code: 'Tab', target: editable }));
+    expect(phone.isOpen).toBe(true);
+    dom.doc.dispatchEvent(fakeEvent('keydown', { code: 'Escape', target: { tagName: 'INPUT' } as unknown as FakeEvent['target'] }));
+    expect(phone.isOpen).toBe(false);
+  });
+
   it('a held close key (auto-repeat) does not close the phone it just opened', () => {
     phone.open();
     const rep = fakeEvent('keydown', { code: 'Tab', repeat: true });
@@ -169,6 +185,15 @@ describe('Phone', () => {
     expect(settings).toContain('Tab');
     expect(settings).toContain(clientConfig.input.bindings.accept[0]!.replace('Key', ''));
     expect(settings).toContain('Esc');
+  });
+
+  it('settings labels Steer and Throttle / brake from the bindings, not fixed keys', () => {
+    const root = dom.doc.createElement('div') as unknown as HTMLElement;
+    const bindings = { ...clientConfig.input.bindings, forward: ['ArrowUp'], back: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'] };
+    buildStubApp(root, 'settings', () => undefined, bindings);
+    const text = (root as unknown as FakeElement).textContent;
+    expect(text).toContain('SteerArrowLeft / ArrowRight');
+    expect(text).toContain('Throttle / brakeArrowUp / ArrowDown');
   });
 
   it('the Shop app renders the shop rows; Buy and the confirm sheet reach the callbacks', () => {
