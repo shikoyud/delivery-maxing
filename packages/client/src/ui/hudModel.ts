@@ -34,6 +34,7 @@ import { keyLabel } from './dom';
 import type { ParkedMarker } from './minimap';
 import type { GarageRow } from './phone/garageApp';
 import type { ShopRow } from './phone/shopApp';
+import type { WardrobeRow } from './phone/wardrobeApp';
 
 /** A countdown: seconds left (0 once over) and whether the limit has passed. */
 export interface HudTimer {
@@ -124,6 +125,8 @@ export interface HudNav {
   wallet?: HudWallet;
   /** The Shop app's rows (DeliveryLoop: shopRows over Purchases); absent (tests): none. */
   shop?: ShopRow[];
+  /** The Wardrobe app's rows (DeliveryLoop: wardrobeRows over the wardrobe and the chain's skins); absent (tests): none. */
+  wardrobe?: WardrobeRow[];
 }
 
 /** The lock-to-boost lock as the Wallet shows it (spec §6.4). */
@@ -302,6 +305,8 @@ export interface HudModel {
   wallet: HudWallet;
   /** The Shop app's rows, live prices and states (spec §6, §8). */
   shop: ShopRow[];
+  /** The Wardrobe app's rows (Decision 4). */
+  wardrobe: WardrobeRow[];
 }
 
 /** What the key prompt depends on. */
@@ -496,6 +501,7 @@ export function hudModel(
     prompt: nav.prompt ?? null,
     wallet: nav.wallet ?? emptyWallet(),
     shop: nav.shop ?? [],
+    wardrobe: nav.wardrobe ?? [],
   };
   model.nextStop = next?.stop ?? null;
   return model;

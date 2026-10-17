@@ -13,7 +13,8 @@ import {
   type RideTier,
   type ShopItemId,
 } from '@dm/shared';
-import type { QuoteView, Wardrobe } from '../../economy/Purchases';
+import type { QuoteView } from '../../economy/Purchases';
+import type { Wardrobe } from '../../economy/wardrobe';
 import { el, mockBadge, setText } from '../dom';
 import { gameText, type HudModel } from '../hudModel';
 import { syncList } from './ordersApp';

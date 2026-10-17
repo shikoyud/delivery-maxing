@@ -202,6 +202,7 @@ describe('Garage app', () => {
         lockGame: () => undefined,
         withdrawLock: () => undefined,
         switchRide: () => undefined,
+        wardrobeEquip: () => undefined,
       },
       ['Escape'],
     );

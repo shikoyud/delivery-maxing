@@ -55,6 +55,7 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     prompt: null,
     wallet: emptyWallet(),
     shop: [],
+    wardrobe: [],
     ...over,
   };
 }

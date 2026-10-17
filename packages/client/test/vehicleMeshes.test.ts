@@ -6,6 +6,7 @@ import {
   expandGreybox,
   Garage,
   initRapier,
+  movementConfig,
   RIDE_TIERS,
   ridingConfig,
   type GreyboxSource,
@@ -16,7 +17,10 @@ import {
 import greybox from '../../../map/greybox.json';
 import { buildAccessZoneMeshes } from '../src/render/accessZoneMeshes';
 import { buildGasStationMeshes } from '../src/render/gasStationMeshes';
-import { buildVehicleMesh, CAR_MODEL_ID, carModel } from '../src/render/vehicles/vehicleMeshes';
+import { buildVehicleMesh, CAR_MODEL_ID, carModel, paintVehicle } from '../src/render/vehicles/vehicleMeshes';
+import { createCourierPlaceholder } from '../src/render/courierPlaceholder';
+import { clientConfig } from '../src/clientConfig';
+import type { Look } from '../src/render/cosmetics';
 import { ModelLoader } from '../src/render/city/modelLoader';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CatalogEntry } from '@dm/shared';
@@ -245,7 +249,7 @@ describe('the pack car (Decision 11)', () => {
   };
   const flush = () => new Promise((r) => setTimeout(r, 0));
 
-  it('carModel: null until loaded and when missing; then the model 1:1, its pivot on the feet, its front on −z', async () => {
+  it('carModel: null until loaded and when missing; then the model scaled to the collider, its pivot on the feet, its front on −z', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const missing = loaderFor(false);
     missing.request(CAR_MODEL_ID);
@@ -264,9 +268,10 @@ describe('the pack car (Decision 11)', () => {
     expect(box.min.y).toBeCloseTo(0, 5);
     expect((box.min.x + box.max.x) / 2).toBeCloseTo(0, 5);
     expect((box.min.z + box.max.z) / 2).toBeCloseTo(0, 5);
-    // 1:1, turned half round: its length along z
-    expect(box.max.z - box.min.z).toBeCloseTo(3.28, 5);
-    expect(box.max.x - box.min.x).toBeCloseTo(1.97, 5);
+    // Scaled to the 4.4 m collider (Decision 13), turned half round: its length along z
+    const k = 4.4 / 3.28;
+    expect(box.max.z - box.min.z).toBeCloseTo(4.4, 5);
+    expect(box.max.x - box.min.x).toBeCloseTo(1.97 * k, 5);
     let mesh: THREE.Mesh | null = null;
     o.traverse((c) => {
       if ((c as THREE.Mesh).isMesh) mesh = c as THREE.Mesh;
@@ -295,3 +300,106 @@ describe('the pack car (Decision 11)', () => {
   });
 });
 
+
+describe('vehicle paint (Decision 4)', () => {
+  const meshOf = (root: THREE.Object3D): THREE.Mesh => {
+    let mesh: THREE.Mesh | null = null;
+    root.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) mesh ??= o as THREE.Mesh;
+    });
+    return mesh!;
+  };
+  const colours = (m: THREE.Mesh, start: number, count: number): number[] =>
+    Array.from((m.geometry.getAttribute('color').array as Float32Array).slice(start * 3, (start + count) * 3));
+  const look = (vehicle: Look['vehicle']): Look => ({ outfit: { color: 0x1f9e93 }, vehicle, bag: 0xd8b98a, phone: 0x10262d });
+
+  it('vehicle paint recolours body parts and leaves wheels and the rider untouched', async () => {
+    for (const tier of RIDE_TIERS) {
+      const root = buildVehicleMesh(tier, ridingConfig.rides[tier]);
+      const mesh = meshOf(root);
+      const [fixed, body] = mesh.geometry.groups;
+      expect(mesh.geometry.groups, tier).toHaveLength(2);
+      expect(body!.count, tier).toBeGreaterThan(0);
+      const wheels = colours(mesh, fixed!.start, fixed!.count);
+      const factory = colours(mesh, body!.start, body!.count);
+      const base = mesh.material;
+
+      paintVehicle(root, { color: 0xc8323c });
+      const red = new THREE.Color(0xc8323c).toArray();
+      const painted = colours(mesh, body!.start, body!.count);
+      for (let i = 0; i < painted.length; i++) expect(painted[i], tier).toBeCloseTo(red[i % 3]!, 6);
+      expect(colours(mesh, fixed!.start, fixed!.count), tier).toEqual(wheels);
+      // A colour is still one material (one draw call): only the body's vertex colours change.
+      expect(mesh.material, tier).toBe(base);
+
+      paintVehicle(root, { finish: 'chrome' });
+      const mats = mesh.material as THREE.Material[];
+      expect(mats, tier).toHaveLength(2);
+      expect(mats[0], tier).toBe(base);
+      const chrome = mats[1] as THREE.MeshStandardMaterial;
+      expect([chrome.color.getHex(), chrome.metalness, chrome.roughness], tier).toEqual([0xdfe3e8, 1, 0.1]);
+      expect(colours(mesh, fixed!.start, fixed!.count), tier).toEqual(wheels);
+
+      // The factory paint brings each ride's own SP5 colours back.
+      paintVehicle(root, { color: null });
+      expect(mesh.material, tier).toBe(base);
+      expect(colours(mesh, body!.start, body!.count), tier).toEqual(factory);
+    }
+
+    // VehicleViews paints every ride; the courier riding one keeps its own colours.
+    const physics = createPhysicsWorld(await initRapier(), map);
+    const garage = new Garage(physics, map, defaultGarage(map));
+    const scene = new THREE.Scene();
+    const rider = createCourierPlaceholder(movementConfig.capsule, clientConfig.courier);
+    scene.add(rider.root);
+    const riderColours = (): number[] => {
+      const out: number[] = [];
+      rider.root.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) out.push(((o as THREE.Mesh).material as THREE.MeshLambertMaterial).color.getHex());
+      });
+      return out;
+    };
+    const before = riderColours();
+    const views = new VehicleViews(scene);
+    views.update(garage, 1);
+    views.applyLook(look({ finish: 'gold' }));
+    for (const t of RIDE_TIERS) {
+      const mats = meshOf(views.root(t)).material as THREE.MeshStandardMaterial[];
+      expect(mats[1]!.color.getHex(), t).toBe(0xd4a017);
+    }
+    expect(riderColours()).toEqual(before);
+  });
+
+  it("the pack car's paint material is tinted on a copy; the city's cars keep the shared one", async () => {
+    const car: CatalogEntry = {
+      id: CAR_MODEL_ID, file: 'megatropolis vehicles/Car_01.glb', category: 'vehicle', size: { w: 1.97, h: 1.38, d: 3.28 },
+      pivot: { x: 0, z: 0, minY: 0 }, use: 'placed',
+    };
+    const gltf = {
+      loadAsync: async () => ({ scene: new THREE.Mesh(new THREE.BoxGeometry(1.97, 1.38, 3.28).translate(0, 0.69, 0), new THREE.MeshStandardMaterial({ name: 'flat' })) }),
+    } as unknown as GLTFLoader;
+    const loader = new ModelLoader('packs/', gltf);
+    const physics = createPhysicsWorld(await initRapier(), map);
+    const garage = new Garage(physics, map, defaultGarage(map));
+    const scene = new THREE.Scene();
+    const views = new VehicleViews(scene, { loader, car });
+    // Painted before the model arrives: the swap paints it too.
+    views.applyLook(look({ color: 0x2f6fb5 }));
+    views.update(garage, 1);
+    await new Promise((r) => setTimeout(r, 0));
+    views.update(garage, 1);
+    const model = scene.getObjectByName('vehicle-car-model')!;
+    const mesh = meshOf(model);
+    const shared = (loader.get(CAR_MODEL_ID) as unknown as { material: THREE.MeshLambertMaterial }).material;
+    expect(mesh.material).not.toBe(shared);
+    expect((mesh.material as THREE.MeshLambertMaterial).color.getHex()).toBe(0x2f6fb5);
+    expect(shared.color.getHex()).toBe(0xffffff);
+    views.applyLook(look({ finish: 'neon' }));
+    const neon = mesh.material as THREE.MeshStandardMaterial;
+    expect([neon.color.getHex(), neon.emissive.getHex()]).toEqual([0x39ff14, 0x39ff14]);
+    views.applyLook(look({ color: null }));
+    expect(mesh.material).toBe(shared);
+    model.updateMatrixWorld(true);
+    expect(new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).z).toBeCloseTo(4.4, 5);
+  });
+});

@@ -48,7 +48,9 @@ import { CAR_MODEL_ID } from '../render/vehicles/vehicleMeshes';
 import { Renderer } from '../render/Renderer';
 import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { MockChain } from '../economy/MockChain';
-import { Purchases, type Wardrobe } from '../economy/Purchases';
+import { Purchases } from '../economy/Purchases';
+import { equipItem, type Wardrobe } from '../economy/wardrobe';
+import { lookOf } from '../render/cosmetics';
 import { capacityLabel, mountDevPanel, type DevPanel } from '../ui/devPanel';
 import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
@@ -238,6 +240,7 @@ export class Game {
       chain: this.chain,
       purchases: () => this.purchases,
       wardrobe: () => this.wardrobe,
+      equip: (id) => this.equip(id),
       player: () => this.sim.state,
       rider: () => ({
         riding: this.sim.state.riding,
@@ -335,11 +338,31 @@ export class Game {
       },
     });
     this.devPanel.setOverrideCount(countOverrides(settings));
+    // The look follows the wardrobe and the chain's skins (a skin the chain no longer owns falls back to the free item).
+    this.applyLook();
+    chain.subscribe(() => this.applyLook());
     this.actions.onUiKey = (name) => {
       if (name === 'debugOverlay') this.overlay.toggle();
       else if (name === 'mapDebug') this.setMapDebug(!(this.mapDebug?.visible ?? false));
       else this.toggleDevPanel();
     };
+  }
+
+  /** The Wardrobe's Equip: wears an owned item (or a skin the chain owns), saved, and redraws the look. */
+  private equip(itemId: string): void {
+    const w = equipItem(this.wardrobe, itemId, this.chain.ownership().skins);
+    if (!w) return;
+    this.wardrobe = w;
+    this.delivery.save();
+    this.applyLook();
+  }
+
+  /** Dresses the courier, paints the rides and colours the phone from the wardrobe (Decision 4). */
+  private applyLook(): void {
+    const look = lookOf(this.wardrobe, this.chain.ownership().skins);
+    this.courier.applyLook(look);
+    this.vehicles.applyLook(look);
+    this.delivery.applyLook(look);
   }
 
   /**

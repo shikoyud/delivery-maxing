@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { lerpVec3, RIDE_TIERS, ridingConfig, type CatalogEntry, type Garage, type RideTier, type Vec3, type VehicleSpot } from '@dm/shared';
 import { lerpAngle } from '../../game/interpolation';
 import type { ModelLoader } from '../city/modelLoader';
-import { buildVehicleMesh, carModel } from './vehicleMeshes';
+import type { Look, Paint } from '../cosmetics';
+import { buildVehicleMesh, carModel, paintPackCar, paintVehicle } from './vehicleMeshes';
 
 /** Where the pack car comes from: the model loader and the car's catalog entry. */
 export interface VehicleModels {
@@ -26,7 +27,7 @@ const UP = new THREE.Vector3(0, 1, 0);
  * courier, so the ridden vehicle and its rider move together; it yaws to the heading and pitches to the ground normal.
  * A summon, tow, mount or dismount moves a vehicle in one go: snap() (and any spot change) draws it at its new place
  * without sweeping across the map. With `models`, the car's placeholder is swapped for the pack car once it has
- * loaded (and stays when it is missing).
+ * loaded (and stays when it is missing). applyLook paints them all with the vehicle paint (Decision 4).
  */
 export class VehicleViews {
   private readonly views: Record<RideTier, View>;
@@ -36,6 +37,7 @@ export class VehicleViews {
   private readonly normal = new THREE.Vector3();
 
   private carPending: VehicleModels | null;
+  private paint: Paint = { color: null };
 
   constructor(scene: THREE.Scene, models?: VehicleModels) {
     const views = {} as Record<RideTier, View>;
@@ -53,6 +55,16 @@ export class VehicleViews {
   /** The vehicle's mesh (tests, screenshots). */
   root(t: RideTier): THREE.Group {
     return this.views[t].root;
+  }
+
+  /** Paints every ride (the pack car too, now or once it loads) with `look.vehicle`; the rider is not touched. */
+  applyLook(look: Look): void {
+    this.paint = look.vehicle;
+    for (const t of RIDE_TIERS) {
+      const root = this.views[t].root;
+      paintVehicle(root, this.paint);
+      paintPackCar(root, this.paint);
+    }
   }
 
   /** Call before each simulation tick: records where every vehicle starts it. */
@@ -101,6 +113,7 @@ export class VehicleViews {
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh) mesh.geometry.dispose();
     }
+    paintPackCar(model, this.paint);
     root.add(model);
   }
 

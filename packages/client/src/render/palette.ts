@@ -25,6 +25,8 @@ export const palette = {
   safeZone: 0x5fc9a8,
   /** Cardboard parcels on the courier's back. */
   parcel: 0xd8b98a,
+  /** The phone's frame (the free Slate case). */
+  phoneCase: 0x10262d,
   /** Vehicle placeholders: tyres, metal trim (hubs, bars, forks), seats, glass, lights. */
   tyre: 0x33393d,
   trim: 0xb8c2c7,

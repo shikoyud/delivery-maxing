@@ -18,7 +18,8 @@ import {
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { MockChain } from '../src/economy/MockChain';
-import { Purchases, defaultWardrobe, type Wardrobe } from '../src/economy/Purchases';
+import { Purchases } from '../src/economy/Purchases';
+import { defaultWardrobe, type Wardrobe } from '../src/economy/wardrobe';
 
 const map = expandGreybox(greybox as GreyboxSource);
 const CONFIRM_MS = economyConfig.mockChain.confirmSeconds * 1000;

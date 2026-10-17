@@ -1,17 +1,14 @@
 import {
-  COSMETIC_SLOTS,
   RIDE_TIERS,
   economyConfig,
   fuelCanCoins,
   nearestHospital,
   quote as quoteGame,
-  shopCatalog,
   shopItem,
   tierOfVehicle,
   vehicleOfTier,
   type ChainSource,
   type ChainTx,
-  type CosmeticSlot,
   type Garage,
   type Line,
   type MapData,
@@ -24,25 +21,7 @@ import {
 } from '@dm/shared';
 import type { PopupTone } from '../ui/popups';
 import { gameText, usdText } from '../ui/hudModel';
-
-/** The Coin cosmetics the player owns and what each slot wears (saved in Progress.cosmetics). */
-export interface Wardrobe {
-  owned: ShopItemId[];
-  /** A Coin cosmetic of that slot, or a premium skin (`skin.<slot>.<finish>`, owned on the chain). */
-  equipped: Record<CosmeticSlot, ShopItemId>;
-}
-
-/** Each slot's first (free) cosmetic, owned and worn. */
-export function defaultWardrobe(): Wardrobe {
-  const catalog = shopCatalog();
-  const first = (slot: CosmeticSlot): ShopItemId => {
-    const item = catalog.find((i) => i.kind === 'cosmetic' && i.slot === slot);
-    if (!item) throw new Error(`no cosmetic for ${slot}`);
-    return item.id;
-  };
-  const equipped = Object.fromEntries(COSMETIC_SLOTS.map((s) => [s, first(s)])) as Record<CosmeticSlot, ShopItemId>;
-  return { owned: COSMETIC_SLOTS.map((s) => equipped[s]), equipped };
-}
+import type { Wardrobe } from './wardrobe';
 
 export type QuoteView =
   | { kind: 'game'; usd: string; game: number; maxGame: number; text: string }

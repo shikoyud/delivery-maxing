@@ -3,7 +3,8 @@ import { GAME_UNITS, economyConfig, expandGreybox, ridingConfig, type Garage, ty
 import greybox from '../../../map/greybox.json';
 import { MockChain } from '../src/economy/MockChain';
 import { emptyWallet, gameText } from '../src/ui/hudModel';
-import { Purchases, defaultWardrobe } from '../src/economy/Purchases';
+import { Purchases } from '../src/economy/Purchases';
+import { defaultWardrobe } from '../src/economy/wardrobe';
 import { createShopApp, shopRows, type ShopRow } from '../src/ui/phone/shopApp';
 import { installFakeDom, type FakeElement } from './fakeDom';
 import { model } from './phoneFixtures';

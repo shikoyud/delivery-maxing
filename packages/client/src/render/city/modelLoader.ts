@@ -35,20 +35,27 @@ const TEX = MATERIAL_TEX_PREFIX;
 const FOLDED = MATERIAL_FOLDED_SUFFIX;
 
 /**
- * The texture material for folded models: vertex colours are RGBA, and A = 1 marks an untextured vertex (glass,
- * lights), which takes its colour alone instead of colour × texel. One draw call per model instead of one per material.
+ * Makes `m` (Lambert or standard, with a map and vertex colours) draw a folded model: vertex colours are RGBA, and
+ * A = 1 marks an untextured vertex (glass, lights), which takes its colour alone instead of colour × texel. The
+ * material's own colour tints only the textured parts (the pack car's paint, Decision 4). One draw call per model
+ * instead of one per material.
  */
-function foldedMaterial(map: THREE.Texture): THREE.MeshLambertMaterial {
-  const m = new THREE.MeshLambertMaterial({ map, vertexColors: true });
+export function foldFlatShader(m: THREE.Material): void {
   m.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <map_fragment>',
       `#ifdef USE_MAP
-  diffuseColor *= mix( texture2D( map, vMapUv ), vec4( 1.0 ), vColor.a );
+  diffuseColor = mix( diffuseColor * texture2D( map, vMapUv ), vec4( 1.0, 1.0, 1.0, diffuseColor.a ), vColor.a );
 #endif`,
     );
   };
   m.customProgramCacheKey = () => 'dm-folded-flat';
+}
+
+/** The texture material for folded models (foldFlatShader). */
+function foldedMaterial(map: THREE.Texture): THREE.MeshLambertMaterial {
+  const m = new THREE.MeshLambertMaterial({ map, vertexColors: true });
+  foldFlatShader(m);
   return m;
 }
 

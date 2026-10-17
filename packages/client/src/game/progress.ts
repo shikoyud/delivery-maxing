@@ -1,14 +1,12 @@
 import {
-  COSMETIC_SLOTS,
   RIDE_TIERS,
-  shopCatalog,
   tierOfVehicle,
   type RideTier,
   type SavedVehicle,
   type Totals,
   type VehicleSpot,
 } from '@dm/shared';
-import { defaultWardrobe, type Wardrobe } from '../economy/Purchases';
+import { defaultWardrobe, parseWardrobe, type Wardrobe } from '../economy/wardrobe';
 
 /**
  * What persists between visits: lifetime totals, the vehicles (where each is parked, its fuel), the tier last ridden
@@ -84,29 +82,6 @@ function parseGarage(v: unknown, defaults: SavedVehicle[]): SavedVehicle[] {
     }
   }
   return RIDE_TIERS.flatMap((t) => out.filter((o) => o.tier === t));
-}
-
-/**
- * The saved wardrobe. Not a record with an `owned` list and an `equipped` record: the default. Otherwise unknown items
- * are dropped, the free first item of each slot is always owned, and a slot wearing something it may not (not a
- * cosmetic or premium skin of that slot, or a cosmetic not owned) wears its default.
- */
-function parseWardrobe(v: unknown): Wardrobe {
-  const fallback = defaultWardrobe();
-  if (!isRecord(v) || !Array.isArray(v.owned) || !isRecord(v.equipped)) return fallback;
-  const items = new Map(shopCatalog().map((i) => [i.id, i]));
-  const owned = [...fallback.owned];
-  for (const id of v.owned) {
-    if (typeof id === 'string' && items.get(id)?.kind === 'cosmetic' && !owned.includes(id)) owned.push(id);
-  }
-  const equipped = { ...fallback.equipped };
-  for (const slot of COSMETIC_SLOTS) {
-    const id = v.equipped[slot];
-    const item = typeof id === 'string' ? items.get(id) : undefined;
-    if (!item || !('slot' in item) || item.slot !== slot) continue;
-    if ((item.kind === 'cosmetic' && owned.includes(item.id)) || item.kind === 'skin') equipped[slot] = item.id;
-  }
-  return { owned, equipped };
 }
 
 function parseJson(raw: string | null): Record<string, unknown> | null {

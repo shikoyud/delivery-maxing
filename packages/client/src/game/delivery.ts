@@ -61,8 +61,11 @@ import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui
 import { Popups, type PopupSink, type PopupTone } from '../ui/popups';
 import { SlotColorAssigner } from '../ui/slotColors';
 import type { ProgressStore } from './progress';
-import { defaultWardrobe, type Purchases, type Wardrobe } from '../economy/Purchases';
+import type { Purchases } from '../economy/Purchases';
+import { defaultWardrobe, type Wardrobe } from '../economy/wardrobe';
 import { shopRows, type ShopRow } from '../ui/phone/shopApp';
+import { wardrobeRows } from '../ui/phone/wardrobeApp';
+import type { Look } from '../render/cosmetics';
 import { RouteCache } from './routes';
 
 export interface DeliveryDeps {
@@ -99,6 +102,8 @@ export interface DeliveryDeps {
   purchases?(): Pick<Purchases, 'update' | 'quote' | 'pending' | 'fuelTarget' | 'buy' | 'buyWithCoins'> | null;
   /** The Coin cosmetics to save (Game: the wardrobe); absent: the stored ones are kept. */
   wardrobe?(): Wardrobe;
+  /** The Wardrobe's Equip (Game: wears the item, saves and redraws the look). */
+  equip?(itemId: string): void;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
   /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
@@ -256,6 +261,10 @@ export class DeliveryLoop {
       claim: () => void this.claim(),
       lockGame: (game) => this.lockGame(game),
       withdrawLock: () => this.withdrawLock(),
+      wardrobeEquip: (id) => {
+        this.d.equip?.(id);
+        this.nextHudAt = 0;
+      },
       summon: (t) => void this.summon(t),
       switchRide: (t) => void this.switchTo(t),
       respawn: () => this.respawn(),
@@ -641,6 +650,11 @@ export class DeliveryLoop {
     this.nextHudAt = 0;
   }
 
+  /** The phone case colour on the phone (Decision 4). */
+  applyLook(look: Look): void {
+    this.phone.applyLook?.(look);
+  }
+
   /** Dev panel and debug API: sets the Coins held, saved. */
   setCoins(n: number): void {
     this.sys.totals = { ...this.sys.totals, coins: Math.max(0, n) };
@@ -742,9 +756,10 @@ export class DeliveryLoop {
       route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
       prompt: this.prompt(),
-      // The Wallet's lists, the Shop and the Orders app's Skip read the rows: built only while the phone shows them.
+      // The Wallet's lists, the Shop, the Wardrobe and the Orders app's Skip read the rows: built only while the phone shows them.
       wallet: walletModel(this.d.chain, this.wallMs(), this.phone.isOpen),
       shop: this.phone.isOpen ? this.shopRows(now) : [],
+      wardrobe: this.phone.isOpen ? wardrobeRows(this.d.wardrobe?.() ?? defaultWardrobe(), this.d.chain.ownership().skins) : [],
     });
   }
 

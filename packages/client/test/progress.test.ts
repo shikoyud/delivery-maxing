@@ -2,7 +2,7 @@ import { describe, expect, it, test } from 'vitest';
 import { RIDE_TIERS, defaultGarage, expandGreybox, type GreyboxSource, type SavedVehicle } from '@dm/shared';
 import greyboxJson from '../../../map/greybox.json';
 import { PROGRESS_KEY_V2, PROGRESS_KEY_V3, createProgressStore, ownedGarage, progressKey, saveWhenLeaving } from '../src/game/progress';
-import { defaultWardrobe, type Wardrobe } from '../src/economy/Purchases';
+import { defaultWardrobe, type Wardrobe } from '../src/economy/wardrobe';
 
 const map = expandGreybox(greyboxJson as GreyboxSource);
 const garage = (): SavedVehicle[] => defaultGarage(map);

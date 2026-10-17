@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { vehiclesConfig, type PlayerState, type Vec3 } from '@dm/shared';
 import type { CourierConfig, CourierPoseName } from '../../clientConfig';
+import { paintMaterial, surfaceOf, type Look, type Surface } from '../cosmetics';
 import { palette } from '../palette';
 import { riderLift } from '../vehicles/vehicleMeshes';
 import { animFor, displayYaw, easeYaw, type CourierAnim, type CourierClip } from './animState';
@@ -112,6 +113,8 @@ export class CourierModel implements CourierView {
   /** Torso bone → body frame at rest, inverted: carries the packages with the torso. */
   private readonly packagesRest = new THREE.Matrix4();
   private readonly materials = new Set<THREE.Material>();
+  /** The outfit: every `Main` material and its own surface (a colour after a finish brings it back). */
+  private readonly outfit: { m: THREE.MeshStandardMaterial | THREE.MeshLambertMaterial; surface: Surface }[] = [];
   private snapNext = true;
   private packageCount = 0;
 
@@ -143,7 +146,11 @@ export class CourierModel implements CourierView {
       const own = (m: THREE.Material): THREE.Material => {
         const c = m.clone();
         // Fictional courier colours: the file's orange body becomes the courier teal (no orange on black, spec §16).
-        if (c.name === 'Main' && 'color' in c) (c as THREE.MeshStandardMaterial).color.setHex(palette.teal);
+        if (c.name === 'Main' && 'color' in c) {
+          const m = c as THREE.MeshStandardMaterial;
+          m.color.setHex(palette.teal);
+          this.outfit.push({ m, surface: surfaceOf(m) });
+        }
         this.materials.add(c);
         return c;
       };
@@ -287,6 +294,12 @@ export class CourierModel implements CourierView {
       m.colorWrite = !hidden;
       m.depthWrite = !hidden;
     }
+  }
+
+  /** The outfit colour or finish on the `Main` material; the bag colour on the carried boxes. */
+  applyLook(look: Look): void {
+    for (const { m, surface } of this.outfit) paintMaterial(m, look.outfit, surface, palette.teal);
+    (this.packages.material as THREE.MeshLambertMaterial).color.setHex(look.bag);
   }
 
   setPackages(n: number): void {

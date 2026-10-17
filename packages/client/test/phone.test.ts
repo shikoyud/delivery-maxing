@@ -31,6 +31,7 @@ describe('Phone', () => {
         lockGame: (g) => void calls.push(`lock ${g}`),
         withdrawLock: () => void calls.push('withdraw'),
         switchRide: (t) => void calls.push(`switch ${t}`),
+        wardrobeEquip: (id) => void calls.push(`equip ${id}`),
       },
       ['Escape', 'Tab'],
     );
@@ -157,8 +158,8 @@ describe('Phone', () => {
   it('stub apps say when they arrive; settings lists the key bindings from config', () => {
     expect(STUB_APPS).not.toHaveProperty('garage');
     expect(STUB_APPS).not.toHaveProperty('shop');
+    expect(STUB_APPS).not.toHaveProperty('wardrobe');
     expect(STUB_APPS).toMatchObject({
-      wardrobe: { sp: 6 },
       leaderboard: { sp: 7 },
       settings: { sp: 3 },
     });
@@ -210,6 +211,24 @@ describe('Phone', () => {
     expect(calls).toEqual(['summon car']);
   });
 
+  it('the Wardrobe app renders the wardrobe rows and Equip reaches the callback', () => {
+    phone.open('wardrobe');
+    expect(view('wardrobe').textContent).not.toContain('Coming in');
+    phone.render(
+      model({
+        wardrobe: [
+          { itemId: 'cosmetic.outfit.teal', section: 'Outfits', label: 'Teal outfit', swatch: '#1f9e93', state: 'equipped' },
+          { itemId: 'cosmetic.outfit.coral', section: 'Outfits', label: 'Coral outfit', swatch: '#f27166', state: 'equip' },
+        ],
+      }),
+    );
+    const equip = view('wardrobe').findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'equip');
+    expect(equip.map((b) => b.textContent)).toEqual(['Equipped', 'Equip']);
+    equip[0]!.click();
+    equip[1]!.click();
+    expect(calls).toEqual(['equip cosmetic.outfit.coral']);
+  });
+
   it('Settings has "Respawn at nearest hospital", reaching the respawn callback', () => {
     phone.open('settings');
     const b = view('settings').findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === 'respawn')[0]!;
@@ -222,5 +241,23 @@ describe('Phone', () => {
     expect(PHONE_APPS).toEqual(['orders', 'garage', 'shop', 'wallet', 'wardrobe', 'leaderboard', 'settings']);
     expect(dom.host.byClass('phone-nav-btn').map((b) => b.dataset.app)).toEqual([...PHONE_APPS]);
     expect(dom.host.findAll((e) => e.dataset.app === 'map')).toHaveLength(0);
+  });
+});
+
+describe('Phone look', () => {
+  it('the phone frame takes the phone case colour', () => {
+    const dom = installFakeDom();
+    const noop = (): void => undefined;
+    const phone = new Phone(
+      dom.asHost,
+      { accept: noop, cancel: noop, skipLockout: noop, closed: noop, summon: noop, switchRide: noop, respawn: noop, shopBuy: noop, shopConfirm: noop, shopCancel: noop, claim: noop, lockGame: noop, withdrawLock: noop, wardrobeEquip: noop },
+      ['Escape'],
+    );
+    const device = dom.host.byClass('phone-device')[0]!;
+    phone.applyLook({ outfit: { color: 0 }, vehicle: { color: null }, bag: 0, phone: 0xe88aa6 });
+    expect(device.style.getPropertyValue('--phone-case')).toBe('#e88aa6');
+    phone.applyLook({ outfit: { color: 0 }, vehicle: { color: null }, bag: 0, phone: 0x10262d });
+    expect(device.style.getPropertyValue('--phone-case')).toBe('#10262d');
+    dom.restore();
   });
 });

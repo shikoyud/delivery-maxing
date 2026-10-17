@@ -1,4 +1,5 @@
 import type { RideTier, Vec3 } from '@dm/shared';
+import type { Look } from '../../render/cosmetics';
 import { el, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
 import { createGarageApp } from './garageApp';
@@ -6,6 +7,7 @@ import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
 import { createShopApp } from './shopApp';
 import { buildStubApp, type StubAppName } from './stubApp';
 import { createWalletApp, type WalletCallbacks } from './walletApp';
+import { createWardrobeApp } from './wardrobeApp';
 
 export type PhoneApp = 'orders' | 'garage' | 'shop' | 'wallet' | 'wardrobe' | 'leaderboard' | 'settings';
 
@@ -37,6 +39,8 @@ export interface PhoneCallbacks extends OrdersCallbacks, WalletCallbacks {
   shopConfirm(itemId: string, maxGame: number): void;
   /** Shop: the confirm sheet was cancelled. */
   shopCancel(): void;
+  /** Wardrobe: Equip on an owned item. */
+  wardrobeEquip(itemId: string): void;
 }
 
 /** What DeliveryLoop needs from the phone (tests pass a recorder). */
@@ -50,6 +54,8 @@ export interface PhoneView {
   render(model: HudModel, player: Vec3, heading: number): void;
   /** Brings the view's main tab to the front (the Shop: Token); called after the phone shows the app. */
   focus?(): void;
+  /** The phone case colour on the frame (Decision 4); absent on test recorders. */
+  applyLook?(look: Look): void;
 }
 
 /** An app view the phone hosts: its element and how it draws a model. */
@@ -67,6 +73,7 @@ export interface PhoneAppView {
  */
 export class Phone implements PhoneView {
   private readonly root: HTMLElement;
+  private readonly device: HTMLElement;
   private readonly title: HTMLElement;
   private readonly screen: HTMLElement;
   private readonly navButtons = new Map<PhoneApp, HTMLButtonElement>();
@@ -85,6 +92,7 @@ export class Phone implements PhoneView {
     this.root = el('div', 'phone', host);
     this.root.hidden = true;
     const device = el('div', 'phone-device', this.root);
+    this.device = device;
     device.setAttribute('role', 'dialog');
     device.setAttribute('aria-label', 'Phone');
     this.title = el('div', 'phone-title', device);
@@ -175,6 +183,11 @@ export class Phone implements PhoneView {
     this.views.get('shop')!.focus?.();
   }
 
+  /** The phone case colour on the frame (`--phone-case`). */
+  applyLook(look: Look): void {
+    this.device.style.setProperty('--phone-case', `#${look.phone.toString(16).padStart(6, '0')}`);
+  }
+
   private buildApp(app: PhoneApp): PhoneAppView {
     const root = el('section', 'phone-app', this.screen);
     root.dataset.app = app;
@@ -197,6 +210,11 @@ export class Phone implements PhoneView {
         const view = createShopApp({ buy: (id) => cb.shopBuy(id), confirm: (id, max) => cb.shopConfirm(id, max), cancel: () => cb.shopCancel() });
         root.appendChild(view.el);
         return { el: root, render: (m, p, h) => view.render(m, p, h), focus: () => view.focus?.() };
+      }
+      case 'wardrobe': {
+        const view = createWardrobeApp({ equip: (id) => this.callbacks.wardrobeEquip(id) });
+        root.appendChild(view.el);
+        return { el: root, render: (m, p, h) => view.render(m, p, h) };
       }
       case 'settings':
         buildStubApp(root, app, () => this.callbacks.respawn());
