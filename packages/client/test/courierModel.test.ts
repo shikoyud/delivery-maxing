@@ -202,7 +202,7 @@ describe('CourierModel', () => {
     expect(m.packages.visible).toBe(true);
     expect(m.packages.count).toBe(3);
     m.setPackages(99);
-    expect(m.packages.count).toBe(vehiclesConfig.car.slots);
+    expect(m.packages.count).toBe(vehiclesConfig.car.slotCap);
     // Behind the courier (+Z at heading 0), around its back.
     m.root.updateMatrixWorld(true);
     const p = new THREE.Box3().setFromObject(m.packages);

@@ -15,6 +15,7 @@ import {
   ordersConfig,
   ridingConfig,
   streetDistance,
+  vehicleCapacity,
   vehiclesConfig,
   type GreyboxSource,
   type Offer,
@@ -408,7 +409,7 @@ describe('DeliveryLoop', () => {
   it('starts from the saved totals and the last ridden tier', () => {
     const s = setup('bicycle', { totals: { points: 5, coins: 50, deliveries: 3 }, garage: [], lastRide: null });
     expect(s.loop.orders.totals).toEqual({ points: 5, coins: 50, deliveries: 3 });
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('bicycle'));
   });
 
   it('resetProgress zeroes the totals, drops the orders and saves; capacity still follows the ride', () => {
@@ -417,7 +418,7 @@ describe('DeliveryLoop', () => {
     s.loop.accept(offer.order.id);
     s.loop.resetProgress();
     expect(s.loop.orders.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.car);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('car'));
     expect(s.loop.orders.active).toHaveLength(0);
     expect(s.stored().totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
   });
@@ -429,23 +430,23 @@ describe('DeliveryLoop', () => {
     expect(s.huds).toHaveLength(1);
     s.loop.draw(1 / clientConfig.ui.hudUpdateHz + 0.001);
     expect(s.huds).toHaveLength(2);
-    expect(s.huds[0]!.load.slots).toBe(vehiclesConfig.car.slots);
+    expect(s.huds[0]!.load.slots).toBe(vehiclesConfig.car.slotCap);
   });
 
-  it('Review Focus 4: two food orders, last ride bicycle, F next to the skateboard is swallowed with the reason and both orders stay', () => {
+  it('Review Focus 4: three food orders, last ride bicycle, F next to the skateboard is swallowed with the reason and all three stay', () => {
     const s = setup('bicycle');
-    for (let n = 0; n < 2; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
+    for (let n = 0; n < 3; n++) s.loop.accept(s.waitForOffer((o) => o.order.kind === 'food').order.id);
     const ids = s.loop.orders.active.map((a) => a.order.id);
-    expect(ids).toHaveLength(2);
+    expect(ids).toHaveLength(3);
     s.rider.candidate = 'skateboard';
     const before = s.popups.length;
     s.tick(false, false, false, { mount: true });
     expect(s.simFrames.at(-1)!.mount).toEqual({ held: false, pressed: false });
     expect(s.popups.length).toBe(before + 1);
-    expect(s.popups.at(-1)).toEqual({ text: "Can't ride the skateboard", lines: ["Your orders don't fit: 1 slot and no packages"], tone: 'warn' });
+    expect(s.popups.at(-1)).toEqual({ text: "Can't ride the skateboard", lines: ["Your orders don't fit: 2 slots and 10 kg"], tone: 'warn' });
     expect(s.loop.orders.active.map((a) => a.order.id)).toEqual(ids);
     expect(s.loop.capacityTier).toBe('bicycle');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('bicycle'));
     // A ride that holds them (a car next to the courier) passes F to the sim.
     s.rider.candidate = 'car';
     s.tick(false, false, false, { mount: true });
@@ -500,20 +501,20 @@ describe('DeliveryLoop', () => {
     const s = setup(null);
     s.tick();
     expect(s.loop.capacityTier).toBe('walk');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.walk);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('walk'));
     s.rider.riding = 'motorbike';
     s.rider.lastRide = 'motorbike';
     s.tick();
     expect(s.loop.capacityTier).toBe('motorbike');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.motorbike);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('motorbike'));
     s.rider.riding = null;
     s.tick();
     expect(s.loop.capacityTier).toBe('motorbike');
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.motorbike);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('motorbike'));
     s.rider.riding = 'bicycle';
     s.rider.lastRide = 'bicycle';
     s.tick();
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.bicycle);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('bicycle'));
   });
 
   it('Review Focus 5: after a tow, carried orders are kept and the Fragile break popup shows once', () => {
@@ -534,7 +535,7 @@ describe('DeliveryLoop', () => {
     expect(s.popups.filter((p) => p.text.includes('Fragile'))).toHaveLength(1);
     expect(s.loop.orders.active.map((a) => a.order.id)).toEqual([offer.order.id]);
     expect(s.loop.carriedCount()).toBe(1);
-    expect(s.loop.orders.capacity).toEqual(vehiclesConfig.car);
+    expect(s.loop.orders.capacity).toEqual(vehicleCapacity('car'));
   });
 
   it('an offer whose door has no walk path is never generated', () => {

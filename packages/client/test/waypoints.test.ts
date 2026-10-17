@@ -25,7 +25,7 @@ describe('buildWaypoints', () => {
   });
 
   it('has a beam and a distinct colour for every slot of the largest carrier', () => {
-    expect(MAX_WAYPOINTS).toBe(vehiclesConfig.car.slots);
+    expect(MAX_WAYPOINTS).toBe(vehiclesConfig.car.slotCap);
     expect(slotColors.length).toBeGreaterThanOrEqual(MAX_WAYPOINTS);
     expect(buildWaypoints(MAX_WAYPOINTS, 1).mesh.instanceMatrix.count).toBe(MAX_WAYPOINTS);
   });

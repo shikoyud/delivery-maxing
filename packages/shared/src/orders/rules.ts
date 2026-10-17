@@ -39,3 +39,12 @@ export function scoreOrder(
   }
   return { points, coins, bonuses };
 }
+
+/**
+ * The most points `order` can earn (the payout roll's quality denominator, spec §3.6): the band value times the
+ * weight multiplier (rounded, as scoreOrder), plus the hot (food) or par (package) bonus, plus Express and Fragile
+ * when the package has them.
+ */
+export function maxPointsFor(order: Order, cfg: OrdersConfig): number {
+  return scoreOrder(order, { inTime: true, expressOnTime: true, intact: true }, cfg).points;
+}

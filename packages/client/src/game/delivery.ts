@@ -9,7 +9,7 @@ import {
   playerZones,
   pumpAt,
   ridingConfig,
-  vehiclesConfig,
+  vehicleCapacity,
   type AcceptResult,
   type AccessKind,
   type ButtonState,
@@ -254,7 +254,7 @@ export class DeliveryLoop {
         rules: this.d.map.orderRules,
         cfg: ordersConfig,
         rng: this.rng,
-        capacity: vehiclesConfig[this.capacityTier],
+        capacity: vehicleCapacity(this.capacityTier),
         totals,
       },
       this.d.now(),
@@ -405,7 +405,7 @@ export class DeliveryLoop {
     if (r.riding !== null) return true;
     const tier = r.mountCandidate();
     if (tier === null) return true;
-    const cap = vehiclesConfig[tier];
+    const cap = vehicleCapacity(tier);
     if (this.sys.canSwitchCapacity(cap)) return true;
     const kg = cap.maxPackageKg > 0 ? ` and ${cap.maxPackageKg} kg` : ' and no packages';
     this.popups.show(`Can't ride the ${TIER_LABEL[tier]}`, [`Your orders don't fit: ${cap.slots} slot${cap.slots === 1 ? '' : 's'}${kg}`], 'warn');
@@ -424,7 +424,7 @@ export class DeliveryLoop {
       const text = simEventHint(e, ridden, this.d.map);
       if (text) this.hint(text, now);
     }
-    this.sys.setCapacity(vehiclesConfig[this.capacityTier]);
+    this.sys.setCapacity(vehicleCapacity(this.capacityTier));
     const events = this.sys.onSimEvents(simEvents);
     const before = [...this.sys.active];
     this.zones = playerZones(position, this.d.map, ordersConfig.zones);

@@ -1,3 +1,4 @@
+import type { CosmeticSlot, Finish } from '../economy/types';
 import type { Vec3 } from '../math/vec3';
 import type { CityDistrict, OrderRules } from '../world/mapTypes';
 
@@ -36,7 +37,8 @@ export interface MovementConfig {
 }
 
 export type VehicleTier = 'walk' | 'skateboard' | 'bicycle' | 'motorbike' | 'car';
-export interface VehicleSpec { slots: number; maxPackageKg: number; topSpeed: number }
+/** `slotCap` and `kgCap` cap the Bag's capacity (spec §3.3 rev. 3; the player's capacity is the smaller of the two). */
+export interface VehicleSpec { slotCap: number; kgCap: number; topSpeed: number }
 export type VehiclesConfig = Record<VehicleTier, VehicleSpec>;
 
 export type RideTier = 'skateboard' | 'bicycle' | 'motorbike' | 'car';
@@ -427,3 +429,37 @@ export interface ItemsConfig {
   /** Per catalog phrase: up to `max` of each thing, each thing as [singular, plural] */
   phrases: Record<string, { max: number; things: string[][] }>;
 }
+
+/** A [min, max] range in micro-USD. */
+type MicroRange = [number, number];
+
+/**
+ * config/economy.json once loaded: every USD value (decimals in the JSON, `usd`/`…Usd` keys) becomes a micro-USD
+ * integer (`usdMicro`/`…UsdMicro`). Line price arrays are tiers 1..n; capacity and Dispatcher tables are tiers 0..n.
+ */
+export interface EconomyConfig {
+  lines: {
+    vehicle: { usdMicro: number[] };
+    bag: { usdMicro: number[]; slots: number[]; kg: number[] };
+    shoes: { usdMicro: number[]; sprintPerTier: number };
+    dispatcher: { usdMicro: number[]; maxShown: number[]; intervalScale: number[]; longWeightPerTier: number; modifierWeightPerTier: number };
+  };
+  skinUsdMicro: number;
+  lockoutSkipUsdMicro: number;
+  /** Share of a line purchase's GAME sent to the reward vault; the rest is burned. Skins and the skip burn all. */
+  split: { linePool: number };
+  /** The rate must be younger than maxAgeSeconds; one update may move it at most maxMove (a fraction). */
+  rate: { maxAgeSeconds: number; maxMove: number };
+  /** The buyer's maxGame is the quote × (1 + slippage). */
+  slippage: number;
+  payout: { ranges: Record<VehicleTier, MicroRange>; qualityWeight: number; luckWeight: number };
+  lock: { days: number; maxBoost: number; fullBoostUsdMicro: number };
+  /** A fuel can adds `tank` of a tank for `markup` × the pump price of that much fuel. */
+  fuelCan: { tank: number; markup: number };
+  mockChain: { wallet: string; startGame: number; vaultUsdMicro: number; usdPerGame: number; confirmSeconds: number };
+}
+
+/** One Coin cosmetic. `color` null keeps each model's own colours (the free factory paint). */
+export interface CosmeticSpec { name: string; color: number | null; coins: number }
+/** config/cosmetics.json once loaded (`"#rrggbb"` colours become numbers). The first entry of each slot is free and owned. */
+export type CosmeticsConfig = Record<CosmeticSlot, CosmeticSpec[]> & { premiumFinishes: Finish[]; premiumSlots: CosmeticSlot[] };

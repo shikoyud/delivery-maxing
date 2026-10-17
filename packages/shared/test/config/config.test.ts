@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cityConfig, movementConfig, namesConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig, worldConfig } from '../../src/config';
+import { cityConfig, cosmeticsConfig, economyConfig, movementConfig, namesConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig, worldConfig } from '../../src/config';
 
 describe('config pins spec values', () => {
   it('two-wheelers back up at walking pace, the skateboard does not (Decision 3)', () => {
@@ -34,9 +34,41 @@ describe('config pins spec values', () => {
   it('world', () => {
     expect(worldConfig).toEqual({ chunkSize: 100, physics: { loadRadius: 150, unloadRadius: 220 } });
   });
-  it('vehicles', () => {
-    expect(vehiclesConfig.car.maxPackageKg).toBe(150);
-    expect(vehiclesConfig.walk.slots).toBe(1);
+  it('vehicle caps: slots 2/2/3/4/6 and kg 10/10/25/50/150 (spec §3.3 rev. 3)', () => {
+    const tiers = ['walk', 'skateboard', 'bicycle', 'motorbike', 'car'] as const;
+    expect(tiers.map((t) => vehiclesConfig[t].slotCap)).toEqual([2, 2, 3, 4, 6]);
+    expect(tiers.map((t) => vehiclesConfig[t].kgCap)).toEqual([10, 10, 25, 50, 150]);
+    expect('slots' in vehiclesConfig.car).toBe(false);
+    expect('maxPackageKg' in vehiclesConfig.car).toBe(false);
+  });
+  it('economy: spec §3.3, §3.6, §6 values, USD loaded as micro-USD integers', () => {
+    const e = economyConfig;
+    expect(e.lines.vehicle.usdMicro).toEqual([2, 5, 12, 25].map((d) => d * 1e6));
+    expect(e.lines.bag.usdMicro).toEqual([1, 2, 4, 8, 15].map((d) => d * 1e6));
+    expect(e.lines.bag.slots).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(e.lines.bag.kg).toEqual([0, 10, 25, 50, 100, 150]);
+    expect(e.lines.shoes).toEqual({ usdMicro: [1, 2, 3, 4, 5].map((d) => d * 1e6), sprintPerTier: 0.035 });
+    expect(e.lines.dispatcher).toMatchObject({ usdMicro: [1, 3, 6, 10, 15].map((d) => d * 1e6), maxShown: [3, 3, 4, 4, 5, 5], longWeightPerTier: 0.3, modifierWeightPerTier: 0.2 });
+    expect(e.lines.dispatcher.intervalScale).toEqual([1, 0.9, 0.8, 0.7, 0.6, 0.5]);
+    expect(e.skinUsdMicro).toBe(3_000_000);
+    expect(e.lockoutSkipUsdMicro).toBe(500_000);
+    expect(e.split.linePool).toBe(0.2);
+    expect(e.rate).toEqual({ maxAgeSeconds: 900, maxMove: 0.2 });
+    expect(e.slippage).toBe(0.02);
+    expect(e.payout.ranges.motorbike).toEqual([30_000, 300_000]);
+    expect(e.payout.ranges.walk).toEqual([5_000, 30_000]);
+    expect([e.payout.qualityWeight, e.payout.luckWeight]).toEqual([0.6, 0.4]);
+    expect(e.lock).toEqual({ days: 7, maxBoost: 0.3, fullBoostUsdMicro: 100_000_000 });
+    expect(e.fuelCan).toEqual({ tank: 0.25, markup: 1.5 });
+    expect(e.mockChain).toEqual({ wallet: 'DEV-WALLET', startGame: 600_000, vaultUsdMicro: 50_000_000, usdPerGame: 0.00024, confirmSeconds: 2 });
+    for (const m of [...e.lines.vehicle.usdMicro, e.skinUsdMicro, ...e.payout.ranges.car]) expect(Number.isInteger(m)).toBe(true);
+  });
+  it('cosmetics: six per slot, colours parsed, Gold, Chrome and Neon for the outfit and the paint', () => {
+    for (const slot of ['outfit', 'vehicle', 'bag', 'phone'] as const) expect(cosmeticsConfig[slot]).toHaveLength(6);
+    expect(cosmeticsConfig.premiumFinishes).toEqual(['gold', 'chrome', 'neon']);
+    expect(cosmeticsConfig.premiumSlots).toEqual(['outfit', 'vehicle']);
+    expect(cosmeticsConfig.vehicle[0]!.color).toBeNull(); // factory paint: each ride keeps its own colours
+    expect(typeof cosmeticsConfig.bag[1]!.color).toBe('number');
   });
   it('riding config: four rides, fuel only on motorbike and car (spec §4.2, §4.4)', () => {
     expect(RIDE_TIERS).toEqual(['skateboard', 'bicycle', 'motorbike', 'car']);

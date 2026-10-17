@@ -415,7 +415,7 @@ export class CourierModel implements CourierView {
   /** Boxes in `columns` up the back, placed in the body frame at rest and then carried by the torso bone. */
   private buildPackages(): THREE.InstancedMesh {
     const { size, gap, columns } = this.cfg.packages;
-    const max = vehiclesConfig.car.slots;
+    const max = vehiclesConfig.car.slotCap;
     const mesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(size, size, size),
       new THREE.MeshLambertMaterial({ color: palette.parcel }),

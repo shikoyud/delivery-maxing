@@ -7,7 +7,7 @@ import {
   playerZones,
   scoreOrder,
   streetDistance,
-  vehiclesConfig,
+  vehicleCapacity,
   type GreyboxSource,
   type Offer,
   type RouteToDoor,
@@ -25,7 +25,7 @@ const nowhere = { poiIds: new Set<string>(), safeZone: null };
 
 function makeSystem(tier: VehicleTier = 'car', seed = 7): OrderSystem {
   return new OrderSystem(
-    { pois: map.pois, distance: streetDistance, rules: map.orderRules, cfg: ordersConfig, rng: mulberry32(seed), capacity: vehiclesConfig[tier] },
+    { pois: map.pois, distance: streetDistance, rules: map.orderRules, cfg: ordersConfig, rng: mulberry32(seed), capacity: vehicleCapacity(tier) },
     0,
   );
 }
@@ -73,7 +73,7 @@ describe('hudModel', () => {
     const m = hudModel(sys, map, spawn, 0, 'Downtown General');
     expect(m.totals).toEqual({ points: 0, coins: 0, deliveries: 0 });
     expect(m.totals).not.toBe(sys.totals);
-    expect(m.load).toEqual({ usedSlots: 0, slots: 3, carriedKg: 0, maxPackageKg: 50 });
+    expect(m.load).toEqual({ usedSlots: 0, slots: 4, carriedKg: 0, maxPackageKg: 50 });
     expect(m.lockoutLeft).toBe(0);
     expect(m.orders).toEqual([]);
     expect(m.offers).toEqual([]);
@@ -104,7 +104,7 @@ describe('hudModel', () => {
   it('city offers name the pickup with its address, and the dropoff by address with the name on its own line', () => {
     const city = { ...map, pois: map.pois.map((p, i) => ({ ...p, address: `${i + 1} Test St` })) };
     const sys = new OrderSystem(
-      { pois: city.pois, distance: streetDistance, rules: city.orderRules, cfg: ordersConfig, rng: mulberry32(7), capacity: vehiclesConfig.car },
+      { pois: city.pois, distance: streetDistance, rules: city.orderRules, cfg: ordersConfig, rng: mulberry32(7), capacity: vehicleCapacity('car') },
       0,
     );
     let found: Offer | undefined;
@@ -126,7 +126,7 @@ describe('hudModel', () => {
     const { offer, t } = waitForOffer(sys, (o) => (o.order.weightKg ?? 0) > 0);
     const status = (): string => hudModel(sys, map, spawn, t, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus;
     expect(status()).toBe('ok');
-    sys.setCapacity(vehiclesConfig.walk); // takes no packages
+    sys.setCapacity({ slots: 3, maxPackageKg: 0 }); // takes no packages
     expect(status()).toBe('too_heavy');
     expect(status()).toBe(sys.canAccept(offer.order.id, t));
     expect(hudModel(sys, map, spawn, offer.expiresAt, null).offers.find((o) => o.id === offer.order.id)!.acceptStatus).toBe('expired');
