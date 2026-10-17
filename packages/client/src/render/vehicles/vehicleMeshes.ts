@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MATERIAL_FOLDED_SUFFIX, ridingConfig, type CatalogEntry, type RideSpec, type RideTier } from '@dm/shared';
-import { carModelScale, finishMaterial, paintMaterial, surfaceOf, type Paint } from '../cosmetics';
+import { carModelScale, finishMaterial, paintMaterial, surfaceOf, type Paint, type Surface } from '../cosmetics';
 import { foldFlatShader, type ModelLoader } from '../city/modelLoader';
 import { placeModel } from '../city/placement';
 import { palette } from '../palette';
@@ -315,39 +315,47 @@ function paintIndex(mesh: THREE.Mesh, materials: readonly THREE.Material[]): num
 }
 
 /**
- * A painted copy of the pack car's paint material: the same texture and vertex colours, tinted by the colour (a
- * folded material tints only its textured parts, never the glass and lights); a finish is a standard material.
+ * A copy of the pack car's paint material to paint: the same texture and vertex colours, Lambert for a colour or
+ * standard for a finish; a folded one tints only its textured parts, never the glass and lights.
  */
-function packPaint(src: THREE.Material, paint: Paint): THREE.MeshLambertMaterial | THREE.MeshStandardMaterial {
+function packPaint(src: THREE.Material, standard: boolean): THREE.MeshLambertMaterial | THREE.MeshStandardMaterial {
   const s = src as THREE.MeshLambertMaterial;
   const params = { map: s.map ?? null, vertexColors: s.vertexColors };
-  const m = 'finish' in paint ? new THREE.MeshStandardMaterial(params) : new THREE.MeshLambertMaterial(params);
+  const m = standard ? new THREE.MeshStandardMaterial(params) : new THREE.MeshLambertMaterial(params);
   m.name = src.name;
   if (src.name.endsWith(MATERIAL_FOLDED_SUFFIX)) foldFlatShader(m);
-  paintMaterial(m, paint, surfaceOf(m), 0xffffff);
   return m;
 }
 
 /**
  * Paints the pack car (carModel) on copies of its materials: the loader's are shared with every parked car of the
  * city, which keep theirs. The factory paint (`color: null`) draws the model's own materials. Draw calls stay the same.
+ * The copy is repainted in place while its kind fits (Lambert for a colour, standard for a finish) and kept across
+ * the factory paint, so a repaint never drops a shader program for three.js to compile again.
  */
 export function paintPackCar(model: THREE.Object3D, paint: Paint): void {
   model.traverse((o) => {
     const mesh = o as THREE.Mesh;
     const shared = mesh.userData.shared as THREE.Material | THREE.Material[] | undefined;
     if (!mesh.isMesh || !shared) return;
-    const previous = mesh.userData.painted as THREE.Material | undefined;
-    previous?.dispose();
-    mesh.userData.painted = undefined;
     if ('color' in paint && paint.color === null) {
       mesh.material = shared;
       return;
     }
     const list = Array.isArray(shared) ? shared : [shared];
     const i = paintIndex(mesh, list);
-    const painted = packPaint(list[i]!, paint);
-    mesh.userData.painted = painted;
-    mesh.material = Array.isArray(shared) ? shared.map((m, k) => (k === i ? painted : m)) : painted;
+    let painted = mesh.userData.painted as THREE.MeshLambertMaterial | THREE.MeshStandardMaterial | undefined;
+    const standard = 'finish' in paint;
+    if (painted && Boolean((painted as THREE.MeshStandardMaterial).isMeshStandardMaterial) === standard) {
+      paintMaterial(painted, paint, mesh.userData.paintSurface as Surface, 0xffffff);
+    } else {
+      painted?.dispose();
+      painted = packPaint(list[i]!, standard);
+      mesh.userData.paintSurface = surfaceOf(painted);
+      paintMaterial(painted, paint, mesh.userData.paintSurface as Surface, 0xffffff);
+      mesh.userData.painted = painted;
+    }
+    const p = painted;
+    mesh.material = Array.isArray(shared) ? shared.map((m, k) => (k === i ? p : m)) : p;
   });
 }

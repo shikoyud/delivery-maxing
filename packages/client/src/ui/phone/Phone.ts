@@ -1,5 +1,6 @@
 import type { RideTier, Vec3 } from '@dm/shared';
 import type { Look } from '../../render/cosmetics';
+import { cssHex } from '../../render/palette';
 import { el, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
 import { createGarageApp } from './garageApp';
@@ -185,7 +186,7 @@ export class Phone implements PhoneView {
 
   /** The phone case colour on the frame (`--phone-case`). */
   applyLook(look: Look): void {
-    this.device.style.setProperty('--phone-case', `#${look.phone.toString(16).padStart(6, '0')}`);
+    this.device.style.setProperty('--phone-case', cssHex(look.phone));
   }
 
   private buildApp(app: PhoneApp): PhoneAppView {

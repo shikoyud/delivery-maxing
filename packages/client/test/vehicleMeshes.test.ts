@@ -346,60 +346,116 @@ describe('vehicle paint (Decision 4)', () => {
       expect(colours(mesh, body!.start, body!.count), tier).toEqual(factory);
     }
 
-    // VehicleViews paints every ride; the courier riding one keeps its own colours.
+    // VehicleViews paints every ride with the look's vehicle paint; the rider wears the look's outfit, not the paint.
     const physics = createPhysicsWorld(await initRapier(), map);
     const garage = new Garage(physics, map, defaultGarage(map));
     const scene = new THREE.Scene();
     const rider = createCourierPlaceholder(movementConfig.capsule, clientConfig.courier);
     scene.add(rider.root);
-    const riderColours = (): number[] => {
-      const out: number[] = [];
-      rider.root.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) out.push(((o as THREE.Mesh).material as THREE.MeshLambertMaterial).color.getHex());
-      });
-      return out;
-    };
-    const before = riderColours();
     const views = new VehicleViews(scene);
     views.update(garage, 1);
-    views.applyLook(look({ finish: 'gold' }));
-    for (const t of RIDE_TIERS) {
-      const mats = meshOf(views.root(t)).material as THREE.MeshStandardMaterial[];
-      expect(mats[1]!.color.getHex(), t).toBe(0xd4a017);
-    }
-    expect(riderColours()).toEqual(before);
+    const gold = { ...look({ finish: 'gold' }), outfit: { color: 0x7d4e9e } };
+    views.applyLook(gold);
+    rider.applyLook(gold);
+    const finishes = RIDE_TIERS.map((t) => (meshOf(views.root(t)).material as THREE.MeshStandardMaterial[])[1]!);
+    for (const [k, t] of RIDE_TIERS.entries()) expect(finishes[k]!.color.getHex(), t).toBe(0xd4a017);
+    const capsule = meshOf(rider.root).material as THREE.MeshLambertMaterial;
+    expect([capsule.color.getHex(), capsule.emissive.getHex()]).toEqual([0x7d4e9e, 0]);
+    // The same look again (and a colour and back) keeps the same material objects: no shader program is dropped.
+    views.applyLook(gold);
+    views.applyLook(look({ color: 0x2f6fb5 }));
+    views.applyLook(gold);
+    for (const [k, t] of RIDE_TIERS.entries()) expect((meshOf(views.root(t)).material as THREE.Material[])[1], t).toBe(finishes[k]);
   });
 
-  it("the pack car's paint material is tinted on a copy; the city's cars keep the shared one", async () => {
-    const car: CatalogEntry = {
-      id: CAR_MODEL_ID, file: 'megatropolis vehicles/Car_01.glb', category: 'vehicle', size: { w: 1.97, h: 1.38, d: 3.28 },
-      pivot: { x: 0, z: 0, minY: 0 }, use: 'placed',
-    };
-    const gltf = {
-      loadAsync: async () => ({ scene: new THREE.Mesh(new THREE.BoxGeometry(1.97, 1.38, 3.28).translate(0, 0.69, 0), new THREE.MeshStandardMaterial({ name: 'flat' })) }),
-    } as unknown as GLTFLoader;
-    const loader = new ModelLoader('packs/', gltf);
+  const packCar: CatalogEntry = {
+    id: CAR_MODEL_ID, file: 'megatropolis vehicles/Car_01.glb', category: 'vehicle', size: { w: 1.97, h: 1.38, d: 3.28 },
+    pivot: { x: 0, z: 0, minY: 0 }, use: 'placed',
+  };
+  /** VehicleViews with the pack car served from `scene` (the loader's extract runs on it) and swapped in. */
+  async function packViews(gltfScene: () => THREE.Object3D, before?: Look) {
+    const gltf = { loadAsync: async () => ({ scene: gltfScene() }) } as unknown as GLTFLoader;
+    const loader = new ModelLoader('packs/', gltf, { loadTexture: () => new THREE.Texture() });
     const physics = createPhysicsWorld(await initRapier(), map);
     const garage = new Garage(physics, map, defaultGarage(map));
     const scene = new THREE.Scene();
-    const views = new VehicleViews(scene, { loader, car });
-    // Painted before the model arrives: the swap paints it too.
-    views.applyLook(look({ color: 0x2f6fb5 }));
+    const views = new VehicleViews(scene, { loader, car: packCar });
+    if (before) views.applyLook(before);
     views.update(garage, 1);
     await new Promise((r) => setTimeout(r, 0));
     views.update(garage, 1);
     const model = scene.getObjectByName('vehicle-car-model')!;
-    const mesh = meshOf(model);
-    const shared = (loader.get(CAR_MODEL_ID) as unknown as { material: THREE.MeshLambertMaterial }).material;
-    expect(mesh.material).not.toBe(shared);
-    expect((mesh.material as THREE.MeshLambertMaterial).color.getHex()).toBe(0x2f6fb5);
-    expect(shared.color.getHex()).toBe(0xffffff);
+    const shared = (loader.get(CAR_MODEL_ID) as unknown as { material: THREE.Material | THREE.Material[] }).material;
+    return { views, model, mesh: meshOf(model), shared };
+  }
+  const box = (): THREE.BufferGeometry => new THREE.BoxGeometry(1.97, 1.38, 3.28).translate(0, 0.69, 0);
+
+  it("the pack car's paint material is tinted on a copy; the city's cars keep the shared one", async () => {
+    // Painted before the model arrives: the swap paints it too.
+    const { views, model, mesh, shared } = await packViews(() => new THREE.Mesh(box(), new THREE.MeshStandardMaterial({ name: 'flat' })), look({ color: 0x2f6fb5 }));
+    const flat = shared as THREE.MeshLambertMaterial;
+    expect(mesh.material).not.toBe(flat);
+    const blue = mesh.material as THREE.MeshLambertMaterial;
+    expect(blue.color.getHex()).toBe(0x2f6fb5);
+    expect(flat.color.getHex()).toBe(0xffffff);
+    // Another colour repaints the same copy in place; the same look again changes nothing.
+    views.applyLook(look({ color: 0xc8323c }));
+    views.applyLook(look({ color: 0xc8323c }));
+    expect(mesh.material).toBe(blue);
+    expect(blue.color.getHex()).toBe(0xc8323c);
     views.applyLook(look({ finish: 'neon' }));
     const neon = mesh.material as THREE.MeshStandardMaterial;
     expect([neon.color.getHex(), neon.emissive.getHex()]).toEqual([0x39ff14, 0x39ff14]);
+    views.applyLook(look({ finish: 'gold' }));
+    expect(mesh.material).toBe(neon);
+    expect([neon.color.getHex(), neon.emissive.getHex(), neon.metalness]).toEqual([0xd4a017, 0, 1]);
     views.applyLook(look({ color: null }));
-    expect(mesh.material).toBe(shared);
+    expect(mesh.material).toBe(flat);
+    views.applyLook(look({ finish: 'gold' }));
+    expect(mesh.material).toBe(neon);
     model.updateMatrixWorld(true);
     expect(new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).z).toBeCloseTo(4.4, 5);
+  });
+
+  it('a pack car with glass in its own material paints the body (the largest group) only', async () => {
+    const { views, mesh, shared } = await packViews(() => {
+      const scene = new THREE.Group();
+      scene.add(new THREE.Mesh(box(), new THREE.MeshStandardMaterial({ name: 'body' })));
+      scene.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 0.5).translate(0, 1.2, 0), new THREE.MeshStandardMaterial({ name: 'glass' })));
+      return scene;
+    });
+    const list = shared as THREE.Material[];
+    expect(list.map((m) => m.name)).toEqual(['body', 'glass']);
+    views.applyLook(look({ color: 0xc8323c }));
+    const mats = mesh.material as THREE.MeshLambertMaterial[];
+    expect(mats).toHaveLength(2);
+    expect(mats[1]).toBe(list[1]);
+    expect(mats[0]).not.toBe(list[0]);
+    expect([mats[0]!.name, mats[0]!.color.getHex()]).toEqual(['body', 0xc8323c]);
+    expect((list[0] as THREE.MeshLambertMaterial).color.getHex()).toBe(0xffffff);
+  });
+
+  it('a folded pack car (texture plus flat glass) keeps the folded shader on its painted copy', async () => {
+    const { views, mesh, shared } = await packViews(() => {
+      const scene = new THREE.Group();
+      scene.add(new THREE.Mesh(box(), new THREE.MeshStandardMaterial({ name: 'tex:atlas.png' })));
+      const glass = new THREE.PlaneGeometry(1, 0.5).translate(0, 1.2, 0);
+      glass.setAttribute('color', new THREE.BufferAttribute(new Float32Array(glass.getAttribute('position').count * 3).fill(0.5), 3));
+      scene.add(new THREE.Mesh(glass, new THREE.MeshStandardMaterial({ name: 'flat' })));
+      return scene;
+    });
+    const folded = shared as THREE.MeshLambertMaterial;
+    expect(folded.name).toBe('tex:atlas.png+flat');
+    views.applyLook(look({ finish: 'chrome' }));
+    const chrome = mesh.material as THREE.MeshStandardMaterial;
+    expect(chrome).not.toBe(folded);
+    expect([chrome.name, chrome.map, chrome.vertexColors]).toEqual([folded.name, folded.map, true]);
+    expect(chrome.customProgramCacheKey()).toBe('dm-folded-flat');
+    // The folded fragment: the material colour tints the textured texels only, the flat parts keep their own.
+    const shader = { fragmentShader: '#include <map_fragment>', vertexShader: '', uniforms: {} } as unknown as THREE.WebGLProgramParametersWithUniforms;
+    chrome.onBeforeCompile(shader, null as unknown as THREE.WebGLRenderer);
+    expect(shader.fragmentShader).toContain('mix( diffuseColor * texture2D( map, vMapUv ), vec4( 1.0, 1.0, 1.0, diffuseColor.a ), vColor.a )');
+    expect(chrome.color.getHex()).toBe(0xdfe3e8);
+    expect(folded.color.getHex()).toBe(0xffffff);
   });
 });

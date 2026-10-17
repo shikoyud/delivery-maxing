@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import * as THREE from 'three';
-import { carModelScale, finishMaterial, lookOf } from '../src/render/cosmetics';
+import { economyConfig } from '@dm/shared';
+import { MockChain } from '../src/economy/MockChain';
+import { carModelScale, finishMaterial, lookApplier, lookOf, type Look } from '../src/render/cosmetics';
 import { defaultWardrobe, equipItem, type Wardrobe } from '../src/economy/wardrobe';
 
 describe('cosmetics', () => {
@@ -47,5 +49,26 @@ describe('cosmetics', () => {
     expect(equipItem(w, 'nope', [])).toBeNull();
     expect(equipItem(w, 'skin.vehicle.neon', ['skin.vehicle.neon'])!.equipped.vehicle).toBe('skin.vehicle.neon');
     expect(w.equipped.vehicle).toBe('cosmetic.vehicle.factory');
+  });
+});
+
+describe('lookApplier', () => {
+  test('a chain change that leaves the look as it was does not repaint', () => {
+    const clock = { t: 1_760_000_000_000, now() { return this.t; } };
+    const chain = new MockChain(null, economyConfig, clock);
+    const w = defaultWardrobe();
+    const drawn: Look[] = [];
+    const apply = lookApplier((l) => void drawn.push(l));
+    const redraw = (): boolean => apply(lookOf(w, chain.ownership().skins));
+    chain.subscribe(() => void redraw());
+    expect(redraw()).toBe(true);
+    chain.dev.addGame(1_000_000); // a payout-like change: balance only
+    chain.dev.setVaultUsd(5);
+    expect(drawn).toHaveLength(1);
+    // A look that does change (another outfit worn) draws again, once.
+    expect(apply(lookOf({ ...w, owned: [...w.owned, 'cosmetic.outfit.coral'], equipped: { ...w.equipped, outfit: 'cosmetic.outfit.coral' } }, []))).toBe(true);
+    expect(redraw()).toBe(true);
+    expect(redraw()).toBe(false);
+    expect(drawn.map((l) => l.outfit)).toEqual([{ color: 0x1f9e93 }, { color: 0xf27166 }, { color: 0x1f9e93 }]);
   });
 });

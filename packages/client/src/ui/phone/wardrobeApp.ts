@@ -1,5 +1,6 @@
 import { COSMETIC_SLOTS, shopCatalog, type CosmeticSlot, type Finish, type ShopItemId } from '@dm/shared';
 import { wornItem, type Wardrobe } from '../../economy/wardrobe';
+import { cssHex } from '../../render/palette';
 import { el, setText } from '../dom';
 import type { HudModel } from '../hudModel';
 import { syncList } from './ordersApp';
@@ -35,7 +36,7 @@ export function wardrobeRows(w: Wardrobe, skins: readonly ShopItemId[]): Wardrob
     const state = (id: ShopItemId, owned: boolean): WardrobeRow['state'] => (id === worn ? 'equipped' : owned ? 'equip' : 'shop');
     for (const item of catalog) {
       if (item.kind !== 'cosmetic' || item.slot !== slot) continue;
-      const swatch = item.color === undefined ? null : `#${item.color.toString(16).padStart(6, '0')}`;
+      const swatch = item.color === undefined ? null : cssHex(item.color);
       rows.push({ itemId: item.id, section: SECTION[slot], label: item.label, swatch, state: state(item.id, w.owned.includes(item.id)) });
     }
     for (const item of catalog) {

@@ -50,7 +50,7 @@ import { mountDebugOverlay, type DebugOverlay } from '../ui/debugOverlay';
 import { MockChain } from '../economy/MockChain';
 import { Purchases } from '../economy/Purchases';
 import { equipItem, type Wardrobe } from '../economy/wardrobe';
-import { lookOf } from '../render/cosmetics';
+import { lookApplier, lookOf } from '../render/cosmetics';
 import { capacityLabel, mountDevPanel, rideOfTier, vehicleTierAfter, type DevPanel } from '../ui/devPanel';
 import { MapDebugView } from '../ui/mapDebug';
 import { installDebugHooks } from './debugHooks';
@@ -123,6 +123,12 @@ export class Game {
   readonly purchases: Purchases;
   /** The Coin cosmetics owned and worn (saved with the progress). */
   wardrobe: Wardrobe;
+  /** Draws the look on the courier, the rides and the phone, only when it changed. */
+  private readonly drawLook = lookApplier((look) => {
+    this.courier.applyLook(look);
+    this.vehicles.applyLook(look);
+    this.delivery.applyLook(look);
+  });
   /** The runtime pack models (public/packs/, git-ignored; boxes and placeholders without them). */
   readonly models: ModelLoader;
   /** The city's regions, blocks and pack models; null on the greybox. */
@@ -363,10 +369,8 @@ export class Game {
 
   /** Dresses the courier, paints the rides and colours the phone from the wardrobe (Decision 4). */
   private applyLook(): void {
-    const look = lookOf(this.wardrobe, this.chain.ownership().skins);
-    this.courier.applyLook(look);
-    this.vehicles.applyLook(look);
-    this.delivery.applyLook(look);
+    // The chain changes on every payout, settle and lock renewal: only a new look repaints (no material churn).
+    this.drawLook(lookOf(this.wardrobe, this.chain.ownership().skins));
   }
 
   /**

@@ -103,6 +103,7 @@ export function surfaceOf(m: Painted): Surface {
  */
 export function paintMaterial(m: Painted, paint: Paint, surface: Surface, factory: number): void {
   const std = m as THREE.MeshStandardMaterial;
+  const env = m.envMap;
   if ('finish' in paint) {
     if (std.isMeshStandardMaterial) finishMaterial(paint.finish, std);
     else {
@@ -121,7 +122,30 @@ export function paintMaterial(m: Painted, paint: Paint, surface: Surface, factor
     m.emissiveIntensity = surface.emissiveIntensity;
     m.envMap = surface.envMap;
   }
-  m.needsUpdate = true; // the env map may come or go (a shader change)
+  if (m.envMap !== env) m.needsUpdate = true; // an env map coming or going changes the shader; colours do not
+}
+
+/** Whether two looks draw the same (Game repaints only on a change). */
+export function sameLook(a: Look, b: Look): boolean {
+  return samePaint(a.outfit, b.outfit) && samePaint(a.vehicle, b.vehicle) && a.bag === b.bag && a.phone === b.phone;
+}
+
+function samePaint(a: Paint, b: Paint): boolean {
+  return 'finish' in a ? 'finish' in b && a.finish === b.finish : 'color' in b && a.color === b.color;
+}
+
+/**
+ * Draws a look only when it differs from the last one drawn: the chain changes on every payout, settle and lock
+ * renewal, and a repaint for nothing would churn materials. Returns whether `draw` ran.
+ */
+export function lookApplier(draw: (look: Look) => void): (look: Look) => boolean {
+  let last: Look | null = null;
+  return (look) => {
+    if (last && sameLook(last, look)) return false;
+    last = look;
+    draw(look);
+    return true;
+  };
 }
 
 /** The pack car's scale: its model is shorter than the collider it drives with (Decision 13: 4.4 / 3.3). */
