@@ -348,7 +348,7 @@ describe('getting off at any speed (Decision 9, Review Focus 4)', () => {
     addBox(h, vec3(bike.x + 1.9, 1, bike.z), vec3(0.5, 1, 1.2));
     expect(h.tick({}, ['mount'])).toContainEqual({ kind: 'dismounted', tier: 'motorbike' });
     expect(h.sim.state.position.x).toBeCloseTo(bike.x, 2);
-    expect(h.sim.state.position.z).toBeGreaterThan(bike.z + back - 0.5); // behind is +Z; one foot tick has passed
+    expect(h.sim.state.position.z).toBeCloseTo(bike.z + back, 6); // behind is +Z; no velocity carries it back at the bike
     expect(h.sim.body.fitsAt(h.sim.state.position, false)).toBe(true);
 
     // And a crate behind: no room, still riding.
@@ -359,6 +359,44 @@ describe('getting off at any speed (Decision 9, Review Focus 4)', () => {
     expect(h.tick({ forward: 1 }, ['mount'])).toContainEqual({ kind: 'mountRefused', reason: 'noRoom' });
     expect(h.sim.state.riding).toBe('motorbike');
     expect(h.sim.body.collider.isEnabled()).toBe(false);
+  });
+
+  test('getting off behind at speed never throws the courier at the parked ride, even with W held', async () => {
+    const alley = [box('left', vec3(-1.7, 2, 0), vec3(1, 4, 800)), box('right', vec3(3.3, 2, 0), vec3(1, 4, 800))];
+    const c = RIDES.motorbike.collider;
+    const rear = c.halfLength + c.radius; // the rear face, from the bike's centre
+    const back = rear + CAPSULE + R.dismountGap;
+    const h = await atTopSpeed('motorbike', 22, alley);
+    const bike = { ...h.sim.garage.state('motorbike').position };
+    addBox(h, vec3(bike.x + 1.9, 1, bike.z), vec3(0.5, 1, 1.2)); // a bin on the right: the spot is behind
+    expect(h.tick({ forward: 1 }, ['mount'])).toContainEqual({ kind: 'dismounted', tier: 'motorbike' });
+    const s = h.sim.state;
+    expect(s.position.x).toBeCloseTo(bike.x, 2);
+    // None of the bike's 22 m/s (all of it toward the bike from behind) is kept: W from rest is all that moves the
+    // courier, at most one tick of groundAccel, and it stays clear of the rear face.
+    expect(s.velocity.z).toBeGreaterThanOrEqual(-cfg.run.groundAccel * DT - 1e-6);
+    expect(s.position.z).toBeGreaterThanOrEqual(bike.z + back - cfg.run.groundAccel * DT * DT - 1e-4); // Rapier positions are f32
+    expect(s.position.z - CAPSULE).toBeGreaterThan(bike.z + rear);
+    expect(h.sim.lastMove?.wallNormals ?? []).toEqual([]);
+  });
+
+  test('a drifting ride: the sideways velocity back into the vehicle is removed, the rest is kept', async () => {
+    for (const drift of [5, -5]) {
+      const h = await atTopSpeed('car', 28);
+      const car = h.sim.garage.state('car');
+      car.velocity = vec3(drift, 0, -20); // sliding sideways while doing 20 m/s
+      expect(h.tick({}, ['mount'])).toContainEqual({ kind: 'dismounted', tier: 'car' });
+      const s = h.sim.state;
+      expect(s.position.x).toBeLessThan(car.position.x); // the left spot (-X)
+      if (drift > 0) {
+        // +X points from the left spot back into the car: gone; the 20 m/s along the car is clamped to 12.
+        expect(Math.abs(s.velocity.x)).toBeLessThan(1e-9);
+        expect(s.velocity.z).toBeCloseTo(-(cfg.speedCap - cfg.run.groundDecel * DT), 6);
+      } else {
+        expect(s.velocity.x).toBeLessThan(-1); // -X is away from the car: kept
+      }
+      expect(speed(s)).toBeLessThanOrEqual(cfg.speedCap);
+    }
   });
 
   test('F mid-ollie on the skateboard: board carried, courier airborne with the board velocity, lands normally', async () => {
@@ -507,20 +545,18 @@ describe('parked vehicles', () => {
   });
 
   test('F while the car is airborne is refused (airborne); it gets off once landed', async () => {
-    for (const tier of ['car'] as const) {
-      const h = await makeSim({ spawn: vec3(2, 0, -10), garage: [skateboard, parked('car', vec3(0, 0, -10))] });
-      h.runUntil((s) => s.grounded, 30);
-      mount(h, tier);
-      h.sim.teleport(vec3(h.sim.state.position.x, 4, h.sim.state.position.z));
-      expect(h.sim.state.grounded).toBe(false);
-      const ev = h.tick({}, ['mount']);
-      expect(ev.filter((e) => e.kind === 'dismounted' || e.kind === 'mountRefused'), tier).toEqual([{ kind: 'mountRefused', reason: 'airborne' }]);
-      expect(h.sim.state.riding, tier).toBe(tier);
-      h.runUntil((s) => s.grounded, 60);
-      h.run(10);
-      expect(h.tick({}, ['mount']), tier).toContainEqual({ kind: 'dismounted', tier });
-      if (tier === 'car') expect((h.sim.garage.spot('car') as { position: Vec3 }).position.y).toBeLessThan(0.2);
-    }
+    const h = await makeSim({ spawn: vec3(2, 0, -10), garage: [skateboard, parked('car', vec3(0, 0, -10))] });
+    h.runUntil((s) => s.grounded, 30);
+    mount(h, 'car');
+    h.sim.teleport(vec3(h.sim.state.position.x, 4, h.sim.state.position.z));
+    expect(h.sim.state.grounded).toBe(false);
+    const ev = h.tick({}, ['mount']);
+    expect(ev.filter((e) => e.kind === 'dismounted' || e.kind === 'mountRefused')).toEqual([{ kind: 'mountRefused', reason: 'airborne' }]);
+    expect(h.sim.state.riding).toBe('car');
+    h.runUntil((s) => s.grounded, 60);
+    h.run(10);
+    expect(h.tick({}, ['mount'])).toContainEqual({ kind: 'dismounted', tier: 'car' });
+    expect((h.sim.garage.spot('car') as { position: Vec3 }).position.y).toBeLessThan(0.2);
   });
 
   test('skateboard under a low overhang: no room to stand, noRoom and still riding; clear of it, F gets off', async () => {

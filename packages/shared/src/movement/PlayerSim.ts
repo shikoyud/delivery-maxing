@@ -23,6 +23,19 @@ const BLOCK_EPS = 1e-4;
 const DIRECTION_EPS = 1e-6;
 
 /**
+ * Horizontal velocity `v` of a courier stepping off at `spot` from a vehicle at `vehicle`, less its component back
+ * toward the vehicle: with n the horizontal unit vector from vehicle to spot, v − min(0, v·n)·n. Unchanged when the
+ * spot is the vehicle's own position (the skateboard).
+ */
+function awayFrom(v: Vec3, vehicle: Vec3, spot: Vec3): Vec3 {
+  const n = vec3(spot.x - vehicle.x, 0, spot.z - vehicle.z);
+  const l = horizontalLength(n);
+  if (l <= DIRECTION_EPS) return v;
+  const into = Math.min(0, (v.x * n.x + v.z * n.z) / l);
+  return vec3(v.x - (into * n.x) / l, v.y, v.z - (into * n.z) / l);
+}
+
+/**
  * Deterministic single-player movement simulation, stepped at cfg.tickRate: on foot, or riding a vehicle from the
  * garage (F mounts and dismounts). `cfg` is held by reference: edits (e.g. from the dev panel) apply on the next step.
  */
@@ -238,8 +251,8 @@ export class PlayerSim {
    * standing courier fits there, grounded or in the air as the board was. Any other (grounded) vehicle is parked
    * where it is, stopped, and the courier steps off at the first spot of dismountSpots a standing courier fits and
    * reaches from the vehicle in a straight line (never through a wall or rail). No such spot: `mountRefused 'noRoom'`,
-   * still riding. The courier keeps the ride's horizontal velocity, clamped to speedCap, and in the air its vertical
-   * velocity.
+   * still riding. The courier keeps the ride's horizontal velocity less any part of it pointing back into the parked
+   * vehicle (awayFrom), clamped to speedCap, and in the air its vertical velocity.
    */
   private dismount(tier: RideTier, events: SimEvent[]): void {
     const s = this.state;
@@ -261,7 +274,7 @@ export class PlayerSim {
       return;
     }
     const grounded = v.grounded;
-    const flat = clampHorizontal(vec3(v.velocity.x, 0, v.velocity.z), this.cfg.speedCap);
+    const flat = clampHorizontal(awayFrom(vec3(v.velocity.x, 0, v.velocity.z), v.position, feet), this.cfg.speedCap);
     const velocity = vec3(flat.x, grounded ? 0 : v.velocity.y, flat.z);
     g.leave(tier);
     s.riding = null;
