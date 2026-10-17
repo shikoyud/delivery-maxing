@@ -63,19 +63,19 @@ async function riding(tier: SavedVehicle['tier'], at: Vec3, heading: number): Pr
 }
 
 const speed = (s: PlayerState) => Math.hypot(s.velocity.x, s.velocity.z);
-/** Holds W and steers (A/D) toward the heading `yaw`, coasting above `vmax` and braking well above it, until `until` holds. */
-function drive(h: Harness, yaw: number, vmax: number, until: (s: PlayerState) => boolean, maxSeconds = 30): void {
+/** Holds W and steers with A/D toward `heading`, coasting above `vmax` and braking well above it, until `until` holds. */
+function drive(h: Harness, heading: number, vmax: number, until: (s: PlayerState) => boolean, maxSeconds = 30): void {
   for (let i = 0; i < seconds(maxSeconds); i++) {
     const v = speed(h.sim.state);
-    const steer = Math.max(-1, Math.min(1, 3 * wrapAngle(yaw - h.sim.state.heading)));
-    h.tick({ forward: v > vmax + 2 ? -1 : v > vmax ? 0 : 1, strafe: -steer, yaw });
+    const steer = Math.max(-1, Math.min(1, 3 * wrapAngle(heading - h.sim.state.heading)));
+    h.tick({ forward: v > vmax + 2 ? -1 : v > vmax ? 0 : 1, strafe: -steer });
     if (until(h.sim.state)) return;
   }
   throw new Error(`drive: not there after ${maxSeconds} s (at ${JSON.stringify(h.sim.state.position)})`);
 }
 /** Brakes (S) to a stop. */
-function stop(h: Harness, yaw: number): void {
-  for (let i = 0; i < seconds(5) && speed(h.sim.state) > 0.5; i++) h.tick({ forward: -1, yaw });
+function stop(h: Harness): void {
+  for (let i = 0; i < seconds(5) && speed(h.sim.state) > 0.5; i++) h.tick({ forward: -1 });
   h.run(2);
 }
 
@@ -129,11 +129,11 @@ describe('terraces (band B fixture)', () => {
     expect(car.sim.state.position.y).toBeCloseTo(g.mid, 1);
     const [first, last] = [samples[0]!, samples[samples.length - 1]!];
     expect((last.y - first.y) / (last.x - first.x)).toBeCloseTo(0.09, 2);
-    stop(car, EAST);
+    stop(car);
     drive(car, NORTH, 4, (s) => s.position.z > g.legZ[1] - 1);
     drive(car, WEST, 12, (s) => s.position.x < g.xs - 1);
     expect(car.sim.state.position.y).toBeCloseTo(24, 1);
-    stop(car, WEST);
+    stop(car);
     drive(car, NORTH, 6, (s) => s.position.z > 625);
     expect(car.sim.state.riding).toBe('car');
     expect(car.sim.state.position.y).toBeCloseTo(24, 1);

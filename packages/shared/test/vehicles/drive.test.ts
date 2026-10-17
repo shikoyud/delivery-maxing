@@ -112,10 +112,24 @@ describe('drive model', () => {
     expect(applyDrive(mk('bicycle'), { ...LEFT, steer: -1 }, spec, 16, G, DT)).toBeCloseTo(-spec.turnRateLow * DT, 9);
   });
 
+  test('W+A (the normalised diagonal) turns at the full turn rate and accelerates at full throttle', () => {
+    const spec = ridingConfig.rides.car;
+    const d = Math.SQRT1_2;
+    expect(driveInput(frame(-d, d), spec)).toEqual({ throttle: 1, steer: 1, handbrake: false });
+    const v = mk('car');
+    stepIn(v, frame(-d, d));
+    expect(v.heading).toBeCloseTo(spec.turnRateLow * DT, 9);
+    expect(fwdSpeed(v)).toBeCloseTo(spec.accel * DT, 9);
+    // A single axis and a partial stick stay as they are.
+    expect(driveInput(frame(0, 0.5), spec)).toEqual({ throttle: 0.5, steer: 0, handbrake: false });
+    expect(driveInput(frame(0, 0), spec)).toEqual({ throttle: 0, steer: 0, handbrake: false });
+  });
+
   test('driveInput: throttle is move.y, steer is -move.x, Space is the handbrake', () => {
-    const i = frame(0.5, -0.25, 2);
+    const i = frame(0.5, 0, 2);
     i.jump.held = true;
-    expect(driveInput(i, ridingConfig.rides.car)).toEqual({ throttle: -0.25, steer: -0.5, handbrake: true });
+    expect(driveInput(i, ridingConfig.rides.car)).toEqual({ throttle: 0, steer: -0.5, handbrake: true });
+    expect(driveInput(frame(0, -1), ridingConfig.rides.car)).toEqual({ throttle: -1, steer: 0, handbrake: false });
   });
 
   it('S above stoppedSpeed brakes without turning', () => {

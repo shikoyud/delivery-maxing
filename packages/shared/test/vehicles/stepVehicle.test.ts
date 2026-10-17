@@ -180,6 +180,12 @@ describe('stepVehicle', () => {
     r.run(15, input(0, -1), (v) => expect(v.heading).toBe(Math.PI));
     expect(r.body.heading).toBe(Math.PI);
     r.body.destroy();
+    // Control: the same car steering away (W + D) does turn once its swinging tail clears the wall.
+    const away = rig('car', vec3(80 - 0.95 - 0.03, 0, 0), Math.PI);
+    away.run(20, input(1, 1));
+    expect(away.v.heading).toBeLessThan(Math.PI - 0.05);
+    expect(away.v.heading).toBeGreaterThan(0);
+    away.body.destroy();
   });
 
   test('a motorbike with walls ahead and left backs out on S at 2.5 m/s', () => {
