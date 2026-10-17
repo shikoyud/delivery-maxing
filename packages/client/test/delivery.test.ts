@@ -1027,7 +1027,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(p!.usdMicro).toBeLessThanOrEqual(max);
     expect(p!.usdPerGame).toBe(rate.usdPerGame);
     expect(p!.paid).toBe(true);
-    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate));
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate, 'payout'));
     expect(s.chain.accrued()).toBe(p!.game);
     expect(popup.text).toBe(`Delivered! +${points} pts · +${s.loop.orders.totals.coins} coins`);
     expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
@@ -1041,7 +1041,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
   it('with $100 locked the payout is ×1.3', () => {
     const s = setup('car');
     const rate = s.chain.rate()!;
-    expect(s.chain.lockGame(usdToGame(100_000_000, rate), s.wall.ms)).toEqual({ ok: true });
+    expect(s.chain.lockGame(usdToGame(100_000_000, rate, 'purchase'), s.wall.ms)).toEqual({ ok: true });
     const { order, popup } = s.deliverFood();
     const [p] = s.chain.payouts();
     expect(p!.boost).toBeCloseTo(1.3, 12);
@@ -1049,7 +1049,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     const roll = { tier: 'car' as const, points: s.loop.orders.totals.points, maxPoints: maxPointsFor(order, ordersConfig), luck: p!.luck };
     expect(p!.usdMicro).toBe(rollPayoutUsd({ ...roll, boost: p!.boost }, economyConfig));
     expect(p!.usdMicro / rollPayoutUsd({ ...roll, boost: 1 }, economyConfig)).toBeCloseTo(1.3, 4);
-    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate));
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate, 'payout'));
     expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
     expect(popup.lines[1]).toBe('×1.3 boost');
   });
@@ -1137,7 +1137,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     const [p] = s.chain.payouts();
     expect(p!.usdPerGame).toBe(0.0002);
     expect(p!.paid).toBe(true);
-    expect(p!.game).toBe(usdToGame(p!.usdMicro, { usdPerGame: 0.0002, updatedAt: 0 }));
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, { usdPerGame: 0.0002, updatedAt: 0 }, 'payout'));
     expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
   });
 });

@@ -1,5 +1,4 @@
 import {
-  GAME_UNITS,
   LINES,
   quote,
   rateUpdateAllowed,
@@ -143,9 +142,9 @@ export class MockChain implements ChainSource {
     const rate = { usdPerGame: this.cfg.mockChain.usdPerGame, updatedAt: this.clock.now() };
     return {
       v: 1,
-      balance: this.cfg.mockChain.startGame * GAME_UNITS,
+      balance: this.cfg.mockChain.startGameUnits,
       accrued: 0,
-      vault: usdToGame(this.cfg.mockChain.vaultUsdMicro, rate),
+      vault: usdToGame(this.cfg.mockChain.vaultUsdMicro, rate, 'payout'),
       rate,
       rateLive: true,
       ownership: { lines: { vehicle: 0, bag: 0, shoes: 0, dispatcher: 0 }, skins: [] },
@@ -281,7 +280,7 @@ export class MockChain implements ChainSource {
 
   accrue(p: Omit<Payout, 'id' | 'paid' | 'game'>): Payout {
     // usdMicro already includes the boost (rollPayoutUsd applied it); `boost` is only recorded.
-    const due = usdToGame(p.usdMicro, { usdPerGame: p.usdPerGame, updatedAt: p.at });
+    const due = usdToGame(p.usdMicro, { usdPerGame: p.usdPerGame, updatedAt: p.at }, 'payout');
     const paid = due <= this.s.vault;
     const payout: Payout = { ...p, id: this.id('pay'), game: paid ? due : 0, paid };
     if (paid) {
@@ -376,7 +375,7 @@ export class MockChain implements ChainSource {
     },
     /** Sets the vault to `usd` dollars of GAME at the current rate (0 empties it). */
     setVaultUsd: (usd: number): void => {
-      this.s.vault = usdToGame(Math.max(0, Math.round(usd * 1e6)), this.s.rate);
+      this.s.vault = usdToGame(Math.max(0, Math.round(usd * 1e6)), this.s.rate, 'payout');
       this.changed();
     },
     /** Sets a line's tier directly (up or down), as if bought or revoked on the chain. */

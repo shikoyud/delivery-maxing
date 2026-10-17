@@ -147,7 +147,7 @@ describe('the Wallet app (spec §8, §6.4)', () => {
     expect(payouts[0]!.byClass('phone-wallet-when')[0]!.textContent).toBe('just now');
     expect(payouts[0]!.classList.contains('unpaid')).toBe(true);
     // The newest paid one: $0.210023 ≈ 875 GAME at $0.00024.
-    expect(gameText(usdToGame(210_023, { usdPerGame: 0.00024, updatedAt: 0 }))).toBe('875');
+    expect(gameText(usdToGame(210_023, { usdPerGame: 0.00024, updatedAt: 0 }, 'payout'))).toBe('875');
     expect(line(payouts[1]!)).toBe('Car · hot · $0.21 ≈ 875 GAME');
     expect(payouts.every((p) => !p.textContent.includes('undefined'))).toBe(true);
 

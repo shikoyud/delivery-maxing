@@ -1,7 +1,7 @@
 import type { DispatcherTuning } from '../economy/dispatcher';
 import type { OrdersConfig } from '../config/types';
 import type { Vec3 } from '../math/vec3';
-import { pickWeighted, shuffle, type Rng } from '../util/rng';
+import { pickIndexWeighted, pickWeighted, shuffle, type Rng } from '../util/rng';
 import { bandFor, type PathDistance } from '../world/distance';
 import type { OrderRules, Poi, PoiRole } from '../world/mapTypes';
 import type { DistanceTable } from './distanceTable';
@@ -94,10 +94,7 @@ function offerOfKind(ctx: OfferContext, kind: OrderKind, remainingKg: number, bu
     if (dropoffs.length === 0) continue;
     // the long band's weight scales with the Dispatcher tier (Decision 16); at tier 0 every dropoff weighs 1
     const weights = dropoffs.map(({ distance }) => (bandFor(distance, rules.bands) === 'long' ? ctx.dispatcher.longWeightScale : 1));
-    let r = rng() * weights.reduce((a, b) => a + b, 0);
-    let at = 0;
-    while (at < weights.length - 1 && (r -= weights[at] as number) >= 0) at++;
-    const { poi: dropoff, distance } = dropoffs[at] as (typeof dropoffs)[number];
+    const { poi: dropoff, distance } = dropoffs[pickIndexWeighted(rng, weights)] as (typeof dropoffs)[number];
 
     // a quantity and concrete things for the catalog phrase ("2 baguettes and a sourdough"); the greybox's own words as they are
     const item = pickup.items && pickup.items.length > 0 ? itemPhrase(pickOne(pickup.items, rng), rng) : pickup.name;

@@ -348,7 +348,7 @@ describe('hudModel next stop and ride', () => {
       ['On foot · late', '$0.030', true, '3 h ago'],
       ['Car · hot', '$0.21', true, '3 h ago'],
     ]);
-    expect(w.payouts[2]!.game).toBe(usdToGame(210_000, { usdPerGame: 0.00024, updatedAt: 0 }));
+    expect(w.payouts[2]!.game).toBe(usdToGame(210_000, { usdPerGame: 0.00024, updatedAt: 0 }, 'payout'));
     expect(w.history).toEqual([{ label: 'Bag 1', game: 0, burned: 0, vault: 0, status: 'pending', when: '3 h ago' }]);
     expect(w.lock).toEqual({ game: 100_000 * GAME_UNITS, boostText: '×1.07', unlocksAt: dateText(T0 + 2000 + 7 * 86_400_000), canWithdraw: false });
     // Closed phone: the lists are not built (the HUD needs only the figures).

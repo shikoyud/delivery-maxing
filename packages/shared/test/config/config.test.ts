@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { cityConfig, cosmeticsConfig, economyConfig, movementConfig, namesConfig, navConfig, ordersConfig, RIDE_TIERS, ridingConfig, vehiclesConfig, worldConfig } from '../../src/config';
+import cosmeticsJson from '../../../../config/cosmetics.json';
+import economyJson from '../../../../config/economy.json';
+import {
+  assertRiding,
+  cityConfig,
+  cosmeticsConfig,
+  economyConfig,
+  loadCosmetics,
+  loadEconomy,
+  movementConfig,
+  namesConfig,
+  navConfig,
+  ordersConfig,
+  RIDE_TIERS,
+  ridingConfig,
+  vehiclesConfig,
+  worldConfig,
+} from '../../src/config';
 
 describe('config pins spec values', () => {
   it('two-wheelers back up at walking pace, the skateboard does not (Decision 3)', () => {
@@ -10,7 +27,8 @@ describe('config pins spec values', () => {
   });
   it('bay slots are long enough for the car (Decision 13)', () => {
     const car = ridingConfig.rides.car.collider;
-    expect(ridingConfig.bays.spacing).toBeGreaterThanOrEqual(2 * (car.halfLength + car.radius) + 1);
+    expect(ridingConfig.bays.minGap).toBe(1);
+    expect(ridingConfig.bays.spacing).toBeGreaterThanOrEqual(2 * (car.halfLength + car.radius) + ridingConfig.bays.minGap);
   });
   it('movement', () => {
     expect(movementConfig.tickRate).toBe(30);
@@ -24,7 +42,8 @@ describe('config pins spec values', () => {
   });
   it('orders', () => {
     expect(ordersConfig.lockout.seconds).toBe(45);
-    expect(ordersConfig.offers).toEqual({ maxShown: 3, lifetimeSeconds: 25, minIntervalSeconds: 18, maxIntervalSeconds: 30, maxPathQueries: 8 });
+    expect('maxShown' in ordersConfig.offers).toBe(false); // the Dispatcher tier sets it (economy.json)
+    expect(ordersConfig.offers).toEqual({ lifetimeSeconds: 25, minIntervalSeconds: 18, maxIntervalSeconds: 30, maxPathQueries: 8 });
     expect(ordersConfig.deliveryCooldown).toEqual({ minSeconds: 8, maxSeconds: 10 });
     expect(ordersConfig.prep.foodSeconds).toBeGreaterThan(0);
     expect(ordersConfig.referenceSpeed).toBe(8);
@@ -64,7 +83,7 @@ describe('config pins spec values', () => {
     expect([e.payout.qualityWeight, e.payout.luckWeight]).toEqual([0.6, 0.4]);
     expect(e.lock).toEqual({ days: 7, withdrawWindowHours: 24, maxBoost: 0.3, fullBoostUsdMicro: 100_000_000 });
     expect(e.fuelCan).toEqual({ tank: 0.25, markup: 1.5 });
-    expect(e.mockChain).toEqual({ wallet: 'DEV-WALLET', startGame: 600_000, vaultUsdMicro: 50_000_000, usdPerGame: 0.00024, confirmSeconds: 2 });
+    expect(e.mockChain).toEqual({ wallet: 'DEV-WALLET', startGameUnits: 600_000 * 1_000_000, vaultUsdMicro: 50_000_000, usdPerGame: 0.00024, confirmSeconds: 2 });
     for (const m of [...e.lines.vehicle.usdMicro, e.skinUsdMicro, ...e.payout.ranges.car]) expect(Number.isInteger(m)).toBe(true);
   });
   it('cosmetics: six per slot, colours parsed, Gold, Chrome and Neon for the outfit and the paint', () => {
@@ -150,5 +169,64 @@ describe('config pins spec values', () => {
     walk(namesConfig);
     expect(words.length).toBeGreaterThan(200);
     expect(words.filter((w) => banned.test(w))).toEqual([]);
+  });
+});
+
+describe('config is validated at load', () => {
+  type EconomyJson = typeof economyJson;
+  type CosmeticsJson = typeof cosmeticsJson;
+  const econ = (edit: (j: EconomyJson) => void): (() => unknown) => () => {
+    const j = structuredClone(economyJson);
+    edit(j);
+    return loadEconomy(j);
+  };
+  const cos = (edit: (j: CosmeticsJson) => void): (() => unknown) => () => {
+    const j = structuredClone(cosmeticsJson);
+    edit(j);
+    return loadCosmetics(j);
+  };
+
+  it('the shipped files pass', () => {
+    expect(econ(() => {})).not.toThrow();
+    expect(cos(() => {})).not.toThrow();
+    expect(() => assertRiding(ridingConfig)).not.toThrow();
+  });
+
+  it('economy: table lengths follow the price lists', () => {
+    expect(econ((j) => j.lines.vehicle.usd.push(40))).toThrow(/vehicle/);
+    expect(econ((j) => j.lines.bag.slots.pop())).toThrow(/bag\.slots/);
+    expect(econ((j) => j.lines.bag.kg.push(200))).toThrow(/bag\.kg/);
+    expect(econ((j) => j.lines.dispatcher.maxShown.pop())).toThrow(/dispatcher\.maxShown/);
+    expect(econ((j) => j.lines.dispatcher.intervalScale.push(0.4))).toThrow(/dispatcher\.intervalScale/);
+  });
+
+  it('economy: payout ranges, roll weights, split, rate and lock days', () => {
+    expect(econ((j) => (j.payout.ranges.car = [0.6, 0.05]))).toThrow(/payout\.ranges\.car/);
+    expect(econ((j) => (j.payout.ranges.walk = [-0.01, 0.03]))).toThrow(/payout\.ranges\.walk/);
+    expect(econ((j) => (j.payout.luckWeight = 0.5))).toThrow(/luckWeight/);
+    expect(econ((j) => (j.split.linePool = 1.2))).toThrow(/split/);
+    expect(econ((j) => (j.split.linePool = -0.1))).toThrow(/split/);
+    expect(econ((j) => (j.mockChain.usdPerGame = 0))).toThrow(/usdPerGame/);
+    // a 0-day lock would renew forever in one tick
+    expect(econ((j) => (j.lock.days = 0))).toThrow(/lock\.days/);
+  });
+
+  it('economy: the mock wallet starts with startGame whole GAME, loaded as base units', () => {
+    expect(loadEconomy(structuredClone(economyJson)).mockChain.startGameUnits).toBe(economyJson.mockChain.startGame * 1_000_000);
+  });
+
+  it('cosmetics: #rrggbb colours (null only for factory paint), the first of each slot free, unique names', () => {
+    expect(cos((j) => (j.outfit[2]!.color = 'blue'))).toThrow(/outfit.*colou?r/);
+    expect(cos((j) => (j.bag[1]!.color = '#12345'))).toThrow(/bag.*colou?r/);
+    expect(cos((j) => (j.phone[0]!.coins = 10))).toThrow(/phone.*free/);
+    expect(cos((j) => (j.vehicle[3]!.name = 'cherry'))).toThrow(/vehicle.*cherry/);
+  });
+
+  it('riding: a bay slot fits the longest collider plus bays.minGap', () => {
+    const r = structuredClone(ridingConfig);
+    r.bays.spacing = 5.3; // car 4.4 + 1
+    expect(() => assertRiding(r)).toThrow(/bays\.spacing/);
+    r.bays.spacing = 5.4;
+    expect(() => assertRiding(r)).not.toThrow();
   });
 });

@@ -81,7 +81,7 @@ export interface ChainSource {
   payouts(): readonly Payout[];
   /** Sends a purchase paying at most `maxGame`. Never throws: refusals come back as a failed tx. */
   purchase(itemId: ShopItemId, maxGame: number, nowMs: number): Promise<ChainTx>;
-  /** Records an order's payout: converts `usdMicro` (boost included) at `usdPerGame` and pays that GAME from the vault into `accrued`, or records it unpaid when the vault cannot cover it. */
+  /** Records an order's payout: converts `usdMicro` (boost included) at `usdPerGame`, rounded down (usdToGame 'payout'), and pays that GAME from the vault into `accrued`, or records it unpaid when the vault cannot cover it. */
   accrue(p: Omit<Payout, 'id' | 'paid' | 'game'>): Payout;
   lockGame(game: number, nowMs: number): { ok: true } | { ok: false; reason: 'insufficient' | 'locked' };
   /** Whether withdrawLock would succeed at `nowMs`. */

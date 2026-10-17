@@ -249,7 +249,7 @@ export function walletModel(chain: ChainSource, nowMs: number, lists: boolean, c
     // base units × USD per GAME = micro-USD
     vaultUsd: rate ? usdText(Math.floor(vault * rate.usdPerGame)) : '',
     // As accrue decides: the walk minimum, converted at the rate, must fit in the vault.
-    vaultEmpty: rate ? vault < usdToGame(payoutRange('walk', cfg).minMicro, rate) : vault === 0,
+    vaultEmpty: rate ? vault < usdToGame(payoutRange('walk', cfg).minMicro, rate, 'payout') : vault === 0,
     usdPerGame: rate ? rate.usdPerGame : null,
     lock: lock && {
       game: lock.game,

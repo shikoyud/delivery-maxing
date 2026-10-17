@@ -8,6 +8,9 @@ export type CosmeticSlot = 'outfit' | 'vehicle' | 'bag' | 'phone';
 export const COSMETIC_SLOTS: readonly CosmeticSlot[] = ['outfit', 'vehicle', 'bag', 'phone'];
 export type Finish = 'gold' | 'chrome' | 'neon';
 
+/** The id part of a Coin cosmetic's name (`cosmetic.<slot>.<slug>`): lower case, runs of other characters to "-". */
+export const cosmeticSlug = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
 /** `line.<line>.<tier>`, `skin.<slot>.<finish>`, `lockoutSkip`, `cosmetic.<slot>.<name>`, `fuelCan`. */
 export type ShopItemId = string;
 

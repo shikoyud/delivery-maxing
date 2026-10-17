@@ -13,5 +13,5 @@
   "riding": { "mountRadius": 2.5, "mountReachHeight": 1.5, "stoppedSpeed": 0.5, "dismountGap": 0.3, "emptyTankSpeed": 3 },
   "refuel": { "pumpRadius": 3, "tankPerSecond": 0.25 },
   "summon": { "minDistance": 100, "cooldownSeconds": 60, "minClearance": 3, "searchRadius": 60, "ringSamples": 16 },
-  "bays": { "spacing": 5.5 }
+  "bays": { "spacing": 5.5, "minGap": 1 }
 }

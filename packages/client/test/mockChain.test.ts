@@ -6,7 +6,7 @@ const cfg = economyConfig;
 const DAY = 86_400_000;
 const T0 = 1_760_000_000_000;
 const CONFIRM_MS = cfg.mockChain.confirmSeconds * 1000;
-const START = cfg.mockChain.startGame * GAME_UNITS;
+const START = cfg.mockChain.startGameUnits;
 
 function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -147,7 +147,7 @@ describe('MockChain', () => {
     const { chain, clock } = setup();
     const rate = { usdPerGame: cfg.mockChain.usdPerGame, updatedAt: clock.t };
     const vault0 = chain.vault();
-    expect(vault0).toBe(usdToGame(usd(50), rate));
+    expect(vault0).toBe(usdToGame(usd(50), rate, 'payout'));
     const base = { orderId: 'o1', luck: 0.5, quality: 0.8, usdPerGame: rate.usdPerGame, at: clock.t };
 
     const p = chain.accrue({ ...base, usdMicro: 120_000, boost: 1 });
@@ -250,7 +250,7 @@ describe('MockChain', () => {
       expect(chain.mock).toBe(true);
       expect(chain.balance()).toBe(START);
       expect(chain.accrued()).toBe(0);
-      expect(chain.vault()).toBe(usdToGame(usd(50), { usdPerGame: cfg.mockChain.usdPerGame, updatedAt: T0 }));
+      expect(chain.vault()).toBe(usdToGame(usd(50), { usdPerGame: cfg.mockChain.usdPerGame, updatedAt: T0 }, 'payout'));
       expect(chain.ownership()).toEqual({ lines: { vehicle: 0, bag: 0, shoes: 0, dispatcher: 0 }, skins: [] });
       expect(chain.lock()).toBeNull();
       const tx = await chain.purchase('line.bag.1', Number.MAX_SAFE_INTEGER, T0);

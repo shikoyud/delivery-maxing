@@ -77,7 +77,11 @@ export interface RidingConfig {
   };
   refuel: { pumpRadius: number; tankPerSecond: number };
   summon: { minDistance: number; cooldownSeconds: number; minClearance: number; searchRadius: number; ringSamples: number };
-  bays: { spacing: number };
+  /**
+   * Bay slots run nose-to-tail `spacing` apart (m); the longest ride's collider plus `minGap` must fit in one (asserted
+   * at load), so neighbours never touch.
+   */
+  bays: { spacing: number; minGap: number };
 }
 
 export interface NavConfig {
@@ -138,7 +142,6 @@ interface Rewards { short: number; medium: number; long: number; hot: number; pa
 
 export interface OrdersConfig {
   offers: {
-    maxShown: number;
     lifetimeSeconds: number;
     minIntervalSeconds: number;
     maxIntervalSeconds: number;
@@ -457,7 +460,8 @@ export interface EconomyConfig {
   lock: { days: number; withdrawWindowHours: number; maxBoost: number; fullBoostUsdMicro: number };
   /** A fuel can adds `tank` of a tank for `markup` × the pump price of that much fuel. */
   fuelCan: { tank: number; markup: number };
-  mockChain: { wallet: string; startGame: number; vaultUsdMicro: number; usdPerGame: number; confirmSeconds: number };
+  /** `startGameUnits`: the dev wallet's starting balance in base units (economy.json `startGame` is whole GAME). */
+  mockChain: { wallet: string; startGameUnits: number; vaultUsdMicro: number; usdPerGame: number; confirmSeconds: number };
 }
 
 /** One Coin cosmetic. `color` null keeps each model's own colours (the free factory paint). */

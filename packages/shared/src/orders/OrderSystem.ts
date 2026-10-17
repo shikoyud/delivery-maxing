@@ -217,9 +217,10 @@ export class OrderSystem {
     }
 
     // An order not reached by its pickup deadline fails like a cancel; the lockout it starts blocks this tick's roll.
+    // Standing at the pickup on the deadline tick counts as reaching it (the arrival is handled below).
     for (let i = this._active.length - 1; i >= 0; i--) {
       const a = this._active[i] as ActiveOrder;
-      if (now < a.pickupBy || a.prepStartedAt !== null || a.pickedUpAt !== null) continue;
+      if (now < a.pickupBy || a.prepStartedAt !== null || a.pickedUpAt !== null || zones.poiIds.has(a.order.pickupPoiId)) continue;
       this._active.splice(i, 1);
       const lockoutSeconds = cfg.pickupDeadline.lockoutSeconds;
       this.startLockout(now, lockoutSeconds, 'missedPickup');

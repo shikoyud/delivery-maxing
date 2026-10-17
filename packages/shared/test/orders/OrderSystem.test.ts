@@ -17,7 +17,7 @@ const zeroRng: Rng = () => 0;
 const cfgWith = (kind: 'food' | 'package', modifier: 'none' | 'express' | 'fragile' = 'none'): OrdersConfig => ({
   ...ordersConfig,
   // These tests pin the original pacing; the prep and cooldown tests below opt in to the live values.
-  offers: { maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15, maxPathQueries: 8 },
+  offers: { lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15, maxPathQueries: 8 },
   deliveryCooldown: { minSeconds: 0, maxSeconds: 0 },
   prep: { foodSeconds: 0 },
   mix: {
@@ -296,6 +296,24 @@ describe('OrderSystem', () => {
     expect(pkg.active).toHaveLength(1);
   });
 
+  test('arriving at the pickup on the deadline tick counts as reaching it in time', () => {
+    const food = makeSystem({ cfg: { ...cfgWith('food'), prep: { foodSeconds: 6 } } });
+    food.update(8, offerPlayer, nowhere);
+    food.accept('o1', 0);
+    const ev = food.update(180, offerPlayer, zones('fp-near'));
+    expect(kinds(ev)).toContain('prepStarted');
+    expect(kinds(ev)).not.toContain('pickupMissed');
+    expect(food.active).toHaveLength(1);
+
+    const pkg = makeSystem({ pois: packagePois([5]), cfg: cfgWith('package') });
+    pkg.update(8, offerPlayer, nowhere);
+    pkg.accept('o1', 0);
+    const ev2 = pkg.update(180, offerPlayer, zones('ps-5'));
+    expect(kinds(ev2)).toContain('pickedUp');
+    expect(kinds(ev2)).not.toContain('pickupMissed');
+    expect(pkg.lockoutReason).toBeNull();
+  });
+
   test('a cancel lockout still running is extended to the missed-pickup lockout, never shortened', () => {
     const other = makeSystem({ pois: twoFoodPois(), capacity: CAR });
     other.update(8, offerPlayer, nowhere);
@@ -490,12 +508,11 @@ describe('the Dispatcher tier', () => {
     const cfg = { ...cfgWith('food'), offers: { ...cfgWith('food').offers, lifetimeSeconds: 1e6 } };
     const sys = makeSystem({ pois: manyFood(), cfg, dispatcher: () => dispatcherTuning(tier) });
     let peak = 0;
-    let count = 0;
     for (let t = 0; t <= seconds; t += 0.5) {
-      count += sys.update(t, offerPlayer, nowhere).filter((e) => e.kind === 'offered').length;
+      sys.update(t, offerPlayer, nowhere);
       peak = Math.max(peak, sys.offers.length);
     }
-    return { peak, count };
+    return { peak };
   };
   test('Dispatcher 5 shows up to 5 offers and rolls them twice as often as tier 0', () => {
     expect(offered(0, 200).peak).toBe(3);

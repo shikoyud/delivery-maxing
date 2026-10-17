@@ -9,8 +9,17 @@ test('$10 at $0.00024 per GAME is 41,666,666,667 base units (ceil) and maxGame a
   expect(quote(10_000_000, rate, NOW, economyConfig)).toEqual({ ok: true, game: 41_666_666_667, maxGame: Math.ceil(41_666_666_667 * 1.02) });
   // a whole result is not pushed up by float noise: $12 is exactly 50,000 GAME, at most 51,000
   expect(quote(12_000_000, rate, NOW, economyConfig)).toEqual({ ok: true, game: 50_000_000_000, maxGame: 51_000_000_000 });
-  expect(usdToGame(120_000, rate)).toBe(500_000_000); // $0.12 ≈ 500 GAME
-  expect(usdToGame(10_000_000, rate)).toBe(41_666_666_667);
+  expect(usdToGame(120_000, rate, 'purchase')).toBe(500_000_000); // $0.12 ≈ 500 GAME
+  expect(usdToGame(10_000_000, rate, 'purchase')).toBe(41_666_666_667);
+});
+
+test('payouts round down, purchases up: the player never gets a base unit the vault did not cover', () => {
+  // $10 is 41,666,666,666.67 base units
+  expect(usdToGame(10_000_000, rate, 'payout')).toBe(41_666_666_666);
+  expect(usdToGame(10_000_000, rate, 'purchase')).toBe(41_666_666_667);
+  // a whole result is not pushed down by float noise either: $0.12 is exactly 500 GAME both ways
+  expect(usdToGame(120_000, rate, 'payout')).toBe(500_000_000);
+  expect(usdToGame(210_000, { usdPerGame: 0.00024, updatedAt: 0 }, 'payout')).toBe(875_000_000);
 });
 
 test('a rate older than 15 minutes is stale; no rate is noRate; a move over 20% is refused', () => {

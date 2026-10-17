@@ -83,7 +83,7 @@ function stop(h: Harness): void {
 function fragileCarried(): { sys: OrderSystem; id: string } {
   const cfg: OrdersConfig = {
     ...ordersConfig,
-    offers: { maxShown: 3, lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15, maxPathQueries: 8 },
+    offers: { lifetimeSeconds: 20, minIntervalSeconds: 8, maxIntervalSeconds: 15, maxPathQueries: 8 },
     deliveryCooldown: { minSeconds: 0, maxSeconds: 0 },
     prep: { foodSeconds: 0 },
     mix: { kindWeights: { food: 0, package: 1 }, modifierWeights: { none: 0, express: 0, fragile: 1 } },

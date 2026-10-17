@@ -60,7 +60,16 @@ test('nextTier returns the next unowned tier of a line, null when maxed; prices 
   expect(() => vehicleOfTier(5)).toThrow();
 });
 
-const BRANDS = ['amazon', 'grab', 'shopee', 'uber', 'doordash', 'deliveroo', 'postmates', 'gojek', 'foodpanda', 'swiggy', 'zomato', 'just eat', 'fedex', 'ups', 'dhl', 'pump.fun', 'solana'];
+test('cosmetic ids are pinned: renaming an item in cosmetics.json changes its id and orphans saved wardrobes', () => {
+  expect(catalog.filter((i) => i.kind === 'cosmetic').map((i) => i.id)).toEqual([
+    'cosmetic.outfit.teal', 'cosmetic.outfit.coral', 'cosmetic.outfit.sky', 'cosmetic.outfit.lime', 'cosmetic.outfit.plum', 'cosmetic.outfit.charcoal',
+    'cosmetic.vehicle.factory', 'cosmetic.vehicle.cherry', 'cosmetic.vehicle.ocean', 'cosmetic.vehicle.sunflower', 'cosmetic.vehicle.mint', 'cosmetic.vehicle.midnight',
+    'cosmetic.bag.cardboard', 'cosmetic.bag.crimson', 'cosmetic.bag.navy', 'cosmetic.bag.olive', 'cosmetic.bag.lavender', 'cosmetic.bag.snow',
+    'cosmetic.phone.slate', 'cosmetic.phone.rose', 'cosmetic.phone.aqua', 'cosmetic.phone.lemon', 'cosmetic.phone.grape', 'cosmetic.phone.pearl',
+  ]);
+});
+
+const BRANDS = ['amazon', 'grab', 'shopee', 'uber', 'doordash', 'deliveroo', 'postmates', 'gojek', 'foodpanda', 'shopeefood', 'uber eats', 'swiggy', 'zomato', 'just eat', 'fedex', 'ups', 'dhl', 'pump.fun', 'solana'];
 
 test('no label names a real brand (the §16 list)', () => {
   const names = [...catalog.map((i) => i.label), ...(['outfit', 'vehicle', 'bag', 'phone'] as const).flatMap((s) => cosmeticsConfig[s].map((c) => c.name))];

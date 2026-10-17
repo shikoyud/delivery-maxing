@@ -112,7 +112,7 @@ describe('drive model', () => {
     expect(applyDrive(mk('bicycle'), { ...LEFT, steer: -1 }, spec, 16, G, DT)).toBeCloseTo(-spec.turnRateLow * DT, 9);
   });
 
-  test('W+A (the normalised diagonal) turns at the full turn rate and accelerates at full throttle', () => {
+  test('driveInput takes each axis at full strength: W+A turns at the full turn rate at full throttle; one axis or a partial stick is unchanged', () => {
     const spec = ridingConfig.rides.car;
     const d = Math.SQRT1_2;
     expect(driveInput(frame(-d, d), spec)).toEqual({ throttle: 1, steer: 1, handbrake: false });

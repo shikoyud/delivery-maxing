@@ -1,6 +1,6 @@
 import { cosmeticsConfig, economyConfig, ridingConfig } from '../config';
 import { RIDE_TIERS, type CosmeticsConfig, type EconomyConfig, type RideTier, type RidingConfig, type VehicleTier } from '../config/types';
-import { COSMETIC_SLOTS, LINES, type CosmeticSlot, type Finish, type Line, type LineTiers, type ShopItem, type ShopItemId } from './types';
+import { COSMETIC_SLOTS, LINES, cosmeticSlug, type CosmeticSlot, type Finish, type Line, type LineTiers, type ShopItem, type ShopItemId } from './types';
 
 /** Vehicle line tier 0 is on foot; tiers 1–4 are the rides in order (spec §6.2). */
 const VEHICLE_BY_TIER: readonly VehicleTier[] = ['walk', 'skateboard', 'bicycle', 'motorbike', 'car'];
@@ -24,7 +24,6 @@ const LINE_LABEL: Record<Exclude<Line, 'vehicle'>, string> = { bag: 'Bag', shoes
 const SLOT_LABEL: Record<CosmeticSlot, string> = { outfit: 'outfit', vehicle: 'paint', bag: 'bag', phone: 'phone case' };
 const FINISH_LABEL: Record<Finish, string> = { gold: 'Gold', chrome: 'Chrome', neon: 'Neon' };
 const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-const slug = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
 /** Every item the Shop sells: the four lines' tiers, premium skins, the lockout skip, Coin cosmetics and the fuel can. */
 export function shopCatalog(econ: EconomyConfig = economyConfig, cos: CosmeticsConfig = cosmeticsConfig): ShopItem[] {
@@ -45,7 +44,7 @@ export function shopCatalog(econ: EconomyConfig = economyConfig, cos: CosmeticsC
   for (const slot of COSMETIC_SLOTS) {
     for (const c of cos[slot]) {
       items.push({
-        id: `cosmetic.${slot}.${slug(c.name)}`,
+        id: `cosmetic.${slot}.${cosmeticSlug(c.name)}`,
         kind: 'cosmetic',
         currency: 'coins',
         coins: c.coins,
@@ -72,17 +71,20 @@ export function fuelCanCoins(ride: RideTier, econ: EconomyConfig = economyConfig
 
 let byId: Map<ShopItemId, ShopItem> | null = null;
 
+/** The shipped catalog by id, built once. */
+function catalogById(): Map<ShopItemId, ShopItem> {
+  byId ??= new Map(shopCatalog().map((i) => [i.id, i]));
+  return byId;
+}
+
 /** The shipped catalog's item; throws on an unknown id. */
 export function shopItem(id: ShopItemId): ShopItem {
-  byId ??= new Map(shopCatalog().map((i) => [i.id, i]));
-  const item = byId.get(id);
+  const item = catalogById().get(id);
   if (!item) throw new Error(`unknown shop item ${id}`);
   return item;
 }
 
 /** The next tier of `line` after the one owned, or null when the line is maxed. */
 export function nextTier(line: Line, owned: LineTiers): ShopItem | null {
-  const id = `line.${line}.${owned[line] + 1}`;
-  byId ??= new Map(shopCatalog().map((i) => [i.id, i]));
-  return byId.get(id) ?? null;
+  return catalogById().get(`line.${line}.${owned[line] + 1}`) ?? null;
 }
