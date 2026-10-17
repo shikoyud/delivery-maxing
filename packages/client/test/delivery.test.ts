@@ -1,8 +1,17 @@
 import { describe, expect, it, test } from 'vitest';
 import * as THREE from 'three';
 import {
+  Garage,
+  NO_MODS,
+  PlayerSim,
+  createPhysicsWorld,
   emptyInput,
   expandGreybox,
+  initRapier,
+  movementConfig,
+  vec3,
+  type InputFrame,
+  type MapData,
   ordersConfig,
   ridingConfig,
   streetDistance,
@@ -574,6 +583,52 @@ describe('DeliveryLoop', () => {
     s.tick(false, true);
     expect(s.loop.phoneOpen).toBe(true);
     expect(s.simFrames.at(-1)!.jump.held).toBe(false);
+  });
+
+  it('with the phone open the skateboard holds still on a 12° slope: S brakes it (Space does not, it ollies)', async () => {
+    // A real sim on a 12° ramp, fed the frames beforeStep gives it with the phone open.
+    const slope = 12;
+    const rampMap: MapData = {
+      ...map,
+      solids: [
+        { id: 'ground', kind: 'ground', center: vec3(0, -0.5, 0), size: vec3(200, 1, 200) },
+        { id: 'ramp', kind: 'ramp', center: vec3(0, 7, 0), size: vec3(20, 1, 60), rotationDeg: vec3(slope, 0, 0) },
+      ],
+      pois: [],
+      accessZones: [],
+      gasStations: [],
+    };
+    const rapier = await initRapier();
+    /** Ticks the phone-open sim for 2 s and returns how far the board moved; `frame` builds each tick's input. */
+    const drift = (frame: () => InputFrame): number => {
+      const physics = createPhysicsWorld(rapier, rampMap);
+      const garage = new Garage(physics, rampMap, [{ tier: 'skateboard', spot: { kind: 'carried' }, fuel: 1 }]);
+      const sim = new PlayerSim(physics, rampMap, movementConfig, vec3(0, 7.8, 0), 0, garage);
+      for (let i = 0; i < 10; i++) sim.step(emptyInput(), NO_MODS, 0);
+      expect(sim.state.grounded).toBe(true);
+      const mount = emptyInput();
+      mount.mount = { held: true, pressed: true };
+      sim.step(mount, NO_MODS, 0);
+      expect(sim.state.riding).toBe('skateboard');
+      const start = { ...sim.state.position };
+      for (let i = 0; i < 2 * movementConfig.tickRate; i++) sim.step(frame(), NO_MODS, 0);
+      expect(sim.state.riding).toBe('skateboard');
+      return Math.hypot(sim.state.position.x - start.x, sim.state.position.z - start.z);
+    };
+
+    const s = setup('skateboard');
+    s.rider.riding = 'skateboard';
+    s.rider.speed = 0;
+    s.tick(false, true);
+    expect(s.loop.phoneOpen).toBe(true);
+    const f = s.loop.beforeStep(emptyInput());
+    expect(f.move).toEqual({ x: 0, y: -1 });
+    expect(f.jump).toEqual({ held: false, pressed: false });
+    expect(drift(() => s.loop.beforeStep(emptyInput()))).toBeLessThan(0.1);
+
+    // Not vacuous: Space held alone (the other rides' phone input) lets the board roll down the slope.
+    const space = (): InputFrame => ({ ...emptyInput(), jump: { held: true, pressed: false } });
+    expect(drift(space)).toBeGreaterThan(1);
   });
 
   it('Y accepts the top offer while riding at speed', () => {

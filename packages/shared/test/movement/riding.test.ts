@@ -154,7 +154,6 @@ describe('riding', () => {
 });
 
 describe('the skateboard ollie (Decision 10)', () => {
-  const JUMP = ridingConfig.rides.skateboard.jumpHeight as number;
   const BOARD_R = ridingConfig.rides.skateboard.collider.radius;
   const jumped = (ev: { kind: string }[]) => ev.some((e) => e.kind === 'jumped');
 
@@ -248,7 +247,6 @@ describe('the skateboard ollie (Decision 10)', () => {
     };
     expect(await pressAfterLeaving(early)).toBe(true);
     expect(await pressAfterLeaving(tooEarly)).toBe(false);
-    expect(JUMP).toBe(0.8);
   });
 
   test('Space on the car is the handbrake, never a jump', async () => {

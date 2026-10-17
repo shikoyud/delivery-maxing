@@ -304,7 +304,9 @@ export class DeliveryLoop {
    * than ridingConfig.riding.stoppedSpeed they only say "Stop to use the phone" (spec §8: notifications only while
    * riding). Y accepts the top offer here, riding or not, before afterStep's update, so an accept on an offer's expiry
    * tick reports 'expired' (Review Focus 1). While the phone is open Y is ignored and only the look passes (the Orders
-   * app's buttons accept, between ticks at `now()`), with the handbrake held on a vehicle so it stays put. F on foot
+   * app's buttons accept, between ticks at `now()`), with the brake held on a vehicle so it stays put: Space (the
+   * handbrake) on a ride whose Space does not jump, S on one that ollies (its jumpHeight is set; it does not reverse, so
+   * S only brakes, slopes included). F on foot
    * next to a ride that can't hold the active orders is swallowed (the sim never mounts it) with the reason.
    */
   beforeStep(frame: InputFrame): InputFrame {
@@ -324,7 +326,11 @@ export class DeliveryLoop {
     }
     const idle = emptyInput();
     idle.look = frame.look;
-    if (this.d.rider().riding !== null) idle.jump = { held: true, pressed: false }; // Space: the handbrake
+    const tier = this.d.rider().riding;
+    if (tier !== null) {
+      if (ridingConfig.rides[tier].jumpHeight === null) idle.jump = { held: true, pressed: false }; // Space: the handbrake
+      else idle.move = { x: 0, y: -1 }; // S: the brake (Space would not brake a ride that jumps)
+    }
     return idle;
   }
 
