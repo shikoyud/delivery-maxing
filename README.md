@@ -59,7 +59,7 @@ pnpm install && pnpm dev   # then open the URL Vite prints
 | Input | Action |
 | --- | --- |
 | W A S D | On foot: move. On a vehicle: W throttle, S brakes then reverses (car, bicycle, motorbike; the skateboard only brakes), A / D steer, also when stopped (reversing steers like a car) |
-| Mouse | Look (click the page to lock the pointer). On a vehicle the camera orbits freely and eases back behind the ride once you stop moving the mouse; the mouse never steers |
+| Mouse | Look (click the page to lock the pointer). On a vehicle the camera orbits freely and eases back behind the ride 1.5 s after you stop moving the mouse, while the ride moves faster than 2 m/s; the mouse never steers |
 | Space | Jump; climb onto ledges up to chest height. On the skateboard: ollie (0.8 m). On the bicycle, motorbike and car: handbrake |
 | C | Crouch; crouch-slide while sprinting |
 | Shift | Sprint on / off (toggle); drains the stamina ring top left. Unused on a vehicle |

@@ -46,7 +46,7 @@ describe('createProgressStore (v3)', () => {
   it('a legacy v3 save (SP4, written on the greybox) loads as the greybox save once; the city starts fresh', () => {
     const storage = memoryStorage();
     const g = garage().slice(0, 2);
-    storage.data.set(PROGRESS_KEY_V3, JSON.stringify({ totals: TOTALS, garage: g, lastRide: 'bicycle', cosmetics: W }));
+    storage.data.set(PROGRESS_KEY_V3, JSON.stringify({ totals: TOTALS, garage: g, lastRide: 'bicycle' })); // SP4: no cosmetics
     expect(createProgressStore(storage, 'city', garage).load()).toEqual({ totals: ZERO, garage: garage(), lastRide: null, cosmetics: W });
     const grey = createProgressStore(storage, 'greybox', garage);
     expect(grey.load()).toEqual({ totals: TOTALS, garage: g, lastRide: 'bicycle', cosmetics: W });
@@ -182,7 +182,7 @@ describe('createProgressStore (v3)', () => {
   test('a SP5 save keeps totals but its vehicles are not owned until the chain says so (Decision 2)', () => {
     const storage = memoryStorage();
     // An SP5 save: every vehicle owned and parked, no cosmetics.
-    storage.data.set(progressKey('greybox'), JSON.stringify({ totals: TOTALS, garage: garage(), lastRide: 'car', cosmetics: W }));
+    storage.data.set(progressKey('greybox'), JSON.stringify({ totals: TOTALS, garage: garage(), lastRide: 'car' }));
     const p = createProgressStore(storage, 'greybox', () => []).load();
     expect(p.totals).toEqual(TOTALS);
     expect(p.cosmetics).toEqual(defaultWardrobe());

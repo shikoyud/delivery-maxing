@@ -112,9 +112,9 @@ The player's capacity is the smaller of the two. All values are config.
 
 | Rule | Value (config) |
 |---|---|
-| Offers shown at once | Up to 3 (Dispatcher tier 0); up to 5 at tier 5 |
-| Offer lifetime | 20 s, then it disappears |
-| New offers | Every 8–15 s while the player has a free slot, scaled by the Dispatcher tier (×1.0 at tier 0 down to ×0.5 at tier 5) |
+| Offers shown at once | At most 3, 3, 4, 4, 5, 5 at Dispatcher tiers 0–5 (`lines.dispatcher.maxShown`). The cap counts the offers still within their lifetime, so it is reached only when the lifetime allows: at the tier 5 interval (9–15 s) and a 25 s lifetime about two or three offers are up at once |
+| Offer lifetime | 25 s (`offers.lifetimeSeconds`), then it disappears |
+| New offers | Every 18–30 s (`offers.minIntervalSeconds`–`maxIntervalSeconds`) while the player has a free slot, scaled by the Dispatcher tier: ×1.0, 0.9, 0.8, 0.7, 0.6, 0.5 at tiers 0–5 (`lines.dispatcher.intervalScale`; 9–15 s at tier 5) |
 | Pickup distance | The pickup is at most 400 m (path) from the player when offered |
 | Accepting | One tap on the phone, anywhere; while driving, a one-key accept on the notification |
 | Pickup deadline | After accepting, the courier has **3 min** to reach the pickup door. Missing it fails the order (no points, Coins or GAME) and starts a 3 min offer lockout (§3.5). |
@@ -159,7 +159,7 @@ Every value is a tuning value in config. Points are rounded to the nearest whole
 
 ## 4. Movement and vehicles
 
-**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). On foot, movement is relative to the camera. On a vehicle, WASD alone drives it (W throttle, S brake and reverse, A/D steer) and the mouse only looks around; the camera swings back behind the vehicle shortly after the mouse stops moving.
+**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). On foot, movement is relative to the camera. On a vehicle, WASD alone drives it (W throttle, S brake and reverse, A/D steer) and the mouse only looks around; the camera swings back behind the vehicle once the mouse has been still for 1.5 s, while the vehicle moves faster than 2 m/s (`camera.ride`).
 
 All movement and vehicle code lives in the shared package and runs on the fixed **30 Hz** step on client and server; rendering interpolates between steps.
 
@@ -195,7 +195,7 @@ All movement and vehicle code lives in the shared package and runs on the fixed 
 - **Reverse:** S brakes, then reverses: the car at 6 m/s, the bicycle and motorbike at walking pace (2 and 2.5 m/s, `config/riding.json`); the skateboard only brakes. A/D turn every vehicle on the spot when stopped, so a wedged bike can always get out.
 - **Speed caps:** each vehicle's top speed is its server-enforced cap (§10).
 - **Crashes:** hitting a wall above 10 m/s costs a carried Fragile bonus (§3.2). It does not knock the rider off until combat and collisions (SP7).
-- **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Vehicles are an upgrade line bought in order (skateboard first, car last); a player owns every tier up to the one bought and switches at any parked vehicle. Until the shop (SP6), all four vehicles are owned from the start, with dev-panel toggles to remove or re-add them.
+- **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Vehicles are an upgrade line bought in order (skateboard first, car last); a player owns every tier up to the one bought and switches at any parked vehicle. A new player owns no vehicle; the dev panel's Owned boxes grant and revoke tiers on the mock chain (SP6).
 - **Models:** the skateboard, bicycle and motorbike are not in the art packs yet (placeholders until supplied); the car is chosen from the pack's cars.
 
 ### 4.3 Where each vehicle can go
@@ -246,7 +246,7 @@ Premium skins (GAME, §6.2) are three finishes, **Gold, Chrome and Neon**, each 
 
 ### 6.2 GAME purchases
 
-Paid with GAME at a fixed USD price (§6.4). Ownership is recorded on-chain against the wallet and is permanent.
+Paid with GAME at a fixed USD price (§6.3). Ownership is recorded on-chain against the wallet and is permanent.
 
 **Four upgrade lines (revision 3)**, each with tiers bought in order (tier 0 is free), each strictly better than the tier below:
 
@@ -255,7 +255,7 @@ Paid with GAME at a fixed USD price (§6.4). Ownership is recorded on-chain agai
 | **Vehicle** | The payout range (§3.6), speed, and the capacity cap (§4.2) | Skateboard, bicycle, motorbike, car | $2, $5, $12, $25 | 80% burned, 20% to the reward vault |
 | **Bag** | Slots and max package weight (§3.3) | 5 | $1, $2, $4, $8, $15 | 80% burned, 20% to the vault |
 | **Shoes** | +3.5% on-foot sprint speed per tier (about +17.5% maxed) | 5 | $1, $2, $3, $4, $5 | 80% burned, 20% to the vault |
-| **Dispatcher** | Offers more often (interval ×0.9, 0.8, 0.7, 0.6, 0.5), more at once (3, 3, 4, 4, 5, 5 from tier 0), and weighted toward long and modified orders (the top of the payout range) | 5 | $1, $3, $6, $10, $15 | 80% burned, 20% to the vault |
+| **Dispatcher** | Offers more often (interval ×0.9, 0.8, 0.7, 0.6, 0.5 of 18–30 s), more at once (a cap of 3, 3, 4, 4, 5, 5 from tier 0, counted within the 25 s offer lifetime, §3.4), and weighted toward long and modified orders (the top of the payout range) | 5 | $1, $3, $6, $10, $15 | 80% burned, 20% to the vault |
 
 Other GAME purchases:
 
