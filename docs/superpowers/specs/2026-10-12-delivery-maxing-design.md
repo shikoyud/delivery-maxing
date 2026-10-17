@@ -1,7 +1,7 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) approved by the owner on 2026-10-14:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). **SP5 playtest changes (2026-10-17, the owner's decisions):** a full-screen map instead of the phone's Map app, a food-prep progress bar, a skateboard jump, getting off at any speed, and WASD-only vehicle controls with the mouse for looking. Sections marked **Pending** need the owner's input before they are built.
+- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) approved by the owner on 2026-10-14:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). **SP5 playtest changes (2026-10-17, the owner's decisions):** a full-screen map instead of the phone's Map app, a food-prep progress bar, a skateboard jump, getting off at any speed, WASD-only vehicle controls with the mouse for looking, and a 3 min pickup deadline with a 3 min offer lockout. Sections marked **Pending** need the owner's input before they are built.
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
@@ -41,6 +41,7 @@ Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel
 | **Vehicle controls (SP5 playtest)** | WASD only: W throttle, S brake and reverse, A/D steer. The mouse only looks. Get off at any speed. The skateboard jumps (§4.2). |
 | **Spawning and safe zones (rev. 2)** | Four hospitals are the only spawn points and the only safe zones. |
 | **Cancelling (rev. 2)** | Cancel any order from the phone, anywhere. No cooldown, but the server stops sending you offers for a while; burning GAME skips the wait (§3.5). |
+| **Pickup deadline (SP5 playtest)** | 3 min from accepting to reach the pickup; missing it fails the order and locks offers for 3 min (§3.4). |
 | **Ranks (rev. 2)** | Removed. |
 | **City (rev. 2)** | 1.2 × 1.2 km terraced Western bay city built from the owner's Megatropolis and Tropical City packs; dense wall-to-wall blocks, four levels (§5, `2026-10-14-city-map-design.md`). Replaces the SP2 2 × 2 km city. |
 | **Token (rev. 2)** | GAME launches on Pump.fun paired with SOL (no AMZNx). Creator fees accrue in SOL. |
@@ -104,6 +105,7 @@ Faster vehicles beat the timers more easily; that is intended (design goal 2).
 | New offers | Every 8–15 s while the player has a free slot |
 | Pickup distance | The pickup is at most 400 m (path) from the player when offered |
 | Accepting | One tap on the phone, anywhere; while driving, a one-key accept on the notification |
+| Pickup deadline | After accepting, the courier has **3 min** to reach the pickup door. Missing it fails the order (no points, Coins or GAME) and starts a 3 min offer lockout (§3.5). |
 | Selection rules | Distance bands, door spacing, reuse and reachability per city map design §6.4 |
 
 Players never compete for the same order: each player's offers are their own.
@@ -112,6 +114,7 @@ Players never compete for the same order: each player's offers are their own.
 
 - Any accepted order can be cancelled from the phone, anywhere, at any time. There is no cancel cooldown.
 - Cancelling starts an **offer lockout**: the server sends that player no new offers for 45 s (config). Orders already accepted continue normally.
+- Missing the pickup deadline (§3.4) also fails the order and starts a longer lockout of 3 min (config). A longer lockout replaces a shorter one still running; it never shortens one.
 - The lockout can be skipped by burning GAME at a fixed USD price (§6.3). The price is **Pending**.
 - A cancelled order that was already picked up simply disappears. No points, Coins or GAME.
 
@@ -379,7 +382,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 | 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
 | 4 | **Vehicles** | Built (PR #10). Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
 | 5 | **City v2** | Built (PR #12). The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs. Draw-call and triangle budgets proved on the placeholder city in the sandbox; 60 fps with the pack models awaits the owner's `?perf=1` run. The city is the default map; `?map=greybox` keeps the SP4 test town. |
-| 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps; plus the SP5 playtest changes: the full-screen map, the food-prep bar, the skateboard jump, getting off at any speed and WASD vehicle controls. |
+| 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps; plus the SP5 playtest changes: the full-screen map, the food-prep bar, the skateboard jump, getting off at any speed, WASD vehicle controls and the 3 min pickup deadline. |
 | 7 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation for players and vehicles, server-authoritative thieves, wallet sign-in, Postgres persistence, combat and collisions, anti-cheat, reconnects. |
 | 8 | **Reward program + launch** | After the owner's payout design (§9): harvest spike, Anchor program, buyback, price keeper, claims, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 
