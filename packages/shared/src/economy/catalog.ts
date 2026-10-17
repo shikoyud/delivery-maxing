@@ -15,6 +15,11 @@ export function tierOfVehicle(v: VehicleTier): number {
   return VEHICLE_BY_TIER.indexOf(v);
 }
 
+/** The sprint multiplier of an owned Shoes tier: +shoes.sprintPerTier per tier (spec §6.2). */
+export function shoesSprintMul(tier: number, econ: EconomyConfig = economyConfig): number {
+  return 1 + tier * econ.lines.shoes.sprintPerTier;
+}
+
 const LINE_LABEL: Record<Exclude<Line, 'vehicle'>, string> = { bag: 'Bag', shoes: 'Shoes', dispatcher: 'Dispatcher' };
 const SLOT_LABEL: Record<CosmeticSlot, string> = { outfit: 'outfit', vehicle: 'paint', bag: 'bag', phone: 'phone case' };
 const FINISH_LABEL: Record<Finish, string> = { gold: 'Gold', chrome: 'Chrome', neon: 'Neon' };

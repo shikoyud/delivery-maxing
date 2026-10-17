@@ -395,7 +395,7 @@ describe('OrderSystem', () => {
     sys.accept(order.id, 9);
     expect(sys.statModifiers().canSprint).toBe(true);
     sys.update(10, offerPlayer, zones('ps-100'));
-    expect(sys.statModifiers()).toEqual({ speedMul: 1, jumpHeightMul: 1, canSprint: false });
+    expect(sys.statModifiers()).toEqual({ speedMul: 1, jumpHeightMul: 1, sprintMul: 1, canSprint: false });
     sys.update(11, offerPlayer, zones('dp-0'));
     expect(sys.statModifiers().canSprint).toBe(true);
   });

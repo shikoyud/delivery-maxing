@@ -57,11 +57,13 @@ export interface PlayerState {
 export interface StatModifiers {
   speedMul: number;
   jumpHeightMul: number;
+  /** Multiplies the sprint target only, on foot (Shoes, spec §6.2); the on-foot speedCap still applies. */
+  sprintMul: number;
   /** False while a Heavy order is carried: the sprint toggle is ignored and sprint stays off. */
   canSprint: boolean;
 }
 
-export const NO_MODS: StatModifiers = Object.freeze({ speedMul: 1, jumpHeightMul: 1, canSprint: true });
+export const NO_MODS: StatModifiers = Object.freeze({ speedMul: 1, jumpHeightMul: 1, sprintMul: 1, canSprint: true });
 
 export type SimEvent =
   | { kind: 'jumped' }

@@ -35,13 +35,14 @@ export function wishDirection(input: InputFrame): Vec3 {
 }
 
 /**
- * Speed the player is trying to reach on the ground: run or sprint, scaled by stick magnitude and speedMul.
+ * Speed the player is trying to reach on the ground: run or sprint, scaled by stick magnitude and speedMul
+ * (sprint also by sprintMul).
  * Crouched (crouch-walk), the target is capped at run.crouchSpeed.
  */
 export function targetGroundSpeed(input: InputFrame, state: PlayerState, cfg: MovementConfig, mods: StatModifiers): number {
   const magnitude = Math.min(1, Math.hypot(input.move.x, input.move.y));
   if (magnitude === 0) return 0;
-  const base = state.sprinting ? cfg.run.sprintSpeed : cfg.run.runSpeed;
+  const base = state.sprinting ? cfg.run.sprintSpeed * mods.sprintMul : cfg.run.runSpeed;
   const target = base * magnitude * mods.speedMul;
   return state.crouched ? Math.min(target, cfg.run.crouchSpeed) : target;
 }

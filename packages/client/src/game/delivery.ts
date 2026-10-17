@@ -36,6 +36,7 @@ import {
   type RideTier,
   type Rng,
   type SimEvent,
+  shoesSprintMul,
   type StatModifiers,
   type SavedVehicle,
   type SummonResult,
@@ -311,7 +312,7 @@ export class DeliveryLoop {
   }
 
   statModifiers(): StatModifiers {
-    return this.sys.statModifiers();
+    return { ...this.sys.statModifiers(), sprintMul: shoesSprintMul(this.d.chain.ownership().lines.shoes) };
   }
 
   /** Whether the phone is up (the sim then gets only the look, and Y is ignored: accept with the phone's buttons). */

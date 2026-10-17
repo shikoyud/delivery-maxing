@@ -561,6 +561,17 @@ describe('DeliveryLoop', () => {
     expect(s.huds.at(-1)!.load).toMatchObject({ slots: 3, maxPackageKg: 25 });
   });
 
+  test('the sim modifiers follow the chain’s Shoes tier', () => {
+    const s = setup(null);
+    expect(s.loop.statModifiers().sprintMul).toBe(1);
+    const lines = { vehicle: 0, bag: 0, shoes: 3, dispatcher: 0 };
+    s.chain.ownership = () => ({ lines, skins: [] });
+    expect(s.loop.statModifiers().sprintMul).toBeCloseTo(1.105, 10);
+    expect(s.loop.statModifiers()).toMatchObject({ speedMul: 1, canSprint: true });
+    lines.shoes = 5;
+    expect(s.loop.statModifiers().sprintMul).toBeCloseTo(1.175, 10);
+  });
+
   test('buying a Bag tier mid-game raises the capacity on the next tick without dropping orders', () => {
     const s = setup('car');
     s.bag.tier = 1;
