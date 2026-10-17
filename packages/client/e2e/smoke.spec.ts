@@ -732,14 +732,10 @@ async function rideInto(page: Page, poiId: string, fromPoiId: string): Promise<v
 test('F at the spawn bay mounts the car; 12 s of W reaches 28 m/s and never more', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  // The two-wheelers bought at another hospital, then the car at the spawn: it takes the spawn bay's front slot (bought
-  // together, the car would take the last slot, nose to tail behind the motorbike).
+  // Every tier granted at once at the spawn bay: the longest vehicle parks in front (slot 0), the motorbike and
+  // bicycle behind it, so the car drives off with nothing ahead.
   const hospitals = await page.evaluate(() => window.__dm!.hospitals());
-  for (const [h, tier] of [[hospitals[1]!, 3], [hospitals[0]!, 4]] as const) {
-    await page.evaluate((id) => window.__dm!.teleportTo(id), h.id);
-    await page.evaluate(() => window.__dm!.advance(10)); // landed: purchases park at the bay nearest the feet
-    await grant(page, 'vehicle', tier);
-  }
+  await grant(page, 'vehicle', 4);
   const car = await vehicle(page, 'car');
   expect(car.spot).toBe('parked');
   const hospital = hospitals[0]!;
@@ -1013,7 +1009,7 @@ test('draw calls stay under the budget with all four vehicles in view', async ({
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   await grant(page, 'vehicle', 4); // all four bought at the spawn: three in its bay, the skateboard carried
-  // On the skateboard in front of the spawn bay, looking at the bicycle, motorbike and car parked in it.
+  // On the skateboard in front of the spawn bay, looking at the car, motorbike and bicycle parked in it (longest in front).
   const bay = await page.evaluate(() => window.__dm!.vehicles().filter((v) => v.spot === 'parked').map((v) => v.position));
   expect(bay.length).toBe(3);
   const mid = { x: bay[1]!.x, y: 0.8, z: bay[1]!.z };
@@ -1632,11 +1628,10 @@ test('city: M shows the whole city with hospitals and gas stations; wheel zooms;
 test('prompts: "F · Ride the car" at the bay, "Hold E · Refuel" at a pump, "No Coins for fuel" with 0 Coins', async ({ page }) => {
   const { errors } = await bootCity(page);
   await hideOverlay(page);
-  // On foot beside the car parked in Bayview General's bay (bought at the spawn: its third slot, after the bicycle and
-  // the motorbike, bays.spacing apart).
+  // On foot beside the car parked in Bayview General's bay (bought at the spawn: the longest parks in its front slot).
   await grant(page, 'vehicle', 4);
   const car = await vehicle(page, 'car');
-  expect(flat(car.position, cityLayout.hospitals[0]!.bay)).toBeLessThan(2 * ridingJson.bays.spacing + 0.5);
+  expect(flat(car.position, cityLayout.hospitals[0]!.bay)).toBeLessThan(0.5);
   await page.evaluate(([c]) => window.__dm!.viewpoint({ x: c.x, y: c.y, z: c.z - 2 }, { ...c, y: c.y + 1 }), [car.position] as const);
   await page.evaluate(() => window.__dm!.advance(3));
   expect(await page.evaluate(() => window.__dm!.prompt())).toBe('F · Ride the car');
@@ -1891,7 +1886,20 @@ test('buying the skateboard then the bicycle: confirm sheet, "Confirming…", th
   expect(await page.evaluate(() => window.__dm!.chain().ownership.lines.vehicle)).toBe(0); // nothing until confirmed
   await page.screenshot({ path: `${sp6}purchase-pending.png` });
   await expect(board.locator('.phone-shop-buy')).toHaveText('✓ Owned', { timeout: 5_000 });
-  await expect(page.locator('.popup-title', { hasText: 'Skateboard bought' })).toBeVisible();
+  const bought = page.locator('.popup', { hasText: 'Skateboard bought' });
+  await expect(bought).toBeVisible();
+  await expect(bought.locator('.phone-mock-badge')).toBeVisible(); // a GAME purchase (Decision 1)
+  await expect.poll(() => bought.evaluate((e) => getComputedStyle(e).opacity), { timeout: 3_000 }).toBe('1');
+  // Drawn over the open phone, not hidden behind it: the popup is what the page hit-tests at its own centre (the
+  // popups ignore the pointer, so hit-testing is switched on for the check).
+  expect(await bought.evaluate((e) => {
+    const box = e.parentElement!;
+    box.style.pointerEvents = 'auto';
+    const r = e.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    box.style.pointerEvents = '';
+    return e.contains(hit);
+  })).toBe(true);
   await page.screenshot({ path: `${sp6}purchase-confirmed.png` });
   const c1 = await page.evaluate(() => window.__dm!.chain());
   expect(c1.ownership.lines.vehicle).toBe(1);
@@ -1932,7 +1940,8 @@ test('buying the skateboard then the bicycle: confirm sheet, "Confirming…", th
 test('the price rising past the slippage before confirmation fails the purchase and charges nothing', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  // Sent at the mock's 2 s confirm (quoted $2 ≈ 8,334 GAME, at most 8,501) ...
+  // Sent at the mock's 2 s confirm (charged $2 ≈ 8,334 GAME and capped at 8,501: the charge rounds up; the Shop shows
+  // them rounded down, 8,333 and 8,500) ...
   const sent = await page.evaluate(() => window.__dm!.buy('line.vehicle.1'));
   expect(sent).toMatchObject({ ok: true, tx: { status: 'pending' } });
   // ... then the dev panel moves the rate 20% down (the item costs 20% more GAME): far past the 2% slippage.
@@ -2044,6 +2053,7 @@ test('a delivery pays GAME in the bicycle range and the Wallet lists it; with th
   expect(c.vault).toBe(vault0 - p.game);
   const popup = page.locator('.popup', { hasText: 'Delivered!' });
   await expect(popup).toContainText(`≈ ${Math.floor(p.game / GAME).toLocaleString('en-US')} GAME`);
+  await expect(popup.locator('.phone-mock-badge')).toBeVisible(); // the GAME line's Mock wallet badge (Decision 1)
   await expect.poll(() => popup.evaluate((e) => getComputedStyle(e).opacity), { timeout: 3_000 }).toBe('1');
   await page.screenshot({ path: `${sp6}delivery-game.png` });
   await page.evaluate(() => window.__dm!.openPhone('wallet'));
@@ -2062,7 +2072,9 @@ test('a delivery pays GAME in the bicycle range and the Wallet lists it; with th
   expect(after.chain.accrued).toBe(p.game);
   expect(after.totals.points).toBeGreaterThan(totals.points);
   expect(after.totals.coins).toBeGreaterThan(totals.coins);
-  await expect(page.locator('.popup', { hasText: 'Delivered!' })).toContainText('Vault empty · no GAME');
+  const empty = page.locator('.popup', { hasText: 'Delivered!' });
+  await expect(empty).toContainText('Vault empty · no GAME');
+  await expect(empty.locator('.phone-mock-badge')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -2091,7 +2103,7 @@ test('locking $100 of GAME shows ×1.3 and the next payout is boosted', async ({
   expect(p.boost).toBeCloseTo(1.3, 9);
   // On foot (walk, $0.005–0.03), times 1.3.
   expect(p.usdMicro).toBe(Math.round((5_000 + 25_000 * (0.6 * p.quality + 0.4 * p.luck)) * 1.3));
-  await expect(page.locator('.popup', { hasText: 'Delivered!' })).toContainText('×1.3 boost');
+  await expect(page.locator('.popup', { hasText: 'Delivered!' })).toContainText('×1.30 boost');
   // The Wallet with the vault, the lock and the payout history.
   await popupsGone(page);
   await page.evaluate(() => window.__dm!.openPhone('wallet'));
@@ -2103,9 +2115,10 @@ test('locking $100 of GAME shows ×1.3 and the next payout is boosted', async ({
   expect(errors).toEqual([]);
 });
 
-test('Dispatcher 5 shows five offers', async ({ page }) => {
-  // Ruling (Task 20): offers live 25 s and Dispatcher 5 sends one every 9–15 s (18–30 s × 0.5), so at most three are
-  // ever on the phone together; the test proves the tier's cap (5, from the Shop's row) and its arrival rate.
+test('Dispatcher 5 sends offers faster and caps at five', async ({ page }) => {
+  // Offers live 25 s and Dispatcher 5 sends one every 9–15 s (18–30 s × 0.5), so about two or three are on the phone
+  // together (spec §3.4: the cap counts offers within their lifetime); the test proves the tier's cap (5, from the
+  // Shop's row) and its arrival rate.
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   await grant(page, 'bag', 5);
@@ -2249,6 +2262,12 @@ test('Garage Switch to the car makes package offers appear on foot', async ({ pa
   await expect(car.locator('.phone-garage-range')).toContainText('$0.05–0.60 per order');
   expect(await page.evaluate(() => window.__dm!.capacityTier())).toBe('car');
   expect((await player(page)).riding).toBeNull();
+  // The car is the last row: Switch scrolled the list to it. Back to the top so the shot shows every vehicle, once the
+  // "Offers now for the car" popup (drawn over the phone) has gone.
+  await popupsGone(page);
+  await page.evaluate(() => {
+    for (const e of document.querySelectorAll('.phone, .phone *')) if (e.scrollTop) e.scrollTop = 0;
+  });
   await page.screenshot({ path: `${sp6}garage.png` });
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !window.__dm!.phoneOpen());
@@ -2333,6 +2352,7 @@ test('the skateboard ollies over a curb; F at 28 m/s in the car gets off on foot
   console.log(`F at ${fast.toFixed(2)} m/s: on foot at ${after.toFixed(2)} m/s`);
   expect(off.riding).toBeNull();
   expect(after).toBeLessThanOrEqual(12 + 1e-6);
+  expect(after).toBeGreaterThan(10); // the momentum is kept (Decision 9), up to the on-foot cap
   const car = await vehicle(page, 'car');
   expect(car.spot).toBe('parked');
   await page.evaluate((n) => window.__dm!.advance(n), 2 * TICK_RATE);
@@ -2349,7 +2369,10 @@ test('an order not reached in 3 min fails with the popup and no offer appears fo
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   await hideOverlay(page);
   const id = await acceptWithY(page);
-  const item = await page.evaluate(() => window.__dm!.active()[0]!.order.item);
+  const { item, acceptedAt } = await page.evaluate(() => {
+    const a = window.__dm!.active()[0]!;
+    return { item: a.order.item, acceptedAt: a.acceptedAt };
+  });
   await popupsGone(page);
   // The courier waits at the spawn: the pickup deadline (180 s from the accept) passes.
   const miss = await page.evaluate(
@@ -2364,6 +2387,10 @@ test('an order not reached in 3 min fails with the popup and no offer appears fo
     [TICK_RATE, id] as const,
   );
   expect(miss, 'the order never failed').not.toBeNull();
+  // It failed on the tick the deadline passed: 180 s (pickupDeadline.seconds) after the accept.
+  const missAfter = miss!.tick - Math.round(acceptedAt * TICK_RATE);
+  expect(missAfter).toBeGreaterThanOrEqual(180 * TICK_RATE);
+  expect(missAfter).toBeLessThanOrEqual(180 * TICK_RATE + 1);
   expect(await page.evaluate(() => window.__dm!.totals().deliveries)).toBe(0);
   const popup = page.locator('.popup', { hasText: `Missed the pickup · ${item}` });
   await expect(popup).toBeVisible();
@@ -2412,9 +2439,25 @@ test('playtest screenshots: map screen whole and zoomed, prep bar, ollie, missed
   await standAt(page, order.pickupPoiId);
   await page.evaluate((n) => window.__dm!.advance(n), 3 * TICK_RATE);
   await expect(page.locator('.hud-prep')).toContainText('Preparing');
-  // From above the pickup's zone marker (4 m tall), so the shot is not tinted by it.
-  await page.evaluate(() => window.__dm!.setLook(window.__dm!.player().heading, -0.7));
+  // From outside the pickup's zone marker, looking down at it, so neither the courier nor the camera is inside it
+  // (the prep runs on once started).
+  const outside = await page.evaluate((id) => {
+    const t = window.__dm!.poiPosition(id);
+    const back = 9; // metres from the door, well past the marker's radius
+    // The first of eight directions where the courier stands on open ground at the door's level.
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      const feet = { x: t.x + Math.cos(a) * back, y: t.y, z: t.z + Math.sin(a) * back };
+      window.__dm!.viewpoint(feet, { x: t.x, y: t.y + 0.5, z: t.z });
+      window.__dm!.advance(10);
+      const p = window.__dm!.player().position;
+      if (Math.hypot(p.x - feet.x, p.z - feet.z) < 1 && Math.abs(p.y - t.y) < 1 && !window.__dm!.cameraInsideSolid()) return true;
+    }
+    return false;
+  }, order.pickupPoiId);
+  expect(outside, 'no open spot outside the pickup marker').toBe(true);
   await waitCameraSettled(page);
+  await expect(page.locator('.hud-prep')).toContainText('Preparing');
   await page.screenshot({ path: `${sp6}prep-bar.png` });
   expect(await page.evaluate((o) => window.__dm!.cancel(o), order.id)).toBe('ok');
 
