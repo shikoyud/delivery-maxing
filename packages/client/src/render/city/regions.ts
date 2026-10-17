@@ -18,6 +18,8 @@ const SIDEWALK_HEIGHT = 0.04;
 /** A layout street is drawn as a slab this thick lifted ROAD_LIFT off its ground (the ground slab is its collider). */
 const ROAD_LIFT = 0.02;
 const ROAD_THICKNESS = 0.04;
+/** Depth-buffer push of the ground slabs (polygonOffset factor and units) so what lies flat on them wins the depth test. */
+const GROUND_DEPTH_OFFSET = 2;
 /** Flat ground areas (parks, plazas…) sit under the streets. */
 const AREA_LIFT = 0.008;
 const AREA_THICKNESS = 0.008;
@@ -121,7 +123,15 @@ export function buildRegionMeshes(map: MapData, regionSize: number): Map<string,
   for (const r of layout?.roads ?? []) entry(...rectCenter(r.rect)).solids.push(...streetGeometry(r.rect, r.y));
 
   const solidsMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const groundMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: gridTexture() });
+  // The ground is pushed back in the depth buffer: the streets and areas lie only 0.8–2 cm above it, less than the
+  // depth precision a few hundred metres out, and would otherwise flicker against it (the SP5 playtest's road flicker).
+  const groundMaterial = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    map: gridTexture(),
+    polygonOffset: true,
+    polygonOffsetFactor: GROUND_DEPTH_OFFSET,
+    polygonOffsetUnits: GROUND_DEPTH_OFFSET,
+  });
   const out = new Map<string, THREE.Group>();
   for (const [key, { solids, ground }] of parts) {
     const group = new THREE.Group();

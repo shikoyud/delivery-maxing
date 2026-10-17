@@ -65,7 +65,7 @@ export function gridTexture(): THREE.Texture | null {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(1 / 4, 1 / 4); // one grid cell per 4 m
-  tex.anisotropy = 4;
+  tex.anisotropy = 16; // the far grid at grazing angles shimmers without it
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }

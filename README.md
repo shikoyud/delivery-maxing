@@ -99,7 +99,7 @@ save stays with `?map=greybox`. Add `?seed=N` to make the offer stream reproduci
 `?perf=1` flies the camera over the city for 60 s (eight viewpoints from
 `config/perf.json`, 7.5 s each) and then shows a result panel: PASS when the
 p95 frame time is 16.7 ms or less, the draw calls and triangles per viewpoint
-against the budgets (200 calls, 700 k triangles), and the city and pack-model
+against the budgets in `config/client.json` (260 calls, 1.6 M triangles), and the city and pack-model
 counts. Input is ignored during the run; keep the tab in front. It only runs
 on the city: with `?map=greybox` it logs a warning and is ignored.
 

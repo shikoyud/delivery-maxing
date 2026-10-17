@@ -1217,7 +1217,7 @@ test('city: loads, renders and reports ready with no console errors and at most 
   expect(errors).toEqual([]);
 });
 
-test('city: draw calls ≤ 200 and triangles ≤ 700 k at every perf-route viewpoint', async ({ page }) => {
+test('city: draw calls and triangles within the config budgets at every perf-route viewpoint', async ({ page }) => {
   test.setTimeout(120_000);
   const { errors } = await bootCity(page);
   for (const [i, vp] of perfJson.route.entries()) {
