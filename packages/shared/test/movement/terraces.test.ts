@@ -7,6 +7,7 @@ import type { Poi } from '../../src/world/mapTypes';
 import type { PlayerZones } from '../../src/world/zones';
 import { offerPlayer, offerRules } from '../orders/fixture';
 import { vec3, type Vec3 } from '../../src/math/vec3';
+import { wrapAngle } from '../../src/movement/ground';
 import type { PlayerState, SimEvent } from '../../src/movement/types';
 import type { SavedVehicle } from '../../src/vehicles/Garage';
 import { forbiddenZoneAt } from '../../src/world/access';
@@ -62,16 +63,17 @@ async function riding(tier: SavedVehicle['tier'], at: Vec3, heading: number): Pr
 }
 
 const speed = (s: PlayerState) => Math.hypot(s.velocity.x, s.velocity.z);
-/** Holds W toward `yaw`, coasting above `vmax` and braking well above it, until `until` holds. */
+/** Holds W and steers (A/D) toward the heading `yaw`, coasting above `vmax` and braking well above it, until `until` holds. */
 function drive(h: Harness, yaw: number, vmax: number, until: (s: PlayerState) => boolean, maxSeconds = 30): void {
   for (let i = 0; i < seconds(maxSeconds); i++) {
     const v = speed(h.sim.state);
-    h.tick({ forward: v > vmax + 2 ? -1 : v > vmax ? 0 : 1, yaw });
+    const steer = Math.max(-1, Math.min(1, 3 * wrapAngle(yaw - h.sim.state.heading)));
+    h.tick({ forward: v > vmax + 2 ? -1 : v > vmax ? 0 : 1, strafe: -steer, yaw });
     if (until(h.sim.state)) return;
   }
   throw new Error(`drive: not there after ${maxSeconds} s (at ${JSON.stringify(h.sim.state.position)})`);
 }
-/** Brakes (S against the heading) to a stop. */
+/** Brakes (S) to a stop. */
 function stop(h: Harness, yaw: number): void {
   for (let i = 0; i < seconds(5) && speed(h.sim.state) > 0.5; i++) h.tick({ forward: -1, yaw });
   h.run(2);

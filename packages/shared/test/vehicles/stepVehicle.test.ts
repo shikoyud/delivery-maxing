@@ -57,13 +57,6 @@ const input = (forward: number, strafe = 0): InputFrame => {
   return i;
 };
 
-/** Forward/back input with the camera looking along `yaw`. */
-const inputYaw = (forward: number, yaw: number): InputFrame => {
-  const i = input(forward);
-  i.look = { yaw, pitch: 0 };
-  return i;
-};
-
 interface Rig {
   v: VehicleState;
   body: VehicleBody;
@@ -171,25 +164,34 @@ describe('stepVehicle', () => {
     r.body.destroy();
   });
 
-  test('a stopped motorbike beside a wall turns the long way round and drives off (playtest issue 1)', () => {
-    // Heading +X, wall 0.3 m to its left; W with the camera behind (wish = -X).
+  test('a motorbike wedged beside a wall turns away with D and drives off with W', () => {
+    // Heading +X, wall 0.3 m to its left.
     const r = rig('motorbike', vec3(0, 0, 60), -Math.PI / 2);
-    r.run(90, inputYaw(1, Math.PI / 2));
-    const toGo = Math.abs(Math.atan2(Math.sin(r.v.heading - Math.PI / 2), Math.cos(r.v.heading - Math.PI / 2)));
-    expect(toGo).toBeLessThan(0.2);
+    r.run(45, input(0, 1));
+    expect(r.v.heading).toBeLessThan(-Math.PI / 2);
+    r.run(60, input(1));
     expect(Math.hypot(r.v.position.x, r.v.position.z - 60)).toBeGreaterThan(3);
     r.body.destroy();
   });
 
-  test('a stopped motorbike with a wall ahead and one beside it backs out on S', () => {
+  test('a turn into a wall is refused and the heading stays', () => {
+    // A car facing +Z with its side 0.03 m from the wall face at x = 80 on its left; A swings the nose into it.
+    const r = rig('car', vec3(80 - 0.95 - 0.03, 0, 0), Math.PI);
+    r.run(15, input(0, -1), (v) => expect(v.heading).toBe(Math.PI));
+    expect(r.body.heading).toBe(Math.PI);
+    r.body.destroy();
+  });
+
+  test('a motorbike with walls ahead and left backs out on S at 2.5 m/s', () => {
     const r = rig('motorbike', vec3(0, 0, 90), -Math.PI / 2);
     let minSpeed = 0;
-    r.run(60, inputYaw(-1, -Math.PI / 2), (v) => {
+    r.run(60, input(-1), (v) => {
       const f = facing(v.heading);
       minSpeed = Math.min(minSpeed, v.velocity.x * f.x + v.velocity.z * f.z);
     });
     expect(r.v.position.x).toBeLessThan(-1.5);
     expect(minSpeed).toBeGreaterThanOrEqual(-2.5 - 1e-9);
+    expect(minSpeed).toBeLessThan(-2.4);
     r.body.destroy();
   });
 

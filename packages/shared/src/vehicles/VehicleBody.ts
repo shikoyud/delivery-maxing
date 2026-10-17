@@ -2,7 +2,7 @@ import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { movementConfig } from '../config';
 import type { RideSpec } from '../config/types';
 import { vec3, type Vec3 } from '../math/vec3';
-import { clampTurn, wrapAngle } from '../movement/ground';
+import { wrapAngle } from '../movement/ground';
 import { KinematicMover, type BottomSphere, type MoveResult, type MoverSettings, type RayHit } from '../movement/kinematicMover';
 import type { PhysicsWorld } from '../world/physicsWorld';
 
@@ -107,29 +107,18 @@ export class VehicleBody {
     return result;
   }
 
-  /** Turns to `heading` when the turned capsule overlaps nothing; otherwise the heading stays. Returns success. */
-  tryTurn(heading: number): boolean {
-    if (heading === this.headingNow) return true;
-    if (this.spec.collider.shape === 'lengthwise' && !this.fitsAt(this.feetPos, heading)) return false;
+  /**
+   * Turns by `delta` (rad) when the turned capsule overlaps nothing; otherwise the heading stays. Returns the
+   * heading reached.
+   */
+  tryTurn(delta: number): number {
+    if (delta === 0) return this.headingNow;
+    const heading = wrapAngle(this.headingNow + delta);
+    if (this.spec.collider.shape === 'lengthwise' && !this.fitsAt(this.feetPos, heading)) return this.headingNow;
     this.headingNow = heading;
     this.body.setRotation(rotationFor(this.spec.collider.shape, heading), true);
     this.body.setNextKinematicRotation(rotationFor(this.spec.collider.shape, heading));
-    return true;
-  }
-
-  /**
-   * Turns toward `target` by at most `maxTurn`, the short way; when that capsule overlaps something, the same amount
-   * the long way. Returns the heading reached (unchanged when both overlap).
-   */
-  tryTurnToward(target: number, maxTurn: number): number {
-    const h = this.headingNow;
-    const first = clampTurn(h, target, maxTurn);
-    const step = wrapAngle(first - h);
-    if (step === 0) return h;
-    for (const heading of [first, wrapAngle(h - step)]) {
-      if (this.tryTurn(heading)) return this.headingNow;
-    }
-    return this.headingNow;
+    return heading;
   }
 
   /** Places the vehicle at `feet` facing `heading` immediately (no collision check; see fitsAt). */

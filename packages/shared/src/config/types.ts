@@ -71,15 +71,6 @@ export interface RidingConfig {
     dismountMaxSpeed: number;
     dismountGap: number;
     emptyTankSpeed: number;
-    /** Drive input whose direction has a dot product with the heading below this points back (brake / reverse). */
-    backInputDot: number;
-    /**
-     * A ride whose reverseSpeed is at most this (the two-wheelers' walking pace) turns toward back input first and
-     * only backs up when that turn is blocked by an obstacle; faster-reversing rides (the car) back up at once.
-     */
-    turnFirstMaxReverse: number;
-    /** When such a ride's short-way turn is refused it backs up for this long (s) before turning again. */
-    backOutSeconds: number;
   };
   refuel: { pumpRadius: number; tankPerSecond: number };
   summon: { minDistance: number; cooldownSeconds: number; minClearance: number; searchRadius: number; ringSamples: number };

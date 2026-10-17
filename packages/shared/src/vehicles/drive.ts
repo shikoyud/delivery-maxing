@@ -1,25 +1,23 @@
 import { ridingConfig, vehiclesConfig } from '../config';
 import type { RideSpec, RidingConfig, VehiclesConfig } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
-import { vec3, type Vec3 } from '../math/vec3';
-import { clampTurn, facing, hasMoveInput, wishDirection, yawOf } from '../movement/ground';
+import { vec3 } from '../math/vec3';
+import { facing } from '../movement/ground';
 import type { VehicleState } from './types';
 
+/** WASD alone drives a ride; the mouse (look) never steers it (Decision 7). */
 export interface DriveInput {
-  wish: Vec3;
-  magnitude: number;
-  hasInput: boolean;
+  /** W positive, S negative (-1..1). */
+  throttle: number;
+  /** A positive (turns left, like yaw), D negative (-1..1). */
+  steer: number;
   handbrake: boolean;
 }
 
-/** Drive input of one frame; Space (jump) is the handbrake. */
-export function driveInput(input: InputFrame): DriveInput {
-  return {
-    wish: wishDirection(input),
-    magnitude: Math.min(1, Math.hypot(input.move.x, input.move.y)),
-    hasInput: hasMoveInput(input),
-    handbrake: input.jump.held,
-  };
+/** Drive input of one frame: W/S throttle, A/D steer, Space (jump) the handbrake. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Task 4: Space is the handbrake only where spec.jumpHeight is null
+export function driveInput(input: InputFrame, spec: RideSpec): DriveInput {
+  return { throttle: input.move.y, steer: -input.move.x, handbrake: input.jump.held };
 }
 
 /** The tier's spec top speed; the empty-tank crawl speed when a tank exists and is empty. */
@@ -32,25 +30,20 @@ export function vehicleTopSpeed(
   return top;
 }
 
-/** The turn a drive step asks for: the wished heading (null without a turn input) and the most to turn this step. */
-export interface DriveTurn {
-  wishHeading: number | null;
-  maxTurn: number;
-}
-
 const approach = (value: number, target: number, maxDelta: number): number =>
   value < target ? Math.min(target, value + maxDelta) : Math.max(target, value - maxDelta);
 
 /**
  * Grounded arcade drive of one ride. Rolls along the heading at a signed speed; sideways velocity decays at the
  * grip. Mutates the horizontal velocity only (vertical velocity is untouched); it does not turn `v.heading`: it
- * returns the heading the input wishes (null without a turn input) and the most it may turn this step, and the
- * caller turns the collider (which may refuse) before the next step.
+ * returns the heading change this step asks for (steer × the speed-dependent turn rate × dt, mirrored while
+ * reversing so A swings the nose right, as in a real car; 0 without steer), and the caller turns the collider
+ * (which may refuse) before the next step. A/D turn a stopped ride on the spot.
  *
- * Rides that reverse at walking pace (turnFirstMaxReverse: bicycle, motorbike) turn toward back input first and only
- * back up while `v.backOutTicks` runs, which stepVehicle starts when the short-way turn is refused; the car backs up at once. Speed is driven toward
- * topSpeed (above it, it coasts down at coastDecel: an empty tank slows gradually); |speed| never exceeds the tier's
- * spec cap (`capSpeed`, vehicles.json topSpeed), slopes included.
+ * W accelerates along the heading; S brakes above stoppedSpeed and at or below it reverses toward the ride's
+ * reverseSpeed (a ride without one only stops). Speed is driven toward topSpeed (above it, it coasts down at
+ * coastDecel: an empty tank slows gradually); |speed| never exceeds the tier's spec cap (`capSpeed`,
+ * vehicles.json topSpeed), slopes included.
  */
 export function applyDrive(
   v: VehicleState,
@@ -61,25 +54,21 @@ export function applyDrive(
   dt: number,
   stoppedSpeed: number = ridingConfig.riding.stoppedSpeed,
   capSpeed: number = vehiclesConfig[v.tier].topSpeed,
-): DriveTurn {
+): number {
   const h0 = facing(v.heading);
   let s = v.velocity.x * h0.x + v.velocity.z * h0.z;
-  const back = d.hasInput && d.wish.x * h0.x + d.wish.z * h0.z < ridingConfig.riding.backInputDot;
-  const braking = back && s > stoppedSpeed;
-  const turnsFirst = spec.reverseSpeed <= ridingConfig.riding.turnFirstMaxReverse;
-  const reversing = back && !braking && spec.reverseSpeed > 0 && (!turnsFirst || (v.backOutTicks ?? 0) > 0);
+  const braking = d.throttle < 0 && s > stoppedSpeed;
+  const reversing = d.throttle < 0 && !braking && spec.reverseSpeed > 0;
 
-  let wishHeading: number | null = null;
-  let maxTurn = 0;
-  if (d.hasInput && !braking && (!reversing || turnsFirst)) {
+  let delta = 0;
+  if (d.steer !== 0) {
     const t = Math.max(0, Math.min(1, topSpeed > 0 ? Math.abs(s) / topSpeed : 0));
     const rate = spec.turnRateLow + (spec.turnRateHigh - spec.turnRateLow) * t;
-    wishHeading = yawOf(d.wish);
-    maxTurn = rate * dt;
+    delta = d.steer * rate * dt * (s < -stoppedSpeed ? -1 : 1);
   }
   // The speed maths rolls along the heading this step asks for (as if the turn is granted); the caller's turn may
   // be refused, and the sideways velocity that leaves then slides the vehicle off the obstacle as before.
-  const h = facing(wishHeading === null ? v.heading : clampTurn(v.heading, wishHeading, maxTurn));
+  const h = facing(v.heading + delta);
   s = v.velocity.x * h.x + v.velocity.z * h.z;
 
   // Sideways velocity (relative to the new heading) decays toward 0 at the grip.
@@ -97,15 +86,15 @@ export function applyDrive(
   const sinTheta = Math.hypot(n.x, n.z);
   if (sinTheta > 0) s += gravity * sinTheta * spec.slopeGravityScale * ((n.x * h.x + n.z * h.z) / sinTheta) * dt;
 
+  const amount = Math.min(1, Math.abs(d.throttle));
   if (d.handbrake) s = approach(s, 0, spec.handbrakeDecel * dt);
-  else if (braking) s = approach(s, 0, spec.brakeDecel * d.magnitude * dt);
-  else if (reversing) s = approach(s, -Math.min(spec.reverseSpeed, topSpeed), spec.accel * d.magnitude * dt);
-  else if (back) s = approach(s, 0, spec.coastDecel * dt); // turning around in place
-  else if (d.hasInput) s = s > topSpeed ? approach(s, topSpeed, spec.coastDecel * dt) : Math.min(topSpeed, s + spec.accel * d.magnitude * dt);
+  else if (reversing) s = approach(s, -Math.min(spec.reverseSpeed, topSpeed), spec.accel * amount * dt);
+  else if (d.throttle < 0) s = approach(s, 0, spec.brakeDecel * amount * dt); // braking; a ride without reverse stops
+  else if (d.throttle > 0) s = s > topSpeed ? approach(s, topSpeed, spec.coastDecel * dt) : Math.min(topSpeed, s + spec.accel * amount * dt);
   else s = approach(s, 0, spec.coastDecel * dt);
 
   const cap = Math.max(topSpeed, capSpeed);
   s = Math.max(-cap, Math.min(cap, s));
   v.velocity = vec3(h.x * s + sx, v.velocity.y, h.z * s + sz);
-  return { wishHeading, maxTurn };
+  return delta;
 }

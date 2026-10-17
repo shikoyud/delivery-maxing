@@ -1,11 +1,10 @@
-import { ridingConfig } from '../config';
 import type { RideSpec } from '../config/types';
 import type { InputFrame } from '../input/inputFrame';
 import { vec3, type Vec3 } from '../math/vec3';
 import type { MoveResult } from '../movement/kinematicMover';
 import type { SimEvent } from '../movement/types';
 import type { MapData } from '../world/mapTypes';
-import { clampTurn, facing, wrapAngle } from '../movement/ground';
+import { facing } from '../movement/ground';
 import { clipToAccess } from './accessClip';
 import { applyDrive, driveInput, vehicleTopSpeed } from './drive';
 import { burnFuel } from './fuel';
@@ -38,19 +37,11 @@ export function stepVehicle(v: VehicleState, body: VehicleBody, input: InputFram
   const fuelBefore = v.fuel;
 
   // 1. Drive.
-  const turn = v.grounded ? applyDrive(v, driveInput(input), ctx.spec, vehicleTopSpeed(v), gravity, dt) : null;
+  const delta = v.grounded ? applyDrive(v, driveInput(input, ctx.spec), ctx.spec, vehicleTopSpeed(v), gravity, dt) : 0;
 
-  // 2. Turn the collider toward the wish: the short way, else the long way, else it stays (and `turnBlocked` lets a
-  //    slow two-wheeler back out for a moment instead). No turn in the air.
-  if (turn && turn.wishHeading !== null) {
-    const before = body.heading;
-    const shortWay = clampTurn(before, turn.wishHeading, turn.maxTurn);
-    v.heading = body.tryTurnToward(turn.wishHeading, turn.maxTurn);
-    const refused = Math.abs(wrapAngle(v.heading - shortWay)) > 1e-9;
-    v.backOutTicks = refused ? Math.round(ridingConfig.riding.backOutSeconds / dt) : Math.max(0, (v.backOutTicks ?? 0) - 1);
-  } else if (turn) {
-    v.backOutTicks = 0;
-  }
+  // 2. Turn the collider by the steer: a turn the collider has no room for is refused and the heading stays. No
+  //    turn in the air.
+  if (delta !== 0) v.heading = body.tryTurn(delta);
 
   // 3. Gravity, integrated exactly for a constant acceleration (as PlayerSim does).
   const vy0 = v.velocity.y;

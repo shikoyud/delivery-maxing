@@ -43,10 +43,12 @@ describe('config pins spec values', () => {
     expect(ridingConfig.rides.bicycle.fuel).toBeNull();
     expect(ridingConfig.riding.emptyTankSpeed).toBe(3);
     expect(ridingConfig.riding.mountReachHeight).toBe(1.5);
-    expect(ridingConfig.riding.backInputDot).toBe(-0.5);
-    expect(ridingConfig.riding.turnFirstMaxReverse).toBe(3);
-    expect(ridingConfig.riding.backOutSeconds).toBe(0.5);
     expect(ridingConfig.summon).toMatchObject({ minDistance: 100, cooldownSeconds: 60 });
+  });
+  it('the camera-relative turn-first keys are gone (Decision 7)', () => {
+    expect('backInputDot' in ridingConfig.riding).toBe(false);
+    expect('turnFirstMaxReverse' in ridingConfig.riding).toBe(false);
+    expect('backOutSeconds' in ridingConfig.riding).toBe(false);
   });
   it('access table matches spec §4.3', () => {
     expect(ridingConfig.access).toEqual({
