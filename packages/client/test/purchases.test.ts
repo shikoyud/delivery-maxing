@@ -77,13 +77,13 @@ const halfExtent = (t: RideTier): number => {
 };
 
 describe('Purchases', () => {
-  test('buying the car parks it at the nearest hospital’s first free bay slot after confirmation (Review Focus 3)', async () => {
+  test('buying the car parks it in front at the nearest hospital’s bay after confirmation, the others move back (Review Focus 3)', async () => {
     const s = setup({ vehicleTier: 3 });
     const h = map.hospitals[0]!;
-    // The chain already owns tiers 1-3: the skateboard is carried, the bicycle and motorbike take slots 0 and 1.
+    // The chain already owns tiers 1-3: the skateboard is carried, the motorbike (longer) and bicycle take slots 0 and 1.
     expect(s.garage.owned()).toEqual(['skateboard', 'bicycle', 'motorbike']);
-    expect(s.garage.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
-    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
+    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+    expect(s.garage.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
 
     // Bought far from the bay (south of Downtown General, which is still the nearest hospital).
     s.env.player = { x: 100, y: 0, z: -40 };
@@ -91,9 +91,12 @@ describe('Purchases', () => {
     expect(out.ok).toBe(true);
     expect(s.garage.owned()).not.toContain('car');
     s.confirm();
-    expect(s.garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
+    // The longest collider parks in front (slot 0): nothing ahead of the car, the two-wheelers behind it.
+    expect(s.garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
+    expect(s.garage.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
     expect(s.popups.at(-1)).toMatchObject({ title: 'Car bought · parked at Downtown General' });
-    // No overlap with the motorbike in front of it: slot spacing exceeds both half extents (5.5 m slots).
+    // No overlap with the motorbike behind it: slot spacing exceeds both half extents (5.5 m slots).
     const gap = ridingConfig.bays.spacing - halfExtent('car') - halfExtent('motorbike');
     expect(gap).toBeGreaterThan(0);
     const p = s.garage.state('car').position;
@@ -101,6 +104,18 @@ describe('Purchases', () => {
     expect(Math.hypot(p.x - m.x, p.z - m.z)).toBeCloseTo(ridingConfig.bays.spacing);
     // Summon can bring it: far enough, no cooldown.
     expect(s.garage.summonStatus('car', { x: 100, y: 0, z: 100 }, 0)).toBe('ok');
+  });
+
+  test('the chain granting vehicle tier 4 at one bay (dev grantTier) parks the car in slot 0, then motorbike, bicycle', () => {
+    const s = setup();
+    const h = map.hospitals[0]!;
+    for (const tier of [2, 3, 4]) s.chain.dev.grantTier('vehicle', tier);
+    expect(s.garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
+    expect(s.garage.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
+    const t = setup();
+    t.chain.dev.grantTier('vehicle', 4); // all at once
+    expect(t.garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
   });
 
   test('buying the motorbike from tier 0 is refused as order; after skateboard and bicycle it grants and parks it', async () => {
@@ -117,7 +132,9 @@ describe('Purchases', () => {
     expect((await s.purchases.buy('line.vehicle.3')).ok).toBe(true);
     s.confirm();
     expect(s.garage.owned()).toEqual(['skateboard', 'bicycle', 'motorbike']);
-    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(map.hospitals[0]!, 1) });
+    // the motorbike is longer than the bicycle: it takes slot 0 and the bicycle moves back
+    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(map.hospitals[0]!, 0) });
+    expect(s.garage.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(map.hospitals[0]!, 1) });
     expect(s.popups.map((p) => p.title)).toContain('Motorbike bought · parked at Downtown General');
   });
 

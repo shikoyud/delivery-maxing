@@ -1,4 +1,4 @@
-import { ridingConfig } from '../config';
+import { colliderLength, ridingConfig } from '../config';
 import { RIDE_TIERS, type RideTier, type RidingConfig } from '../config/types';
 import { vec3, type Vec3 } from '../math/vec3';
 import { facing } from '../movement/ground';
@@ -33,15 +33,22 @@ interface Entry {
 export const restsCarried = (t: RideTier): boolean => t === 'skateboard';
 
 /**
+ * Bay order: the longer collider first (2 × (halfLength + radius), config/riding.json), ties by the higher tier. The
+ * slots run nose-to-tail behind slot 0 with slot 0 at the front, so the longest ride has nothing ahead of it and every
+ * shorter one behind can back out; a car behind a motorbike would be boxed in 2.2 m from its nose.
+ */
+export function bayOrder(tiers: readonly RideTier[], cfg: RidingConfig = ridingConfig): RideTier[] {
+  return [...tiers].sort((a, b) => colliderLength(cfg, b) - colliderLength(cfg, a) || RIDE_TIERS.indexOf(b) - RIDE_TIERS.indexOf(a));
+}
+
+/**
  * All four vehicles owned (Decision 2): the skateboard carried, the others parked in bay slots 0–2 of the first
- * hospital, full tanks. The slots run nose-to-tail behind slot 0, so the biggest goes in front: the car in slot 0 has
- * nothing ahead of it (in the last slot it was boxed in by the motorbike 0.7 m from its nose), and the two-wheelers
- * behind it can back out (Task 1).
+ * hospital in bayOrder (the car in front), full tanks.
  */
 export function defaultGarage(map: MapData, cfg: RidingConfig = ridingConfig): SavedVehicle[] {
   const h = map.hospitals[0];
   if (!h) throw new Error('map has no hospitals');
-  const parkOrder = RIDE_TIERS.filter((t) => !restsCarried(t)).reverse();
+  const parkOrder = bayOrder(RIDE_TIERS.filter((t) => !restsCarried(t)), cfg);
   return RIDE_TIERS.map((tier) => ({
     tier,
     spot: restsCarried(tier) ? { kind: 'carried' } : { kind: 'parked', ...baySlot(h, parkOrder.indexOf(tier), cfg) },
@@ -58,8 +65,10 @@ function distanceToSegment(p: Vec3, a: Vec3, b: Vec3): number {
   return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
 }
 
-/** A parked vehicle within this horizontal distance (m) of a bay slot takes it. */
+/** A parked vehicle within this fraction of bays.spacing (horizontally) of a bay slot takes it. */
 const SLOT_TAKEN_FRACTION = 0.5;
+/** A vehicle this close (m, rad) to a slot's position and heading was parked there by the bay (and may be re-parked). */
+const AT_SLOT_EPS = 1e-3;
 
 /**
  * Every vehicle's parked state and body. All four tiers have a body; parked ones are enabled colliders (obstacles
@@ -154,7 +163,7 @@ export class Garage {
   }
 
   /**
-   * Buys or removes a vehicle. A new one gets a full tank and parks at the first free bay slot of `startAt` (the
+   * Buys or removes a vehicle. A new one gets a full tank and parks in the bay of `startAt` in bayOrder (parkAtBay; the
    * skateboard is carried); a removed one's collider is disabled. No change when already in that state.
    */
   setOwned(t: RideTier, owned: boolean, startAt: Hospital): void {
@@ -177,7 +186,7 @@ export class Garage {
     else this.park(t, position, heading);
   }
 
-  /** Out of bounds (Decision 6): parks the vehicle at the first free bay slot of `h`, stopped, fuel unchanged. */
+  /** Out of bounds (Decision 6): parks the vehicle in the bay of `h` in bayOrder (parkAtBay), stopped, fuel unchanged. */
   tow(t: RideTier, h: Hospital): void {
     if (restsCarried(t)) this.carry(t);
     else this.parkAtBay(t, h);
@@ -272,22 +281,40 @@ export class Garage {
     });
   }
 
-  /** Parks `t` at the lowest-numbered slot of `h` that no other owned parked or ridden vehicle occupies. */
+  /**
+   * Parks `t` in the bay of `h` in bayOrder: `t` and the vehicles the bay parked there (exactly on a slot) are re-parked
+   * front-to-back, longest first, in the free slots from slot 0. A slot under a ridden vehicle or one parked there by
+   * hand (near a slot, not on it) is not free, and those vehicles stay where they are.
+   */
   private parkAtBay(t: RideTier, h: Hospital): void {
-    const taken = (pos: Vec3): boolean =>
-      this.owned().some((o) => {
-        const e = this.entries[o];
-        if (o === t || e.spot.kind === 'carried') return false;
-        // A ridden vehicle counts where it is now (its saved spot is only where it was parked).
-        const at = e.spot.kind === 'parked' ? e.spot.position : e.state.position;
-        return Math.hypot(at.x - pos.x, at.z - pos.z) < this.cfg.bays.spacing * SLOT_TAKEN_FRACTION;
-      });
-    for (let i = 0; ; i++) {
-      const slot = baySlot(h, i, this.cfg);
-      if (!taken(slot.position)) {
-        this.park(t, slot.position, slot.heading);
-        return;
-      }
+    const spacing = this.cfg.bays.spacing;
+    const behind = vec3(Math.sin(h.bayYaw), 0, Math.cos(h.bayYaw));
+    const inBay: RideTier[] = [];
+    const blockers: Vec3[] = [];
+    for (const o of this.owned()) {
+      const e = this.entries[o];
+      if (o === t || e.spot.kind === 'carried') continue;
+      // A ridden vehicle counts where it is now (its saved spot is only where it was parked).
+      const at = e.spot.kind === 'parked' ? e.spot.position : e.state.position;
+      if (e.spot.kind === 'parked' && this.onSlot(h, behind, e.spot.position, e.spot.heading)) inBay.push(o);
+      else blockers.push(at);
     }
+    const blocked = (pos: Vec3): boolean => blockers.some((b) => Math.hypot(b.x - pos.x, b.z - pos.z) < spacing * SLOT_TAKEN_FRACTION);
+    const order = bayOrder([...inBay, t], this.cfg);
+    let k = 0;
+    for (let i = 0; k < order.length; i++) {
+      const slot = baySlot(h, i, this.cfg);
+      if (blocked(slot.position)) continue;
+      this.park(order[k++]!, slot.position, slot.heading);
+    }
+  }
+
+  /** Whether a vehicle parked at `p` facing `heading` stands exactly on a bay slot of `h`. */
+  private onSlot(h: Hospital, behind: Vec3, p: Vec3, heading: number): boolean {
+    if (Math.abs(heading - h.bayYaw) > AT_SLOT_EPS) return false;
+    const i = Math.round(((p.x - h.bay.x) * behind.x + (p.z - h.bay.z) * behind.z) / this.cfg.bays.spacing);
+    if (i < 0) return false;
+    const slot = baySlot(h, i, this.cfg).position;
+    return Math.hypot(slot.x - p.x, slot.y - p.y, slot.z - p.z) < AT_SLOT_EPS;
   }
 }
