@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { economyConfig, ordersConfig, type VehicleTier } from '../../src/config';
-import { payoutRange, rollPayoutUsd } from '../../src/economy/payout';
+import { payoutQuality, payoutRange, rollPayoutUsd } from '../../src/economy/payout';
 import { maxPointsFor } from '../../src/orders/rules';
 import type { Order } from '../../src/orders/types';
 
@@ -47,4 +47,12 @@ const order = (over: Partial<Order> = {}): Order => ({
 
 test('maxPointsFor: a long Fragile package of 30 kg (Large) is 3 × 2 + 1 (par) + 2 (fragile) = 9', () => {
   expect(maxPointsFor(order({ modifier: 'fragile' }), ordersConfig)).toBe(9);
+});
+
+test('payoutQuality is points ÷ maxPoints clamped to [0, 1], 0 when maxPoints is 0', () => {
+  expect(payoutQuality(3, 6)).toBe(0.5);
+  expect(payoutQuality(7, 7)).toBe(1);
+  expect(payoutQuality(9, 7)).toBe(1);
+  expect(payoutQuality(-1, 7)).toBe(0);
+  expect(payoutQuality(2, 0)).toBe(0);
 });

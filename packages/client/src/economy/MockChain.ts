@@ -262,7 +262,8 @@ export class MockChain implements ChainSource {
   }
 
   accrue(p: Omit<Payout, 'id' | 'paid' | 'game'>): Payout {
-    const due = usdToGame(p.usdMicro * p.boost, { usdPerGame: p.usdPerGame, updatedAt: p.at });
+    // usdMicro already includes the boost (rollPayoutUsd applied it); `boost` is only recorded.
+    const due = usdToGame(p.usdMicro, { usdPerGame: p.usdPerGame, updatedAt: p.at });
     const paid = due <= this.s.vault;
     const payout: Payout = { ...p, id: this.id('pay'), game: paid ? due : 0, paid };
     if (paid) {

@@ -31,11 +31,13 @@ export interface ChainTx {
 export interface Payout {
   id: string;
   orderId: string;
+  /** The amount paid in integer micro-USD: `rollPayoutUsd` with the boost already applied. accrue converts it as is. */
   usdMicro: number;
   game: number;
   luck: number;
   quality: number;
   usdPerGame: number;
+  /** The lock-to-boost multiplier `usdMicro` was rolled with; informational (accrue never multiplies by it again). */
   boost: number;
   at: number;
   /** false: the vault could not cover it, so the order paid no GAME (nothing is owed later). */
@@ -69,7 +71,7 @@ export interface ChainSource {
   payouts(): readonly Payout[];
   /** Sends a purchase paying at most `maxGame`. Never throws: refusals come back as a failed tx. */
   purchase(itemId: ShopItemId, maxGame: number, nowMs: number): Promise<ChainTx>;
-  /** Records an order's payout: pays `game` from the vault into `accrued`, or records it unpaid when the vault cannot cover it. */
+  /** Records an order's payout: converts `usdMicro` (boost included) at `usdPerGame` and pays that GAME from the vault into `accrued`, or records it unpaid when the vault cannot cover it. */
   accrue(p: Omit<Payout, 'id' | 'paid' | 'game'>): Payout;
   lockGame(game: number, nowMs: number): { ok: true } | { ok: false; reason: 'insufficient' | 'locked' };
   withdrawLock(nowMs: number): { ok: true } | { ok: false; reason: 'tooEarly' | 'none' };

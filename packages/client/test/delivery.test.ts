@@ -29,7 +29,6 @@ import {
   maxPointsFor,
   rollPayoutUsd,
   usdToGame,
-  GAME_UNITS,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { clientConfig } from '../src/clientConfig';
@@ -38,7 +37,7 @@ import { createProgressStore, type Progress } from '../src/game/progress';
 import { MockChain } from '../src/economy/MockChain';
 import { defaultWardrobe } from '../src/economy/Purchases';
 import { ActionState } from '../src/input/actionState';
-import type { HudModel } from '../src/ui/hudModel';
+import { gameText, usdText, type HudModel } from '../src/ui/hudModel';
 import type { MapScreenView } from '../src/ui/map/MapScreen';
 import type { PhoneApp, PhoneCallbacks, PhoneView } from '../src/ui/phone/Phone';
 
@@ -912,10 +911,6 @@ describe('DeliveryLoop', () => {
 });
 
 describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
-  /** "$0.12" at or above $0.10, "$0.034" below; GAME whole with separators. */
-  const usd = (micro: number): string => `$${(micro / 1e6).toFixed(micro < 100_000 ? 3 : 2)}`;
-  const game = (units: number): string => Math.floor(units / GAME_UNITS).toLocaleString('en-US');
-
   it('a completed car order accrues a payout in the car range, converted at the rate, recorded with luck and quality', () => {
     const s = setup('car');
     const rate = s.chain.rate()!;
@@ -929,7 +924,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(p!.luck).toBeGreaterThanOrEqual(0);
     expect(p!.luck).toBeLessThan(1);
     expect(p!.boost).toBe(1);
-    expect(p!.usdMicro).toBe(rollPayoutUsd({ tier: 'car', points, maxPoints, luck: p!.luck, boost: 1 }, economyConfig));
+    expect(p!.usdMicro).toBe(rollPayoutUsd({ tier: 'car', points, maxPoints, luck: p!.luck, boost: p!.boost }, economyConfig));
     const [min, max] = economyConfig.payout.ranges.car;
     expect(p!.usdMicro).toBeGreaterThanOrEqual(min);
     expect(p!.usdMicro).toBeLessThanOrEqual(max);
@@ -938,7 +933,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(p!.game).toBe(usdToGame(p!.usdMicro, rate));
     expect(s.chain.accrued()).toBe(p!.game);
     expect(popup.text).toBe(`Delivered! +${points} pts · +${s.loop.orders.totals.coins} coins`);
-    expect(popup.lines[0]).toBe(`+${usd(p!.usdMicro)} ≈ ${game(p!.game)} GAME`);
+    expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
     expect(popup.lines.some((l) => l.includes('boost'))).toBe(false);
     expect(popup.lines.some((l) => l.startsWith('Still hot'))).toBe(true);
     // The HUD's top-right GAME figure is the accrued balance.
@@ -950,12 +945,15 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     const s = setup('car');
     const rate = s.chain.rate()!;
     expect(s.chain.lockGame(usdToGame(100_000_000, rate), s.wall.ms)).toEqual({ ok: true });
-    const { popup } = s.deliverFood();
+    const { order, popup } = s.deliverFood();
     const [p] = s.chain.payouts();
     expect(p!.boost).toBeCloseTo(1.3, 12);
-    expect(p!.game).toBe(usdToGame(p!.usdMicro * p!.boost, rate));
-    expect(p!.game / usdToGame(p!.usdMicro, rate)).toBeCloseTo(1.3, 5);
-    expect(popup.lines[0]).toBe(`+${usd(Math.round(p!.usdMicro * p!.boost))} ≈ ${game(p!.game)} GAME`);
+    // The shared roll applies the boost once: usdMicro is the boosted amount paid, converted as is.
+    const roll = { tier: 'car' as const, points: s.loop.orders.totals.points, maxPoints: maxPointsFor(order, ordersConfig), luck: p!.luck };
+    expect(p!.usdMicro).toBe(rollPayoutUsd({ ...roll, boost: p!.boost }, economyConfig));
+    expect(p!.usdMicro / rollPayoutUsd({ ...roll, boost: 1 }, economyConfig)).toBeCloseTo(1.3, 4);
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate));
+    expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
     expect(popup.lines[1]).toBe('×1.3 boost');
   });
 
@@ -983,7 +981,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(paid.orderId).toBe(second.order.id);
     expect(paid.paid).toBe(true);
     expect(s.chain.accrued()).toBe(paid.game);
-    expect(second.popup.lines[0]).toBe(`+${usd(paid.usdMicro)} ≈ ${game(paid.game)} GAME`);
+    expect(second.popup.lines[0]).toBe(`+${usdText(paid.usdMicro)} ≈ ${gameText(paid.game)} GAME`);
   });
 
   it('a stale rate converts at the last good rate', () => {
@@ -996,7 +994,7 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(p!.usdPerGame).toBe(0.0002);
     expect(p!.paid).toBe(true);
     expect(p!.game).toBe(usdToGame(p!.usdMicro, { usdPerGame: 0.0002, updatedAt: 0 }));
-    expect(popup.lines[0]).toBe(`+${usd(p!.usdMicro)} ≈ ${game(p!.game)} GAME`);
+    expect(popup.lines[0]).toBe(`+${usdText(p!.usdMicro)} ≈ ${gameText(p!.game)} GAME`);
   });
 });
 

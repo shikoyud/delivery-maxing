@@ -155,8 +155,9 @@ describe('MockChain', () => {
     expect(chain.accrued()).toBe(500 * GAME_UNITS);
     expect(chain.vault()).toBe(vault0 - 500 * GAME_UNITS);
 
-    const boosted = chain.accrue({ ...base, orderId: 'o2', usdMicro: 120_000, boost: 1.15 });
-    expect(boosted.game).toBe(575 * GAME_UNITS);
+    // usdMicro is the boosted amount ($0.12 × 1.15 = $0.138); accrue converts it as is and only records the boost.
+    const boosted = chain.accrue({ ...base, orderId: 'o2', usdMicro: 138_000, boost: 1.15 });
+    expect(boosted).toMatchObject({ game: 575 * GAME_UNITS, usdMicro: 138_000, boost: 1.15 });
 
     chain.dev.setVaultUsd(0.1);
     const vaultShort = chain.vault();

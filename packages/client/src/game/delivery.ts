@@ -12,6 +12,7 @@ import {
   dispatcherTuning,
   effectiveCapacity,
   boostMultiplier,
+  payoutQuality,
   rollPayoutUsd,
   type ChainSource,
   type CompletedEvent,
@@ -726,19 +727,19 @@ export class DeliveryLoop {
   /**
    * Rolls and records a completed order's GAME payout (spec §3.6, §9; Decision 3): `luck` from the seeded RNG, the
    * quality points ÷ maxPoints, the order's tier's range, the lock-to-boost multiplier of the GAME locked (valued when
-   * locked). The chain converts at its rate (a stale rate is still the last good one, Decision 14), applies the boost
-   * and pays from the vault, or records it unpaid when the vault cannot cover it. Null without any rate (no payout).
+   * locked), applied once inside the shared roll. The chain converts that USD at its rate (a stale rate is still the
+   * last good one, Decision 14) and pays from the vault, or records it unpaid when the vault cannot cover it.
    */
   payOut(e: CompletedEvent, nowMs: number): Payout | null {
     const chain = this.d.chain;
     const rate = chain.rate();
+    // Unreachable with the MockChain (it always has a rate); a chain without one pays nothing and adds no GAME lines.
     if (rate === null) return null;
     const lock = chain.lock();
-    const luck = this.rng();
-    const quality = e.maxPoints > 0 ? Math.min(1, Math.max(0, e.points / e.maxPoints)) : 0;
-    // The roll unboosted: the chain multiplies by `boost` when it converts (Payout.usdMicro is the roll itself).
-    const usdMicro = rollPayoutUsd({ tier: e.tier, points: e.points, maxPoints: e.maxPoints, luck, boost: 1 });
     const boost = boostMultiplier(lock ? lock.usdMicroAtLock : 0);
+    const luck = this.rng();
+    const quality = payoutQuality(e.points, e.maxPoints);
+    const usdMicro = rollPayoutUsd({ tier: e.tier, points: e.points, maxPoints: e.maxPoints, luck, boost });
     return chain.accrue({ orderId: e.orderId, usdMicro, luck, quality, usdPerGame: rate.usdPerGame, boost, at: nowMs });
   }
 
@@ -746,8 +747,9 @@ export class DeliveryLoop {
   private payoutLines(p: Payout | null): string[] {
     if (p === null) return [];
     if (!p.paid) return ['Vault empty · no GAME'];
-    const lines = [`+${usdText(Math.round(p.usdMicro * p.boost))} ≈ ${gameText(p.game)} GAME`];
-    if (p.boost > 1) lines.push(`×${Number(p.boost.toFixed(2))} boost`);
+    const lines = [`+${usdText(p.usdMicro)} ≈ ${gameText(p.game)} GAME`];
+    const boost = Number(p.boost.toFixed(2));
+    if (boost > 1) lines.push(`×${boost} boost`); // shown only above ×1.00 once rounded
     return lines;
   }
 

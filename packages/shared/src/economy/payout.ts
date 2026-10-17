@@ -9,6 +9,11 @@ export function payoutRange(tier: VehicleTier, cfg: EconomyConfig = economyConfi
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
+/** The roll's quality (spec §3.6): points ÷ maxPoints clamped to [0, 1]; 0 when maxPoints is 0. */
+export function payoutQuality(points: number, maxPoints: number): number {
+  return clamp01(maxPoints > 0 ? points / maxPoints : 0);
+}
+
 /**
  * An order's payout roll in micro-USD (spec §3.6): `min + (max − min) × (0.6 × quality + 0.4 × luck)`, times the
  * lock-to-boost multiplier, rounded. `quality` = points ÷ maxPoints (0 when maxPoints is 0); quality and luck are
@@ -19,7 +24,7 @@ export function rollPayoutUsd(
   cfg: EconomyConfig = economyConfig,
 ): number {
   const { minMicro, maxMicro } = payoutRange(args.tier, cfg);
-  const quality = clamp01(args.maxPoints > 0 ? args.points / args.maxPoints : 0);
+  const quality = payoutQuality(args.points, args.maxPoints);
   const roll = cfg.payout.qualityWeight * quality + cfg.payout.luckWeight * clamp01(args.luck);
   return Math.round((minMicro + (maxMicro - minMicro) * roll) * args.boost);
 }

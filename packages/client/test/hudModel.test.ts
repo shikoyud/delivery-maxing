@@ -1,5 +1,6 @@
 import { describe, expect, it, test } from 'vitest';
 import {
+  GAME_UNITS,
   OrderSystem,
   expandGreybox,
   mulberry32,
@@ -17,7 +18,7 @@ import {
 import greybox from '../../../map/greybox.json';
 import type { GarageRow } from '../src/ui/phone/garageApp';
 import { clientConfig } from '../src/clientConfig';
-import { hudModel, loadText, promptFor, poiIndex, pointsText, stageText } from '../src/ui/hudModel';
+import { gameText, hudModel, loadText, promptFor, poiIndex, pointsText, stageText, usdText } from '../src/ui/hudModel';
 
 const map = expandGreybox(greybox as GreyboxSource);
 const spawn = map.hospitals[0]!.spawn;
@@ -349,4 +350,15 @@ describe('promptFor', () => {
     expect(promptFor({ ...ctx, riding: 'car' }, bindings)).toBe('G · Get off');
     expect(promptFor({ ...ctx, riding: 'car', atPump: true }, bindings)).toBe('Hold R · Refuel');
   });
+});
+
+test('usdText shows two decimals, three below $0.10; gameText whole GAME with thousands separators', () => {
+  expect(usdText(120_000)).toBe('$0.12');
+  expect(usdText(34_000)).toBe('$0.034');
+  expect(usdText(100_000)).toBe('$0.10');
+  expect(usdText(12_000_000)).toBe('$12.00');
+  expect(gameText(0)).toBe('0');
+  expect(gameText(500 * GAME_UNITS)).toBe('500');
+  expect(gameText(50_000 * GAME_UNITS + 999_999)).toBe('50,000');
+  expect(gameText(1_234_567_890_123)).toBe('1,234,567');
 });
