@@ -355,11 +355,15 @@ describe('vehicle paint (Decision 4)', () => {
     const views = new VehicleViews(scene);
     views.update(garage, 1);
     const gold = { ...look({ finish: 'gold' }), outfit: { color: 0x7d4e9e } };
+    const capsule = meshOf(rider.root).material as THREE.MeshLambertMaterial;
+    const unpainted = [capsule.color.getHex(), capsule.emissive.getHex()];
     views.applyLook(gold);
+    // Painting the rides leaves the rider alone: the capsule changes only with its own applyLook.
+    expect([capsule.color.getHex(), capsule.emissive.getHex()]).toEqual(unpainted);
+    expect(unpainted[0]).not.toBe(0xd4a017);
     rider.applyLook(gold);
     const finishes = RIDE_TIERS.map((t) => (meshOf(views.root(t)).material as THREE.MeshStandardMaterial[])[1]!);
     for (const [k, t] of RIDE_TIERS.entries()) expect(finishes[k]!.color.getHex(), t).toBe(0xd4a017);
-    const capsule = meshOf(rider.root).material as THREE.MeshLambertMaterial;
     expect([capsule.color.getHex(), capsule.emissive.getHex()]).toEqual([0x7d4e9e, 0]);
     // The same look again (and a colour and back) keeps the same material objects: no shader program is dropped.
     views.applyLook(gold);

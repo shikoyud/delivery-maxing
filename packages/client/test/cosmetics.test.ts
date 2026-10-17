@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import * as THREE from 'three';
 import { economyConfig } from '@dm/shared';
 import { MockChain } from '../src/economy/MockChain';
-import { carModelScale, finishMaterial, lookApplier, lookOf, type Look } from '../src/render/cosmetics';
+import { carModelScale, finishMaterial, lookApplier, lookOf, paintMaterial, surfaceOf, type Look } from '../src/render/cosmetics';
 import { defaultWardrobe, equipItem, type Wardrobe } from '../src/economy/wardrobe';
 
 describe('cosmetics', () => {
@@ -70,5 +70,25 @@ describe('lookApplier', () => {
     expect(redraw()).toBe(true);
     expect(redraw()).toBe(false);
     expect(drawn.map((l) => l.outfit)).toEqual([{ color: 0x1f9e93 }, { color: 0xf27166 }, { color: 0x1f9e93 }]);
+  });
+});
+
+describe('paintMaterial', () => {
+  test('a colour after a colour keeps the shader (material.version); a finish with an env map recompiles it, and back', () => {
+    const m = new THREE.MeshStandardMaterial({ color: 0x808080 });
+    const surface = surfaceOf(m);
+    const v0 = m.version;
+    paintMaterial(m, { color: 0xc8323c }, surface, 0x808080);
+    paintMaterial(m, { color: 0x2f6fb5 }, surface, 0x808080);
+    paintMaterial(m, { color: null }, surface, 0x808080);
+    expect(m.version).toBe(v0);
+    expect(m.color.getHex()).toBe(0x808080);
+    paintMaterial(m, { finish: 'chrome' }, surface, 0x808080);
+    expect(m.envMap).not.toBeNull();
+    const v1 = m.version;
+    expect(v1).toBeGreaterThan(v0);
+    paintMaterial(m, { color: 0xc8323c }, surface, 0x808080);
+    expect(m.envMap).toBeNull();
+    expect(m.version).toBeGreaterThan(v1);
   });
 });

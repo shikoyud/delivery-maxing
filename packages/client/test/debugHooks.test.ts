@@ -54,11 +54,13 @@ describe('debug hooks: economy', () => {
   it('chain(), buy(), shop(), lockGame(), claim() and the map hooks are installed', async () => {
     (globalThis as { window?: unknown }).window = {};
     const log: string[] = [];
+    // One shared ownership object, as MockChain returns its snapshot: only a real copy keeps it from the caller.
+    const ownership = { lines: { vehicle: 1 } };
     const chain = {
       balance: () => 5,
       accrued: () => 2,
       vault: () => 9,
-      ownership: () => ({ lines: { vehicle: 1 } }),
+      ownership: () => ownership,
       lock: () => null,
       history: () => [],
       payouts: () => [],
@@ -84,6 +86,7 @@ describe('debug hooks: economy', () => {
     const snap = dm.chain();
     (snap.ownership as { lines: Record<string, number> }).lines.vehicle = 99;
     expect(dm.chain().ownership.lines.vehicle).toBe(1);
+    expect(ownership.lines.vehicle).toBe(1);
     expect(dm.shop()).toEqual([{ id: 'x' }]);
     expect(dm.devChain).toBe(chain.dev);
     dm.lockGame(7);
