@@ -36,19 +36,26 @@ describe('buildRegionMeshes', () => {
   const vertexCount = (m: THREE.Mesh): number => m.geometry.getAttribute('position').count;
   const solidsOf = (g: THREE.Group): THREE.Mesh => g.children.find((c) => c.name === 'region-solids') as THREE.Mesh;
 
-  it('merges the non-lot solids per region into one solids mesh plus one ground mesh; buildings and props are the blocks', () => {
+  it('merges the non-lot solids per region into one mesh per depth layer (solids, terrain, ground); buildings and props are the blocks', () => {
     const regions = buildRegionMeshes(map, 250);
     expect([...regions.keys()].sort()).toEqual([regionOf(10, 10, 250), regionOf(300, 10, 250)].sort());
     const a = regions.get(regionOf(10, 10, 250))!;
     const meshes = a.children as THREE.Mesh[];
-    expect(meshes.map((m) => m.name).sort()).toEqual(['region-ground', 'region-solids']);
+    expect(meshes.map((m) => m.name).sort()).toEqual(['region-ground', 'region-solids', 'region-terrain']);
     const solids = solidsOf(a);
-    expect(vertexCount(solids)).toBe(2 * 24); // terrain + parapet; the building and the prop are not region geometry
+    expect(vertexCount(solids)).toBe(24); // the parapet; the building and the prop are not region geometry
     expect(solids.geometry.getAttribute('color')).toBeDefined();
     expect(solids.castShadow).toBe(true);
+    const terrain = meshes.find((m) => m.name === 'region-terrain')!;
+    expect(vertexCount(terrain)).toBe(24);
+    expect(terrain.castShadow).toBe(true);
     const ground = meshes.find((m) => m.name === 'region-ground')!;
     expect(vertexCount(ground)).toBe(24);
     expect(ground.castShadow).toBe(false);
+    // depth layers: the ground is pushed back furthest, then the terrain lying on it, then the solids on both
+    const units = (m: THREE.Mesh) => (m.material as THREE.Material).polygonOffsetUnits;
+    expect(units(ground)).toBeGreaterThan(units(terrain));
+    expect(units(terrain)).toBeGreaterThan(units(solids));
     // the second region has only ground (its building is a block): no empty solids mesh
     expect(regions.get(regionOf(300, 10, 250))!.children.map((c) => c.name)).toEqual(['region-ground']);
   });
@@ -58,6 +65,8 @@ describe('buildRegionMeshes', () => {
       const m = { ...map, solids: [{ ...solid('r', kind, 10, 10), size: vec3(6, 1, 40) }] } as MapData;
       const mesh = solidsOf(buildRegionMeshes(m, 250).get(regionOf(10, 10, 250))!);
       expect(vertexCount(mesh)).toBe(3 * 24);
+      mesh.geometry.computeBoundingBox();
+      expect(mesh.geometry.boundingBox!.min.y).toBeCloseTo(0.02, 5); // drawn a road lift above its collider
       const color = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
       const asphalt = new THREE.Color().fromBufferAttribute(color, 0);
       const strip = new THREE.Color().fromBufferAttribute(color, 24);
@@ -84,8 +93,9 @@ describe('buildRegionMeshes', () => {
     const layout = { roads: [road], areas: [] } as unknown as CityLayout;
     const city = { ...map, kind: 'city', layout, solids: [] } as unknown as MapData;
     const regions = buildRegionMeshes(city, 250);
-    const mesh = solidsOf(regions.get(regionOf(50, 6, 250))!);
+    const mesh = regions.get(regionOf(50, 6, 250))!.children.find((c) => c.name === 'region-streets') as THREE.Mesh;
     expect(vertexCount(mesh)).toBe(3 * 24);
+    expect((mesh.material as THREE.Material).polygonOffsetUnits).toBeLessThan(0); // nearest depth layer: over the decks that cross it
     mesh.geometry.computeBoundingBox();
     const b = mesh.geometry.boundingBox!;
     expect(b.min.y).toBeGreaterThanOrEqual(10);
@@ -112,11 +122,16 @@ describe('buildRegionMeshes', () => {
 
     const layout = { roads: [], areas: [quay, rail] } as unknown as CityLayout;
     const city = { ...map, kind: 'city', layout, solids: [] } as unknown as MapData;
-    const mesh = solidsOf(buildRegionMeshes(city, 250).get(regionOf(190, 182, 250))!);
+    const mesh = buildRegionMeshes(city, 250).get(regionOf(190, 182, 250))!.children.find((c) => c.name === 'region-flats-1') as THREE.Mesh; // the rail is tier 1
+    const quayMesh = buildRegionMeshes(city, 250).get(regionOf(190, 182, 250))!.children.find((c) => c.name === 'region-flats-0') as THREE.Mesh;
+    expect((quayMesh.material as THREE.Material).polygonOffsetUnits).toBeGreaterThan((mesh.material as THREE.Material).polygonOffsetUnits);
+    expect((mesh.material as THREE.Material).polygonOffset).toBe(true); // flats sit in their own depth layer, between ground and solids
     const pos = mesh.geometry.getAttribute('position');
     const tops = new Set<number>();
     for (let i = 0; i < pos.count; i++) tops.add(Math.round(pos.getY(i) * 1000));
-    // two slabs, four distinct heights: the rail's bottom (2.024) sits a lift step above the quay's top (2.016)
-    expect([...tops].sort((a, b) => a - b)).toEqual([2008, 2016, 2024, 2032]);
+    const qpos = quayMesh.geometry.getAttribute('position');
+    for (let i = 0; i < qpos.count; i++) tops.add(Math.round(qpos.getY(i) * 1000));
+    // two slabs, four distinct heights: the rail's bottom (2.004) sits a lift step above the quay's top (2.003)
+    expect([...tops].sort((a, b) => a - b)).toEqual([2001, 2003, 2004, 2006]);
   });
 });

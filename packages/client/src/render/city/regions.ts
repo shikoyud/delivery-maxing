@@ -18,11 +18,33 @@ const SIDEWALK_HEIGHT = 0.04;
 /** A layout street is drawn as a slab this thick lifted ROAD_LIFT off its ground (the ground slab is its collider). */
 const ROAD_LIFT = 0.02;
 const ROAD_THICKNESS = 0.04;
-/** Depth-buffer push of the ground slabs (polygonOffset factor and units) so what lies flat on them wins the depth test. */
-const GROUND_DEPTH_OFFSET = 2;
+/**
+ * Depth layers (polygonOffset factor and units): what lies on something must win its depth test however small the
+ * gap, so the ground is pushed back furthest, the terrain and the flat areas (parks, lots, the quay…) less, the
+ * decks, walls, lot boxes and pack models not at all, and the layout streets are pulled nearer still. Every drawn
+ * surface is then higher than what it covers AND in a nearer (or the same) layer, so the depth test cannot pick
+ * the wrong one however far away. Without this the 0.8–2 cm gaps between the slabs fall under the depth precision
+ * a few hundred metres out, and they flicker (the SP5 playtest's striped streets). cityFlats.test scans the city.
+ */
+export const DEPTH_LAYER = {
+  /** Layout streets: their deck lies over the lane mouths and decks that cross their edges. */
+  streets: -1,
+  solids: 0,
+  /** Flat areas: the top tier (what lies on other areas) at 1, each tier below it one further back. */
+  flats: (tier: number, maxTier: number): number => 1 + (maxTier - tier),
+  /** Terrain blocks (band-gap floors, cliffs, the beach): behind every flat, in front of the ground they lie on. */
+  terrain: (maxTier: number): number => 2 + maxTier,
+  /** The ground slabs: behind everything. */
+  ground: (maxTier: number): number => 3 + maxTier,
+} as const;
 /** Flat ground areas (parks, plazas…) sit under the streets. */
-const AREA_LIFT = 0.008;
-const AREA_THICKNESS = 0.008;
+export const AREA_LIFT = 0.001;
+export const AREA_THICKNESS = 0.002;
+/**
+ * The lowest up-facing surface any placed pack model has above its lot (the ground plate of House_49…52 at 10 mm):
+ * every flat tier tops out under it, so a model is never buried in the slab it stands on (cityFlats.test checks the city).
+ */
+export const MODEL_BASE_MIN = 0.01;
 
 /** Solids drawn by others: lots are the block meshes (blockMeshes.ts), hospital blocks hospitalMeshes.ts. */
 const NOT_REGION: ReadonlySet<SolidKind> = new Set(['building', 'prop', 'hospital']);
@@ -59,7 +81,8 @@ function sidewalkStrips(sx: number, sy: number, sz: number, m?: THREE.Matrix4, b
 
 /** A paved solid (road deck, ramp, stair step): asphalt plus its two sidewalk strips, rotated with the solid. */
 function pavedGeometry(s: Solid): THREE.BufferGeometry[] {
-  const m = solidMatrix(s);
+  // drawn ROAD_LIFT above its collider, like a street: above the flats it borders, under a street deck it crosses
+  const m = new THREE.Matrix4().makeTranslation(0, ROAD_LIFT, 0).multiply(solidMatrix(s));
   return [box(s.size.x, s.size.y, s.size.z, 0, 0, 0, colorOf(cityPalette.asphalt), m), ...sidewalkStrips(s.size.x, s.size.y, s.size.z, m)];
 }
 
@@ -115,13 +138,17 @@ const isCityMap = (map: MapData): map is CityMap => map.kind === 'city' && 'layo
 export function buildRegionMeshes(map: MapData, regionSize: number): Map<string, THREE.Group> {
   const layout: CityLayout | undefined = isCityMap(map) ? map.layout : undefined;
   const areaKind = new Map<string, AreaKind>(layout?.areas.map((a) => [a.id, a.kind]) ?? []);
-  const parts = new Map<string, { solids: THREE.BufferGeometry[]; ground: THREE.BufferGeometry[] }>();
-  const entry = (x: number, z: number) => {
+  type Parts = { streets: THREE.BufferGeometry[]; solids: THREE.BufferGeometry[]; flats: THREE.BufferGeometry[][]; terrain: THREE.BufferGeometry[]; ground: THREE.BufferGeometry[] };
+  const parts = new Map<string, Parts>();
+  const entry = (x: number, z: number): Parts => {
     const key = regionOf(x, z, regionSize);
     let e = parts.get(key);
-    if (!e) parts.set(key, (e = { solids: [], ground: [] }));
+    if (!e) parts.set(key, (e = { streets: [], solids: [], flats: [], terrain: [], ground: [] }));
     return e;
   };
+  // areas with a terrain solid of their own (sand, pier, breakwater, the cliffs) are coloured on that solid, not drawn flat
+  const solidIds = new Set(map.solids.map((s) => s.id));
+  const hasSolid = (areaId: string): boolean => solidIds.has(areaId) || solidIds.has(`${areaId}-terrain`);
 
   for (const s of map.solids) {
     if (NOT_REGION.has(s.kind)) continue;
@@ -131,35 +158,41 @@ export function buildRegionMeshes(map: MapData, regionSize: number): Map<string,
     else {
       const area = areaKind.get(s.id);
       const own = area ? AREA_COLORS[area] : undefined;
-      e.solids.push(solidGeometry(s, own !== undefined ? colorOf(own) : solidColor(s)));
+      // terrain blocks (band-gap floors, cliffs, the beach) lie under decks and areas: behind them in depth, like the ground
+      (s.kind === 'terrain' ? e.terrain : e.solids).push(solidGeometry(s, own !== undefined ? colorOf(own) : solidColor(s)));
     }
   }
-  for (const [a, tier] of areaTiers(layout?.areas ?? [])) {
+  const tiers = areaTiers(layout?.areas ?? []);
+  const maxTier = Math.max(0, ...tiers.map(([, t]) => t));
+  for (const [a, tier] of tiers) {
     const c = AREA_COLORS[a.kind];
     if (c === undefined) continue;
-    if (a.kind === 'sand' || a.kind === 'pier' || a.kind === 'breakwater') continue; // terrain solids, coloured above
-    entry(...rectCenter(a.rect)).solids.push(flat(a.rect, a.y + AREA_LIFT + tier * (AREA_LIFT + AREA_THICKNESS), AREA_THICKNESS, colorOf(c)));
+    if (hasSolid(a.id)) continue;
+    const e = entry(...rectCenter(a.rect));
+    (e.flats[tier] ??= []).push(flat(a.rect, a.y + AREA_LIFT + tier * (AREA_LIFT + AREA_THICKNESS), AREA_THICKNESS, colorOf(c)));
   }
-  for (const r of layout?.roads ?? []) entry(...rectCenter(r.rect)).solids.push(...streetGeometry(r.rect, r.y));
+  for (const r of layout?.roads ?? []) entry(...rectCenter(r.rect)).streets.push(...streetGeometry(r.rect, r.y));
 
-  const solidsMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
-  // The ground is pushed back in the depth buffer: the streets and areas lie only 0.8–2 cm above it, less than the
-  // depth precision a few hundred metres out, and would otherwise flicker against it (the SP5 playtest's road flicker).
-  const groundMaterial = new THREE.MeshLambertMaterial({
-    vertexColors: true,
-    map: gridTexture(),
-    polygonOffset: true,
-    polygonOffsetFactor: GROUND_DEPTH_OFFSET,
-    polygonOffsetUnits: GROUND_DEPTH_OFFSET,
-  });
+  const layered = (layer: number, map: THREE.Texture | null = null): THREE.MeshLambertMaterial =>
+    new THREE.MeshLambertMaterial({ vertexColors: true, map, polygonOffset: layer !== 0, polygonOffsetFactor: layer, polygonOffsetUnits: layer });
+  const streetsMaterial = layered(DEPTH_LAYER.streets);
+  const solidsMaterial = layered(DEPTH_LAYER.solids);
+  const flatsMaterials = Array.from({ length: maxTier + 1 }, (_, tier) => layered(DEPTH_LAYER.flats(tier, maxTier)));
+  const terrainMaterial = layered(DEPTH_LAYER.terrain(maxTier));
+  const groundMaterial = layered(DEPTH_LAYER.ground(maxTier), gridTexture());
   const out = new Map<string, THREE.Group>();
-  for (const [key, { solids, ground }] of parts) {
+  for (const [key, { streets, solids, flats, terrain, ground }] of parts) {
     const group = new THREE.Group();
     group.name = `region ${key}`;
-    for (const [name, geoms, material, castShadow] of [
+    const layers: readonly (readonly [string, THREE.BufferGeometry[], THREE.Material, boolean])[] = [
+      ['region-streets', streets, streetsMaterial, false], // a 4 cm slab on the ground: no shadow worth a pass
       ['region-solids', solids, solidsMaterial, true],
+      // an 8 mm slab casts nothing worth a shadow pass
+      ...flatsMaterials.map((m, tier) => [`region-flats-${tier}`, flats[tier] ?? [], m, false] as const),
+      ['region-terrain', terrain, terrainMaterial, true],
       ['region-ground', ground, groundMaterial, false],
-    ] as const) {
+    ];
+    for (const [name, geoms, material, castShadow] of layers) {
       if (geoms.length === 0) continue;
       const merged = mergeGeometries(geoms, false);
       for (const g of geoms) g.dispose();
