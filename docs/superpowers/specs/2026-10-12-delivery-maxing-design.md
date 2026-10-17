@@ -1,21 +1,21 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) approved by the owner on 2026-10-14:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). Sections marked **Pending** need the owner's input before they are built.
+- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) approved by the owner on 2026-10-14:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). **SP5 playtest changes (2026-10-17, the owner's decisions):** a full-screen map instead of the phone's Map app, a food-prep progress bar, a skateboard jump, getting off at any speed, WASD-only vehicle controls with the mouse for looking, and a 3 min pickup deadline with a 3 min offer lockout. **Revision 3 (2026-10-17, the economy) approved by the owner in the SP6 plan thread:** every order pays a random USD-valued amount of GAME whose range the vehicle sets, four upgrade lines (Vehicle, Bag, Shoes, Dispatcher), lock-to-boost, fixed ranges that pay nothing from an empty vault (§3.6, §6, §9). Sections marked **Pending** need the owner's input before they are built.
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
 
 Delivery Maxing is a third-person, low-poly, multiplayer courier game that runs in the browser. Players take food and package orders on their **phone** and deliver them from one place in the city to another: from a bakery to an apartment, from a factory to a construction site. They get around on foot or on a vehicle they own: **skateboard, bicycle, motorbike or car**. Better vehicles carry more and heavier orders and earn more. Players can shove each other, vehicles knock people over, and street thieves chase couriers on foot. There are no health points.
 
-Every completed order adds **GAME** to the player's **Wallet** app on the phone; the player claims it on-chain whenever they like and pays the transaction fee. The reward pool is funded by the Pump.fun creator fees of the game's own token **GAME** (paired with SOL) and by part of every vehicle purchase, and pays out in GAME bought back from the market. How much each order pays is **Pending** (§9).
+Every completed order adds **GAME** to the player's **Wallet** app on the phone; the player claims it on-chain whenever they like and pays the transaction fee. The reward pool is funded by the Pump.fun creator fees of the game's own token **GAME** (paired with SOL) and by part of every vehicle purchase, and pays out in GAME bought back from the market. Each order pays a random USD-valued amount whose range the vehicle sets (§3.6).
 
 Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel and cosmetics are bought with **Coins**, an off-chain currency earned by playing.
 
 ### Design goals
 
 1. **Getting around the city is the fun.** Moving through a dense, hilly city on foot and on wheels must feel good on its own.
-2. **Spending buys a stronger courier.** Each vehicle tier carries more and earns more than the one below it. Skill (routes, shortcuts, order choice) decides the rest.
+2. **Spending buys a stronger courier.** Each tier of every upgrade line is strictly better than the one below it: a better vehicle earns more per order whatever the route. Skill (routes, shortcuts, order choice) decides the rest.
 3. **Rewards are honest and verifiable.** The pool, payouts and claims live on-chain. Delivery validation is server-authoritative.
 4. **Token demand comes from use.** GAME is burned on vehicles and upgrades and paid out for work.
 
@@ -36,15 +36,21 @@ Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel
 | **Vehicles (rev. 2)** | Walk, skateboard, bicycle, motorbike, car. Slots 1/1/2/3/5; packages only on motorbike (≤ 50 kg) and car (≤ 150 kg); top speeds 8/12/16/22/28 m/s. No truck. Each tier is strictly better than the one below (§4). |
 | **Fuel (rev. 2)** | Motorbike and car use fuel, refilled at gas stations with Coins (§4.4). |
 | **Parkour (rev. 2)** | Removed: wall-runs, wall-jumps, zip lines, jump pads, grind rails, map slide chutes, boost orbs. Kept: sprint, jump, crouch-slide, low mantle (≤ 1.2 m). |
-| **Phone (rev. 2)** | The main UI: orders, map, garage, shop, wallet, wardrobe, leaderboard, settings (§8). |
+| **Phone (rev. 2)** | The main UI: orders, garage, shop, wallet, wardrobe, leaderboard, settings (§8). |
+| **Map (SP5 playtest)** | A game feature, not a phone app: M opens a full-screen map of the whole city at any time (§8). |
+| **Vehicle controls (SP5 playtest)** | WASD only: W throttle, S brake and reverse, A/D steer. The mouse only looks. Get off at any speed. The skateboard jumps (§4.2). |
 | **Spawning and safe zones (rev. 2)** | Four hospitals are the only spawn points and the only safe zones. |
 | **Cancelling (rev. 2)** | Cancel any order from the phone, anywhere. No cooldown, but the server stops sending you offers for a while; burning GAME skips the wait (§3.5). |
+| **Pickup deadline (SP5 playtest)** | 3 min from accepting to reach the pickup; missing it fails the order and locks offers for 3 min (§3.4). |
 | **Ranks (rev. 2)** | Removed. |
 | **City (rev. 2)** | 1.2 × 1.2 km terraced Western bay city built from the owner's Megatropolis and Tropical City packs; dense wall-to-wall blocks, four levels (§5, `2026-10-14-city-map-design.md`). Replaces the SP2 2 × 2 km city. |
 | **Token (rev. 2)** | GAME launches on Pump.fun paired with SOL (no AMZNx). Creator fees accrue in SOL. |
-| **Rewards (rev. 2)** | Paid in GAME (bought back with pool SOL), accrued per completed order into the Wallet app, claimed by the player who pays the fees. Payout math **Pending** (§9). |
+| **Rewards (rev. 2)** | Paid in GAME (bought back with pool SOL), accrued per completed order into the Wallet app, claimed by the player who pays the fees. Payout math in §3.6 (rev. 3). |
 | **Vehicle purchases (rev. 2)** | Paid in GAME at fixed USD prices: 80% burned, 20% sent to the reward pool. |
 | **Spender advantage (rev. 2)** | Intentional: better vehicles earn more. The legal risk this adds is in §16. |
+| **Payout per order (rev. 3)** | A random USD-valued GAME amount; the order's vehicle tier sets the range, so each tier is strictly better by payout (§3.6). Ranges are fixed; an empty vault pays nothing (§9). |
+| **Upgrade lines (rev. 3)** | Vehicle (payout range), Bag (slots and weight), Shoes (on-foot speed), Dispatcher (offer frequency and quality): five tiers each, bought in order with GAME (§6.2). |
+| **Lock-to-boost (rev. 3)** | GAME locked for 7 days gives up to +30% on every payout (§6.4). |
 | Thieves | Street NPCs chase couriers on foot carrying orders; a catch fails the carried orders. Kept from SP2, adapted to vehicles (§7.3). |
 | Art (rev. 2) | The owner's Megatropolis and Tropical City `.glb` packs for the city; the CC0 Quaternius courier; code-built placeholders for anything missing. Licensed Unity Asset Store packs, kept out of git (§16, `assets/CREDITS.md`). |
 | Map build | A seeded generator writes the committed layout and generated files; `pnpm map:check` regenerates and byte-compares them in CI (kept from SP2). |
@@ -54,7 +60,7 @@ Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel
 1. The player spawns at a hospital, on foot or next to their parked vehicle.
 2. **Offers** arrive on the phone. The player accepts the ones that fit their free slots and their vehicle's weight limit.
 3. They ride or walk to each **pickup**, collect the order at the door, then take it to the **dropoff** door.
-4. Each completed order earns **Delivery Points** (score and reward weight), **Coins**, and a **GAME** reward credited to the Wallet app (amount **Pending**, §9).
+4. Each completed order earns **Delivery Points** (score and reward weight), **Coins**, and a **GAME** reward credited to the Wallet app (§3.6).
 5. Coins buy fuel and cosmetics; GAME buys vehicles and token upgrades.
 
 ### 3.1 Order kinds
@@ -82,14 +88,23 @@ Faster vehicles beat the timers more easily; that is intended (design goal 2).
 
 ### 3.3 Slots and weight
 
-| | Walk | Skateboard | Bicycle | Motorbike | Car |
-|---|---|---|---|---|---|
-| Slots (food and packages share them) | 1 | 1 | 2 | 3 | 5 |
-| Max total package weight | — | — | — | 50 kg | 150 kg |
+Capacity comes from the **Bag** (an upgrade line, §6.2), capped by the vehicle (revision 3; before, the vehicle alone set it).
 
-- Food uses a slot and has no weight. A package uses a slot and its weight counts against the vehicle's limit.
+| Bag tier | 0 (free) | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| Slots (food and packages share them) | 1 | 2 | 3 | 4 | 5 | 6 |
+| Max total package weight | — | 10 kg | 25 kg | 50 kg | 100 kg | 150 kg |
+
+| Vehicle cap | Walk | Skateboard | Bicycle | Motorbike | Car |
+|---|---|---|---|---|---|
+| Slots at most | 2 | 2 | 3 | 4 | 6 |
+| Package weight at most | 10 kg | 10 kg | 25 kg | 50 kg | 150 kg |
+
+The player's capacity is the smaller of the two. All values are config.
+
+- Food uses a slot and has no weight. A package uses a slot and its weight counts against the capacity.
 - Package weight classes: Small 1–10 kg, Medium 10–25 kg, Large 25–50 kg, Bulky 50–150 kg (car only).
-- Offers are filtered by the vehicle the player is using (or last parked): package offers only appear on a motorbike or car, and only if the weight fits.
+- Offers are filtered by the player's capacity for the vehicle they are using (or last parked): a package offer appears only if its weight fits.
 - **Every delivery ends on foot.** The player gets off, carries the order to the door, and walks back. Carrying a Bulky package by hand disables sprint and slide.
 - Switching to a smaller vehicle while carrying orders it can't hold is blocked.
 
@@ -97,12 +112,13 @@ Faster vehicles beat the timers more easily; that is intended (design goal 2).
 
 | Rule | Value (config) |
 |---|---|
-| Offers shown at once | Up to 3 |
+| Offers shown at once | Up to 3 (Dispatcher tier 0); up to 5 at tier 5 |
 | Offer lifetime | 20 s, then it disappears |
-| New offers | Every 8–15 s while the player has a free slot |
+| New offers | Every 8–15 s while the player has a free slot, scaled by the Dispatcher tier (×1.0 at tier 0 down to ×0.5 at tier 5) |
 | Pickup distance | The pickup is at most 400 m (path) from the player when offered |
 | Accepting | One tap on the phone, anywhere; while driving, a one-key accept on the notification |
-| Selection rules | Distance bands, door spacing, reuse and reachability per city map design §6.4 |
+| Pickup deadline | After accepting, the courier has **3 min** to reach the pickup door. Missing it fails the order (no points, Coins or GAME) and starts a 3 min offer lockout (§3.5). |
+| Selection rules | Distance bands, door spacing, reuse and reachability per city map design §6.4; higher Dispatcher tiers weight long and modified orders more (§6.2) |
 
 Players never compete for the same order: each player's offers are their own.
 
@@ -110,7 +126,8 @@ Players never compete for the same order: each player's offers are their own.
 
 - Any accepted order can be cancelled from the phone, anywhere, at any time. There is no cancel cooldown.
 - Cancelling starts an **offer lockout**: the server sends that player no new offers for 45 s (config). Orders already accepted continue normally.
-- The lockout can be skipped by burning GAME at a fixed USD price (§6.3). The price is **Pending**.
+- Missing the pickup deadline (§3.4) also fails the order and starts a longer lockout of 3 min (config). A longer lockout replaces a shorter one still running; it never shortens one.
+- The lockout can be skipped by burning GAME at a fixed USD price (§6.3). The price is a placeholder in §6.2.
 - A cancelled order that was already picked up simply disappears. No points, Coins or GAME.
 
 ### 3.6 Points and Coins per order
@@ -126,11 +143,23 @@ Players never compete for the same order: each player's offers are their own.
 | Express, on time | +1 | +10 |
 | Fragile, intact | +2 | +20 |
 
-Every value is a tuning value in config. Points are rounded to the nearest whole point. A thief catch (§7.3) subtracts points. How points relate to the GAME reward is **Pending** (§9).
+Every value is a tuning value in config. Points are rounded to the nearest whole point. A thief catch (§7.3) subtracts points.
+
+**GAME reward per order (revision 3).** Every completed order also pays a random USD-valued amount of GAME, in the style of a fishing game where the rod sets the price range of what you catch:
+
+| Order's vehicle tier | Walk | Skateboard | Bicycle | Motorbike | Car |
+|---|---|---|---|---|---|
+| Payout range (USD, config starting values) | $0.005–0.03 | $0.01–0.06 | $0.02–0.12 | $0.03–0.30 | $0.05–0.60 |
+
+- The **order's vehicle tier** is the tier its offer was made for (the vehicle in use or last parked when it was accepted, §3.3). Ranges never overlap in average: each tier's expected payout per hour is above the tier below on any route, so a better vehicle is strictly better however the city is laid out.
+- The roll: `payout = min + (max − min) × (0.6 × quality + 0.4 × luck)`, where `quality` is the order's points divided by the most points that order could have earned (so band, weight, hot or par time, Express and Fragile all pull the roll up) and `luck` is a uniform random number the server draws and records with the delivery. Weights are config.
+- Lock-to-boost (§6.4) multiplies the result by up to 1.3.
+- The USD amount is converted to GAME at the keeper's rate (§6.3) when the order completes and credited to the Wallet app (§9). An order completed while the vault cannot cover the payout pays points and Coins only, and the Wallet app says so.
+- Late, cold, damaged or over-par orders still roll, with the lower `quality` they earned. A cancelled, failed or stolen order pays nothing.
 
 ## 4. Movement and vehicles
 
-**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). Movement is relative to the camera; on a vehicle, so is steering (W drives toward where the camera looks).
+**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). On foot, movement is relative to the camera. On a vehicle, WASD alone drives it (W throttle, S brake and reverse, A/D steer) and the mouse only looks around; the camera swings back behind the vehicle shortly after the mouse stops moving.
 
 All movement and vehicle code lives in the shared package and runs on the fixed **30 Hz** step on client and server; rendering interpolates between steps.
 
@@ -146,25 +175,27 @@ All movement and vehicle code lives in the shared package and runs on the fixed 
 
 **Removed in revision 2:** wall-runs, wall-jumps, zip lines, jump pads, grind rails, map slide chutes, boost orbs.
 
-**Input layer:** raw input is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `mount`, `phone`, `accept`. Gameplay code only reads actions. Default keys: WASD move, mouse look, Space jump (on a vehicle: handbrake), C crouch, Shift sprint (toggle; on a vehicle: boost is not used), E interact (pick up, hand over, refuel), F mount/dismount, Tab phone, Y accept the top offer, left click hit. Crouch is C only, never Ctrl (Ctrl+W closes the tab).
+**Input layer:** raw input is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `mount`, `phone`, `accept`. Gameplay code only reads actions. Default keys: WASD move (on a vehicle: W throttle, S brake and reverse, A/D steer), mouse look, Space jump (on the skateboard: jump; on the other vehicles: handbrake), C crouch, Shift sprint (toggle; on a vehicle: boost is not used), E interact (pick up, hand over, refuel), F mount/dismount, Tab phone, M map, Y accept the top offer, left click hit. Crouch is C only, never Ctrl (Ctrl+W closes the tab).
 
 ### 4.2 Vehicles
 
 | | Walk | Skateboard | Bicycle | Motorbike | Car |
 |---|---|---|---|---|---|
 | Top speed | 8 m/s | 12 m/s | 16 m/s | 22 m/s | 28 m/s |
-| Slots | 1 | 1 | 2 | 3 | 5 |
-| Max package weight | — | — | — | 50 kg | 150 kg |
+| Slot cap (the Bag sets the rest, §3.3) | 2 | 2 | 3 | 4 | 6 |
+| Package weight cap | 10 kg | 10 kg | 25 kg | 50 kg | 150 kg |
+| Payout range (§3.6) | $0.005–0.03 | $0.01–0.06 | $0.02–0.12 | $0.03–0.30 | $0.05–0.60 |
 | Fuel | — | — | — | Yes | Yes |
-| Price | Free | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) |
+| Price (USD, placeholder config) | Free | $2 | $5 | $12 | $25 |
 
 - **Physics:** an arcade vehicle model in the shared package (kinematic, like the character controller), not Rapier dynamic-body cars, so server authority and client prediction stay simple. Each vehicle has acceleration, braking, turn rate, grip and slope behavior in config.
-- **Mount and dismount:** F next to an owned vehicle. A dismounted vehicle stays parked where it was left; other players can't use it. The skateboard is the exception: it is carried when you get off (never parked), and F on foot puts it down and rides it.
+- **Mount and dismount:** F next to an owned vehicle. F gets off at any speed: the vehicle stops and stays parked where it was left, and the courier steps off beside it keeping the vehicle's momentum up to the on-foot speed cap. Other players can't use a parked vehicle. The skateboard is the exception: it is carried when you get off (never parked), and F on foot puts it down and rides it.
+- **Skateboard jump:** Space makes the skateboard jump (about 0.8 m, config), keeping its speed.
 - **Summon:** from the phone's Garage, an owned vehicle more than 100 m away is moved to the nearest legal road spot next to the player. Cooldown 60 s.
-- **Reverse:** back input while stopped reverses the car (6 m/s). The bicycle and motorbike turn toward it first, the long way round if the short way is blocked, and back up at walking pace (2 and 2.5 m/s, `config/riding.json`) only while a turn is refused, so a wedged bike can always get out; the skateboard never reverses (it turns on the spot).
+- **Reverse:** S brakes, then reverses: the car at 6 m/s, the bicycle and motorbike at walking pace (2 and 2.5 m/s, `config/riding.json`); the skateboard only brakes. A/D turn every vehicle on the spot when stopped, so a wedged bike can always get out.
 - **Speed caps:** each vehicle's top speed is its server-enforced cap (§10).
 - **Crashes:** hitting a wall above 10 m/s costs a carried Fragile bonus (§3.2). It does not knock the rider off until combat and collisions (SP7).
-- **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Only one vehicle of each tier is needed; a player may own several tiers and switch at any parked vehicle. Until the shop (SP6), all four vehicles are owned from the start, with dev-panel toggles to remove or re-add them.
+- **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Vehicles are an upgrade line bought in order (skateboard first, car last); a player owns every tier up to the one bought and switches at any parked vehicle. Until the shop (SP6), all four vehicles are owned from the start, with dev-panel toggles to remove or re-add them.
 - **Models:** the skateboard, bicycle and motorbike are not in the art packs yet (placeholders until supplied); the car is chosen from the pack's cars.
 
 ### 4.3 Where each vehicle can go
@@ -186,7 +217,7 @@ Every package door is within 30 m of a road cars can use, and at most 15% of foo
 | Tank range | Motorbike 6 km, car 5 km of driving |
 | Refuel | At any of the 6 gas stations: stop at a pump and hold E. A full tank costs 40 Coins (motorbike) or 80 Coins (car); partial fills cost proportionally. |
 | Empty tank | The vehicle still moves at 3 m/s so the player is never stranded |
-| HUD | Fuel gauge while riding; the phone Map shows gas stations |
+| HUD | Fuel gauge while riding; the map (M) shows gas stations |
 
 ## 5. City and POIs
 
@@ -214,28 +245,42 @@ Coins are off-chain, stored in the database, and cannot be traded or withdrawn.
 
 Paid with GAME at a fixed USD price (§6.4). Ownership is recorded on-chain against the wallet and is permanent.
 
+**Four upgrade lines (revision 3)**, each with tiers bought in order (tier 0 is free), each strictly better than the tier below:
+
+| Line | What a tier gives | Tiers | USD per tier (placeholder config) | GAME split |
+|---|---|---|---|---|
+| **Vehicle** | The payout range (§3.6), speed, and the capacity cap (§4.2) | Skateboard, bicycle, motorbike, car | $2, $5, $12, $25 | 80% burned, 20% to the reward vault |
+| **Bag** | Slots and max package weight (§3.3) | 5 | $1, $2, $4, $8, $15 | 80% burned, 20% to the vault |
+| **Shoes** | +3.5% on-foot sprint speed per tier (about +17.5% maxed) | 5 | $1, $2, $3, $4, $5 | 80% burned, 20% to the vault |
+| **Dispatcher** | Offers more often (interval ×0.9, 0.8, 0.7, 0.6, 0.5), more at once (3, 3, 4, 4, 5, 5 from tier 0), and weighted toward long and modified orders (the top of the payout range) | 5 | $1, $3, $6, $10, $15 | 80% burned, 20% to the vault |
+
+Other GAME purchases:
+
 | Item | Effect | GAME split |
 |---|---|---|
-| Skateboard, bicycle, motorbike, car | The vehicle (§4.2). Tiers can be bought in any order. | 80% burned, 20% to the reward pool |
-| Shoes (5 tiers, in order) | +3.5% on-foot sprint speed per tier (about +17.5% maxed) | 100% burned |
 | Premium skins | Cosmetic only | 100% burned |
-| Offer-lockout skip | Ends the cancel lockout (§3.5) | 100% burned |
+| Offer-lockout skip | Ends the cancel or missed-pickup lockout (§3.5) | 100% burned |
 
-USD prices are set in the program's settings by the admin multisig and are **Pending**.
+USD prices are set in the program's settings by the admin multisig; the values above are the config starting values until the owner sets the real ones.
 
-**Removed in revision 2:** Backpack tiers (slots now come from the vehicle), skateboard tiers, Gloves, the GPS Watch (its features are standard on the phone), ranks and rank unlocks.
+**Removed in revision 2:** skateboard tiers, Gloves, the GPS Watch (its features are standard on the phone), ranks and rank unlocks. Revision 3 brings slots back as the Bag line.
 
 ### 6.3 USD pricing mechanism
 
 - Each GAME-priced item has `usd_price` (6 decimals) stored on-chain.
 - The **price keeper** computes a **30-minute average** GAME→USD rate (the GAME/SOL pool average × a SOL/USD oracle average, e.g. Pyth) and posts it every few minutes. It reads the bonding curve before GAME graduates and the PumpSwap pool after.
-- At purchase time: `game_to_spend = usd_price ÷ rate`.
+- At purchase time: `game_to_spend = usd_price ÷ rate`. At order completion: `game_paid = usd_payout ÷ rate` (§3.6).
 - **Safety limits (on-chain):** the rate must be younger than 15 minutes; one update may move it at most 20%; the buyer passes `max_game` and the purchase fails above it.
 - The shop shows both values, e.g. "$10 ≈ 41,250 GAME", updated live.
 
-### 6.4 Lock-to-boost — **Pending**
+### 6.4 Lock-to-boost
 
-The v1 lock-to-boost (lock GAME for up to +30% epoch points) was designed for epoch payouts. Whether it survives with per-order payouts is decided together with §9.
+Decided in revision 3 (the "boat": holding the token makes you a better courier, checkably).
+
+- The player locks GAME in the reward program for **7 days**; the lock renews for another 7 days unless the player withdraws after it ends. Locked GAME is not spent.
+- Every order payout (§3.6) is multiplied by `1 + 0.3 × min(1, locked_usd ÷ 100)`: +30% at $100 of GAME locked (valued at the keeper's rate when locked), linear below. The cap and the amount are config and program settings.
+- Locking rather than holding means the same tokens cannot boost several wallets, and the boost is readable on-chain by the server.
+- The Wallet app shows the locked amount, the boost and the unlock date.
 
 ## 7. Multiplayer and combat
 
@@ -279,28 +324,32 @@ The phone replaces the HUB screens. Tab raises it in the courier's hand; the ful
 | App | Contents |
 |---|---|
 | Orders | Incoming offers (item, pickup and dropoff names, distance band, weight, timer, reward), active orders, cancel, lockout timer and skip |
-| Map | City map, route to the next stop for the current vehicle class, hospitals, gas stations; standard waypoint line (the old GPS Watch) |
 | Garage | Owned vehicles, where each is parked, fuel, switch, summon |
-| Shop | Coins tab (fuel cards, cosmetics) and Token tab (vehicles, Shoes, premium skins) with USD and GAME prices |
-| Wallet | Accrued GAME from orders, Claim button (the player signs and pays the fee), claim history |
+| Shop | Coins tab (fuel, cosmetics) and Token tab (the four upgrade lines, premium skins, lockout skip) with USD and GAME prices |
+| Wallet | Accrued GAME from orders with each order's payout, the reward vault's balance ("Vault empty" when orders pay no GAME), lock-to-boost (lock, renew, withdraw), Claim button (the player signs and pays the fee), claim history |
 | Wardrobe | Outfits, vehicle colours, bag and phone skins |
 | Leaderboard | Daily and weekly Delivery Points |
 | Settings | Controls, audio, graphics |
 
-**HUD (always on screen):** the next stop with distance and arrow, active order timers, the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and GAME.
+**Map (M):** not a phone app (SP5 playtest). M opens a full-screen map of the whole city on foot or riding: routes to the next stops for the current vehicle class, hospitals, gas stations, parked vehicles and offers, with the standard waypoint line (the old GPS Watch). The minimap stays on the HUD.
 
-## 9. Reward program (Solana, Anchor) — **Pending**
+**HUD (always on screen):** the next stop with distance and arrow, active order timers (a food order being prepared shows a progress bar, not a countdown), the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and the GAME payout.
 
-**This section is a draft. The owner will define the payout design; nothing here is approved for implementation.** Any change to the reward program needs the owner's explicit approval.
+## 9. Reward program (Solana, Anchor)
+
+**The payout design was decided by the owner in revision 3 (2026-10-17).** Any change to it needs the owner's explicit approval. The program itself is built in SP8 after an audit; until then SP6 plays the same rules against a browser mock (§15).
 
 What is decided:
 - **Funding:** Pump.fun creator fees from the GAME/SOL pair (in SOL) go to the reward vault through the fee-sharing split, harvested permissionlessly as in v1; plus 20% of the GAME spent on every vehicle purchase (§6.2).
 - **Payout currency:** GAME. The vault's SOL is used to buy back GAME (PumpSwap) and that GAME is paid to players.
-- **Accrual:** each completed order adds its reward to the player's balance shown in the Wallet app.
+- **Payout per order:** the random USD-valued roll of §3.6, converted to GAME at the keeper's rate, times the lock-to-boost multiplier (§6.4). Ranges are fixed: they never scale with the vault.
+- **Empty vault:** when the vault cannot cover an order's payout, that order pays no GAME (points and Coins as usual). Nothing is owed later. The Wallet app shows the vault balance so this is never a surprise.
+- **Accrual:** each completed order adds its payout to the player's balance shown in the Wallet app; the server records the roll (the luck number, the quality, the rate) with the delivery.
+- **Lock-to-boost:** locked GAME is held by the program (§6.4).
 - **Claim:** the player claims whenever they like; the claim is a transaction the player signs and pays the fee for.
 - **Warning kept from v1:** Pump.fun allows only one post-launch change to the fee recipients. The program must be audited and deployed, and its vault address final, before the fee configuration is set.
 
-What is **Pending** (owner): how much one order pays and how that depends on the pool (fixed fraction per order, a per-order cap, points-weighted share of a periodic budget, …); buyback timing and slippage limits; how accrued balances are proven on-chain (signed vouchers or cumulative Merkle roots, as in v1); the fate of lock-to-boost (§6.4).
+Still open for the SP8 plan (engineering, not game design): buyback timing and slippage limits; how accrued balances are proven on-chain (signed vouchers or cumulative Merkle roots, as in v1).
 
 Guarantees any design must keep: payouts can never exceed what the vault holds; claims are idempotent and can't double-pay; purchases burn and record in one instruction; only the admin multisig changes settings; an emergency pause can stop claims but never redirect funds.
 
@@ -375,9 +424,9 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 | 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
 | 4 | **Vehicles** | Built (PR #10). Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
 | 5 | **City v2** | Built (PR #12). The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs. Draw-call and triangle budgets proved on the placeholder city in the sandbox; 60 fps with the pack models awaits the owner's `?perf=1` run. The city is the default map; `?map=greybox` keeps the SP4 test town. |
-| 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps. |
+| 6 | **Economy** | The revision 3 economy on a browser mock of the chain: the four upgrade lines (Vehicle, Bag, Shoes, Dispatcher) and the Coin shop (fuel, cosmetics), the per-order GAME payout roll, lock-to-boost, the Garage, Wallet and Wardrobe apps; plus the SP5 playtest changes: the full-screen map, the food-prep bar, the skateboard jump, getting off at any speed, WASD vehicle controls and the 3 min pickup deadline. |
 | 7 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation for players and vehicles, server-authoritative thieves, wallet sign-in, Postgres persistence, combat and collisions, anti-cheat, reconnects. |
-| 8 | **Reward program + launch** | After the owner's payout design (§9): harvest spike, Anchor program, buyback, price keeper, claims, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
+| 8 | **Reward program + launch** | The §9 program for real: harvest spike, Anchor program (purchases, locks, payouts, claims), buyback, price keeper, replacing SP6's mock, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 
 ## 16. Risks, legal and open items
 
@@ -391,11 +440,10 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 **Performance risk:** the dense city places about 2,600 buildings (7.3 M triangles at full detail). City v2 must re-prove 60 fps with merged blocks, LOD and fog, and keep the first download under about 40 MB with compression.
 
 **Open items (owner):**
-- The reward payout design (§9) and lock-to-boost (§6.4).
-- USD prices of vehicles, Shoes, skins and the lockout skip.
+- The real USD prices of every upgrade tier, skins and the lockout skip (placeholders in §6.2), and the real payout ranges (§3.6).
 - Models for the skateboard, bicycle, motorbike, post office, warehouse, school, containers and cranes.
 - Confirm the creator fee percentage at launch (Pump.fun allows 0.05%–1%).
 
 **Not in v1 (later ideas):** mobile touch controls, NPC traffic and pedestrians, Rush Hour events, private rooms.
 
-**Considered and rejected:** a truck tier; separate cc classes of motorbike (merged into one); ranks; per-epoch payouts (replaced by per-order accrual); VIP levels; race wagers (gambling risk).
+**Considered and rejected:** a truck tier; separate cc classes of motorbike (merged into one); ranks; per-epoch payouts (replaced by per-order accrual); VIP levels; race wagers (gambling risk); payout ranges that scale with the vault (rev. 3: fixed ranges, honest about an empty vault); higher tiers going everywhere lower tiers go (rev. 3: the city's shortcuts stay); hold-to-boost without a lock (gameable across wallets).
