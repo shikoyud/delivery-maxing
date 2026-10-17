@@ -1,7 +1,7 @@
 # Delivery Maxing — Game Design Spec
 
 - **Date:** 2026-10-12
-- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) approved by the owner on 2026-10-14:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). Sections marked **Pending** need the owner's input before they are built.
+- **Status:** Approved v1 (2026-10-12, revised after the SP1 playtests and SP2). **Revision 2 (2026-10-14, the redesign) approved by the owner on 2026-10-14:** no HUB, point-to-point food and package orders, vehicles and fuel, an in-game phone, hospitals as spawn points and safe zones, no parkour, no ranks, a SOL-paired token, rewards paid in GAME per order, and a new 1.2 km terraced city (`2026-10-14-city-map-design.md`). **SP5 playtest changes (2026-10-17, the owner's decisions):** a full-screen map instead of the phone's Map app, a food-prep progress bar, a skateboard jump, getting off at any speed, and WASD-only vehicle controls with the mouse for looking. Sections marked **Pending** need the owner's input before they are built.
 - **Game name:** Delivery Maxing
 
 ## 1. Summary
@@ -36,7 +36,9 @@ Vehicles and token upgrades are bought by burning GAME at fixed USD prices. Fuel
 | **Vehicles (rev. 2)** | Walk, skateboard, bicycle, motorbike, car. Slots 1/1/2/3/5; packages only on motorbike (≤ 50 kg) and car (≤ 150 kg); top speeds 8/12/16/22/28 m/s. No truck. Each tier is strictly better than the one below (§4). |
 | **Fuel (rev. 2)** | Motorbike and car use fuel, refilled at gas stations with Coins (§4.4). |
 | **Parkour (rev. 2)** | Removed: wall-runs, wall-jumps, zip lines, jump pads, grind rails, map slide chutes, boost orbs. Kept: sprint, jump, crouch-slide, low mantle (≤ 1.2 m). |
-| **Phone (rev. 2)** | The main UI: orders, map, garage, shop, wallet, wardrobe, leaderboard, settings (§8). |
+| **Phone (rev. 2)** | The main UI: orders, garage, shop, wallet, wardrobe, leaderboard, settings (§8). |
+| **Map (SP5 playtest)** | A game feature, not a phone app: M opens a full-screen map of the whole city at any time (§8). |
+| **Vehicle controls (SP5 playtest)** | WASD only: W throttle, S brake and reverse, A/D steer. The mouse only looks. Get off at any speed. The skateboard jumps (§4.2). |
 | **Spawning and safe zones (rev. 2)** | Four hospitals are the only spawn points and the only safe zones. |
 | **Cancelling (rev. 2)** | Cancel any order from the phone, anywhere. No cooldown, but the server stops sending you offers for a while; burning GAME skips the wait (§3.5). |
 | **Ranks (rev. 2)** | Removed. |
@@ -130,7 +132,7 @@ Every value is a tuning value in config. Points are rounded to the nearest whole
 
 ## 4. Movement and vehicles
 
-**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). Movement is relative to the camera; on a vehicle, so is steering (W drives toward where the camera looks).
+**Camera:** a third-person chase camera about 4.5 m behind and 1.6 m above the courier, orbited with the mouse. It lags slightly, widens its field of view with speed, and pulls in when geometry would block the view. On vehicles it sits further back and higher (config). On foot, movement is relative to the camera. On a vehicle, WASD alone drives it (W throttle, S brake and reverse, A/D steer) and the mouse only looks around; the camera swings back behind the vehicle shortly after the mouse stops moving.
 
 All movement and vehicle code lives in the shared package and runs on the fixed **30 Hz** step on client and server; rendering interpolates between steps.
 
@@ -146,7 +148,7 @@ All movement and vehicle code lives in the shared package and runs on the fixed 
 
 **Removed in revision 2:** wall-runs, wall-jumps, zip lines, jump pads, grind rails, map slide chutes, boost orbs.
 
-**Input layer:** raw input is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `mount`, `phone`, `accept`. Gameplay code only reads actions. Default keys: WASD move, mouse look, Space jump (on a vehicle: handbrake), C crouch, Shift sprint (toggle; on a vehicle: boost is not used), E interact (pick up, hand over, refuel), F mount/dismount, Tab phone, Y accept the top offer, left click hit. Crouch is C only, never Ctrl (Ctrl+W closes the tab).
+**Input layer:** raw input is mapped to actions: `move`, `look`, `jump`, `crouch`, `sprint`, `interact`, `hit`, `mount`, `phone`, `accept`. Gameplay code only reads actions. Default keys: WASD move (on a vehicle: W throttle, S brake and reverse, A/D steer), mouse look, Space jump (on the skateboard: jump; on the other vehicles: handbrake), C crouch, Shift sprint (toggle; on a vehicle: boost is not used), E interact (pick up, hand over, refuel), F mount/dismount, Tab phone, M map, Y accept the top offer, left click hit. Crouch is C only, never Ctrl (Ctrl+W closes the tab).
 
 ### 4.2 Vehicles
 
@@ -159,8 +161,10 @@ All movement and vehicle code lives in the shared package and runs on the fixed 
 | Price | Free | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) | GAME (**Pending**) |
 
 - **Physics:** an arcade vehicle model in the shared package (kinematic, like the character controller), not Rapier dynamic-body cars, so server authority and client prediction stay simple. Each vehicle has acceleration, braking, turn rate, grip and slope behavior in config.
-- **Mount and dismount:** F next to an owned vehicle. A dismounted vehicle stays parked where it was left; other players can't use it. The skateboard is the exception: it is carried when you get off (never parked), and F on foot puts it down and rides it.
+- **Mount and dismount:** F next to an owned vehicle. F gets off at any speed: the vehicle stops and stays parked where it was left, and the courier steps off beside it keeping the vehicle's momentum up to the on-foot speed cap. Other players can't use a parked vehicle. The skateboard is the exception: it is carried when you get off (never parked), and F on foot puts it down and rides it.
+- **Skateboard jump:** Space makes the skateboard jump (about 0.8 m, config), keeping its speed.
 - **Summon:** from the phone's Garage, an owned vehicle more than 100 m away is moved to the nearest legal road spot next to the player. Cooldown 60 s.
+- **Reverse:** S brakes, then reverses: the car at 6 m/s, the bicycle and motorbike at walking pace (2 and 2.5 m/s, `config/riding.json`); the skateboard only brakes. A/D turn every vehicle on the spot when stopped, so a wedged bike can always get out.
 - **Speed caps:** each vehicle's top speed is its server-enforced cap (§10).
 - **Crashes:** hitting a wall above 10 m/s costs a carried Fragile bonus (§3.2). It does not knock the rider off until combat and collisions (SP7).
 - **Ownership:** recorded on-chain against the wallet and permanent (§6.2). Only one vehicle of each tier is needed; a player may own several tiers and switch at any parked vehicle. Until the shop (SP6), all four vehicles are owned from the start, with dev-panel toggles to remove or re-add them.
@@ -185,7 +189,7 @@ Every package door is within 30 m of a road cars can use, and at most 15% of foo
 | Tank range | Motorbike 6 km, car 5 km of driving |
 | Refuel | At any of the 6 gas stations: stop at a pump and hold E. A full tank costs 40 Coins (motorbike) or 80 Coins (car); partial fills cost proportionally. |
 | Empty tank | The vehicle still moves at 3 m/s so the player is never stranded |
-| HUD | Fuel gauge while riding; the phone Map shows gas stations |
+| HUD | Fuel gauge while riding; the map (M) shows gas stations |
 
 ## 5. City and POIs
 
@@ -194,7 +198,7 @@ The city is defined in **`2026-10-14-city-map-design.md`**: a 1.2 × 1.2 km West
 - **Building blocks:** the owner's Megatropolis and Tropical City packs, used at 1:1, listed in `map/catalog.json`. Missing types (post office, warehouse, school, courier vehicles, containers, cranes) render as placeholders until supplied.
 - **Layout data:** `map/city.layout.json` (lots, roads, connectors, POI doors), generated deterministically and then editable; swapping a model never moves a lot.
 - **Streaming and LOD (kept from SP2):** 100 m chunks; colliders paged around the player; render LOD rings (LOD0 near, simplified LOD1, placeholder boxes far) with radial fog; one merged mesh and one compound collider per block.
-- **Navmeshes:** generated at build time, one per tier (walk, skateboard, bicycle, motorbike, car). A path counts only if it really reaches both ends (recast reports partial paths as success). Path distance is the navmesh straight-path length.
+- **Navmeshes:** generated at build time, one per tier (five: walk, skateboard, bicycle, motorbike, car), gzipped (`map/nav/city-<tier>.bin.gz`). A path counts only if it really reaches both ends (recast reports partial paths as success). Path distance is the navmesh straight-path length.
 - **Debug view:** an overlay shows POI doors with their roles, catalog ids and distance bands, the chunk grid, physics-loaded chunks and thief states.
 - Falling into the water or out of bounds respawns the player at the nearest hospital. They keep their orders; Fragile bonuses are lost. A vehicle ridden out of bounds is towed to that hospital's vehicle bay.
 
@@ -278,7 +282,6 @@ The phone replaces the HUB screens. Tab raises it in the courier's hand; the ful
 | App | Contents |
 |---|---|
 | Orders | Incoming offers (item, pickup and dropoff names, distance band, weight, timer, reward), active orders, cancel, lockout timer and skip |
-| Map | City map, route to the next stop for the current vehicle class, hospitals, gas stations; standard waypoint line (the old GPS Watch) |
 | Garage | Owned vehicles, where each is parked, fuel, switch, summon |
 | Shop | Coins tab (fuel cards, cosmetics) and Token tab (vehicles, Shoes, premium skins) with USD and GAME prices |
 | Wallet | Accrued GAME from orders, Claim button (the player signs and pays the fee), claim history |
@@ -286,7 +289,9 @@ The phone replaces the HUB screens. Tab raises it in the courier's hand; the ful
 | Leaderboard | Daily and weekly Delivery Points |
 | Settings | Controls, audio, graphics |
 
-**HUD (always on screen):** the next stop with distance and arrow, active order timers, the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and GAME.
+**Map (M):** not a phone app (SP5 playtest). M opens a full-screen map of the whole city on foot or riding: routes to the next stops for the current vehicle class, hospitals, gas stations, parked vehicles and offers, with the standard waypoint line (the old GPS Watch). The minimap stays on the HUD.
+
+**HUD (always on screen):** the next stop with distance and arrow, active order timers (a food order being prepared shows a progress bar, not a countdown), the vehicle's speed, fuel and load (slots and kg), offer notifications, Coins, and the Wallet's accrued GAME. **Feedback:** hit and crash effects, a stun tumble, delivery-complete popups with points, Coins and GAME.
 
 ## 9. Reward program (Solana, Anchor) — **Pending**
 
@@ -373,8 +378,8 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 | 2 | City map + POI system (2 × 2 km, Quaternius) | Built on branch `sp2/city-map-poi`; PR #3 was closed unmerged on 2026-10-14 because revision 2 replaces its map. Its streaming, LOD, navmesh, generator and perf tooling are reused from that branch in SP5. |
 | 3 | **Core loop rework** | Built (PR #5). HUB, Order Board and parkour kit removed; food and package orders pickup → dropoff; offers, slots and weight, timers, cancel lockout; the phone (Orders, Map, Wallet stub); hospitals as spawn points; on the current map with placeholder POI roles. |
 | 4 | **Vehicles** | Built (PR #10). Skateboard, bicycle, motorbike and car on the shared sim; mount, park, summon; access per surface; per-class navmeshes and routing; fuel and gas stations; vehicle collisions; tuned on a greybox test town with slopes, alleys and stairs. |
-| 5 | **City v2** | The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs, 60 fps re-proved. |
-| 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps. |
+| 5 | **City v2** | Built (PR #12). The terraced bay city from `2026-10-14-city-map-design.md`: asset import and `assets:check`, catalog, layout generator and validator, placeholders, business names and addresses, streaming and LOD with the new packs. Draw-call and triangle budgets proved on the placeholder city in the sandbox; 60 fps with the pack models awaits the owner's `?perf=1` run. The city is the default map; `?map=greybox` keeps the SP4 test town. |
+| 6 | **Economy** | Coin shop (fuel, cosmetics), token shop (vehicles, Shoes, skins, lockout skip) wired to a mock on-chain source, Garage and Wallet apps; plus the SP5 playtest changes: the full-screen map, the food-prep bar, the skateboard jump, getting off at any speed and WASD vehicle controls. |
 | 7 | **Multiplayer + combat** | Colyseus rooms, prediction and interpolation for players and vehicles, server-authoritative thieves, wallet sign-in, Postgres persistence, combat and collisions, anti-cheat, reconnects. |
 | 8 | **Reward program + launch** | After the owner's payout design (§9): harvest spike, Anchor program, buyback, price keeper, claims, devnet rehearsal, audit, then mainnet and the Pump.fun launch. |
 
@@ -383,7 +388,7 @@ Each sub-project gets its own implementation plan, the owner's approval and a pl
 **Risks and legal:**
 - **Real-value rewards:** paying rewards funded by token trading fees may be regulated as securities, gambling or another category depending on the country. Get legal advice before launch; this spec is not legal advice.
 - **Spending for advantage:** revision 2 deliberately lets spending (vehicles bought with GAME) increase earnings. Combined with real-value payouts, this strengthens the case that the game is an investment product or gambling in some jurisdictions. Include it in the legal review. (The v1 spec had rejected spend-for-advantage designs as too pay-to-win.)
-- **Asset licence:** the Megatropolis and Tropical City packs are the owner's Unity Asset Store purchase (Low Poly Asset Bundle, Standard EULA, Single Entity). They may ship inside the game but not be redistributed, so they are git-ignored and fetched privately in CI (`assets/CREDITS.md`). The project rule "CC0 assets only" must be updated to cover them.
+- **Asset licence:** the Megatropolis and Tropical City packs are the owner's Unity Asset Store purchase (Low Poly Asset Bundle, Standard EULA, Single Entity). They may ship inside the game but not be redistributed, so they are git-ignored (`assets/CREDITS.md`); fetching them privately in CI waits for the owner, and until then GitHub Pages deploys the placeholder city. The asset rule is: CC0, or the owner's licensed packs listed in `assets/CREDITS.md` (the project instructions' "CC0 assets only" is for the owner to update).
 - **Custody:** the program holds the reward pool, which makes it a high-value target. The audit must cover it.
 - **Branding:** no Amazon or real delivery-app names, logos or trade dress (Grab, ShopeeFood, Uber Eats, DoorDash…). Business names in the city are fictional.
 
