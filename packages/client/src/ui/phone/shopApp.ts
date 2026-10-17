@@ -14,7 +14,7 @@ import {
   type ShopItemId,
 } from '@dm/shared';
 import type { QuoteView, Wardrobe } from '../../economy/Purchases';
-import { el, setText } from '../dom';
+import { el, mockBadge, setText } from '../dom';
 import { gameText, type HudModel } from '../hudModel';
 import { syncList } from './ordersApp';
 import type { PhoneAppView } from './Phone';
@@ -208,14 +208,6 @@ interface SectionView {
   el: HTMLElement;
   list: HTMLElement;
   rows: Map<string, RowView>;
-}
-
-/** The "Mock wallet" badge shown wherever GAME is spent (Decision 1). */
-export function mockBadge(parent: HTMLElement): HTMLElement {
-  const b = el('span', 'phone-mock-badge', parent);
-  b.textContent = 'Mock wallet';
-  b.title = 'GAME here is a browser mock of the reward program: no real tokens';
-  return b;
 }
 
 export interface ConfirmSheet {

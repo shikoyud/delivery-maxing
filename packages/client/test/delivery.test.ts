@@ -25,6 +25,7 @@ import {
   type SummonResult,
   type Vec3,
   type VehicleState,
+  GAME_UNITS,
   economyConfig,
   effectiveCapacity,
   maxPointsFor,
@@ -78,7 +79,11 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
   const actions = new ActionState(clientConfig.input, -1, 1);
   /** The reward chain: an in-memory mock wallet on a wall clock (ms) the test moves. */
   const wall = { ms: 1_000_000 };
-  const chain = new MockChain(null, economyConfig, { now: () => wall.ms });
+  const chainData = new Map<string, string>();
+  const chainStorage = { getItem: (k: string) => chainData.get(k) ?? null, setItem: (k: string, v: string) => void chainData.set(k, v) };
+  const chain = new MockChain(chainStorage, economyConfig, { now: () => wall.ms });
+  /** The chain as a reload would find it in storage. */
+  const reloadChain = (): MockChain => new MockChain(chainStorage, economyConfig, { now: () => wall.ms });
   /** A recording Shop: what Buy and Confirm sent, and what they answer. */
   const shop = { calls: [] as string[], answer: { ok: true } as PurchaseOutcome };
   const purchases = {
@@ -242,7 +247,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Omit<Progress, 'cosmet
     const popup = [...popups].reverse().find((p) => p.text.startsWith('Delivered!'))!;
     return { order: offer.order, popup };
   };
-  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states, chain, wall, deliverFood, shop };
+  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states, chain, wall, deliverFood, shop, reloadChain };
 }
 
 describe('DeliveryLoop', () => {
@@ -1073,6 +1078,53 @@ describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
     expect(paid.paid).toBe(true);
     expect(s.chain.accrued()).toBe(paid.game);
     expect(second.popup.lines[0]).toBe(`+${usdText(paid.usdMicro)} ≈ ${gameText(paid.game)} GAME`);
+  });
+
+  test('Claim moves accrued to the balance on the mock; lock and withdraw go through the chain and are saved', async () => {
+    const s = setup('car');
+    const { popup } = s.deliverFood();
+    expect(popup.lines[0]).toContain('GAME');
+    const p = s.chain.payouts().at(-1)!;
+    expect(p.detail).toEqual({ tier: 'car', kind: 'food', inTime: true });
+    const balance = s.chain.balance();
+    expect(s.chain.accrued()).toBe(p.game);
+    s.phone.cb!.claim();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(s.chain.accrued()).toBe(0);
+    expect(s.chain.balance()).toBe(balance + p.game);
+    expect(s.popups.at(-1)).toMatchObject({ text: `Claimed ${gameText(p.game)} GAME`, tone: 'good' });
+    expect(s.reloadChain().balance()).toBe(balance + p.game);
+    expect(s.reloadChain().claims()).toEqual([{ game: p.game, at: s.wall.ms }]);
+    // Nothing left to claim.
+    await s.loop.claim();
+    expect(s.popups.at(-1)).toMatchObject({ text: 'Nothing to claim yet', tone: 'warn' });
+
+    // Lock 100,000 GAME for 7 days: out of the balance, saved, and the model shows it.
+    const units = 100_000 * GAME_UNITS;
+    const lockedAt = s.wall.ms;
+    s.phone.cb!.lockGame(units);
+    expect(s.chain.lock()).toMatchObject({ game: units, lockedAt });
+    expect(s.chain.balance()).toBe(balance + p.game - units);
+    expect(s.reloadChain().lock()).toEqual(s.chain.lock());
+    expect(s.popups.at(-1)).toMatchObject({ text: `Locked ${gameText(units)} GAME for ${economyConfig.lock.days} days`, lines: ['×1.07 boost on every order'] });
+    s.phone.cb!.lockGame(units); // one lock at a time
+    expect(s.popups.at(-1)).toMatchObject({ text: 'GAME is already locked', tone: 'warn' });
+    s.phone.isOpen = true;
+    s.loop.draw(1000);
+    expect(s.phone.renders.at(-1)!.wallet.lock).toMatchObject({ game: units, boostText: '×1.07', canWithdraw: false });
+
+    // Withdraw before the 7 days is refused; after them it returns the GAME, saved.
+    s.phone.cb!.withdrawLock();
+    expect(s.chain.lock()).not.toBeNull();
+    expect(s.popups.at(-1)!.tone).toBe('warn');
+    s.wall.ms = lockedAt + economyConfig.lock.days * 86_400_000;
+    s.phone.cb!.withdrawLock();
+    expect(s.chain.lock()).toBeNull();
+    expect(s.chain.balance()).toBe(balance + p.game);
+    expect(s.reloadChain().lock()).toBeNull();
+    expect(s.reloadChain().balance()).toBe(balance + p.game);
+    expect(s.popups.at(-1)).toMatchObject({ text: `Withdrew ${gameText(units)} GAME`, tone: 'good' });
   });
 
   it('a stale rate converts at the last good rate', () => {

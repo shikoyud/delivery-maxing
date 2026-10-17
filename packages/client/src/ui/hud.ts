@@ -1,7 +1,7 @@
 import type { ClientConfig } from '../clientConfig';
 import { cssHex } from '../render/palette';
 import { slotColor } from '../render/waypoints';
-import { clock, el, esc, setHtml, setText } from './dom';
+import { clock, el, esc, mockBadge, setHtml, setText } from './dom';
 import { acceptBlockedReason } from './phone/ordersApp';
 import { BAND_LABEL, KIND_LABEL, gameText, loadText, pointsText, type HudModel, type HudOrder, type HudTimer } from './hudModel';
 
@@ -25,6 +25,7 @@ export class Hud implements HudView {
   private readonly points: HTMLElement;
   private readonly deliveries: HTMLElement;
   private readonly game: HTMLElement;
+  private readonly gameBadge: HTMLElement;
   private readonly load: HTMLElement;
   private readonly offers: HTMLElement;
   private readonly safe: HTMLElement;
@@ -67,6 +68,8 @@ export class Hud implements HudView {
     this.points = stat('pts', 'hud-points');
     this.deliveries = stat('delivered', 'hud-deliveries');
     this.game = stat('GAME', 'hud-game');
+    // The GAME figure is the browser mock's (Decision 1): a small badge under it.
+    this.gameBadge = mockBadge(this.game.parentNode as HTMLElement, 'hud-mock-badge');
     const load = el('div', 'hud-load', totals);
     el('span', 'hud-load-label', load).textContent = 'Load';
     this.load = el('b', 'hud-load-value', load);
@@ -115,6 +118,7 @@ export class Hud implements HudView {
     setText(this.points, String(m.totals.points));
     setText(this.deliveries, String(m.totals.deliveries));
     setText(this.game, gameText(m.wallet.accrued));
+    this.gameBadge.hidden = !m.wallet.mock;
     setText(this.load, loadText(m.load));
 
     this.safe.hidden = m.safeZone === null;

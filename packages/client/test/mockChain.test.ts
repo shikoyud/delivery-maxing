@@ -216,6 +216,24 @@ describe('MockChain', () => {
     expect(chain.balance()).toBe(START + 500 * GAME_UNITS);
   });
 
+  test('claims are recorded and saved; a state saved before claims and payout details loads with none', async () => {
+    const { chain, clock, storage } = setup();
+    const detail = { tier: 'car' as const, kind: 'food' as const, inTime: true };
+    chain.accrue({ orderId: 'o1', usdMicro: 120_000, luck: 0.5, quality: 0.5, usdPerGame: cfg.mockChain.usdPerGame, boost: 1, at: clock.t, detail });
+    await chain.claim(clock.t);
+    const again = setup(storage).chain;
+    expect(again.claims()).toEqual([{ game: 500 * GAME_UNITS, at: T0 }]);
+    expect(again.payouts()[0]!.detail).toEqual(detail);
+    const old = JSON.parse(storage.data.get(MOCK_CHAIN_KEY)!) as Record<string, unknown>;
+    delete old.claims;
+    delete (old.payouts as Record<string, unknown>[])[0]!.detail;
+    storage.data.set(MOCK_CHAIN_KEY, JSON.stringify(old));
+    const legacy = setup(storage).chain;
+    expect(legacy.claims()).toEqual([]);
+    expect(legacy.balance()).toBe(START + 500 * GAME_UNITS); // the saved wallet, not a fresh one
+    expect(legacy.payouts()[0]!.detail).toBeUndefined();
+  });
+
   test('blocked or corrupt storage gives a fresh wallet with startGame and the starting vault, and never throws', async () => {
     const throwing: Pick<Storage, 'getItem' | 'setItem'> = {
       getItem: () => { throw new Error('SecurityError'); },

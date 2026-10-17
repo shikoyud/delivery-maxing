@@ -2,6 +2,9 @@ import { describe, expect, it, test } from 'vitest';
 import {
   GAME_UNITS,
   OrderSystem,
+  economyConfig,
+  usdToGame,
+  type Payout,
   expandGreybox,
   mulberry32,
   ordersConfig,
@@ -19,7 +22,10 @@ import greybox from '../../../map/greybox.json';
 import type { GarageRow } from '../src/ui/phone/garageApp';
 import type { ShopRow } from '../src/ui/phone/shopApp';
 import { clientConfig } from '../src/clientConfig';
-import { gameText, hudModel, loadText, promptFor, poiIndex, pointsText, stageText, usdText } from '../src/ui/hudModel';
+import { dateText, gameText, hudModel, loadText, promptFor, poiIndex, pointsText, stageText, usdText, walletModel, whenText } from '../src/ui/hudModel';
+import { MockChain } from '../src/economy/MockChain';
+
+const T0 = 1_760_000_000_000;
 
 const map = expandGreybox(greybox as GreyboxSource);
 const spawn = map.hospitals[0]!.spawn;
@@ -285,7 +291,7 @@ describe('hudModel next stop and ride', () => {
     expect(Math.abs(straightAtDoor)).toBeGreaterThan(0.1);
   });
 
-  test('the model carries the Shop rows and the wallet balance; without them, none and 0', () => {
+  test('the model carries the Shop rows and the wallet; without them, none and an empty wallet', () => {
     const sys = makeSystem('car');
     const shop: ShopRow[] = [
       {
@@ -298,12 +304,65 @@ describe('hudModel next stop and ride', () => {
         state: 'buy',
       },
     ];
-    const m = hudModel(sys, map, spawn, 0, null, 1, [], { shop, wallet: { accrued: 5, balance: 600_000 * GAME_UNITS } });
+    const wallet = walletModel(new MockChain(null, economyConfig, { now: () => T0 }), T0, true);
+    const m = hudModel(sys, map, spawn, 0, null, 1, [], { shop, wallet });
     expect(m.shop).toEqual(shop);
-    expect(m.wallet).toEqual({ accrued: 5, balance: 600_000 * GAME_UNITS });
+    expect(m.wallet).toEqual(wallet);
+    expect(m.wallet.balance).toBe(600_000 * GAME_UNITS);
     const bare = hudModel(sys, map, spawn, 0, null);
     expect(bare.shop).toEqual([]);
-    expect(bare.wallet).toEqual({ accrued: 0, balance: 0 });
+    expect(bare.wallet).toMatchObject({ accrued: 0, balance: 0, vault: 0, lock: null, payouts: [], history: [], claims: [] });
+  });
+
+  test('walletModel: address and mock flag, balance, accrued, the vault in GAME and USD, the lock with its boost, newest-first lists', async () => {
+    const clock = { t: T0, now() { return this.t; } };
+    const chain = new MockChain(null, economyConfig, clock);
+    const fresh = walletModel(chain, T0, true);
+    expect(fresh).toEqual({
+      address: 'DEV-WALLET',
+      mock: true,
+      balance: 600_000 * GAME_UNITS,
+      accrued: 0,
+      vault: chain.vault(),
+      vaultUsd: '$50.00',
+      vaultEmpty: false,
+      usdPerGame: 0.00024,
+      lock: null,
+      payouts: [],
+      history: [],
+      claims: [],
+    });
+    const pay = (usdMicro: number, detail?: Payout['detail']) =>
+      chain.accrue({ orderId: `o${clock.t}`, usdMicro, luck: 0, quality: 1, usdPerGame: 0.00024, boost: 1, at: clock.t, ...(detail ? { detail } : {}) });
+    pay(210_000, { tier: 'car', kind: 'food', inTime: true });
+    clock.t += 1000;
+    pay(30_000, { tier: 'walk', kind: 'package', inTime: false });
+    clock.t += 1000;
+    pay(50_000); // a payout saved before payouts carried their order
+    await chain.purchase('line.bag.1', 10_000 * GAME_UNITS, clock.t);
+    expect(chain.lockGame(100_000 * GAME_UNITS, clock.t)).toEqual({ ok: true });
+    clock.t += 3 * 3_600_000;
+    const w = walletModel(chain, clock.t, true);
+    expect(w.payouts.map((p) => [p.label, p.usd, p.paid, p.when])).toEqual([
+      ['Order', '$0.050', true, '3 h ago'],
+      ['On foot · late', '$0.030', true, '3 h ago'],
+      ['Car · hot', '$0.21', true, '3 h ago'],
+    ]);
+    expect(w.payouts[2]!.game).toBe(usdToGame(210_000, { usdPerGame: 0.00024, updatedAt: 0 }));
+    expect(w.history).toEqual([{ label: 'Bag 1', game: 0, burned: 0, vault: 0, status: 'pending', when: '3 h ago' }]);
+    expect(w.lock).toEqual({ game: 100_000 * GAME_UNITS, boostText: '×1.07', unlocksAt: dateText(T0 + 2000 + 7 * 86_400_000), canWithdraw: false });
+    // Closed phone: the lists are not built (the HUD needs only the figures).
+    const closed = walletModel(chain, clock.t, false);
+    expect(closed.payouts).toEqual([]);
+    expect(closed.history).toEqual([]);
+    expect(closed.accrued).toBe(w.accrued);
+  });
+
+  test('whenText is relative: just now, minutes, hours, days', () => {
+    expect(whenText(T0, T0 + 30_000)).toBe('just now');
+    expect(whenText(T0, T0 + 5 * 60_000)).toBe('5 min ago');
+    expect(whenText(T0, T0 + 2 * 3_600_000)).toBe('2 h ago');
+    expect(whenText(T0, T0 + 3 * 86_400_000)).toBe('3 d ago');
   });
 
   it('nextStop is null without active orders; ride carries tier, speed and fuel', () => {

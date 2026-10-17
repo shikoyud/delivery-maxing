@@ -257,6 +257,8 @@ kbd {
 
 .hud-coins .hud-stat-value { color: var(--dm-coral); }
 .hud-points .hud-stat-value { color: var(--dm-teal); }
+.hud-mock-badge { margin-top: 2px; padding: 0 4px; font-size: 9px; }
+.hud-mock-badge[hidden] { display: none; }
 
 .hud-stat-label,
 .hud-load-label {
@@ -734,6 +736,33 @@ kbd {
 .phone-wallet-value { font-size: 18px; }
 .phone-wallet-row.coins .phone-wallet-value { color: var(--dm-coral); }
 .phone-wallet-row.points .phone-wallet-value { color: var(--dm-teal); }
+.phone-wallet { display: flex; flex-direction: column; gap: 6px; }
+.phone-wallet-address { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; }
+.phone-wallet-card { gap: 6px; }
+.phone-wallet-figure { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.phone-wallet-claim, .phone-wallet-withdraw, .phone-wallet-lock-btn { margin: 0; align-self: auto; background: var(--dm-teal); }
+.phone-wallet-withdraw { align-self: flex-start; background: var(--dm-ink); }
+.phone-wallet-claim:disabled, .phone-wallet-lock-btn:disabled { background: #b9c4c6; }
+.phone-wallet-vault-usd { font-size: 14px; font-weight: 700; color: #557078; }
+.phone-wallet-vault-empty {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(242, 113, 102, 0.16);
+  font-size: 13px;
+  font-weight: 700;
+}
+.phone-wallet-lock { display: flex; flex-direction: column; gap: 3px; }
+.phone-wallet-lock-boost { color: var(--dm-teal); font-weight: 700; }
+.phone-wallet-amount { flex: 1; min-width: 0; padding: 7px 8px; border: 1px solid #b9c4c6; border-radius: 8px; font: 14px system-ui, sans-serif; }
+.phone-wallet-preview { font-size: 13px; color: #557078; }
+.phone-wallet-list { display: flex; flex-direction: column; }
+.phone-wallet-item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; padding: 5px 0; border-top: 1px solid rgba(22, 50, 58, 0.08); font-size: 13px; }
+.phone-wallet-item.unpaid .phone-wallet-line { color: #c0503f; }
+.phone-wallet-when { color: #557078; font-size: 12px; white-space: nowrap; }
+.phone-wallet-tx-detail { flex-basis: 100%; color: #557078; font-size: 12px; }
+.phone-wallet-tx[data-status='failed'] .phone-wallet-line { color: #c0503f; }
+.phone-wallet-lock[hidden], .phone-wallet-lock-form[hidden], .phone-wallet-withdraw[hidden], .phone-wallet-vault-empty[hidden] { display: none; }
 
 .phone-stub-title { margin: 8px 0 2px; font-size: 18px; }
 

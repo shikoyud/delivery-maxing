@@ -5,7 +5,7 @@ import { createGarageApp } from './garageApp';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
 import { createShopApp } from './shopApp';
 import { buildStubApp, type StubAppName } from './stubApp';
-import { renderWalletApp } from './walletApp';
+import { createWalletApp, type WalletCallbacks } from './walletApp';
 
 export type PhoneApp = 'orders' | 'garage' | 'shop' | 'wallet' | 'wardrobe' | 'leaderboard' | 'settings';
 
@@ -22,7 +22,7 @@ const APP_TITLE: Record<PhoneApp, string> = {
   settings: 'Settings',
 };
 
-export interface PhoneCallbacks extends OrdersCallbacks {
+export interface PhoneCallbacks extends OrdersCallbacks, WalletCallbacks {
   /** The phone was closed (Esc / Tab in the phone, or close()). */
   closed(): void;
   /** Garage: Summon `t` to the road next to the courier. */
@@ -181,8 +181,12 @@ export class Phone implements PhoneView {
     switch (app) {
       case 'orders':
         return { el: root, render: (m) => renderOrdersApp(root, m, this.callbacks) };
-      case 'wallet':
-        return { el: root, render: (m) => renderWalletApp(root, m) };
+      case 'wallet': {
+        const cb = this.callbacks;
+        const view = createWalletApp({ claim: () => cb.claim(), lockGame: (g) => cb.lockGame(g), withdrawLock: () => cb.withdrawLock() });
+        root.appendChild(view.el);
+        return { el: root, render: (m, p, h) => view.render(m, p, h) };
+      }
       case 'garage': {
         const view = createGarageApp((t) => this.callbacks.summon(t), { switchTo: (t) => this.callbacks.switchRide(t), buy: () => this.openShopTokens() });
         root.appendChild(view.el);

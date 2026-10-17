@@ -7,6 +7,7 @@ import {
   splitPurchase,
   usdToGame,
   type ChainSource,
+  type Claim,
   type ChainTx,
   type EconomyConfig,
   type Line,
@@ -45,6 +46,8 @@ interface State {
   lockRenewed: boolean;
   txs: StoredTx[];
   payouts: Payout[];
+  /** Claims (absent in states saved before the Wallet app: none). */
+  claims: Claim[];
   nextId: number;
 }
 
@@ -60,10 +63,19 @@ function validTx(t: unknown): boolean {
     && isNat(t.game) && isNat(t.burned) && isNat(t.vault) && isNum(t.createdAt) && isNat(t.maxGame) && isNum(t.settleAt);
 }
 
+const TIERS = new Set(['walk', 'skateboard', 'bicycle', 'motorbike', 'car']);
+
+function validDetail(d: unknown): boolean {
+  return d === undefined || (isObj(d) && TIERS.has(d.tier as string) && (d.kind === 'food' || d.kind === 'package') && typeof d.inTime === 'boolean');
+}
+
 function validPayout(p: unknown): boolean {
   return isObj(p) && typeof p.id === 'string' && typeof p.orderId === 'string' && isNat(p.usdMicro) && isNat(p.game)
-    && isNum(p.luck) && isNum(p.quality) && isNum(p.usdPerGame) && isNum(p.boost) && isNum(p.at) && typeof p.paid === 'boolean';
+    && isNum(p.luck) && isNum(p.quality) && isNum(p.usdPerGame) && isNum(p.boost) && isNum(p.at) && typeof p.paid === 'boolean'
+    && validDetail(p.detail);
 }
+
+const validClaim = (c: unknown): boolean => isObj(c) && isNat(c.game) && isNum(c.at);
 
 /** The saved state when it is whole and well-formed, else null (a fresh wallet). */
 function parseState(raw: string | null, cfg: EconomyConfig): State | null {
@@ -77,6 +89,8 @@ function parseState(raw: string | null, cfg: EconomyConfig): State | null {
   if (!LINES.every((l) => isNat(lines[l]) && lines[l] <= cfg.lines[l].usdMicro.length)) return null;
   if (lock !== null && !(isObj(lock) && isNat(lock.game) && isNat(lock.usdMicroAtLock) && isNum(lock.lockedAt) && isNum(lock.unlocksAt))) return null;
   if (typeof s.lockRenewed !== 'boolean' || !Array.isArray(s.txs) || !s.txs.every(validTx) || !Array.isArray(s.payouts) || !s.payouts.every(validPayout)) return null;
+  if (s.claims === undefined) s.claims = [];
+  if (!Array.isArray(s.claims) || !s.claims.every(validClaim)) return null;
   return s as unknown as State;
 }
 
@@ -137,6 +151,7 @@ export class MockChain implements ChainSource {
       lockRenewed: false,
       txs: [],
       payouts: [],
+      claims: [],
       nextId: 1,
     };
   }
@@ -169,7 +184,8 @@ export class MockChain implements ChainSource {
   ownership(): Ownership { return { lines: { ...this.s.ownership.lines }, skins: [...this.s.ownership.skins] }; }
   lock(): Lock | null { return this.s.lock ? { ...this.s.lock } : null; }
   history(): readonly ChainTx[] { return this.s.txs.map(publicTx); }
-  payouts(): readonly Payout[] { return this.s.payouts.map((p) => ({ ...p })); }
+  payouts(): readonly Payout[] { return this.s.payouts.map((p) => ({ ...p, ...(p.detail ? { detail: { ...p.detail } } : {}) })); }
+  claims(): readonly Claim[] { return this.s.claims.map((c) => ({ ...c })); }
 
   /** `owned` or `order` when the wallet's ownership refuses the item, else null. */
   private ownershipError(item: ShopItem): PurchaseError | null {
@@ -292,11 +308,17 @@ export class MockChain implements ChainSource {
   }
 
   /** Allowed from `unlocksAt` and, once the lock has renewed, for `withdrawWindowHours` after the period that ended. */
+  withdrawable(nowMs: number): boolean {
+    const lock = this.s.lock;
+    if (!lock) return false;
+    const inWindow = this.s.lockRenewed && nowMs < lock.lockedAt + this.cfg.lock.withdrawWindowHours * HOUR_MS;
+    return nowMs >= lock.unlocksAt || inWindow;
+  }
+
   withdrawLock(nowMs: number): { ok: true } | { ok: false; reason: 'tooEarly' | 'none' } {
     const lock = this.s.lock;
     if (!lock) return { ok: false, reason: 'none' };
-    const inWindow = this.s.lockRenewed && nowMs < lock.lockedAt + this.cfg.lock.withdrawWindowHours * HOUR_MS;
-    if (nowMs < lock.unlocksAt && !inWindow) return { ok: false, reason: 'tooEarly' };
+    if (!this.withdrawable(nowMs)) return { ok: false, reason: 'tooEarly' };
     this.s.balance += lock.game;
     this.s.lock = null;
     this.s.lockRenewed = false;
@@ -306,11 +328,13 @@ export class MockChain implements ChainSource {
 
   /** The mock claim is instant (Decision 3). */
   async claim(nowMs: number): Promise<{ ok: true; game: number } | { ok: false; reason: 'nothing' }> {
-    void nowMs; // a real claim is a transaction sent at nowMs; the mock's settles at once
+    // A real claim is a transaction sent at nowMs; the mock's settles at once.
     const game = this.s.accrued;
     if (game <= 0) return { ok: false, reason: 'nothing' };
     this.s.accrued = 0;
     this.s.balance += game;
+    this.s.claims.push({ game, at: nowMs });
+    trim(this.s.claims);
     this.changed();
     return { ok: true, game };
   }

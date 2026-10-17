@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, test } from 'vitest';
 import { ordersConfig } from '@dm/shared';
 import { acceptBlockedReason, renderOrdersApp } from '../src/ui/phone/ordersApp';
-import { renderWalletApp } from '../src/ui/phone/walletApp';
-import { asEl, installFakeDom, type FakeElement } from './fakeDom';
+import { installFakeDom, type FakeElement } from './fakeDom';
 import { model, offer, order } from './phoneFixtures';
 import type { ShopRow } from '../src/ui/phone/shopApp';
 
@@ -202,24 +201,5 @@ describe('renderOrdersApp', () => {
   it('says the cancel lockout length from config on the Cancel button', () => {
     renderOrdersApp(dom.asHost, model({ orders: [order('o1')] }), cb);
     expect(button(dom.host, 'cancel', 'o1')!.title).toContain(`${ordersConfig.lockout.seconds} s`);
-  });
-});
-
-describe('renderWalletApp', () => {
-  it('shows Delivery Points, Coins, deliveries and the GAME note, no invented amounts', () => {
-    const dom = installFakeDom();
-    try {
-      renderWalletApp(asEl(dom.host), model({ totals: { points: 7, coins: 70, deliveries: 3 } }));
-      const t = dom.host.textContent;
-      expect(t).toContain('Delivery Points');
-      expect(t).toContain('7');
-      expect(t).toContain('Coins');
-      expect(t).toContain('70');
-      expect(t).toContain('Deliveries');
-      expect(t).toContain('GAME rewards arrive with the reward program (spec §9)');
-      expect(dom.host.byClass('phone-wallet-row')).toHaveLength(3); // no GAME balance row: nothing invented
-    } finally {
-      dom.restore();
-    }
   });
 });

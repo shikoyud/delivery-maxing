@@ -1,5 +1,10 @@
 import {
   GAME_UNITS,
+  boostMultiplier,
+  economyConfig,
+  payoutRange,
+  shopItem,
+  usdToGame,
   dropoffText,
   ordersConfig,
   orderText,
@@ -8,7 +13,10 @@ import {
   type AcceptResult,
   type ActiveOrder,
   type Band,
+  type ChainSource,
+  type EconomyConfig,
   type MapData,
+  type Payout,
   type OrderKind,
   type OrderSystem,
   type Poi,
@@ -16,6 +24,8 @@ import {
   type RideTier,
   type RouteToDoor,
   type Totals,
+  type TxStatus,
+  type VehicleTier,
   type Vec3,
 } from '@dm/shared';
 import { clientConfig } from '../clientConfig';
@@ -110,18 +120,156 @@ export interface HudNav {
   ride?: HudRide | null;
   /** The key prompt line (DeliveryLoop: `promptFor`). */
   prompt?: string | null;
-  /** The wallet (DeliveryLoop: the chain); absent (tests): nothing accrued, nothing to spend. */
+  /** The wallet (DeliveryLoop: walletModel over the chain); absent (tests): emptyWallet. */
   wallet?: HudWallet;
   /** The Shop app's rows (DeliveryLoop: shopRows over Purchases); absent (tests): none. */
   shop?: ShopRow[];
 }
 
-/** The reward wallet as the HUD shows it. */
+/** The lock-to-boost lock as the Wallet shows it (spec §6.4). */
+export interface HudLock {
+  game: number;
+  /** "×1.15": the multiplier of the GAME locked, valued when locked. */
+  boostText: string;
+  /** The end of the current 7-day period (dateText). */
+  unlocksAt: string;
+  canWithdraw: boolean;
+}
+
+/** One order's payout row: "Car · hot" with "$0.21" and its GAME, or unpaid (the vault was empty). */
+export interface HudPayout {
+  label: string;
+  usd: string;
+  game: number;
+  paid: boolean;
+  when: string;
+}
+
+/** One GAME purchase row: what it bought, the GAME charged, burned and sent to the vault, and its status. */
+export interface HudTx {
+  label: string;
+  game: number;
+  burned: number;
+  vault: number;
+  status: TxStatus;
+  when: string;
+  error?: string;
+}
+
+/** The reward wallet as the HUD and the Wallet app show it (walletModel). GAME amounts are base units. */
 export interface HudWallet {
-  /** GAME paid out by orders, not yet claimed, in base units (the HUD's top-right GAME figure, spec §8). */
-  accrued: number;
-  /** Spendable GAME in base units (the Shop's balance). */
+  address: string;
+  /** The browser mock (Decision 1): the "Mock wallet" badge shows. */
+  mock: boolean;
+  /** Spendable GAME (the Shop's balance). */
   balance: number;
+  /** GAME paid out by orders, not yet claimed (the HUD's top-right GAME figure, spec §8). */
+  accrued: number;
+  /** GAME the reward vault holds, and its USD value at the rate ("" without a rate). */
+  vault: number;
+  vaultUsd: string;
+  /** The vault cannot cover the walk minimum: orders pay no GAME (Review Focus 5). */
+  vaultEmpty: boolean;
+  /** The rate (the Lock form's live boost preview); null without one. */
+  usdPerGame: number | null;
+  lock: HudLock | null;
+  /** The last 20, newest first; empty while the phone is closed. */
+  payouts: HudPayout[];
+  /** GAME purchases, the last 20, newest first; empty while the phone is closed. */
+  history: HudTx[];
+  /** Claims, the last 20, newest first; empty while the phone is closed. */
+  claims: { game: number; when: string }[];
+}
+
+/** Rows each Wallet list shows. */
+export const WALLET_LIST_ROWS = 20;
+
+/** A wallet with nothing in it (tests without a chain). */
+export function emptyWallet(): HudWallet {
+  return { address: '', mock: true, balance: 0, accrued: 0, vault: 0, vaultUsd: '', vaultEmpty: true, usdPerGame: null, lock: null, payouts: [], history: [], claims: [] };
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago". */
+export function whenText(atMs: number, nowMs: number): string {
+  const s = Math.max(0, nowMs - atMs) / 1000;
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86_400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86_400)} d ago`;
+}
+
+/** A date and time in the player's zone: "Oct 24, 14:05". */
+export function dateText(ms: number): string {
+  return new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+}
+
+/** "×1.15" (two decimals). */
+export function boostText(boost: number): string {
+  return `×${boost.toFixed(2)}`;
+}
+
+const TIER_LABEL: Record<VehicleTier, string> = { walk: 'On foot', skateboard: 'Skateboard', bicycle: 'Bicycle', motorbike: 'Motorbike', car: 'Car' };
+
+/** "Car · hot", "Bicycle · on time", "On foot · late"; "Order" for a payout saved without its order. */
+function payoutLabel(p: Payout): string {
+  const d = p.detail;
+  if (!d) return 'Order';
+  const how = d.kind === 'food' ? (d.inTime ? 'hot' : 'cold') : d.inTime ? 'on time' : 'late';
+  return `${TIER_LABEL[d.tier]} · ${how}`;
+}
+
+function itemLabel(itemId: string): string {
+  try {
+    return shopItem(itemId).label;
+  } catch {
+    return itemId;
+  }
+}
+
+/** The last `n` of an oldest-first list, newest first. */
+const newest = <T>(list: readonly T[], n = WALLET_LIST_ROWS): T[] => list.slice(-n).reverse();
+
+/**
+ * The wallet at wall-clock `nowMs` from the chain: figures always, the payout, purchase and claim lists only when
+ * `lists` (the phone is open), so the HUD does not build them every update.
+ */
+export function walletModel(chain: ChainSource, nowMs: number, lists: boolean, cfg: EconomyConfig = economyConfig): HudWallet {
+  const rate = chain.rate();
+  const vault = chain.vault();
+  const lock = chain.lock();
+  return {
+    address: chain.wallet,
+    mock: chain.mock,
+    balance: chain.balance(),
+    accrued: chain.accrued(),
+    vault,
+    // base units × USD per GAME = micro-USD
+    vaultUsd: rate ? usdText(Math.floor(vault * rate.usdPerGame)) : '',
+    // As accrue decides: the walk minimum, converted at the rate, must fit in the vault.
+    vaultEmpty: rate ? vault < usdToGame(payoutRange('walk', cfg).minMicro, rate) : vault === 0,
+    usdPerGame: rate ? rate.usdPerGame : null,
+    lock: lock && {
+      game: lock.game,
+      boostText: boostText(boostMultiplier(lock.usdMicroAtLock, cfg)),
+      unlocksAt: dateText(lock.unlocksAt),
+      canWithdraw: chain.withdrawable(nowMs),
+    },
+    payouts: lists
+      ? newest(chain.payouts()).map((p) => ({ label: payoutLabel(p), usd: usdText(p.usdMicro), game: p.game, paid: p.paid, when: whenText(p.at, nowMs) }))
+      : [],
+    history: lists
+      ? newest(chain.history()).map((t) => ({
+          label: itemLabel(t.itemId),
+          game: t.game,
+          burned: t.burned,
+          vault: t.vault,
+          status: t.status,
+          when: whenText(t.settledAt ?? t.createdAt, nowMs),
+          ...(t.error !== undefined ? { error: t.error } : {}),
+        }))
+      : [],
+    claims: lists ? newest(chain.claims()).map((c) => ({ game: c.game, when: whenText(c.at, nowMs) })) : [],
+  };
 }
 
 export interface HudModel {
@@ -346,7 +494,7 @@ export function hudModel(
     nextStop: null,
     ride: nav.ride ?? null,
     prompt: nav.prompt ?? null,
-    wallet: { ...(nav.wallet ?? { accrued: 0, balance: 0 }) },
+    wallet: nav.wallet ?? emptyWallet(),
     shop: nav.shop ?? [],
   };
   model.nextStop = next?.stop ?? null;

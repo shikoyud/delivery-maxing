@@ -14,6 +14,7 @@ import {
   boostMultiplier,
   payoutQuality,
   rollPayoutUsd,
+  economyConfig,
   type ChainSource,
   type CompletedEvent,
   type Payout,
@@ -28,6 +29,7 @@ import {
   type InputFrame,
   type MapData,
   type MoveMode,
+  type OrderKind,
   type NavRouter,
   type OrderEvent,
   type PathDistance,
@@ -51,7 +53,7 @@ import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
 import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoints';
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
-import { gameText, hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, usdText, type HudModel } from '../ui/hudModel';
+import { boostText, gameText, hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, usdText, walletModel, type HudModel } from '../ui/hudModel';
 import { createMinimap } from '../ui/minimap';
 import { MapScreen, type MapScreenView } from '../ui/map/MapScreen';
 import { RIDE_NAME, type GarageRow } from '../ui/phone/garageApp';
@@ -251,6 +253,9 @@ export class DeliveryLoop {
       shopBuy: (id) => this.shopBuy(id),
       shopConfirm: (id, maxGame) => void this.shopConfirm(id, maxGame),
       shopCancel: () => undefined,
+      claim: () => void this.claim(),
+      lockGame: (game) => this.lockGame(game),
+      withdrawLock: () => this.withdrawLock(),
       summon: (t) => void this.summon(t),
       switchRide: (t) => void this.switchTo(t),
       respawn: () => this.respawn(),
@@ -669,6 +674,37 @@ export class DeliveryLoop {
     this.nextHudAt = 0;
   }
 
+  private wallMs(): number {
+    return this.d.wallClock?.() ?? Date.now();
+  }
+
+  /** The Wallet's Claim: the accrued GAME moves to the balance (instant on the mock, Decision 3). */
+  async claim(): Promise<void> {
+    const r = await this.d.chain.claim(this.wallMs());
+    if (r.ok) this.popup(`Claimed ${gameText(r.game)} GAME`, ['Added to your balance'], 'good');
+    else this.popup('Nothing to claim yet', ['Deliver orders to earn GAME'], 'warn');
+  }
+
+  /** The Wallet's Lock: locks `game` base units for lock.days days (spec §6.4); a refusal pops up. */
+  lockGame(game: number): void {
+    const r = this.d.chain.lockGame(game, this.wallMs());
+    if (!r.ok) {
+      this.popup(r.reason === 'locked' ? 'GAME is already locked' : 'Not enough GAME to lock', [], 'warn');
+      return;
+    }
+    const lock = this.d.chain.lock();
+    const boost = boostText(boostMultiplier(lock ? lock.usdMicroAtLock : 0));
+    this.popup(`Locked ${gameText(game)} GAME for ${economyConfig.lock.days} days`, [`${boost} boost on every order`], 'good');
+  }
+
+  /** The Wallet's Withdraw: the locked GAME back to the balance once the period has ended; too early pops up. */
+  withdrawLock(): void {
+    const lock = this.d.chain.lock();
+    const r = this.d.chain.withdrawLock(this.wallMs());
+    if (r.ok) this.popup(`Withdrew ${gameText(lock?.game ?? 0)} GAME`, ['The boost ends'], 'good');
+    else this.popup(r.reason === 'none' ? 'No GAME is locked' : 'The lock has not ended yet', [], 'warn');
+  }
+
   /** Dev and debug: end the offer lockout now, free (the phone's Skip buys it: shopConfirm). */
   skipLockout(): void {
     this.sys.skipLockout();
@@ -706,8 +742,8 @@ export class DeliveryLoop {
       route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
       prompt: this.prompt(),
-      wallet: { accrued: this.d.chain.accrued(), balance: this.d.chain.balance() },
-      // The Shop and the Orders app's Skip read the rows: built only while the phone shows them.
+      // The Wallet's lists, the Shop and the Orders app's Skip read the rows: built only while the phone shows them.
+      wallet: walletModel(this.d.chain, this.wallMs(), this.phone.isOpen),
       shop: this.phone.isOpen ? this.shopRows(now) : [],
     });
   }
@@ -791,7 +827,7 @@ export class DeliveryLoop {
    * locked), applied once inside the shared roll. The chain converts that USD at its rate (a stale rate is still the
    * last good one, Decision 14) and pays from the vault, or records it unpaid when the vault cannot cover it.
    */
-  payOut(e: CompletedEvent, nowMs: number): Payout | null {
+  payOut(e: CompletedEvent, nowMs: number, kind: OrderKind | null = null): Payout | null {
     const chain = this.d.chain;
     const rate = chain.rate();
     // Unreachable with the MockChain (it always has a rate); a chain without one pays nothing and adds no GAME lines.
@@ -801,7 +837,8 @@ export class DeliveryLoop {
     const luck = this.rng();
     const quality = payoutQuality(e.points, e.maxPoints);
     const usdMicro = rollPayoutUsd({ tier: e.tier, points: e.points, maxPoints: e.maxPoints, luck, boost });
-    return chain.accrue({ orderId: e.orderId, usdMicro, luck, quality, usdPerGame: rate.usdPerGame, boost, at: nowMs });
+    const detail = kind === null ? {} : { detail: { tier: e.tier, kind, inTime: e.inTime } };
+    return chain.accrue({ orderId: e.orderId, usdMicro, luck, quality, usdPerGame: rate.usdPerGame, boost, at: nowMs, ...detail });
   }
 
   /** The delivery popup's GAME lines: "+$0.12 ≈ 500 GAME" (and "×1.15 boost" when locked), or "Vault empty · no GAME". */
@@ -839,7 +876,7 @@ export class DeliveryLoop {
       case 'completed': {
         this.save();
         const done = before.find((a) => a.order.id === e.orderId);
-        const lines = this.payoutLines(this.payOut(e, this.d.wallClock?.() ?? Date.now()));
+        const lines = this.payoutLines(this.payOut(e, this.wallMs(), done?.order.kind ?? null));
         lines.push(...e.bonuses.map((b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[b])} · +${ordersConfig.coins[b]} coins`));
         if (!e.inTime) lines.push(done?.order.kind === 'food' ? 'Cold · no hot bonus' : 'Over par · no bonus');
         if (e.expressOnTime === false) lines.push('Express late · no bonus');

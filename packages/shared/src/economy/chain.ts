@@ -1,3 +1,5 @@
+import type { VehicleTier } from '../config/types';
+import type { OrderKind } from '../orders/types';
 import type { Rate } from './pricing';
 import type { LineTiers, ShopItemId } from './types';
 
@@ -42,6 +44,14 @@ export interface Payout {
   at: number;
   /** false: the vault could not cover it, so the order paid no GAME (nothing is owed later). */
   paid: boolean;
+  /** The order it paid for (the Wallet's "Car · hot"); absent on payouts saved before it was recorded. */
+  detail?: { tier: VehicleTier; kind: OrderKind; inTime: boolean };
+}
+
+/** A claim of accrued GAME into the balance (the mock's is instant; SP8 makes it a transaction). */
+export interface Claim {
+  game: number;
+  at: number;
 }
 
 /** Locked GAME (spec §6.4), valued at the rate when locked. */
@@ -74,7 +84,11 @@ export interface ChainSource {
   /** Records an order's payout: converts `usdMicro` (boost included) at `usdPerGame` and pays that GAME from the vault into `accrued`, or records it unpaid when the vault cannot cover it. */
   accrue(p: Omit<Payout, 'id' | 'paid' | 'game'>): Payout;
   lockGame(game: number, nowMs: number): { ok: true } | { ok: false; reason: 'insufficient' | 'locked' };
+  /** Whether withdrawLock would succeed at `nowMs`. */
+  withdrawable(nowMs: number): boolean;
   withdrawLock(nowMs: number): { ok: true } | { ok: false; reason: 'tooEarly' | 'none' };
+  /** Claims, oldest first (the last 200). */
+  claims(): readonly Claim[];
   claim(nowMs: number): Promise<{ ok: true; game: number } | { ok: false; reason: 'nothing' }>;
   /** Brings the chain up to `nowMs`: settles due transactions (the mock confirms them; a real chain would poll). */
   tick(nowMs: number): void;

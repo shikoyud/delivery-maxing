@@ -1,4 +1,4 @@
-import type { HudModel, HudOffer, HudOrder } from '../src/ui/hudModel';
+import { emptyWallet, type HudModel, type HudOffer, type HudOrder } from '../src/ui/hudModel';
 
 /** Hand-built HUD models for the phone tests. */
 export function offer(id: string, over: Partial<HudOffer> = {}): HudOffer {
@@ -53,7 +53,7 @@ export function model(over: Partial<HudModel> = {}): HudModel {
     nextStop: null,
     ride: null,
     prompt: null,
-    wallet: { accrued: 0, balance: 0 },
+    wallet: emptyWallet(),
     shop: [],
     ...over,
   };

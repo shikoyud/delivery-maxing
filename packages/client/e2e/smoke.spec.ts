@@ -556,7 +556,8 @@ test('phone: Tab opens Orders and Wallet renders (no Map tab); Esc closes', asyn
   await expect(page.locator('.phone-nav-btn[data-app="map"]')).toHaveCount(0);
   await page.locator('.phone-nav-btn[data-app="wallet"]').click();
   await expect(page.locator('.phone-title')).toHaveText('Wallet');
-  await expect(page.locator('.phone-note')).toHaveText('GAME rewards arrive with the reward program (spec §9)');
+  await expect(page.locator('.phone-wallet-address-text')).toHaveText('DEV-WALLET');
+  await expect(page.locator('.phone-wallet-vault-usd')).toHaveText('$50.00');
   await page.screenshot({ path: `${sp3}sp3-phone-wallet.png` });
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !window.__dm!.phoneOpen());

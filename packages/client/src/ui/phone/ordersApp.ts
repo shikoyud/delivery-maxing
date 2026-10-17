@@ -1,7 +1,7 @@
 import { ordersConfig, type AcceptResult } from '@dm/shared';
-import { clock, el, setText } from '../dom';
+import { clock, el, mockBadge, setText } from '../dom';
 import { BAND_LABEL, KIND_LABEL, pointsText, type HudModel, type HudOffer, type HudOrder, type HudTimer } from '../hudModel';
-import { createConfirmSheet, mockBadge, type ConfirmSheet, type ShopRow } from './shopApp';
+import { createConfirmSheet, type ConfirmSheet, type ShopRow } from './shopApp';
 
 export interface OrdersCallbacks {
   accept(offerId: string): void;

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Hud } from '../src/ui/hud';
 import { installFakeDom } from './fakeDom';
 import { model, offer, order } from './phoneFixtures';
+import { emptyWallet } from '../src/ui/hudModel';
 
 describe('Hud offer toasts', () => {
   let dom: ReturnType<typeof installFakeDom>;
@@ -105,9 +106,15 @@ describe('Hud next stop and ride', () => {
     const value = () => one('hud-game').byClass('hud-stat-value')[0]!.textContent;
     hud.update(model(), () => 0);
     expect(value()).toBe('0');
-    hud.update(model({ wallet: { accrued: 1_234_567_890_123, balance: 0 } }), () => 0); // base units: 1,234,567.89 GAME
+    hud.update(model({ wallet: { ...emptyWallet(), accrued: 1_234_567_890_123 } }), () => 0); // base units: 1,234,567.89 GAME
     expect(value()).toBe('1,234,567');
     expect(one('hud-game').byClass('hud-stat-label')[0]!.textContent).toBe('GAME');
+    // Decision 1: the mock's GAME carries the "Mock wallet" badge.
+    const badge = one('hud-game').byClass('phone-mock-badge')[0]!;
+    expect(badge.textContent).toBe('Mock wallet');
+    expect(badge.hidden).toBe(false);
+    hud.update(model({ wallet: { ...emptyWallet(), mock: false } }), () => 0);
+    expect(badge.hidden).toBe(true);
   });
 
   it('the load chip keeps loadText', () => {

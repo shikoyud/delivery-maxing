@@ -16,6 +16,14 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: str
   return e;
 }
 
+/** The "Mock wallet" badge shown wherever GAME appears (Decision 1): the HUD's GAME figure, the Shop, Skip, the Wallet. */
+export function mockBadge(parent: HTMLElement, className = ''): HTMLElement {
+  const b = el('span', `phone-mock-badge${className ? ` ${className}` : ''}`, parent);
+  b.textContent = 'Mock wallet';
+  b.title = 'GAME here is a browser mock of the reward program: no real tokens';
+  return b;
+}
+
 /** Sets innerHTML only when it changed (keeps hover and click targets stable between frames). */
 export function setHtml(e: HTMLElement, html: string): void {
   if (e.dataset.html !== html) {

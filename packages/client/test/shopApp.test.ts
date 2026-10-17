@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { GAME_UNITS, economyConfig, expandGreybox, ridingConfig, type Garage, type GreyboxSource, type OrderSystem } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { MockChain } from '../src/economy/MockChain';
-import { gameText } from '../src/ui/hudModel';
+import { emptyWallet, gameText } from '../src/ui/hudModel';
 import { Purchases, defaultWardrobe } from '../src/economy/Purchases';
 import { createShopApp, shopRows, type ShopRow } from '../src/ui/phone/shopApp';
 import { installFakeDom, type FakeElement } from './fakeDom';
@@ -111,7 +111,7 @@ describe('Shop app', () => {
   const byAction = (action: string): FakeElement => dom.host.findAll((e) => e.tagName === 'BUTTON' && e.dataset.action === action)[0]!;
   const tab = (t: string): FakeElement => dom.host.findAll((e) => e.classList.contains('phone-shop-tab') && e.dataset.tab === t)[0]!;
   const panel = (t: string): FakeElement => dom.host.findAll((e) => e.classList.contains('phone-shop-panel') && e.dataset.tab === t)[0]!;
-  const draw = (rows: ShopRow[]): void => view.render(model({ shop: rows, wallet: { accrued: 0, balance: 600_000 * GAME_UNITS } }), { x: 0, y: 0, z: 0 }, 0);
+  const draw = (rows: ShopRow[]): void => view.render(model({ shop: rows, wallet: { ...emptyWallet(), balance: 600_000 * GAME_UNITS } }), { x: 0, y: 0, z: 0 }, 0);
 
   beforeEach(() => {
     dom = installFakeDom();
