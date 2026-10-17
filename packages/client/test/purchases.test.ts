@@ -134,6 +134,9 @@ describe('Purchases', () => {
     expect((await s.purchases.buy('line.vehicle.4')).ok).toBe(true);
     s.confirm();
     expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+    // the car parks behind the motorbike with room to back out: the bicycle moves back past a free slot 2
+    expect(s.garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
+    expect(s.garage.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 3) });
     const car = s.garage.state('car').position;
     expect(Math.hypot(car.x - s.env.player.x, car.z - s.env.player.z)).toBeGreaterThan(halfExtent('car') + 0.35);
   });
