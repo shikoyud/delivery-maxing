@@ -122,7 +122,7 @@ describe('importPacks: LOD1 and shared textures', () => {
     await writeSphere(join(src, 'p/a.glb'), 48, PNG);
     await writeSphere(join(src, 'p/b.glb'), 48, PNG);
     await writeSphere(join(src, 'p/red.glb'), 48);
-    const r = await importPacks(src, cat(entry('x/a', 'p/a.glb'), entry('x/b', 'p/b.glb'), entry('x/red', 'p/red.glb')), dst);
+    const r = await importPacks(src, cat(entry('x/a', 'p/a.glb'), entry('x/b', 'p/b.glb'), entry('x/red', 'p/red.glb')), dst, undefined, join(dst, 'copy/nested/manifest.json'));
     expect(r.written).toBe(3);
     expect(r.lod1).toBe(3);
     expect(statSync(join(dst, 'x/red.glb')).size).toBeLessThan(statSync(join(src, 'p/red.glb')).size / 2);
@@ -136,5 +136,6 @@ describe('importPacks: LOD1 and shared textures', () => {
     expect((glbJson(join(dst, 'x/red.glb')) as unknown as { materials: { name: string }[] }).materials[0]!.name).toBe('flat');
     const manifest = JSON.parse(readFileSync(join(dst, 'manifest.json'), 'utf8'));
     expect(manifest.models['x/a']).toEqual({ lod1: true });
+    expect(readFileSync(join(dst, 'copy/nested/manifest.json'), 'utf8')).toBe(`${JSON.stringify(manifest)}\n`);
   });
 });

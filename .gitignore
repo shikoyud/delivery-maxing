@@ -12,3 +12,4 @@ docs/playtest/sp5/sheet-*.png
 
 # Runtime pack models written by assets:import (derived from the packs: never committed)
 packages/client/public/packs/
+packages/client/src/packs/

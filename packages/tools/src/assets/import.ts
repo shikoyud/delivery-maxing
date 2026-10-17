@@ -213,13 +213,16 @@ async function writeCompressed(doc: Document, path: string): Promise<number> {
  * into one mesh (see bake) and writes `<outDir>/<id>.glb` (a `/` in the id is a folder) compressed, plus
  * `<id>.lod1.glb` simplified toward `lod1.ratio` within `lod1.error` when that drops at least `lod1.minDrop` of the
  * triangles.
- * Textures go to `<outDir>/textures/` once each; `<outDir>/manifest.json` lists what was written.
+ * Textures go to `<outDir>/textures/` once each; `<outDir>/manifest.json` lists what was written, and the same
+ * manifest is also written to `manifestCopy` when given (the client bundles it from src/, since Vite refuses to import
+ * a file under public/).
  */
 export async function importPacks(
   folder: string,
   cat: AssetCatalog,
   outDir: string,
   lod1: Lod1Options = clientJson.city.lod1,
+  manifestCopy?: string,
 ): Promise<ImportReport> {
   await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready, MeshoptSimplifier.ready]);
   const io = readIo();
@@ -263,6 +266,10 @@ export async function importPacks(
   const manifestPath = join(outDir, 'manifest.json');
   mkdirSync(outDir, { recursive: true });
   writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
+  if (manifestCopy !== undefined) {
+    mkdirSync(dirname(manifestCopy), { recursive: true });
+    writeFileSync(manifestCopy, `${JSON.stringify(manifest)}\n`);
+  }
   report.bytes += shared.bytes + statSync(manifestPath).size;
   return report;
 }

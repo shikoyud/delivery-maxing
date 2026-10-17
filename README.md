@@ -130,8 +130,9 @@ The city's buildings come from the owner's licensed Megatropolis and Tropical
 City packs (`assets/CREDITS.md`). They are never committed: unpack them into
 the git-ignored `assets/packs/` with their original folder names, then run
 `pnpm assets:import assets/packs`, which writes the runtime models (compressed,
-with LOD1 files and a manifest) into `packages/client/public/packs/`, also
-git-ignored. Rebuild or restart `pnpm dev` afterwards. Without that folder the
+with LOD1 files and a manifest) into `packages/client/public/packs/` and a copy
+of the manifest into `packages/client/src/packs/`, both git-ignored. Rebuild or
+restart `pnpm dev` afterwards. Without that folder the
 game makes no model requests, logs one "pack models not installed" warning and
 draws boxes.
 
