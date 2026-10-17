@@ -418,7 +418,7 @@ kbd {
     linear-gradient(90deg, var(--dm-coral) var(--fuel, 100%), rgba(247, 243, 234, 0.18) 0);
 }
 
-/* Minimap, bottom right: a player-centred cut of the city (M opens the full Map app). */
+/* Minimap, bottom right: a player-centred cut of the city (M opens the full-screen map). */
 .minimap {
   position: absolute;
   right: 16px;
@@ -809,7 +809,6 @@ kbd {
   font: 11px ui-monospace, Menlo, Consolas, monospace;
 }
 
-.phone-map-canvas { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; }
 
 .phone-footer {
   padding: 0 12px 8px;
@@ -874,4 +873,116 @@ kbd {
 
 .perf-title.fail {
   color: #ff9a8f;
+}
+
+/* The full-screen map (M, Decision 11): the whole city fitted, wheel zoom, drag pan, a legend. */
+.map-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 16; /* over the HUD and the phone's backdrop; under the debug overlay and the dev panel */
+  background: #9cc3d5;
+  cursor: grab;
+  user-select: none;
+}
+
+.map-screen[hidden] {
+  display: none;
+}
+
+.map-screen.dragging {
+  cursor: grabbing;
+}
+
+.map-screen-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-legend {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(247, 243, 234, 0.94);
+  border-top: 4px solid var(--dm-teal);
+  box-shadow: 0 4px 14px rgba(22, 50, 58, 0.25);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-legend-swatch {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+}
+
+.map-legend-player {
+  background: var(--swatch);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.map-legend-dot {
+  border-radius: 50%;
+  background: var(--swatch);
+}
+
+.map-legend-ring {
+  border-radius: 50%;
+  border: 2px solid var(--swatch);
+}
+
+.map-legend-cross {
+  background:
+    linear-gradient(var(--swatch), var(--swatch)) center / 100% 34% no-repeat,
+    linear-gradient(var(--swatch), var(--swatch)) center / 34% 100% no-repeat;
+}
+
+.map-legend-fuel {
+  width: 9px;
+  margin: 0 2.5px;
+  background: var(--swatch);
+  outline: 1px solid var(--dm-ink);
+}
+
+.map-legend-vehicle {
+  height: 8px;
+  margin: 3px 0;
+  background: var(--swatch);
+  outline: 1px solid var(--dm-ink);
+}
+
+.map-screen-footer {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(22, 50, 58, 0.82);
+  color: var(--dm-paper);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (max-width: 560px) {
+  .map-screen-footer {
+    left: auto;
+    right: 16px;
+    transform: none;
+    white-space: normal;
+    max-width: 45%;
+  }
 }

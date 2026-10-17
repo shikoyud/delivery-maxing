@@ -32,8 +32,8 @@ const BINDING_LABEL: Record<BindingName, string> = {
   mapDebug: 'Map debug view',
 };
 
-/** "App name" and "Coming in SP{n}" in `root`; a placeholder with that copy also serves the Map tab until Task 11. */
-export function buildComingSoon(root: HTMLElement, title: string, sp: number): HTMLElement {
+/** "App name" and "Coming in SP{n}" in `root`. */
+function buildComingSoon(root: HTMLElement, title: string, sp: number): HTMLElement {
   const wrap = el('div', 'phone-stub', root);
   el('h3', 'phone-stub-title', wrap).textContent = title;
   el('p', 'phone-stub-when', wrap).textContent = `Coming in SP${sp}`;

@@ -62,6 +62,12 @@ export interface DebugApi {
   openPhone(app: PhoneApp): void;
   /** Closes the phone (as Esc does). */
   closePhone(): void;
+  /** Whether the full-screen map is up (M). */
+  mapOpen(): boolean;
+  /** Opens the map screen (as M does). */
+  openMap(): void;
+  /** Closes the map screen (as M or Esc does). */
+  closeMap(): void;
   /** Sets the mouse look (radians; pitch is clamped to the chase limits). */
   setLook(yaw: number, pitch: number): void;
   /** The visible courier: the animated model (loaded) or the capsule fallback, its clip, pose and mixer time. */
@@ -167,6 +173,9 @@ export function installDebugHooks(game: Game): void {
     phoneOpen: () => game.delivery.phoneOpen,
     openPhone: (app) => game.delivery.openPhone(app),
     closePhone: () => game.delivery.closePhone(),
+    mapOpen: () => game.delivery.mapOpen,
+    openMap: () => game.delivery.openMap(),
+    closeMap: () => game.delivery.closeMap(),
     setLook: (yaw, pitch) => game.actions.setLook(yaw, pitch),
     cameraInsideSolid: () => game.cameraInsideSolid(),
     courier: () => game.courier.debug(),

@@ -531,7 +531,7 @@ test('dev panel Vehicles: Owned boxes, locked while riding; debug hooks ride, ve
   expect(errors).toEqual([]);
 });
 
-test('phone: Tab opens Orders, Map and Wallet render; Esc closes', async ({ page }) => {
+test('phone: Tab opens Orders and Wallet renders (no Map tab); Esc closes', async ({ page }) => {
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   await hideOverlay(page);
@@ -550,14 +550,10 @@ test('phone: Tab opens Orders, Map and Wallet render; Esc closes', async ({ page
   const end = await page.evaluate(() => window.__dm!.player().position);
   expect(Math.hypot(end.x - start.x, end.z - start.z)).toBeLessThan(0.05);
   await page.screenshot({ path: `${sp3}sp3-phone-orders.png` });
-  // Accept from the phone: the order moves to Active and the Map shows its target.
+  // Accept from the phone: the order moves to Active (the map is its own screen now, M: Decision 11).
   await page.locator('.phone-offer').first().locator('.phone-accept').click();
   await expect(page.locator('.phone-active-order')).toHaveCount(1);
-  await page.locator('.phone-nav-btn[data-app="map"]').click();
-  await expect(page.locator('.phone-title')).toHaveText('Map');
-  await expect(page.locator('.phone-map-canvas')).toBeVisible();
-  await waitTicks(page, 6);
-  await page.screenshot({ path: `${sp3}sp3-phone-map.png` });
+  await expect(page.locator('.phone-nav-btn[data-app="map"]')).toHaveCount(0);
   await page.locator('.phone-nav-btn[data-app="wallet"]').click();
   await expect(page.locator('.phone-title')).toHaveText('Wallet');
   await expect(page.locator('.phone-note')).toHaveText('GAME rewards arrive with the reward program (spec §9)');
@@ -942,7 +938,7 @@ test('Tab while driving shows the hint; stopped, the phone opens', async ({ page
   const errors = await boot(page, SEED);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
   await hideOverlay(page);
-  // An order first, so the Map app has a route to show.
+  // An order first, so the map has a route to show.
   await acceptWithY(page);
   await rideFrom(page, 'car', { x: 100, y: 0, z: -60 }, { x: 100, y: 1, z: 0 });
   await page.keyboard.down('KeyW');
@@ -956,19 +952,20 @@ test('Tab while driving shows the hint; stopped, the phone opens', async ({ page
   await page.keyboard.press('Tab');
   await page.waitForFunction(() => window.__dm!.phoneOpen());
   await expect(page.locator('.phone-title')).toHaveText('Orders');
-  // The Map app routes for the ride: by road on the car ...
-  await page.locator('.phone-nav-btn[data-app="map"]').click();
-  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+  // The map routes for the ride: by road on the car ...
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => window.__dm!.mapOpen());
   await waitTicks(page, 6);
   await page.screenshot({ path: `${sp4}map-route-car.png` });
   const carRoute = await page.evaluate(() => window.__dm!.route().points.length);
-  await page.keyboard.press('Escape');
-  await page.waitForFunction(() => !window.__dm!.phoneOpen());
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => !window.__dm!.mapOpen());
   // ... and on foot after getting off.
   await pressF(page, null);
   await page.keyboard.press('KeyM');
-  await page.waitForFunction(() => window.__dm!.phoneOpen());
-  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await page.waitForFunction(() => window.__dm!.mapOpen());
   await waitTicks(page, 6);
   await page.screenshot({ path: `${sp4}map-route-foot.png` });
   const footRoute = await page.evaluate(() => window.__dm!.route().points.length);
@@ -1425,9 +1422,9 @@ test('city: Review Focus 5 — the car crosses the avenue at top speed without f
   expect(errors).toEqual([]);
 });
 
-/** Counts the Map app canvas's pixels of each colour (#rrggbb). */
+/** Counts the map screen canvas's pixels of each colour (#rrggbb). */
 const canvasColours = (page: Page, colours: string[]): Promise<number[]> =>
-  page.locator('.phone-map-canvas').evaluate((c, cols) => {
+  page.locator('.map-screen-canvas').evaluate((c, cols) => {
     const canvas = c as HTMLCanvasElement;
     const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
     const want = cols.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
@@ -1440,7 +1437,7 @@ const canvasColours = (page: Page, colours: string[]): Promise<number[]> =>
     return n;
   }, colours);
 
-test('city: F4 shows the debug view with lot labels; the Map app shows hospitals, gas stations and a parked car', async ({ page }) => {
+test('city: F4 shows the debug view with lot labels; the map shows hospitals, gas stations and a parked car', async ({ page }) => {
   test.setTimeout(120_000);
   const { errors } = await bootCity(page);
   await hideOverlay(page);
@@ -1463,20 +1460,130 @@ test('city: F4 shows the debug view with lot labels; the Map app shows hospitals
   await page.keyboard.press('F4');
   await page.waitForFunction(() => !window.__dm!.mapDebugVisible());
 
-  // The Map app at the spawn: Bayview General's red cross, Bayview Fuel's icon and the car parked in the bay.
+  // The map at the spawn: the red crosses, the fuel icons and the car parked in the bay.
   await page.evaluate((h) => window.__dm!.teleportTo(h), cityLayout.hospitals[0]!.id);
   await waitTicks(page, 3);
   expect((await vehicle(page, 'car')).spot).toBe('parked');
   await page.keyboard.press('KeyM');
-  await page.waitForFunction(() => window.__dm!.phoneOpen());
-  await expect(page.locator('.phone-title')).toHaveText('Map');
+  await page.waitForFunction(() => window.__dm!.mapOpen());
   await waitTicks(page, 6);
   const [hospital, fuel, parked] = await canvasColours(page, ['#d63a3a', '#f2a33a', '#2f8f83']);
-  console.log(`Map app pixels: hospital ${hospital}, fuel ${fuel}, parked vehicles ${parked}`);
+  console.log(`Map pixels: hospital ${hospital}, fuel ${fuel}, parked vehicles ${parked}`);
   expect(hospital).toBeGreaterThan(0);
   expect(fuel).toBeGreaterThan(0);
   expect(parked).toBeGreaterThan(0);
   await page.screenshot({ path: `${sp5}map-app.png` });
+  expect(errors).toEqual([]);
+});
+
+/** Whether any pixel within `r` px of each CSS-px point on the map screen canvas has colour `hex`. */
+const mapColourNear = (page: Page, points: { x: number; y: number }[], hex: string, r = 6): Promise<boolean[]> =>
+  page.locator('.map-screen-canvas').evaluate(
+    (c, [pts, col, rad]) => {
+      const canvas = c as HTMLCanvasElement;
+      const k = canvas.width / canvas.clientWidth;
+      const ctx = canvas.getContext('2d')!;
+      const want = [parseInt(col.slice(1, 3), 16), parseInt(col.slice(3, 5), 16), parseInt(col.slice(5, 7), 16)];
+      return pts.map((p) => {
+        const x0 = Math.max(0, Math.round((p.x - rad) * k));
+        const y0 = Math.max(0, Math.round((p.y - rad) * k));
+        const side = Math.round(2 * rad * k);
+        const data = ctx.getImageData(x0, y0, side, side).data;
+        for (let i = 0; i < data.length; i += 4) if (data[i] === want[0] && data[i + 1] === want[1] && data[i + 2] === want[2]) return true;
+        return false;
+      });
+    },
+    [points, hex, r] as const,
+  );
+
+test('city: M shows the whole city with hospitals and gas stations; wheel zooms; Esc closes', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { errors } = await bootCity(page);
+  await hideOverlay(page);
+  const vp = page.viewportSize()!;
+  const size = cityLayout.size;
+  /** MapView's projection: zoom `z` about the world centre `c` (CSS px). */
+  const project = (p: { x: number; z: number }, z = 1, c = { x: size / 2, z: size / 2 }) => {
+    const s = (Math.min(vp.width, vp.height) / size) * z;
+    return { x: vp.width / 2 + (p.x - c.x) * s, y: vp.height / 2 + (p.z - c.z) * s };
+  };
+  const hospitals = cityLayout.hospitals.map((h) => h.center);
+  const gas = cityLayout.gasStations.map((g) => g.position);
+
+  // Riding the car at speed on Bayview Avenue: M opens the map anyway (Decision 11) ...
+  await rideFrom(page, 'car', { x: 139.5, y: 10, z: 316 }, { x: 170, y: 11, z: 316 });
+  await page.evaluate((y) => window.__dm!.setLook(y, -0.2), EAST_YAW);
+  const fast = await hold(page, ['KeyW'], 3 * TICK_RATE);
+  expect(fast.at(-1)!).toBeGreaterThan(8);
+  await page.keyboard.down('KeyW');
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => window.__dm!.mapOpen());
+  await expect(page.locator('.map-screen')).toBeVisible();
+  await expect(page.locator('.map-legend-item')).toHaveText(['You', 'Orders', 'Offers', 'Hospitals', 'Gas stations', 'Your vehicles']);
+  // ... and the sim gets no move input: with W still held the car only coasts.
+  const v0 = Math.hypot((await player(page)).velocity.x, (await player(page)).velocity.z);
+  const coast = await page.evaluate((n) => window.__dm!.advance(n), TICK_RATE);
+  await page.keyboard.up('KeyW');
+  console.log(`map open at ${v0.toFixed(1)} m/s; 1 s later ${coast.at(-1)!.toFixed(1)} m/s`);
+  expect(coast.at(-1)!).toBeLessThan(v0);
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => !window.__dm!.mapOpen());
+  await brakeToStop(page);
+  await pressF(page, null);
+
+  // On foot at the first hospital (its parked car in the bay), M again.
+  await page.evaluate((h) => window.__dm!.teleportTo(h), cityLayout.hospitals[0]!.id);
+  await page.evaluate(() => window.__dm!.advance(3));
+  await waitCameraSettled(page);
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => window.__dm!.mapOpen());
+  await waitTicks(page, 6);
+
+  // The whole city at zoom 1: every hospital's cross and every gas station's icon on screen.
+  const nearRed = await mapColourNear(page, hospitals.map((h) => project(h)), '#d63a3a');
+  const nearFuel = await mapColourNear(page, gas.map((g) => project(g)), '#f2a33a');
+  console.log(`map: hospitals ${JSON.stringify(nearRed)}, gas stations ${JSON.stringify(nearFuel)}`);
+  expect(nearRed.every(Boolean)).toBe(true);
+  expect(nearFuel.every(Boolean)).toBe(true);
+  await page.screenshot({ path: `${artifacts}sp6-map-city.png` });
+
+  // The wheel zooms toward the cursor: five notches over the first hospital keep it under the cursor.
+  const h0 = project(hospitals[0]!);
+  const cam0 = await page.evaluate(() => window.__dm!.camera().position);
+  await page.mouse.move(h0.x, h0.y);
+  for (let i = 0; i < 5; i++) await page.mouse.wheel(0, -100);
+  await waitTicks(page, 2);
+  const zoom = clientJson.ui.map.wheelStep ** 5;
+  // The world point under the cursor stays put: the new centre is that point minus its offset at the new scale.
+  const s1 = (Math.min(vp.width, vp.height) / size) * zoom;
+  const centre = { x: hospitals[0]!.x - (h0.x - vp.width / 2) / s1, z: hospitals[0]!.z - (h0.y - vp.height / 2) / s1 };
+  const zoomed = hospitals.map((h) => project(h, zoom, centre));
+  const onScreen = zoomed.map((p) => p.x > 8 && p.x < vp.width - 8 && p.y > 8 && p.y < vp.height - 8);
+  expect((await mapColourNear(page, [h0], '#d63a3a'))[0]).toBe(true);
+  const visible = zoomed.filter((_, i) => onScreen[i]);
+  expect(visible.length).toBeLessThan(hospitals.length); // zoomed in: some of the city is off screen
+  expect((await mapColourNear(page, visible, '#d63a3a')).every(Boolean)).toBe(true);
+  await page.screenshot({ path: `${artifacts}sp6-map-zoomed.png` });
+
+  // A drag pans the map with the pointer, and never turns the camera.
+  await page.mouse.down();
+  await page.mouse.move(h0.x + 60, h0.y + 40, { steps: 6 });
+  await page.mouse.up();
+  await waitTicks(page, 2);
+  expect((await mapColourNear(page, [{ x: h0.x + 60, y: h0.y + 40 }], '#d63a3a'))[0]).toBe(true);
+  const cam1 = await page.evaluate(() => window.__dm!.camera().position);
+  expect(Math.hypot(cam1.x - cam0.x, cam1.z - cam0.z)).toBeLessThan(0.05);
+
+  // Esc closes it; M opens it again fitted to the whole city.
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__dm!.mapOpen());
+  await expect(page.locator('.map-screen')).toBeHidden();
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => window.__dm!.mapOpen());
+  await waitTicks(page, 3);
+  expect((await mapColourNear(page, hospitals.map((h) => project(h)), '#d63a3a')).every(Boolean)).toBe(true);
+  await page.keyboard.press('KeyM');
+  await page.waitForFunction(() => !window.__dm!.mapOpen());
   expect(errors).toEqual([]);
 });
 

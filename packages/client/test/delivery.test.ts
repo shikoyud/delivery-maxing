@@ -31,6 +31,7 @@ import { DeliveryLoop, MOUNT_REFUSED, simEventHint } from '../src/game/delivery'
 import { createProgressStore, type Progress } from '../src/game/progress';
 import { ActionState } from '../src/input/actionState';
 import type { HudModel } from '../src/ui/hudModel';
+import type { MapScreenView } from '../src/ui/map/MapScreen';
 import type { PhoneApp, PhoneCallbacks, PhoneView } from '../src/ui/phone/Phone';
 
 const map = expandGreybox(greybox as GreyboxSource);
@@ -96,6 +97,22 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     },
     render: (m) => void phone.renders.push(m),
   };
+  /** A recording map screen: open state, the renders, and the close keys and callback DeliveryLoop gave it. */
+  const mapScreen = { isOpen: false, renders: [] as HudModel[], closeCodes: [] as string[], closed: null as (() => void) | null };
+  const mapView: MapScreenView = {
+    get isOpen() {
+      return mapScreen.isOpen;
+    },
+    open() {
+      mapScreen.isOpen = true;
+    },
+    close() {
+      if (!mapScreen.isOpen) return;
+      mapScreen.isOpen = false;
+      mapScreen.closed!();
+    },
+    render: (m) => void mapScreen.renders.push(m),
+  };
   const loop = new DeliveryLoop({
     host: {} as HTMLElement,
     scene: new THREE.Scene(),
@@ -115,6 +132,11 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
         phone.cb = cb;
         phone.closeCodes = closeCodes;
         return phoneView;
+      },
+      map: (closeCodes, closed) => {
+        mapScreen.closeCodes = closeCodes;
+        mapScreen.closed = closed;
+        return mapView;
       },
     },
     phoneChanged: (open) => void phone.changes.push(open),
@@ -176,7 +198,7 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     for (let i = 0; i < Math.round(seconds / TICK); i++) tick();
   };
   const poiPos = (id: string): Vec3 => ({ ...map.pois.find((p) => p.id === id)!.position });
-  return { loop, env, rider, popups, huds, phone, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states };
+  return { loop, env, rider, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states };
 }
 
 describe('DeliveryLoop', () => {
@@ -233,17 +255,61 @@ describe('DeliveryLoop', () => {
     expect(s.phone.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.phone, ...clientConfig.input.bindings.map]);
   });
 
-  it('the map key (M) opens the phone straight on the Map app; while open it is a close key, not a toggle here', () => {
+  test('M opens the map while riding at 20 m/s; the sim then gets no move input; M closes it', () => {
+    const s = setup('car');
+    s.rider.riding = 'car';
+    s.rider.speed = 20;
+    s.actions.keyDown('KeyW');
+    s.tick(false, false, true);
+    expect(s.loop.mapOpen).toBe(true);
+    expect(s.mapScreen.isOpen).toBe(true);
+    expect(s.loop.phoneOpen).toBe(false);
+    expect(s.popups.some((p) => p.text === 'Stop to use the phone')).toBe(false); // at any speed
+    expect(s.phone.changes).toEqual([true]); // the pointer lock is released, as for the phone
+    expect(s.actions.sampleTick().move).toEqual({ x: 0, y: 0 }); // W was released
+    expect(s.mapScreen.closeCodes).toEqual(['Escape', ...clientConfig.input.bindings.map]);
+    // The sim gets only the look: no move, no brake, jump, F or Y.
+    const frame = emptyInput();
+    frame.move = { x: 0, y: 1 };
+    frame.look = { yaw: 1.5, pitch: 0.2 };
+    frame.jump = { held: true, pressed: true };
+    frame.mount = { held: true, pressed: true };
+    frame.accept = { held: true, pressed: true };
+    frame.phone = { held: true, pressed: true };
+    const out = s.loop.beforeStep(frame);
+    expect(out).toEqual({ ...emptyInput(), look: { yaw: 1.5, pitch: 0.2 } });
+    expect(s.loop.phoneOpen).toBe(false); // Tab does not open the phone over the map
+    expect(s.loop.orders.active).toHaveLength(0);
+    expect(s.loop.prompt()).toBeNull();
+    // A drag on the map must not turn the camera (the ride camera reads takeYawDelta).
+    const look = s.actions.look();
+    s.actions.mouseMove(200, 40);
+    expect(s.actions.takeYawDelta()).toBe(0);
+    expect(s.actions.look()).toEqual(look);
+    // The map renders at the HUD rate while open.
+    s.loop.draw(0);
+    expect(s.mapScreen.renders).toHaveLength(1);
+    // M again (the screen's close handler, or a press reaching beforeStep) closes it and the sim gets its input back.
+    s.tick(false, false, true);
+    expect(s.loop.mapOpen).toBe(false);
+    expect(s.phone.changes).toEqual([true, false]);
+    s.tick(false, false, false, { move: { x: 0, y: 1 } });
+    expect(s.simFrames.at(-1)!.move).toEqual({ x: 0, y: 1 });
+    s.actions.mouseMove(200, 0);
+    expect(s.actions.takeYawDelta()).not.toBe(0);
+    // Esc in the screen closes it through the same path.
+    s.loop.openMap();
+    s.mapScreen.isOpen = false; // as MapScreen.close: closed, then the callback
+    s.mapScreen.closed!();
+    expect(s.loop.mapOpen).toBe(false);
+    expect(s.phone.changes).toEqual([true, false, true, false]);
+  });
+
+  it('M with the phone open does not open the map over it (the phone takes M as a close key)', () => {
     const s = setup();
+    s.loop.openPhone();
     s.tick(false, false, true);
-    expect(s.loop.phoneOpen).toBe(true);
-    expect(s.phone.app).toBe('map');
-    expect(s.phone.changes).toEqual([true]);
-    // While the phone is open the real M keydown is swallowed by the phone's close handler (closeCodes above);
-    // a map press reaching beforeStep anyway must not reopen or switch apps.
-    s.phone.app = 'orders';
-    s.tick(false, false, true);
-    expect(s.phone.app).toBe('orders');
+    expect(s.loop.mapOpen).toBe(false);
     expect(s.loop.phoneOpen).toBe(true);
   });
 
@@ -561,9 +627,8 @@ describe('DeliveryLoop', () => {
     s.tick(false, true);
     expect(s.loop.phoneOpen).toBe(false);
     expect(s.popups.at(-1)).toMatchObject({ text: 'Stop to use the phone' });
-    // M is refused too, and the hint waits out its cooldown.
-    s.tick(false, false, true);
-    expect(s.loop.phoneOpen).toBe(false);
+    // The hint waits out its cooldown.
+    s.tick(false, true);
     expect(s.popups.filter((p) => p.text === 'Stop to use the phone')).toHaveLength(1);
     s.wait(clientConfig.ui.hintCooldownSeconds);
     s.tick(false, true);

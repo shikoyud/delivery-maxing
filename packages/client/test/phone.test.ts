@@ -190,25 +190,9 @@ describe('Phone', () => {
     expect(calls).toEqual(['respawn']);
   });
 
-  it('setMapApp replaces the Map placeholder', () => {
-    const doc = dom.doc;
-    const el = doc.createElement('div');
-    const seen: number[] = [];
-    phone.setMapApp({ el: el as unknown as HTMLElement, render: (m) => void seen.push(m.totals.coins) });
-    phone.open('map');
-    phone.render(model({ totals: { points: 0, coins: 9, deliveries: 0 } }));
-    expect(seen).toEqual([9]);
-    expect(view('map')).toBe(el);
-  });
-
-  it('forwards the player position and heading to the Map app', () => {
-    const seen: string[] = [];
-    phone.setMapApp({
-      el: dom.doc.createElement('div') as unknown as HTMLElement,
-      render: (_m, p, h) => void seen.push(`${p.x},${p.z},${h}`),
-    });
-    phone.open('map');
-    phone.render(model(), { x: 3, y: 0, z: -4 }, 1.5);
-    expect(seen).toEqual(['3,-4,1.5']);
+  it('the phone has seven apps and no Map tab', () => {
+    expect(PHONE_APPS).toEqual(['orders', 'garage', 'shop', 'wallet', 'wardrobe', 'leaderboard', 'settings']);
+    expect(dom.host.byClass('phone-nav-btn').map((b) => b.dataset.app)).toEqual([...PHONE_APPS]);
+    expect(dom.host.findAll((e) => e.dataset.app === 'map')).toHaveLength(0);
   });
 });

@@ -35,7 +35,7 @@ Game.create(host, { debug, seed, map })
         .catch(() => undefined); // runPerf has already logged the error and shown it in the panel
     } else if (hint && !debug) {
       const update = (): void => {
-        hint.hidden = playHintHidden({ locked: game.input.locked, phoneOpen: game.delivery.phoneOpen });
+        hint.hidden = playHintHidden({ locked: game.input.locked, phoneOpen: game.delivery.phoneOpen || game.delivery.mapOpen });
       };
       document.addEventListener('pointerlockchange', update);
       game.onPhoneChanged = update;

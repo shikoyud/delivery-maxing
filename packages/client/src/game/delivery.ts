@@ -44,8 +44,7 @@ import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
 import { hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, type HudModel } from '../ui/hudModel';
 import { createMinimap } from '../ui/minimap';
-import { createMapApp } from '../ui/phone/mapApp';
-import { MapProjection } from '../ui/phone/mapProjection';
+import { MapScreen, type MapScreenView } from '../ui/map/MapScreen';
 import { RIDE_NAME, type GarageRow } from '../ui/phone/garageApp';
 import { Phone, type PhoneApp, type PhoneCallbacks, type PhoneView } from '../ui/phone/Phone';
 import { Popups, type PopupSink } from '../ui/popups';
@@ -75,7 +74,7 @@ export interface DeliveryDeps {
   /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
   table?: DistanceTable;
   /**
-   * Door routes for the HUD arrow, the stops' distances and the Map app (Game: the NavRouter), cached for
+   * Door routes for the HUD arrow, the stops' distances and the map screen (Game: the NavRouter), cached for
    * ui.routeRefreshSeconds. Absent (tests): straight lines.
    */
   router?: Pick<NavRouter, 'routeToDoor'>;
@@ -84,11 +83,17 @@ export interface DeliveryDeps {
   /** Sprint stamina as a fraction 0..1 (the HUD ring); full when absent (tests). */
   stamina?(): number;
   /**
-   * HUD, popups and the phone; default to the DOM ones on `host` (tests pass recorders). `phone` builds the phone
-   * from the callbacks DeliveryLoop wires (accept, cancel, skip, closed) and its close keys.
+   * HUD, popups, the phone and the map screen; default to the DOM ones on `host` (tests pass recorders). `phone`
+   * builds the phone from the callbacks DeliveryLoop wires (accept, cancel, skip, closed) and its close keys; `map`
+   * the map screen from its close keys and closed callback.
    */
-  ui?: { hud: HudView; popups: PopupSink; phone: (cb: PhoneCallbacks, closeCodes: string[]) => PhoneView };
-  /** The phone opened (true) or closed (false): Game exits or re-requests the pointer lock. */
+  ui?: {
+    hud: HudView;
+    popups: PopupSink;
+    phone: (cb: PhoneCallbacks, closeCodes: string[]) => PhoneView;
+    map: (closeCodes: string[], closed: () => void) => MapScreenView;
+  };
+  /** The phone or the map screen opened (true) or closed (false): Game exits or re-requests the pointer lock. */
   phoneChanged?(open: boolean): void;
   /**
    * The owned vehicles (Game: the sim's garage): the Garage app's rows at sim time `now`, a summon at `now`
@@ -180,6 +185,7 @@ export class DeliveryLoop {
   readonly poiMeshes: PoiMeshes;
   readonly waypoints: Waypoints;
   private readonly phone: PhoneView;
+  private readonly mapScreen: MapScreenView;
   private sys: OrderSystem;
   /** Sim time from which each get-off hint may show again (ui.hintCooldownSeconds). */
   private readonly hintAt = new Map<string, number>();
@@ -217,15 +223,20 @@ export class DeliveryLoop {
         this.d.phoneChanged?.(false);
       },
     };
-    // Esc, the phone key and the map key close it (spec §8; Tab opens it through the `phone` action in beforeStep,
-    // M through `map`, so both keys toggle).
+    // Esc, the phone key and the map key close it (spec §8; Tab opens it through the `phone` action in beforeStep, so
+    // it toggles; M closes it but does not open the map over it).
     const closeCodes = ['Escape', ...d.cfg.input.bindings.phone, ...d.cfg.input.bindings.map];
-    if (d.ui) this.phone = d.ui.phone(phoneCb, closeCodes);
-    else {
-      const phone = new Phone(d.host, phoneCb, closeCodes);
-      phone.setMapApp(createMapApp(d.map, MapProjection.forMap(d.map, 512), this.colorIndex));
-      this.phone = phone;
-    }
+    this.phone = d.ui ? d.ui.phone(phoneCb, closeCodes) : new Phone(d.host, phoneCb, closeCodes);
+    // Esc and the map key close the map screen (M opens it through the `map` action in beforeStep).
+    const mapCodes = ['Escape', ...d.cfg.input.bindings.map];
+    const mapClosed = (): void => {
+      this.d.actions.setLookFrozen(false);
+      this.d.actions.releaseAll();
+      this.d.phoneChanged?.(false);
+    };
+    this.mapScreen = d.ui
+      ? d.ui.map(mapCodes, mapClosed)
+      : new MapScreen(d.host, d.map, this.colorIndex, { closeCodes: mapCodes, closed: mapClosed });
     this.minimap = d.ui ? null : createMinimap(d.host, d.map);
     this.zones = playerZones(d.player().position, d.map, ordersConfig.zones);
     this.routes = d.router ? new RouteCache(d.router, d.cfg.ui.routeRefreshSeconds, d.cfg.ui.routeDriftMeters) : null;
@@ -277,8 +288,32 @@ export class DeliveryLoop {
     return this.phone.isOpen;
   }
 
+  /** Whether the full-screen map is up (M; the sim then gets only the look). */
+  get mapOpen(): boolean {
+    return this.mapScreen.isOpen;
+  }
+
+  /**
+   * Opens the map screen (at any speed, on foot or riding; not over the phone). Held keys are released, the mouse look
+   * freezes (drags pan the map, so they must not turn the camera) and the pointer lock is released as for the phone.
+   */
+  openMap(): void {
+    if (this.mapScreen.isOpen || this.phone.isOpen) return;
+    this.mapScreen.open();
+    this.d.actions.releaseAll();
+    this.d.actions.setLookFrozen(true);
+    this.nextHudAt = 0; // draw the map at once
+    this.d.phoneChanged?.(true);
+  }
+
+  /** Closes the map screen (its `closed` callback frees the look, releases keys and reports it). */
+  closeMap(): void {
+    this.mapScreen.close();
+  }
+
   /** Opens the phone on `app` (Orders by default), or switches to `app` when it is already open. */
   openPhone(app: PhoneApp = 'orders'): void {
+    if (this.mapScreen.isOpen) return;
     if (this.phone.isOpen) {
       this.phone.show(app);
       return;
@@ -300,10 +335,12 @@ export class DeliveryLoop {
   }
 
   /**
-   * The input the sim sees this tick. The phone key toggles the phone and M opens the Map app, but while riding faster
-   * than ridingConfig.riding.stoppedSpeed they only say "Stop to use the phone" (spec §8: notifications only while
-   * riding). Y accepts the top offer here, riding or not, before afterStep's update, so an accept on an offer's expiry
-   * tick reports 'expired' (Review Focus 1). While the phone is open Y is ignored and only the look passes (the Orders
+   * The input the sim sees this tick. M toggles the map screen at any speed (Decision 11); while it is open the sim
+   * gets only the look (no move, brake, jump, F or Y) and the phone key does nothing. The phone key toggles the phone,
+   * but while riding faster than ridingConfig.riding.stoppedSpeed it only says "Stop to use the phone" (spec §8:
+   * notifications only while riding); M with the phone open is the phone's close key, so it does not open the map.
+   * Y accepts the top offer here, riding or not, before afterStep's update, so an accept on an offer's expiry tick
+   * reports 'expired' (Review Focus 1). While the phone is open Y is ignored and only the look passes (the Orders
    * app's buttons accept, between ticks at `now()`), with the brake held on a vehicle so it stays put: Space (the
    * handbrake) on a ride whose Space does not jump, S on one that ollies (its jumpHeight is set; it does not reverse, so
    * S only brakes, slopes included). F on foot
@@ -311,10 +348,17 @@ export class DeliveryLoop {
    */
   beforeStep(frame: InputFrame): InputFrame {
     this.interact = { held: false, pressed: false };
-    if (frame.phone.pressed) {
+    if (this.mapScreen.isOpen) {
+      if (frame.map.pressed) this.closeMap(); // the screen's own key handler usually closes it first
+    } else if (frame.phone.pressed) {
       if (this.phone.isOpen) this.closePhone();
       else if (this.phoneAllowed()) this.openPhone();
-    } else if (frame.map.pressed && !this.phone.isOpen && this.phoneAllowed()) this.openPhone('map');
+    } else if (frame.map.pressed && !this.phone.isOpen) this.openMap();
+    if (this.mapScreen.isOpen) {
+      const look = emptyInput();
+      look.look = frame.look;
+      return look;
+    }
     if (!this.phone.isOpen) {
       this.interact = frame.interact;
       if (frame.accept.pressed) {
@@ -568,7 +612,7 @@ export class DeliveryLoop {
     });
   }
 
-  /** The key prompt now (hud-prompt): F to ride or get off, E to refuel, a pump hint on foot; null with the phone up. */
+  /** The key prompt now (hud-prompt): F to ride or get off, E to refuel, a pump hint on foot; null with the phone or map up. */
   prompt(): string | null {
     const r = this.d.rider();
     const rows = this.d.vehicles?.rows(this.d.now()) ?? [];
@@ -581,7 +625,7 @@ export class DeliveryLoop {
         atPump: pumpAt(this.d.map, this.d.player().position, ridingConfig.refuel.pumpRadius) !== null,
         tankFull: fuel !== undefined && fuel >= 1,
         ownsFuelledRide: rows.some((x) => x.fuel !== null),
-        phoneOpen: this.phone.isOpen,
+        phoneOpen: this.phone.isOpen || this.mapScreen.isOpen,
       },
       this.d.cfg.input.bindings,
     );
@@ -624,6 +668,7 @@ export class DeliveryLoop {
     const m = this.model(now);
     this.hud.update(m, this.colorIndex);
     if (this.phone.isOpen) this.phone.render(m, this.d.player().position, this.d.player().heading ?? 0);
+    if (this.mapScreen.isOpen) this.mapScreen.render(m, this.d.player().position, this.d.player().heading ?? 0);
   }
 
   /**

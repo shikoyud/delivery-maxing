@@ -298,8 +298,8 @@ export class Game {
   }
 
   /**
-   * The phone opened or closed (Tab, Esc). Open: the pointer lock is released so the player can click the phone
-   * (DeliveryLoop already released held keys). Closed: ask for the lock back — browsers may refuse without a click
+   * The phone or the map screen opened or closed (Tab, M, Esc). Open: the pointer lock is released so the player can
+   * click the phone or drag the map (DeliveryLoop already released held keys and, for the map, froze the mouse look). Closed: ask for the lock back — browsers may refuse without a click
    * (Esc gives no user activation), and then a click on the canvas locks it as usual.
    */
   private phoneChanged(open: boolean): void {

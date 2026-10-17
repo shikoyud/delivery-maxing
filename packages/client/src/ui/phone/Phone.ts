@@ -3,17 +3,16 @@ import { el, keyLabel } from '../dom';
 import type { HudModel } from '../hudModel';
 import { createGarageApp } from './garageApp';
 import { renderOrdersApp, type OrdersCallbacks } from './ordersApp';
-import { buildComingSoon, buildStubApp, type StubAppName } from './stubApp';
+import { buildStubApp, type StubAppName } from './stubApp';
 import { renderWalletApp } from './walletApp';
 
-export type PhoneApp = 'orders' | 'map' | 'garage' | 'shop' | 'wallet' | 'wardrobe' | 'leaderboard' | 'settings';
+export type PhoneApp = 'orders' | 'garage' | 'shop' | 'wallet' | 'wardrobe' | 'leaderboard' | 'settings';
 
-/** Nav order (spec §8 app table). */
-export const PHONE_APPS: readonly PhoneApp[] = ['orders', 'map', 'garage', 'shop', 'wallet', 'wardrobe', 'leaderboard', 'settings'];
+/** Nav order (spec §8 app table; the map is its own screen, M: Decision 11). */
+export const PHONE_APPS: readonly PhoneApp[] = ['orders', 'garage', 'shop', 'wallet', 'wardrobe', 'leaderboard', 'settings'];
 
 const APP_TITLE: Record<PhoneApp, string> = {
   orders: 'Orders',
-  map: 'Map',
   garage: 'Garage',
   shop: 'Shop',
   wallet: 'Wallet',
@@ -38,7 +37,7 @@ export interface PhoneView {
   close(): void;
   toggle(): void;
   show(app: PhoneApp): void;
-  /** `player`/`heading` feed the Map app. */
+  /** `player`/`heading` feed the Garage app (distances). */
   render(model: HudModel, player: Vec3, heading: number): void;
 }
 
@@ -50,7 +49,7 @@ export interface PhoneAppView {
 
 /**
  * The courier's phone (spec §8): a dimmed backdrop over the game (the HUD stays visible behind it) and a handset
- * with a nav bar of the eight apps. Only the open app renders. While open, the close keys (Esc and the phone key) are
+ * with a nav bar of the seven apps. Only the open app renders. While open, the close keys (Esc and the phone key) are
  * caught before the game's input sees them.
  */
 export class Phone implements PhoneView {
@@ -147,7 +146,7 @@ export class Phone implements PhoneView {
 
   /**
    * Draws the open app (DeliveryLoop calls this at the HUD rate while the phone is open). The apps read everything
-   * time-dependent (seconds left, accept status) from the model; only the Map also needs the player's pose.
+   * time-dependent (seconds left, accept status) from the model; the Garage also needs the player's pose.
    */
   render(model: HudModel, player: Vec3 = this.player, heading: number = this.heading): void {
     this.last = model;
@@ -155,17 +154,6 @@ export class Phone implements PhoneView {
     this.heading = heading;
     this.screen.hidden = false;
     if (this.open_) this.views.get(this.current)!.render(model, player, heading);
-  }
-
-  /** Puts the real Map app (Task 11) in place of the placeholder. */
-  setMapApp(view: PhoneAppView): void {
-    const old = this.views.get('map')!;
-    view.el.classList.add('phone-app');
-    view.el.dataset.app = 'map';
-    this.screen.replaceChild(view.el, old.el);
-    this.views.set('map', view);
-    this.syncNav();
-    if (this.open_ && this.current === 'map' && this.last) view.render(this.last, this.player, this.heading);
   }
 
   private buildApp(app: PhoneApp): PhoneAppView {
@@ -183,9 +171,6 @@ export class Phone implements PhoneView {
       }
       case 'settings':
         buildStubApp(root, app, () => this.callbacks.respawn());
-        return { el: root, render: () => undefined };
-      case 'map':
-        buildComingSoon(root, 'Map', 3); // placeholder until Task 11's setMapApp
         return { el: root, render: () => undefined };
       default:
         buildStubApp(root, app satisfies StubAppName);
