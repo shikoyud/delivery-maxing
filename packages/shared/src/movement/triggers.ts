@@ -33,7 +33,7 @@ export function applyTriggers(state: PlayerState, body: PlayerBody, map: MapData
     const hospital = nearestHospital(map, state.lastGrounded);
     const tier = state.riding;
     if (tier) {
-      garage.tow(tier, hospital);
+      garage.tow(tier, hospital, hospital.spawn); // the courier respawns there next
       state.riding = null;
       body.setEnabled(true);
     }

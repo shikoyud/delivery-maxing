@@ -124,6 +124,20 @@ describe('Purchases', () => {
     expect(t.garage.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
   });
 
+  test('courier beside the motorbike in slot 0 buys the car: the motorbike stays, the car parks clear of the courier', async () => {
+    const s = setup({ vehicleTier: 3 });
+    const h = map.hospitals[0]!;
+    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+    const m = baySlot(h, 0);
+    const side = { x: Math.cos(m.heading), z: -Math.sin(m.heading) }; // perpendicular to the row
+    s.env.player = { x: m.position.x + side.x, y: m.position.y, z: m.position.z + side.z };
+    expect((await s.purchases.buy('line.vehicle.4')).ok).toBe(true);
+    s.confirm();
+    expect(s.garage.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+    const car = s.garage.state('car').position;
+    expect(Math.hypot(car.x - s.env.player.x, car.z - s.env.player.z)).toBeGreaterThan(halfExtent('car') + 0.35);
+  });
+
   test('buying the motorbike from tier 0 is refused as order; after skateboard and bicycle it grants and parks it', async () => {
     const s = setup();
     expect(await s.purchases.buy('line.vehicle.3')).toEqual({ ok: false, message: 'Buy Vehicle tier 1 first' });
@@ -291,7 +305,7 @@ describe('Purchases', () => {
   test('quote shows "Prices updating, purchases paused" when the rate is stale', async () => {
     const s = setup();
     expect(s.purchases.quote('line.vehicle.3')).toEqual({ kind: 'game', usd: '$12', game: 50_000_000_000, maxGame: 51_000_000_000, text: '$12 ≈ 50,000 GAME' });
-    expect(s.purchases.quote('lockoutSkip')).toMatchObject({ usd: '$0.50', text: '$0.50 ≈ 2,083 GAME' });
+    expect(s.purchases.quote('lockoutSkip')).toMatchObject({ usd: '$0.50', text: '$0.50 ≈ 2,084 GAME' });
     s.chain.dev.makeRateStale();
     expect(s.purchases.quote('line.vehicle.3')).toEqual({ kind: 'paused', text: 'Prices updating, purchases paused' });
     expect(await s.purchases.buy('line.vehicle.1')).toEqual({ ok: false, message: 'Prices updating, purchases paused' });

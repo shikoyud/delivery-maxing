@@ -22,7 +22,7 @@ import greybox from '../../../map/greybox.json';
 import type { GarageRow } from '../src/ui/phone/garageApp';
 import type { ShopRow } from '../src/ui/phone/shopApp';
 import { clientConfig } from '../src/clientConfig';
-import { dateText, gameText, hudModel, loadText, promptFor, poiIndex, pointsText, stageText, usdText, walletModel, whenText } from '../src/ui/hudModel';
+import { dateText, gamePriceText, gameText, hudModel, loadText, promptFor, poiIndex, pointsText, stageText, usdText, walletModel, whenText } from '../src/ui/hudModel';
 import { MockChain } from '../src/economy/MockChain';
 
 const T0 = 1_760_000_000_000;
@@ -446,4 +446,13 @@ test('usdText shows two decimals, three below $0.10; gameText whole GAME with th
   expect(gameText(500 * GAME_UNITS)).toBe('500');
   expect(gameText(50_000 * GAME_UNITS + 999_999)).toBe('50,000');
   expect(gameText(1_234_567_890_123)).toBe('1,234,567');
+});
+
+test('gamePriceText rounds a price or cap up to whole GAME, so the shown "at most" is never below the real cap', () => {
+  expect(gamePriceText(0)).toBe('0');
+  expect(gamePriceText(50_000 * GAME_UNITS)).toBe('50,000');
+  // $2 at $0.00024: charged 8,333.333334 GAME, capped at 8,500.000001
+  expect(gamePriceText(8_333_333_334)).toBe('8,334');
+  expect(gamePriceText(8_500_000_001)).toBe('8,501');
+  expect(gameText(8_500_000_001)).toBe('8,500'); // balances and payouts keep rounding down
 });

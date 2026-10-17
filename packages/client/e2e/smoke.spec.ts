@@ -1875,9 +1875,9 @@ test('buying the skateboard then the bicycle: confirm sheet, "Confirming…", th
   await board.locator('.phone-shop-buy').click();
   const sheet = page.locator('.phone-shop-sheet');
   await expect(sheet).toBeVisible();
-  // $2 ÷ $0.00024 = 8,333.33 GAME (whole GAME shown), at most 2% more.
-  await expect(sheet.locator('.phone-shop-sheet-price')).toHaveText('$2 ≈ 8,333 GAME');
-  await expect(sheet.locator('.phone-shop-sheet-max')).toHaveText('You pay at most 8,500 GAME');
+  // $2 ÷ $0.00024 = 8,333.33 GAME, at most 2% more (8,500.000001): prices and caps show rounded up to whole GAME.
+  await expect(sheet.locator('.phone-shop-sheet-price')).toHaveText('$2 ≈ 8,334 GAME');
+  await expect(sheet.locator('.phone-shop-sheet-max')).toHaveText('You pay at most 8,501 GAME');
   await expect(sheet.locator('.phone-shop-sheet-split')).toHaveText('80% burned · 20% to the reward vault');
   await expect(sheet.locator('.phone-mock-badge')).toBeVisible();
   await page.screenshot({ path: `${sp6}shop-confirm.png` });
@@ -1940,8 +1940,8 @@ test('buying the skateboard then the bicycle: confirm sheet, "Confirming…", th
 test('the price rising past the slippage before confirmation fails the purchase and charges nothing', async ({ page }) => {
   const errors = await boot(page);
   await page.waitForFunction(() => window.__dm?.player().mode === 'ground');
-  // Sent at the mock's 2 s confirm (charged $2 ≈ 8,334 GAME and capped at 8,501: the charge rounds up; the Shop shows
-  // them rounded down, 8,333 and 8,500) ...
+  // Sent at the mock's 2 s confirm (charged 8,333.333334 GAME, the base units rounded up, and capped at 8,500.000001;
+  // the Shop shows both rounded up to whole GAME, 8,334 and 8,501) ...
   const sent = await page.evaluate(() => window.__dm!.buy('line.vehicle.1'));
   expect(sent).toMatchObject({ ok: true, tx: { status: 'pending' } });
   // ... then the dev panel moves the rate 20% down (the item costs 20% more GAME): far past the 2% slippage.

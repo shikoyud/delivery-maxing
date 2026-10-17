@@ -530,7 +530,8 @@ export class Game {
 
   /**
    * Dev panel "Reset progress": the courier gets off and every owned vehicle (the chain keeps what it owns) is parked
-   * afresh at the first hospital's bay slots in order with a full tank, no last ride, summon ready.
+   * afresh at the first hospital's bay slots in order (never beside or onto the courier) with a full tank, no last
+   * ride, summon ready.
    */
   private resetGarage(): void {
     this.offTick(this.sim.leaveRide());
@@ -538,7 +539,7 @@ export class Game {
     const hospital = this.map.hospitals[0]!;
     const owned = [...g.owned()];
     for (const t of owned) g.setOwned(t, false, hospital);
-    for (const t of owned) g.setOwned(t, true, hospital);
+    for (const t of owned) g.setOwned(t, true, hospital, this.sim.state.position);
     g.summonReadyAt = 0;
     this.sim.state.lastRide = null;
     this.vehicles.snap();

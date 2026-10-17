@@ -20,7 +20,7 @@ import {
   type Vec3,
 } from '@dm/shared';
 import type { PopupTone } from '../ui/popups';
-import { gameText, usdText } from '../ui/hudModel';
+import { gamePriceText, usdText } from '../ui/hudModel';
 import type { Wardrobe } from './wardrobe';
 
 export type QuoteView =
@@ -101,7 +101,7 @@ export class Purchases {
     const q = quoteGame(item.usdMicro, this.chain.rate(), this.now(), economyConfig);
     if (!q.ok) return { kind: 'paused', text: PAUSED };
     const usd = priceText(item.usdMicro);
-    return { kind: 'game', usd, game: q.game, maxGame: q.maxGame, text: `${usd} ≈ ${gameText(q.game)} GAME` };
+    return { kind: 'game', usd, game: q.game, maxGame: q.maxGame, text: `${usd} ≈ ${gamePriceText(q.game)} GAME` };
   }
 
   /**
@@ -191,7 +191,7 @@ export class Purchases {
       for (let t = 1; t <= item.tier; t++) {
         const ride = vehicleOfTier(t) as RideTier;
         if (d.garage.owned().includes(ride)) continue;
-        d.garage.setOwned(ride, true, h);
+        d.garage.setOwned(ride, true, h, d.player());
         changed = true;
       }
       if (changed) d.changed?.();
@@ -229,7 +229,7 @@ export class Purchases {
     }
     for (const t of want) {
       if (d.garage.owned().includes(t)) continue;
-      d.garage.setOwned(t, true, h);
+      d.garage.setOwned(t, true, h, d.player());
       changed = true;
     }
     if (!changed) return;

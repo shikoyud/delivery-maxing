@@ -1,6 +1,6 @@
 import { economyConfig, shopItem, type EconomyConfig, type ShopItem, type ShopItemId } from '@dm/shared';
 import { el, mockBadge, setText } from '../dom';
-import { gameText } from '../hudModel';
+import { gamePriceText } from '../hudModel';
 import type { ShopRow } from './shopApp';
 
 export const PAUSED = 'Prices updating, purchases paused';
@@ -78,7 +78,7 @@ export function createConfirmSheet(
     setText(detail, r.detail);
     setText(price, r.price.text);
     shownMax = r.price.kind === 'game' ? r.price.maxGame : null;
-    setText(max, shownMax === null ? '' : `You pay at most ${gameText(shownMax)} GAME`);
+    setText(max, shownMax === null ? '' : `You pay at most ${gamePriceText(shownMax)} GAME`);
     setText(split, splitText(shopItem(r.itemId)));
     const blocked = r.state !== 'buy' || shownMax === null;
     confirm.disabled = blocked;

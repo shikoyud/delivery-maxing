@@ -382,6 +382,14 @@ export function gameText(units: number): string {
   return Math.floor(units / GAME_UNITS).toLocaleString('en-US');
 }
 
+/**
+ * A GAME price or cap in whole GAME, rounded up ("8,334" for 8,333.33): the shown figure is never below what may be
+ * charged. Balances and payouts use gameText (rounded down).
+ */
+export function gamePriceText(units: number): string {
+  return Math.ceil(units / GAME_UNITS).toLocaleString('en-US');
+}
+
 /** "2/3 · 25/50 kg"; just "1/1" for a carrier that takes no packages. */
 export function loadText(l: HudLoad): string {
   const slots = `${l.usedSlots}/${l.slots}`;

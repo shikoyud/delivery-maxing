@@ -43,6 +43,15 @@ function expectRowInOrder(g: Garage, tiers: RideTier[]): void {
   }
 }
 
+/** Horizontal distance from `p` to the axis of `t` parked in the bay (heading bayYaw). */
+function axisGap(t: RideTier, at: Vec3, p: Vec3): number {
+  const yaw = map.hospitals[0]!.bayYaw;
+  const half = ridingConfig.rides[t].collider.shape === 'lengthwise' ? ridingConfig.rides[t].collider.halfLength : 0;
+  const f = vec3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const along = Math.max(-half, Math.min(half, (p.x - at.x) * f.x + (p.z - at.z) * f.z));
+  return Math.hypot(p.x - (at.x + f.x * along), p.z - (at.z + f.z * along));
+}
+
 /** The car, driven with W from its bay slot, gets clear by more than its own length (nothing parked ahead of it). */
 function expectCarDrivesOff(g: Garage): void {
   const v = g.state('car');
@@ -156,6 +165,39 @@ describe('Garage', () => {
         expectCarDrivesOff(g);
       });
     }
+
+    test('courier beside the motorbike in slot 0 buys the car: the motorbike stays, the car does not overlap the courier', () => {
+      const h = map.hospitals[0]!;
+      const g = new Garage(physics, map, []);
+      g.setOwned('motorbike', true, h);
+      const s0 = baySlot(h, 0).position;
+      // 1 m to the motorbike's side (bayYaw -π/2 faces +x, so its side is ±z)
+      const courier = vec3(s0.x, s0.y, s0.z + 1);
+      g.setOwned('car', true, h, courier);
+      expect(g.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+      expect(g.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
+      const c = ridingConfig.rides.car.collider;
+      expect(axisGap('car', g.state('car').position, courier)).toBeGreaterThan(c.radius + movementConfig.capsule.radius);
+      // the same through tow
+      const t = new Garage(createPhysicsWorld(physics.rapier, map), map, [{ tier: 'car', spot: { kind: 'parked', position: vec3(-60, 0, -60), heading: 0 }, fuel: 1 }]);
+      t.setOwned('motorbike', true, h);
+      t.tow('car', h, courier);
+      expect(t.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+      expect(t.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 1) });
+    });
+
+    test('courier standing on slot 1: nothing is parked there, the rest keep the longest-in-front order', () => {
+      const h = map.hospitals[0]!;
+      const g = new Garage(physics, map, []);
+      const courier = baySlot(h, 1).position;
+      for (const t of PARKED) g.setOwned(t, true, h, courier);
+      expect(g.spot('car')).toEqual({ kind: 'parked', ...baySlot(h, 0) });
+      expect(g.spot('motorbike')).toEqual({ kind: 'parked', ...baySlot(h, 2) });
+      expect(g.spot('bicycle')).toEqual({ kind: 'parked', ...baySlot(h, 3) });
+      for (const t of PARKED) {
+        expect(axisGap(t, g.state(t).position, courier), t).toBeGreaterThan(ridingConfig.rides[t].collider.radius + movementConfig.capsule.radius);
+      }
+    });
 
     test('a ridden vehicle or one parked by hand over a slot stays put; the bay orders the rest around it', () => {
       const h = map.hospitals[0]!;

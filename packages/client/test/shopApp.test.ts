@@ -78,9 +78,9 @@ describe('shopRows', () => {
   test('GAME prices read "$12 ≈ 50,000 GAME" and change when the rate changes', () => {
     const s = setup();
     expect(row(s.rows(), 'line.vehicle.3').price).toMatchObject({ kind: 'game', text: '$12 ≈ 50,000 GAME', maxGame: 51_000 * GAME_UNITS });
-    expect(row(s.rows(), 'lockoutSkip').price.text).toBe('$0.50 ≈ 2,083 GAME');
+    expect(row(s.rows(), 'lockoutSkip').price.text).toBe('$0.50 ≈ 2,084 GAME');
     expect(s.chain.dev.setRate(economyConfig.mockChain.usdPerGame * 1.2)).toBe(true);
-    expect(row(s.rows(), 'line.vehicle.3').price.text).toBe('$12 ≈ 41,666 GAME');
+    expect(row(s.rows(), 'line.vehicle.3').price.text).toBe('$12 ≈ 41,667 GAME');
   });
 
   test('a pending row says "Confirming…" and its button is disabled', async () => {
@@ -160,8 +160,8 @@ describe('Shop app', () => {
     expect(sheet.hidden).toBe(false);
     expect(sheet.textContent).toContain('Skateboard');
     expect(sheet.textContent).toContain('$0.01–0.06 per order');
-    expect(sheet.textContent).toContain('$2 ≈ 8,333 GAME');
-    expect(sheet.textContent).toContain('You pay at most 8,500 GAME');
+    expect(sheet.textContent).toContain('$2 ≈ 8,334 GAME');
+    expect(sheet.textContent).toContain('You pay at most 8,501 GAME');
     expect(sheet.textContent).toContain('80% burned · 20% to the reward vault');
     expect(sheet.byClass('phone-mock-badge')[0]!.textContent).toBe('Mock wallet');
     byAction('cancel').click();

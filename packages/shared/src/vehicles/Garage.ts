@@ -1,4 +1,4 @@
-import { colliderLength, ridingConfig } from '../config';
+import { colliderLength, movementConfig, ridingConfig } from '../config';
 import { RIDE_TIERS, type RideTier, type RidingConfig } from '../config/types';
 import { vec3, type Vec3 } from '../math/vec3';
 import { facing } from '../movement/ground';
@@ -146,14 +146,7 @@ export class Garage {
       if (e.spot.kind !== 'parked') continue;
       const p = e.state.position;
       if (Math.abs(p.y - feet.y) > this.cfg.riding.mountReachHeight) continue;
-      const c = this.cfg.rides[t].collider;
-      const half = c.shape === 'lengthwise' ? c.halfLength : 0;
-      const f = facing(e.state.heading);
-      const d = distanceToSegment(
-        feet,
-        vec3(p.x - f.x * half, p.y, p.z - f.z * half),
-        vec3(p.x + f.x * half, p.y, p.z + f.z * half),
-      );
+      const d = this.axisDistance(t, p, e.state.heading, feet);
       if (d <= radius && d < bestD) {
         best = t;
         bestD = d;
@@ -166,7 +159,7 @@ export class Garage {
    * Buys or removes a vehicle. A new one gets a full tank and parks in the bay of `startAt` in bayOrder (parkAtBay; the
    * skateboard is carried); a removed one's collider is disabled. No change when already in that state.
    */
-  setOwned(t: RideTier, owned: boolean, startAt: Hospital): void {
+  setOwned(t: RideTier, owned: boolean, startAt: Hospital, courier?: Vec3): void {
     const e = this.entries[t];
     if (e.owned === owned) return;
     e.owned = owned;
@@ -177,7 +170,7 @@ export class Garage {
     }
     e.state.fuel = 1;
     if (restsCarried(t)) this.carry(t);
-    else this.parkAtBay(t, startAt);
+    else this.parkAtBay(t, startAt, courier);
   }
 
   /** Dev and tests: parks the owned `t` at `position`, stopped (the skateboard is carried instead). */
@@ -187,9 +180,9 @@ export class Garage {
   }
 
   /** Out of bounds (Decision 6): parks the vehicle in the bay of `h` in bayOrder (parkAtBay), stopped, fuel unchanged. */
-  tow(t: RideTier, h: Hospital): void {
+  tow(t: RideTier, h: Hospital, courier?: Vec3): void {
     if (restsCarried(t)) this.carry(t);
-    else this.parkAtBay(t, h);
+    else this.parkAtBay(t, h, courier);
   }
 
   /** Marks `t` as ridden: its collider is enabled (PlayerSim places a carried skateboard at the feet first). */
@@ -284,9 +277,11 @@ export class Garage {
   /**
    * Parks `t` in the bay of `h` in bayOrder: `t` and the vehicles the bay parked there (exactly on a slot) are re-parked
    * front-to-back, longest first, in the free slots from slot 0. A slot under a ridden vehicle or one parked there by
-   * hand (near a slot, not on it) is not free, and those vehicles stay where they are.
+   * hand (near a slot, not on it) is not free, and those vehicles stay where they are. With the `courier`'s feet: a bay
+   * vehicle within riding.mountRadius of them stays where it is too (a blocker), and a slot where the vehicle due there
+   * would overlap the courier's capsule is skipped, so nothing is ever parked beside or onto them.
    */
-  private parkAtBay(t: RideTier, h: Hospital): void {
+  private parkAtBay(t: RideTier, h: Hospital, courier?: Vec3): void {
     const spacing = this.cfg.bays.spacing;
     const behind = vec3(Math.sin(h.bayYaw), 0, Math.cos(h.bayYaw));
     const inBay: RideTier[] = [];
@@ -296,17 +291,31 @@ export class Garage {
       if (o === t || e.spot.kind === 'carried') continue;
       // A ridden vehicle counts where it is now (its saved spot is only where it was parked).
       const at = e.spot.kind === 'parked' ? e.spot.position : e.state.position;
-      if (e.spot.kind === 'parked' && this.onSlot(h, behind, e.spot.position, e.spot.heading)) inBay.push(o);
+      const movable = e.spot.kind === 'parked' && this.onSlot(h, behind, e.spot.position, e.spot.heading);
+      const byCourier = courier !== undefined && this.axisDistance(o, at, e.state.heading, courier) <= this.cfg.riding.mountRadius;
+      if (movable && !byCourier) inBay.push(o);
       else blockers.push(at);
     }
     const blocked = (pos: Vec3): boolean => blockers.some((b) => Math.hypot(b.x - pos.x, b.z - pos.z) < spacing * SLOT_TAKEN_FRACTION);
+    const onCourier = (v: RideTier, pos: Vec3): boolean => {
+      if (!courier || Math.abs(courier.y - pos.y) > this.cfg.rides[v].collider.height) return false;
+      return this.axisDistance(v, pos, h.bayYaw, courier) < this.cfg.rides[v].collider.radius + movementConfig.capsule.radius;
+    };
     const order = bayOrder([...inBay, t], this.cfg);
     let k = 0;
     for (let i = 0; k < order.length; i++) {
       const slot = baySlot(h, i, this.cfg);
-      if (blocked(slot.position)) continue;
+      if (blocked(slot.position) || onCourier(order[k]!, slot.position)) continue;
       this.park(order[k++]!, slot.position, slot.heading);
     }
+  }
+
+  /** Horizontal distance from `p` to the capsule axis of `v` standing at `at` facing `heading`. */
+  private axisDistance(v: RideTier, at: Vec3, heading: number, p: Vec3): number {
+    const c = this.cfg.rides[v].collider;
+    const half = c.shape === 'lengthwise' ? c.halfLength : 0;
+    const f = facing(heading);
+    return distanceToSegment(p, vec3(at.x - f.x * half, at.y, at.z - f.z * half), vec3(at.x + f.x * half, at.y, at.z + f.z * half));
   }
 
   /** Whether a vehicle parked at `p` facing `heading` stands exactly on a bay slot of `h`. */
