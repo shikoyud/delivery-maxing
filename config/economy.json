@@ -27,7 +27,7 @@
     "qualityWeight": 0.6,
     "luckWeight": 0.4
   },
-  "lock": { "days": 7, "maxBoost": 0.3, "fullBoostUsd": 100 },
+  "lock": { "days": 7, "withdrawWindowHours": 24, "maxBoost": 0.3, "fullBoostUsd": 100 },
   "fuelCan": { "tank": 0.25, "markup": 1.5 },
   "mockChain": { "wallet": "DEV-WALLET", "startGame": 600000, "vaultUsd": 50, "usdPerGame": 0.00024, "confirmSeconds": 2 }
 }

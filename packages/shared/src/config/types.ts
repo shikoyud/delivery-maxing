@@ -453,7 +453,8 @@ export interface EconomyConfig {
   /** The buyer's maxGame is the quote × (1 + slippage). */
   slippage: number;
   payout: { ranges: Record<VehicleTier, MicroRange>; qualityWeight: number; luckWeight: number };
-  lock: { days: number; maxBoost: number; fullBoostUsdMicro: number };
+  /** Locks last `days` and renew; a renewed lock may be withdrawn for `withdrawWindowHours` after the period that ended. */
+  lock: { days: number; withdrawWindowHours: number; maxBoost: number; fullBoostUsdMicro: number };
   /** A fuel can adds `tank` of a tank for `markup` × the pump price of that much fuel. */
   fuelCan: { tank: number; markup: number };
   mockChain: { wallet: string; startGame: number; vaultUsdMicro: number; usdPerGame: number; confirmSeconds: number };

@@ -46,3 +46,4 @@ export * from './economy/payout';
 export * from './economy/boost';
 export * from './economy/capacity';
 export * from './economy/dispatcher';
+export * from './economy/chain';

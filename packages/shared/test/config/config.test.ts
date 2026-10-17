@@ -58,7 +58,7 @@ describe('config pins spec values', () => {
     expect(e.payout.ranges.motorbike).toEqual([30_000, 300_000]);
     expect(e.payout.ranges.walk).toEqual([5_000, 30_000]);
     expect([e.payout.qualityWeight, e.payout.luckWeight]).toEqual([0.6, 0.4]);
-    expect(e.lock).toEqual({ days: 7, maxBoost: 0.3, fullBoostUsdMicro: 100_000_000 });
+    expect(e.lock).toEqual({ days: 7, withdrawWindowHours: 24, maxBoost: 0.3, fullBoostUsdMicro: 100_000_000 });
     expect(e.fuelCan).toEqual({ tank: 0.25, markup: 1.5 });
     expect(e.mockChain).toEqual({ wallet: 'DEV-WALLET', startGame: 600_000, vaultUsdMicro: 50_000_000, usdPerGame: 0.00024, confirmSeconds: 2 });
     for (const m of [...e.lines.vehicle.usdMicro, e.skinUsdMicro, ...e.payout.ranges.car]) expect(Number.isInteger(m)).toBe(true);

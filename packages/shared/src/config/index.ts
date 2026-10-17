@@ -68,7 +68,7 @@ function loadEconomy(j: typeof economyJson): EconomyConfig {
       qualityWeight: j.payout.qualityWeight,
       luckWeight: j.payout.luckWeight,
     },
-    lock: { days: j.lock.days, maxBoost: j.lock.maxBoost, fullBoostUsdMicro: micro(j.lock.fullBoostUsd) },
+    lock: { days: j.lock.days, withdrawWindowHours: j.lock.withdrawWindowHours, maxBoost: j.lock.maxBoost, fullBoostUsdMicro: micro(j.lock.fullBoostUsd) },
     fuelCan: j.fuelCan,
     mockChain: {
       wallet: j.mockChain.wallet,
