@@ -181,9 +181,10 @@ export class OrderSystem {
     return true;
   }
 
-  /** Dev / GAME-burn stub (price Pending): end the lockout now. */
+  /** The confirmed lockout skip (and the dev panel): ends the lockout now. */
   skipLockout(): void {
     this.lockoutUntil = 0;
+    this.lockoutReason = null; // over now; the next update still reports lockoutEnded
   }
 
   isCarried(a: ActiveOrder): boolean {

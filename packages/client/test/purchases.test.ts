@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'vitest';
+import { beforeAll, describe, expect, test, vi } from 'vitest';
 import {
   Garage,
   OrderSystem,
@@ -68,6 +68,12 @@ function setup(opts: { coins?: number; vehicleTier?: number } = {}) {
     purchases.update(clock.t);
   };
   return { chain, clock, garage, orders, env, popups, purchases, confirm };
+}
+
+/** Starts an offer lockout until sim time `until` (as a cancel would). */
+function lockOut(orders: OrderSystem, until: number): void {
+  orders.lockoutUntil = until;
+  orders.lockoutReason = 'cancelled';
 }
 
 /** The capsule's half extent along the heading: half the length plus the end radius. */
@@ -186,7 +192,7 @@ describe('Purchases', () => {
     expect(s.popups.filter((p) => p.title.startsWith('Skateboard bought'))).toHaveLength(1);
 
     // A Purchases built afresh (a reload) on the same chain does not grant settled transactions again.
-    s.orders.lockoutUntil = 500;
+    lockOut(s.orders, 500);
     await s.purchases.buy('lockoutSkip');
     s.confirm();
     expect(s.orders.lockoutUntil).toBe(0);
@@ -202,13 +208,42 @@ describe('Purchases', () => {
 
   test('the lockout skip ends the lockout only after confirmation', async () => {
     const s = setup();
-    s.orders.lockoutUntil = 300;
+    lockOut(s.orders, 300);
     const out = await s.purchases.buy('lockoutSkip');
     expect(out.ok).toBe(true);
     s.purchases.update(s.clock.t + 1);
     expect(s.orders.lockoutUntil).toBe(300);
     s.confirm();
     expect(s.orders.lockoutUntil).toBe(0);
+  });
+
+  test('the lockout skip is refused with no lockout running or a skip already pending; nothing is sent', async () => {
+    const s = setup();
+    expect(await s.purchases.buy('lockoutSkip')).toEqual({ ok: false, message: 'No offer lockout to skip' });
+    expect(s.chain.history()).toEqual([]);
+    lockOut(s.orders, 300);
+    expect((await s.purchases.buy('lockoutSkip')).ok).toBe(true);
+    expect(await s.purchases.buy('lockoutSkip')).toEqual({ ok: false, message: 'A lockout skip is already on its way' });
+    expect(s.chain.history()).toHaveLength(1);
+    s.confirm();
+    expect(s.orders.lockoutUntil).toBe(0);
+    expect(s.orders.lockoutReason).toBeNull();
+    expect(await s.purchases.buy('lockoutSkip')).toEqual({ ok: false, message: 'No offer lockout to skip' });
+  });
+
+  test('update() reads the chain history only after the chain changed, not every tick', async () => {
+    const s = setup();
+    const history = vi.spyOn(s.chain, 'history');
+    for (let i = 0; i < 100; i++) s.purchases.update(s.clock.t + i);
+    expect(history).not.toHaveBeenCalled();
+    await s.purchases.buy('line.vehicle.1');
+    history.mockClear();
+    s.confirm(); // the chain settles the tx and tells its listeners
+    expect(history).toHaveBeenCalledTimes(1);
+    expect(s.garage.owned()).toEqual(['skateboard']);
+    history.mockClear();
+    for (let i = 0; i < 100; i++) s.purchases.update(s.clock.t + i);
+    expect(history).not.toHaveBeenCalled();
   });
 
   test('Coin cosmetics are bought at once; not enough Coins refuses', () => {

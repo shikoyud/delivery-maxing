@@ -70,13 +70,18 @@ const coinsText = (n: number): string => (n === 0 ? 'Free' : `${n} Coins`);
  */
 export class Purchases {
   private readonly seen = new Set<string>();
+  /** The chain changed since update() last read its history (set by the chain's listener). */
+  private dirty = false;
 
   constructor(
     private readonly chain: ChainSource,
     private readonly deps: PurchaseDeps,
   ) {
     for (const tx of chain.history()) if (tx.status !== 'pending') this.seen.add(tx.id);
-    chain.subscribe(() => this.sync());
+    chain.subscribe(() => {
+      this.dirty = true;
+      this.sync();
+    });
     this.sync();
   }
 
@@ -107,6 +112,10 @@ export class Purchases {
     if (item.currency === 'coins') return this.buyWithCoins(itemId);
     const own = this.ownershipError(item);
     if (own) return { ok: false, message: this.message(own, item) };
+    if (item.kind === 'lockoutSkip') {
+      if (this.deps.orders.lockoutReason === null) return { ok: false, message: 'No offer lockout to skip' };
+      if (this.pending().some((t) => t.itemId === itemId)) return { ok: false, message: 'A lockout skip is already on its way' };
+    }
     const q = this.quote(itemId);
     if (q.kind !== 'game') return { ok: false, message: PAUSED };
     if (q.game > this.chain.balance()) return { ok: false, message: this.message('insufficient', item) };
@@ -150,9 +159,14 @@ export class Purchases {
     return this.chain.history().filter((t) => t.status === 'pending');
   }
 
-  /** Per tick: lets the chain settle due transactions, then grants each newly confirmed one and reports each failure. */
+  /**
+   * Per tick: lets the chain settle due transactions, then, only when the chain changed since the last look, grants
+   * each newly confirmed one and reports each failure.
+   */
   update(nowMs: number): void {
     this.chain.tick(nowMs);
+    if (!this.dirty) return;
+    this.dirty = false;
     for (const tx of this.chain.history()) {
       if (tx.status === 'pending' || this.seen.has(tx.id)) continue;
       this.seen.add(tx.id);
