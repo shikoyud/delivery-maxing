@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { vec3, type CityLayout, type MapData, type Road, type Solid } from '@dm/shared';
-import { areaTiers, buildRegionMeshes, regionOf } from '../src/render/city/regions';
-import { kindColor } from '../src/render/palette';
+import { areaTiers, buildRegionMeshes, cutIntervals, regionOf } from '../src/render/city/regions';
+import { cityPalette, kindColor } from '../src/render/palette';
 
 describe('regionOf', () => {
   it('(249.9, 0) and (250, 0) fall in different 250 m regions', () => {
@@ -101,6 +101,36 @@ describe('buildRegionMeshes', () => {
     expect(b.min.y).toBeGreaterThanOrEqual(10);
     expect(b.max.y).toBeLessThan(10.2);
     expect([b.min.x, b.max.x, b.min.z, b.max.z]).toEqual([0, 100, 0, 12]);
+  });
+
+  it('cutIntervals removes the cuts from the range and drops slivers', () => {
+    expect(cutIntervals(0, 100, [])).toEqual([[0, 100]]);
+    expect(cutIntervals(0, 100, [[40, 52]])).toEqual([[0, 40], [52, 100]]);
+    expect(cutIntervals(0, 100, [[-10, 12], [90, 120], [40, 52], [45, 60]])).toEqual([[12, 40], [60, 90]]);
+    expect(cutIntervals(0, 100, [[0.02, 100]])).toEqual([]); // a 2 cm sliver is not a kerb
+  });
+
+  it('city: the sidewalk strips stop at a crossing street, so no kerb runs across the intersection', () => {
+    const road = (id: string, rect: [number, number, number, number], y = 10): Road =>
+      ({ id, kind: 'street', rect: { minX: rect[0], maxX: rect[1], minZ: rect[2], maxZ: rect[3] }, y, name: id }) as Road;
+    const top = road('top', [0, 300, 148, 160]);
+    const cross = road('cross', [114, 126, 0, 160]); // ends inside the top street
+    const other = road('other', [50, 62, 0, 100], 24); // another level: no cut
+    const layout = { roads: [top, cross, other], areas: [] } as unknown as CityLayout;
+    const city = { ...map, kind: 'city', layout, solids: [] } as unknown as MapData;
+    const regions = buildRegionMeshes(city, 1000);
+    const mesh = regions.get(regionOf(150, 154, 1000))!.children.find((c) => c.name === 'region-streets') as THREE.Mesh;
+    // top: deck + 2 strips each cut once into 2 → 5 boxes; cross: deck + 2 strips shortened at their far end → 3; other: 3
+    expect(vertexCount(mesh)).toBe((5 + 3 + 3) * 24);
+    const pos = mesh.geometry.getAttribute('position');
+    const col = mesh.geometry.getAttribute('color');
+    const kerb = new THREE.Color(cityPalette.sidewalk);
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(col.getX(i) - kerb.r) > 1e-3 || Math.abs(pos.getY(i) - 10) > 1) continue;
+      const [x, z] = [pos.getX(i), pos.getZ(i)];
+      // no kerb vertex strictly inside the intersection (114..126 × 148..160)
+      expect(x > 114.01 && x < 125.99 && z > 148.01 && z < 159.99).toBe(false);
+    }
   });
 
   it('city: areas lying on a larger area at the same height are drawn a lift step above it, so nothing fights (the quay, its rail and yard)', () => {

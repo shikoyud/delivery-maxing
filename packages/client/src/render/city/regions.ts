@@ -66,17 +66,49 @@ function box(sx: number, sy: number, sz: number, x: number, y: number, z: number
   return g;
 }
 
-/** Two kerb strips on top of a deck of size (sx, sy, sz) in the frame `m`, along its long sides. */
-function sidewalkStrips(sx: number, sy: number, sz: number, m?: THREE.Matrix4, baseY = 0): THREE.BufferGeometry[] {
+/** The part of `[lo, hi]` left after cutting out `cuts`, as intervals; slivers under 5 cm are dropped. */
+export function cutIntervals(lo: number, hi: number, cuts: readonly [number, number][]): [number, number][] {
+  let out: [number, number][] = [[lo, hi]];
+  for (const [a, b] of cuts) {
+    const next: [number, number][] = [];
+    for (const [s, e] of out) {
+      if (b <= s || a >= e) next.push([s, e]);
+      else {
+        if (a > s) next.push([s, a]);
+        if (b < e) next.push([b, e]);
+      }
+    }
+    out = next;
+  }
+  return out.filter(([s, e]) => e - s >= 0.05);
+}
+
+/**
+ * Two kerb strips on top of a deck of size (sx, sy, sz) in the frame `m`, along its long sides. `crossing` rects (in
+ * the deck's local frame, centred on it) cut the strips where another road at the same level crosses, so no kerb
+ * runs across an intersection.
+ */
+function sidewalkStrips(sx: number, sy: number, sz: number, m?: THREE.Matrix4, baseY = 0, crossing: readonly Rect[] = []): THREE.BufferGeometry[] {
   const c = colorOf(cityPalette.sidewalk);
   const alongX = sx >= sz;
   const short = alongX ? sz : sx;
+  const long = alongX ? sx : sz;
   const w = Math.min(SIDEWALK_MAX, short * SIDEWALK_SHARE);
   const off = short / 2 - w / 2;
   const y = baseY + sy / 2 + SIDEWALK_HEIGHT / 2;
-  return [-1, 1].map((k) =>
-    alongX ? box(sx, SIDEWALK_HEIGHT, w, 0, y, k * off, c, m) : box(w, SIDEWALK_HEIGHT, sz, k * off, y, 0, c, m),
-  );
+  const out: THREE.BufferGeometry[] = [];
+  for (const k of [-1, 1]) {
+    // the strip's across-range; a crossing rect cuts it only where it reaches into that range
+    const [aLo, aHi] = [k * off - w / 2, k * off + w / 2];
+    const cuts = crossing
+      .filter((r) => (alongX ? r.minZ < aHi && r.maxZ > aLo : r.minX < aHi && r.maxX > aLo))
+      .map((r): [number, number] => (alongX ? [r.minX, r.maxX] : [r.minZ, r.maxZ]));
+    for (const [s, e] of cutIntervals(-long / 2, long / 2, cuts)) {
+      const mid = (s + e) / 2;
+      out.push(alongX ? box(e - s, SIDEWALK_HEIGHT, w, mid, y, k * off, c, m) : box(w, SIDEWALK_HEIGHT, e - s, k * off, y, mid, c, m));
+    }
+  }
+  return out;
 }
 
 /** A paved solid (road deck, ramp, stair step): asphalt plus its two sidewalk strips, rotated with the solid. */
@@ -93,12 +125,17 @@ function flat(rect: Rect, y0: number, thickness: number, c: THREE.Color): THREE.
   return box(sx, thickness, sz, (rect.minX + rect.maxX) / 2, y0 + thickness / 2, (rect.minZ + rect.maxZ) / 2, c);
 }
 
-/** A layout street (its collider is the ground slab under it): an asphalt slab and its sidewalk strips. */
-function streetGeometry(rect: Rect, y: number): THREE.BufferGeometry[] {
+/**
+ * A layout street (its collider is the ground slab under it): an asphalt slab and its sidewalk strips, the strips
+ * cut where `crossing` roads at the same level overlap it (the SP5 playtest: kerbs ran across every intersection).
+ */
+function streetGeometry(rect: Rect, y: number, crossing: readonly Rect[] = []): THREE.BufferGeometry[] {
   const sx = rect.maxX - rect.minX;
   const sz = rect.maxZ - rect.minZ;
-  const m = new THREE.Matrix4().makeTranslation((rect.minX + rect.maxX) / 2, y + ROAD_LIFT + ROAD_THICKNESS / 2, (rect.minZ + rect.maxZ) / 2);
-  return [box(sx, ROAD_THICKNESS, sz, 0, 0, 0, colorOf(cityPalette.asphalt), m), ...sidewalkStrips(sx, ROAD_THICKNESS, sz, m)];
+  const [cx, cz] = rectCenter(rect);
+  const m = new THREE.Matrix4().makeTranslation(cx, y + ROAD_LIFT + ROAD_THICKNESS / 2, cz);
+  const local = crossing.map((r): Rect => ({ minX: r.minX - cx, maxX: r.maxX - cx, minZ: r.minZ - cz, maxZ: r.maxZ - cz }));
+  return [box(sx, ROAD_THICKNESS, sz, 0, 0, 0, colorOf(cityPalette.asphalt), m), ...sidewalkStrips(sx, ROAD_THICKNESS, sz, m, 0, local)];
 }
 
 const rectCenter = (r: Rect): [number, number] => [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
@@ -171,7 +208,11 @@ export function buildRegionMeshes(map: MapData, regionSize: number): Map<string,
     const e = entry(...rectCenter(a.rect));
     (e.flats[tier] ??= []).push(flat(a.rect, a.y + AREA_LIFT + tier * (AREA_LIFT + AREA_THICKNESS), AREA_THICKNESS, colorOf(c)));
   }
-  for (const r of layout?.roads ?? []) entry(...rectCenter(r.rect)).streets.push(...streetGeometry(r.rect, r.y));
+  const roads = layout?.roads ?? [];
+  for (const r of roads) {
+    const crossing = roads.filter((o) => o !== r && o.y === r.y && rectsOverlap(o.rect, r.rect)).map((o) => o.rect);
+    entry(...rectCenter(r.rect)).streets.push(...streetGeometry(r.rect, r.y, crossing));
+  }
 
   const layered = (layer: number, map: THREE.Texture | null = null): THREE.MeshLambertMaterial =>
     new THREE.MeshLambertMaterial({ vertexColors: true, map, polygonOffset: layer !== 0, polygonOffsetFactor: layer, polygonOffsetUnits: layer });
