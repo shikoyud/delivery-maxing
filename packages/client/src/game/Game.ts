@@ -230,6 +230,7 @@ export class Game {
       now: () => this.time,
       bagTier: () => this.chain.ownership().lines.bag,
       dispatcherTier: () => this.chain.ownership().lines.dispatcher,
+      chain: this.chain,
       player: () => this.sim.state,
       rider: () => ({
         riding: this.sim.state.riding,

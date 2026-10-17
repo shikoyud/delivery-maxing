@@ -3,7 +3,7 @@ import { cssHex } from '../render/palette';
 import { slotColor } from '../render/waypoints';
 import { clock, el, esc, setHtml, setText } from './dom';
 import { acceptBlockedReason } from './phone/ordersApp';
-import { BAND_LABEL, KIND_LABEL, loadText, pointsText, type HudModel, type HudOrder, type HudTimer } from './hudModel';
+import { BAND_LABEL, KIND_LABEL, gameText, loadText, pointsText, type HudModel, type HudOrder, type HudTimer } from './hudModel';
 
 /** What DeliveryLoop needs from the HUD (tests pass a recorder). */
 export interface HudView {
@@ -14,16 +14,17 @@ export interface HudView {
 }
 
 /**
- * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals and load top
- * right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the next-stop
- * arrow (name and route distance) over the safe-zone and lockout chips; bottom centre the key prompt; bottom left
- * while riding the speed and, on the motorbike and car, the fuel gauge.
+ * The always-on HUD (spec §8): active orders top left (stage, target, distance, timers, kg); totals, the accrued GAME
+ * and load top right; offer toasts bottom right with the accept key (or the refusal) on the top one; top centre the
+ * next-stop arrow (name and route distance) over the safe-zone and lockout chips; bottom centre the key prompt; bottom
+ * left while riding the speed and, on the motorbike and car, the fuel gauge.
  */
 export class Hud implements HudView {
   private readonly orders: HTMLElement;
   private readonly coins: HTMLElement;
   private readonly points: HTMLElement;
   private readonly deliveries: HTMLElement;
+  private readonly game: HTMLElement;
   private readonly load: HTMLElement;
   private readonly offers: HTMLElement;
   private readonly safe: HTMLElement;
@@ -65,6 +66,7 @@ export class Hud implements HudView {
     this.coins = stat('coins', 'hud-coins');
     this.points = stat('pts', 'hud-points');
     this.deliveries = stat('delivered', 'hud-deliveries');
+    this.game = stat('GAME', 'hud-game');
     const load = el('div', 'hud-load', totals);
     el('span', 'hud-load-label', load).textContent = 'Load';
     this.load = el('b', 'hud-load-value', load);
@@ -112,6 +114,7 @@ export class Hud implements HudView {
     setText(this.coins, String(m.totals.coins));
     setText(this.points, String(m.totals.points));
     setText(this.deliveries, String(m.totals.deliveries));
+    setText(this.game, gameText(m.wallet.accrued));
     setText(this.load, loadText(m.load));
 
     this.safe.hidden = m.safeZone === null;

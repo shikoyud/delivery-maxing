@@ -11,6 +11,11 @@ import {
   ridingConfig,
   dispatcherTuning,
   effectiveCapacity,
+  boostMultiplier,
+  rollPayoutUsd,
+  type ChainSource,
+  type CompletedEvent,
+  type Payout,
   type AcceptResult,
   type AccessKind,
   type ButtonState,
@@ -44,7 +49,7 @@ import { buildPoiMeshes, type PoiMeshes } from '../render/poiMeshes';
 import { MAX_WAYPOINTS, buildWaypoints, type Waypoints } from '../render/waypoints';
 import { keyLabel } from '../ui/dom';
 import { Hud, type HudView } from '../ui/hud';
-import { hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, type HudModel } from '../ui/hudModel';
+import { gameText, hudModel, parkedOf, poiIndex, promptFor, pointsText, stageText, usdText, type HudModel } from '../ui/hudModel';
 import { createMinimap } from '../ui/minimap';
 import { MapScreen, type MapScreenView } from '../ui/map/MapScreen';
 import { RIDE_NAME, type GarageRow } from '../ui/phone/garageApp';
@@ -75,6 +80,10 @@ export interface DeliveryDeps {
   bagTier(): number;
   /** The owned Dispatcher tier (Game: the chain's `ownership().lines.dispatcher`); it sets how many offers, how often, how good. */
   dispatcherTier(): number;
+  /** The reward chain (Game: the browser MockChain): every completed order's GAME payout accrues there (spec §9). */
+  chain: ChainSource;
+  /** Wall-clock ms a payout is recorded at (the chain's time); Date.now when absent. */
+  wallClock?(): number;
   /** Path distance for offers: the on-foot path (Game: the walk navmesh), Infinity when there is none. */
   distance: PathDistance;
   /** The city's build-time pickup→dropoff distances (offers ask `distance` for pairs it lacks); absent on the greybox. */
@@ -263,6 +272,7 @@ export class DeliveryLoop {
         capacity: this.capacity(),
         totals,
         dispatcher: () => dispatcherTuning(this.d.dispatcherTier()),
+        vehicleTier: () => this.capacityTier,
       },
       this.d.now(),
     );
@@ -624,6 +634,7 @@ export class DeliveryLoop {
       route: routes ? (id, door) => routes.get(tier, from, id, door, now) : undefined,
       ride: r.riding === null ? null : { tier: r.riding, speed: r.speed, fuel: rows.find((x) => x.tier === r.riding)?.fuel ?? null },
       prompt: this.prompt(),
+      wallet: { accrued: this.d.chain.accrued() },
     });
   }
 
@@ -699,6 +710,34 @@ export class DeliveryLoop {
     });
   }
 
+  /**
+   * Rolls and records a completed order's GAME payout (spec §3.6, §9; Decision 3): `luck` from the seeded RNG, the
+   * quality points ÷ maxPoints, the order's tier's range, the lock-to-boost multiplier of the GAME locked (valued when
+   * locked). The chain converts at its rate (a stale rate is still the last good one, Decision 14), applies the boost
+   * and pays from the vault, or records it unpaid when the vault cannot cover it. Null without any rate (no payout).
+   */
+  payOut(e: CompletedEvent, nowMs: number): Payout | null {
+    const chain = this.d.chain;
+    const rate = chain.rate();
+    if (rate === null) return null;
+    const lock = chain.lock();
+    const luck = this.rng();
+    const quality = e.maxPoints > 0 ? Math.min(1, Math.max(0, e.points / e.maxPoints)) : 0;
+    // The roll unboosted: the chain multiplies by `boost` when it converts (Payout.usdMicro is the roll itself).
+    const usdMicro = rollPayoutUsd({ tier: e.tier, points: e.points, maxPoints: e.maxPoints, luck, boost: 1 });
+    const boost = boostMultiplier(lock ? lock.usdMicroAtLock : 0);
+    return chain.accrue({ orderId: e.orderId, usdMicro, luck, quality, usdPerGame: rate.usdPerGame, boost, at: nowMs });
+  }
+
+  /** The delivery popup's GAME lines: "+$0.12 ≈ 500 GAME" (and "×1.15 boost" when locked), or "Vault empty · no GAME". */
+  private payoutLines(p: Payout | null): string[] {
+    if (p === null) return [];
+    if (!p.paid) return ['Vault empty · no GAME'];
+    const lines = [`+${usdText(Math.round(p.usdMicro * p.boost))} ≈ ${gameText(p.game)} GAME`];
+    if (p.boost > 1) lines.push(`×${Number(p.boost.toFixed(2))} boost`);
+    return lines;
+  }
+
   /** `before`: the active orders before this tick's update, so a completed order's details are still known. */
   private announce(e: OrderEvent, before: readonly ActiveOrder[]): void {
     const pois = poiIndex(this.d.map);
@@ -724,7 +763,8 @@ export class DeliveryLoop {
       case 'completed': {
         this.save();
         const done = before.find((a) => a.order.id === e.orderId);
-        const lines = e.bonuses.map((b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[b])} · +${ordersConfig.coins[b]} coins`);
+        const lines = this.payoutLines(this.payOut(e, this.d.wallClock?.() ?? Date.now()));
+        lines.push(...e.bonuses.map((b) => `${BONUS_LINE[b]}  +${pointsText(ordersConfig.points[b])} · +${ordersConfig.coins[b]} coins`));
         if (!e.inTime) lines.push(done?.order.kind === 'food' ? 'Cold · no hot bonus' : 'Over par · no bonus');
         if (e.expressOnTime === false) lines.push('Express late · no bonus');
         if (done?.order.modifier === 'fragile' && !done.fragileIntact) lines.push('Fragile damaged · no bonus');

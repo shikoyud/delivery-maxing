@@ -1,4 +1,5 @@
 import {
+  GAME_UNITS,
   dropoffText,
   ordersConfig,
   orderText,
@@ -108,6 +109,14 @@ export interface HudNav {
   ride?: HudRide | null;
   /** The key prompt line (DeliveryLoop: `promptFor`). */
   prompt?: string | null;
+  /** The wallet (DeliveryLoop: the chain); absent (tests): nothing accrued. */
+  wallet?: HudWallet;
+}
+
+/** The reward wallet as the HUD shows it. */
+export interface HudWallet {
+  /** GAME paid out by orders, not yet claimed, in base units (the HUD's top-right GAME figure, spec §8). */
+  accrued: number;
 }
 
 export interface HudModel {
@@ -137,6 +146,7 @@ export interface HudModel {
   ride: HudRide | null;
   /** The key prompt line (bottom centre), or null. */
   prompt: string | null;
+  wallet: HudWallet;
 }
 
 /** What the key prompt depends on. */
@@ -184,6 +194,16 @@ export function parkedOf(rows: readonly GarageRow[]): ParkedMarker[] {
 /** "1 pt", "N pts". */
 export function pointsText(n: number): string {
   return `${n} ${n === 1 ? 'pt' : 'pts'}`;
+}
+
+/** USD from micro-USD: two decimals, three below $0.10 ("$0.12", "$0.034"). */
+export function usdText(usdMicro: number): string {
+  return `$${(usdMicro / 1e6).toFixed(usdMicro < 100_000 ? 3 : 2)}`;
+}
+
+/** Whole GAME from base units, with thousands separators ("12,500"); fractions are cut, never rounded up. */
+export function gameText(units: number): string {
+  return Math.floor(units / GAME_UNITS).toLocaleString('en-US');
 }
 
 /** "2/3 · 25/50 kg"; just "1/1" for a carrier that takes no packages. */
@@ -319,6 +339,7 @@ export function hudModel(
     nextStop: null,
     ride: nav.ride ?? null,
     prompt: nav.prompt ?? null,
+    wallet: { ...(nav.wallet ?? { accrued: 0 }) },
   };
   model.nextStop = next?.stop ?? null;
   return model;

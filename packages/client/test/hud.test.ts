@@ -101,6 +101,15 @@ describe('Hud next stop and ride', () => {
     expect(one('hud-fuel').className).not.toContain('low');
   });
 
+  it('shows the accrued GAME top right, whole with thousands separators (spec §8)', () => {
+    const value = () => one('hud-game').byClass('hud-stat-value')[0]!.textContent;
+    hud.update(model(), () => 0);
+    expect(value()).toBe('0');
+    hud.update(model({ wallet: { accrued: 1_234_567_890_123 } }), () => 0); // base units: 1,234,567.89 GAME
+    expect(value()).toBe('1,234,567');
+    expect(one('hud-game').byClass('hud-stat-label')[0]!.textContent).toBe('GAME');
+  });
+
   it('the load chip keeps loadText', () => {
     hud.update(model({ load: { usedSlots: 2, slots: 5, carriedKg: 25, maxPackageKg: 150 }, ride: { tier: 'car', speed: 0, fuel: 1 } }), () => 0);
     expect(one('hud-load-value').textContent).toBe('2/5 · 25/150 kg');

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { ordersConfig } from '../../src/config';
-import type { OrdersConfig } from '../../src/config/types';
+import type { OrdersConfig, VehicleTier } from '../../src/config/types';
 import { dispatcherTuning } from '../../src/economy/dispatcher';
 import { vec3 } from '../../src/math/vec3';
 import { OrderSystem, type OrderEvent, type OrderSystemOptions } from '../../src/orders/OrderSystem';
@@ -174,7 +174,7 @@ describe('OrderSystem', () => {
     onTime.accept('o1', 9);
     onTime.update(10, offerPlayer, zones('fp-near'));
     const done = onTime.update(10 + 44.375, offerPlayer, zones('df-ok'));
-    expect(done).toEqual([{ kind: 'completed', orderId: 'o1', points: 3, coins: 30, bonuses: ['hot'], inTime: true, expressOnTime: null }]);
+    expect(done).toEqual([{ kind: 'completed', orderId: 'o1', points: 3, coins: 30, bonuses: ['hot'], inTime: true, expressOnTime: null, maxPoints: 3, tier: 'walk' }]);
     expect(onTime.active).toHaveLength(0);
     expect(onTime.totals).toEqual({ points: 3, coins: 30, deliveries: 1 });
 
@@ -183,8 +183,21 @@ describe('OrderSystem', () => {
     late.accept('o1', 9);
     late.update(10, offerPlayer, zones('fp-near'));
     const lateDone = late.update(10 + 44.5, offerPlayer, zones('df-ok'));
-    expect(lateDone).toEqual([{ kind: 'completed', orderId: 'o1', points: 2, coins: 20, bonuses: [], inTime: false, expressOnTime: null }]);
+    expect(lateDone).toEqual([{ kind: 'completed', orderId: 'o1', points: 2, coins: 20, bonuses: [], inTime: false, expressOnTime: null, maxPoints: 3, tier: 'walk' }]);
     expect(late.totals).toEqual({ points: 7, coins: 70, deliveries: 3 });
+  });
+
+  test('completed carries maxPoints and the tier the offer was made for', () => {
+    // food fp-near -> df-ok: medium band (2) + hot (1) = 3 at most. Accepted on the motorbike, delivered after a switch.
+    let tier: VehicleTier = 'motorbike';
+    const sys = makeSystem({ vehicleTier: () => tier });
+    sys.update(8, offerPlayer, nowhere);
+    sys.accept('o1', 9);
+    expect(sys.active[0]!.tier).toBe('motorbike');
+    tier = 'car';
+    sys.update(10, offerPlayer, zones('fp-near'));
+    const [late] = sys.update(10 + 60, offerPlayer, zones('df-ok'));
+    expect(late).toMatchObject({ kind: 'completed', points: 2, maxPoints: 3, tier: 'motorbike' });
   });
 
   test('express completion reports expressOnTime measured from pickup', () => {

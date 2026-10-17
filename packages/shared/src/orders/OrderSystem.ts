@@ -1,5 +1,5 @@
 import { dispatcherTuning, type DispatcherTuning } from '../economy/dispatcher';
-import type { OrdersConfig } from '../config/types';
+import type { OrdersConfig, VehicleTier } from '../config/types';
 import type { Vec3 } from '../math/vec3';
 import { NO_MODS, type SimEvent, type StatModifiers } from '../movement/types';
 import type { Rng } from '../util/rng';
@@ -8,7 +8,7 @@ import type { OrderRules, Poi } from '../world/mapTypes';
 import type { PlayerZones } from '../world/zones';
 import type { DistanceTable } from './distanceTable';
 import { generateOffer } from './offers';
-import { scoreOrder } from './rules';
+import { maxPointsFor, scoreOrder } from './rules';
 import type { ActiveOrder, Bonus, CarrierCapacity, Offer } from './types';
 
 /** What broke a carried Fragile package: a fall, a respawn, or a crash into a wall on a vehicle. */
@@ -23,9 +23,23 @@ export type OrderEvent =
   | { kind: 'prepStarted'; orderId: string; readySeconds: number }
   | { kind: 'pickedUp'; orderId: string }
   | { kind: 'fragileBroken'; orderId: string; reason: FragileBreak }
-  | { kind: 'completed'; orderId: string; points: number; coins: number; bonuses: Bonus[]; inTime: boolean; expressOnTime: boolean | null }
+  | {
+      kind: 'completed';
+      orderId: string;
+      points: number;
+      coins: number;
+      bonuses: Bonus[];
+      inTime: boolean;
+      expressOnTime: boolean | null;
+      /** The most points the order could have earned (the payout roll's quality is points ÷ maxPoints, spec §3.6). */
+      maxPoints: number;
+      /** The order's vehicle tier, fixed when it was accepted. */
+      tier: VehicleTier;
+    }
   | { kind: 'pickupMissed'; orderId: string; lockoutSeconds: number }
   | { kind: 'lockoutEnded' };
+
+export type CompletedEvent = Extract<OrderEvent, { kind: 'completed' }>;
 
 export interface Totals {
   points: number;
@@ -45,6 +59,8 @@ export interface OrderSystemOptions {
   totals?: Totals;
   /** The owned Dispatcher tier's tuning, read each tick (Game: the chain's tier); absent: tier 0. */
   dispatcher?: () => DispatcherTuning;
+  /** The capacity tier (the ride, else the last ride), read on accept: the order's vehicle tier. Absent: walk. */
+  vehicleTier?: () => VehicleTier;
 }
 
 /** Per-player order state: offers on the phone, accepted orders, lockout and totals (spec §3.2–§3.5). */
@@ -128,7 +144,15 @@ export class OrderSystem {
     const i = this._offers.findIndex((o) => o.order.id === offerId);
     const [offer] = this._offers.splice(i, 1) as [Offer];
     if (result === 'expired') return result;
-    this._active.push({ order: offer.order, acceptedAt: now, pickupBy: now + this.opts.cfg.pickupDeadline.seconds, prepStartedAt: null, pickedUpAt: null, fragileIntact: true });
+    this._active.push({
+      order: offer.order,
+      acceptedAt: now,
+      pickupBy: now + this.opts.cfg.pickupDeadline.seconds,
+      prepStartedAt: null,
+      pickedUpAt: null,
+      fragileIntact: true,
+      tier: this.opts.vehicleTier?.() ?? 'walk',
+    });
     this.used.push({ ids: [offer.order.pickupPoiId, offer.order.dropoffPoiId], at: now });
     return 'ok';
   }
@@ -261,7 +285,7 @@ export class OrderSystem {
         deliveries: this.totals.deliveries + 1,
       };
       this._active.splice(i--, 1);
-      events.push({ kind: 'completed', orderId: a.order.id, ...score, inTime, expressOnTime });
+      events.push({ kind: 'completed', orderId: a.order.id, ...score, inTime, expressOnTime, maxPoints: maxPointsFor(a.order, cfg), tier: a.tier });
       // Pacing after a delivery (server-side only, no UI): the next offer waits at least the cooldown.
       const { minSeconds, maxSeconds } = cfg.deliveryCooldown;
       this.nextOfferAt = Math.max(this.nextOfferAt, now + minSeconds + this.opts.rng() * (maxSeconds - minSeconds));

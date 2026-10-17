@@ -1,3 +1,4 @@
+import type { VehicleTier } from '../config/types';
 import type { Band } from '../world/distance';
 
 export type OrderKind = 'food' | 'package';
@@ -38,6 +39,8 @@ export interface ActiveOrder {
   prepStartedAt: number | null;
   pickedUpAt: number | null;
   fragileIntact: boolean;
+  /** The order's vehicle tier (spec §3.6): the capacity tier when it was accepted; it sets the payout range. */
+  tier: VehicleTier;
 }
 
 export interface CarrierCapacity {

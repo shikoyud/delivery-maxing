@@ -25,11 +25,17 @@ import {
   type SummonResult,
   type Vec3,
   type VehicleState,
+  economyConfig,
+  maxPointsFor,
+  rollPayoutUsd,
+  usdToGame,
+  GAME_UNITS,
 } from '@dm/shared';
 import greybox from '../../../map/greybox.json';
 import { clientConfig } from '../src/clientConfig';
 import { DeliveryLoop, MOUNT_REFUSED, simEventHint } from '../src/game/delivery';
 import { createProgressStore, type Progress } from '../src/game/progress';
+import { MockChain } from '../src/economy/MockChain';
 import { ActionState } from '../src/input/actionState';
 import type { HudModel } from '../src/ui/hudModel';
 import type { MapScreenView } from '../src/ui/map/MapScreen';
@@ -69,6 +75,9 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     ]),
   ) as Record<RideTier, VehicleState>;
   const actions = new ActionState(clientConfig.input, -1, 1);
+  /** The reward chain: an in-memory mock wallet on a wall clock (ms) the test moves. */
+  const wall = { ms: 1_000_000 };
+  const chain = new MockChain(null, economyConfig, { now: () => wall.ms });
   /** A recording phone: open/close state, the app, the renders, the callbacks and close keys DeliveryLoop gave it. */
   const phone = {
     isOpen: false,
@@ -126,6 +135,8 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     seed: 11,
     bagTier: () => bag.tier,
     dispatcherTier: () => 0,
+    chain,
+    wallClock: () => wall.ms,
     now: () => env.now,
     player: () => ({ position: env.position, mode: 'ground', grounded: env.grounded, lastGrounded: env.lastGrounded }),
     rider: () => ({ riding: rider.riding, lastRide: rider.lastRide, speed: rider.speed, mountCandidate: () => rider.candidate }),
@@ -203,7 +214,16 @@ function setup(lastRide: RideTier | null = 'car', saved?: Progress, distance: Pa
     for (let i = 0; i < Math.round(seconds / TICK); i++) tick();
   };
   const poiPos = (id: string): Vec3 => ({ ...map.pois.find((p) => p.id === id)!.position });
-  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states };
+  /** Accepts the next food offer, picks it up and hands it over in time; returns the order and the "Delivered!" popup. */
+  const deliverFood = () => {
+    const offer = waitForOffer((o) => o.order.kind === 'food');
+    expect(loop.accept(offer.order.id)).toBe('ok');
+    goTo(offer.order.pickupPoiId);
+    goTo(offer.order.dropoffPoiId);
+    const popup = [...popups].reverse().find((p) => p.text.startsWith('Delivered!'))!;
+    return { order: offer.order, popup };
+  };
+  return { loop, env, rider, bag, popups, huds, phone, mapScreen, actions, tick, simFrames, waitForOffer, goTo, wait, poiPos, stored, vehicles, states, chain, wall, deliverFood };
 }
 
 describe('DeliveryLoop', () => {
@@ -887,6 +907,95 @@ describe('DeliveryLoop', () => {
     s.tick(); // E released
     expect(s.popups.filter((p) => p.text.startsWith('Refuelled'))).toEqual([]);
     expect(s.loop.orders.totals.coins).toBe(0);
+  });
+});
+
+describe('DeliveryLoop GAME payouts (spec §3.6, §9)', () => {
+  /** "$0.12" at or above $0.10, "$0.034" below; GAME whole with separators. */
+  const usd = (micro: number): string => `$${(micro / 1e6).toFixed(micro < 100_000 ? 3 : 2)}`;
+  const game = (units: number): string => Math.floor(units / GAME_UNITS).toLocaleString('en-US');
+
+  it('a completed car order accrues a payout in the car range, converted at the rate, recorded with luck and quality', () => {
+    const s = setup('car');
+    const rate = s.chain.rate()!;
+    const { order, popup } = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p).toBeDefined();
+    const maxPoints = maxPointsFor(order, ordersConfig);
+    const points = s.loop.orders.totals.points;
+    expect(p!.orderId).toBe(order.id);
+    expect(p!.quality).toBe(points / maxPoints);
+    expect(p!.luck).toBeGreaterThanOrEqual(0);
+    expect(p!.luck).toBeLessThan(1);
+    expect(p!.boost).toBe(1);
+    expect(p!.usdMicro).toBe(rollPayoutUsd({ tier: 'car', points, maxPoints, luck: p!.luck, boost: 1 }, economyConfig));
+    const [min, max] = economyConfig.payout.ranges.car;
+    expect(p!.usdMicro).toBeGreaterThanOrEqual(min);
+    expect(p!.usdMicro).toBeLessThanOrEqual(max);
+    expect(p!.usdPerGame).toBe(rate.usdPerGame);
+    expect(p!.paid).toBe(true);
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, rate));
+    expect(s.chain.accrued()).toBe(p!.game);
+    expect(popup.text).toBe(`Delivered! +${points} pts · +${s.loop.orders.totals.coins} coins`);
+    expect(popup.lines[0]).toBe(`+${usd(p!.usdMicro)} ≈ ${game(p!.game)} GAME`);
+    expect(popup.lines.some((l) => l.includes('boost'))).toBe(false);
+    expect(popup.lines.some((l) => l.startsWith('Still hot'))).toBe(true);
+    // The HUD's top-right GAME figure is the accrued balance.
+    s.loop.draw(1000);
+    expect(s.huds.at(-1)!.wallet.accrued).toBe(p!.game);
+  });
+
+  it('with $100 locked the payout is ×1.3', () => {
+    const s = setup('car');
+    const rate = s.chain.rate()!;
+    expect(s.chain.lockGame(usdToGame(100_000_000, rate), s.wall.ms)).toEqual({ ok: true });
+    const { popup } = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p!.boost).toBeCloseTo(1.3, 12);
+    expect(p!.game).toBe(usdToGame(p!.usdMicro * p!.boost, rate));
+    expect(p!.game / usdToGame(p!.usdMicro, rate)).toBeCloseTo(1.3, 5);
+    expect(popup.lines[0]).toBe(`+${usd(Math.round(p!.usdMicro * p!.boost))} ≈ ${game(p!.game)} GAME`);
+    expect(popup.lines[1]).toBe('×1.3 boost');
+  });
+
+  it('with the vault short the popup says "Vault empty · no GAME" and nothing accrues (Review Focus 5)', () => {
+    const s = setup('car');
+    s.chain.dev.setVaultUsd(0.1);
+    const vault = s.chain.vault();
+    const first = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p!.usdMicro).toBeGreaterThan(100_000); // an on-time car order rolls at least $0.38
+    expect(p!.paid).toBe(false);
+    expect(p!.game).toBe(0);
+    expect(s.chain.vault()).toBe(vault); // not drained for a partial payout
+    expect(s.chain.accrued()).toBe(0);
+    expect(s.loop.orders.totals.deliveries).toBe(1);
+    expect(s.loop.orders.totals.coins).toBeGreaterThan(0);
+    expect(first.popup.text).toMatch(/^Delivered! \+\d+ pts · \+\d+ coins$/);
+    expect(first.popup.lines[0]).toBe('Vault empty · no GAME');
+    expect(first.popup.lines.some((l) => l.includes('≈'))).toBe(false);
+    // The dev panel refills the vault: the next order pays normally.
+    s.chain.dev.setVaultUsd(50);
+    s.wait(ordersConfig.deliveryCooldown.maxSeconds + 1);
+    const second = s.deliverFood();
+    const paid = s.chain.payouts().at(-1)!;
+    expect(paid.orderId).toBe(second.order.id);
+    expect(paid.paid).toBe(true);
+    expect(s.chain.accrued()).toBe(paid.game);
+    expect(second.popup.lines[0]).toBe(`+${usd(paid.usdMicro)} ≈ ${game(paid.game)} GAME`);
+  });
+
+  it('a stale rate converts at the last good rate', () => {
+    const s = setup('car');
+    expect(s.chain.dev.setRate(0.0002)).toBe(true);
+    s.chain.dev.makeRateStale();
+    s.wall.ms += 3_600_000; // an hour later the rate is long past rate.maxAgeSeconds
+    const { popup } = s.deliverFood();
+    const [p] = s.chain.payouts();
+    expect(p!.usdPerGame).toBe(0.0002);
+    expect(p!.paid).toBe(true);
+    expect(p!.game).toBe(usdToGame(p!.usdMicro, { usdPerGame: 0.0002, updatedAt: 0 }));
+    expect(popup.lines[0]).toBe(`+${usd(p!.usdMicro)} ≈ ${game(p!.game)} GAME`);
   });
 });
 
